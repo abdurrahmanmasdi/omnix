@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Add this new block right here
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "../ERD.svg"
+  theme    = "forest"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  members   OrganizationMember[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  organizations OrganizationMember[]
+}
+
+model OrganizationMember {
+  organizationId String
+  userId         String
+  role           Role     @default(MEMBER)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@id([organizationId, userId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
