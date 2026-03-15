@@ -24,6 +24,7 @@ model Organization {
   createdAt DateTime @default(now())
 
   members   OrganizationMember[]
+  invitations Invitation[]
 }
 
 model User {
@@ -44,6 +45,21 @@ model OrganizationMember {
   user           User         @relation(fields: [userId], references: [id])
 
   @@id([organizationId, userId])
+}
+
+model Invitation {
+  id             String   @id @default(uuid())
+  email          String
+  organizationId String
+  role           Role     @default(MEMBER)
+  token          String   @unique @default(uuid()) // The secure string for the URL
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // A user can only have one pending invite per organization
+  @@unique([email, organizationId])
 }
 
 enum Role {
