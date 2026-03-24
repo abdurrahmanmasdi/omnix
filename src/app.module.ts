@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { GlobalExceptionFilter } from './global-exception.filter';
 import { AuthModule } from './auth/auth.module';
 import { GlobalAuthGuard } from './auth/guards/global-auth.guard';
+import { OrganizationsModule } from './organizations/organizations.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { GlobalAuthGuard } from './auth/guards/global-auth.guard';
     ]),
     PrismaModule,
     AuthModule,
+    OrganizationsModule,
   ],
   controllers: [AppController],
   providers: [
