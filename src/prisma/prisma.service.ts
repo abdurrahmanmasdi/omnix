@@ -19,7 +19,9 @@ export class PrismaService
     });
 
     // 2. Wrap the pool in Prisma's adapter
-    const adapter = new PrismaPg(pool as any);
+    const adapter = new PrismaPg(
+      pool as unknown as ConstructorParameters<typeof PrismaPg>[0],
+    );
 
     // 3. Pass the adapter to the PrismaClient
     super({ adapter });

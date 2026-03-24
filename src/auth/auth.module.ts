@@ -1,23 +1,24 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PassportModule } from '@nestjs/passport';
+import { PrismaModule } from '../prisma/prisma.module';
 import { AuthService } from './auth.service';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { jwtConstants } from './constants';
 import { AuthController } from './auth.controller';
-import { JwtStrategy } from './jwt.strategy';
+import { GlobalAuthGuard } from './guards/global-auth.guard';
 
 @Module({
   imports: [
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      // eslint-disable-next-line @typescript-eslint/require-await
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1d' }, // Token expires in 1 day
-      }),
+    PrismaModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.register({
+      secret: jwtConstants.secret,
+      signOptions: { expiresIn: '1d' },
     }),
   ],
+  providers: [AuthService, JwtStrategy, GlobalAuthGuard],
+  exports: [AuthService, GlobalAuthGuard],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
 })
 export class AuthModule {}

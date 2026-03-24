@@ -1,7 +1,25 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
+
+interface IUser {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  created_at: Date;
+}
+
+interface ILoginResponse {
+  access_token: string;
+}
+
+function excludePassword(user: any): IUser {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unused-vars
+  const { password_hash, ...rest } = user;
+  return rest as IUser;
+}
 
 @Injectable()
 export class AuthService {
@@ -10,30 +28,31 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async login(email: string, password: string) {
-    // 1. Find the user in the database
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+  async validateUser(email: string, password: string): Promise<IUser | null> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) return null;
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return null;
+    return excludePassword(user);
+  }
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // 2. Compare the plain-text password with the database hash
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // 3. Create the token payload (usually the user ID and email)
-    // In JWT terminology, 'sub' (subject) is the standard claim for the user ID
+  login(user: { id: string; email: string }): ILoginResponse {
     const payload = { sub: user.id, email: user.email };
+    return { access_token: this.jwtService.sign(payload) };
+  }
 
-    // 4. Sign and return the token
-    return {
-      access_token: await this.jwtService.signAsync(payload),
-    };
+  async register(
+    email: string,
+    password: string,
+    first_name: string,
+    last_name: string,
+  ): Promise<IUser> {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) throw new BadRequestException('User already exists');
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await this.prisma.user.create({
+      data: { email, password_hash: hashed, first_name, last_name },
+    });
+    return excludePassword(user);
   }
 }

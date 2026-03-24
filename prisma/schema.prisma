@@ -17,53 +17,92 @@ generator erd {
 datasource db {
   provider = "postgresql"
 }
+model User {
+  id            String                    @id @default(uuid()) @db.Uuid
+  email         String                    @unique
+  password_hash String
+  first_name    String
+  last_name     String
+  created_at    DateTime                  @default(now())
+
+  memberships   OrganizationMembership[]
+
+  @@map("users")
+}
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
+  id         String                    @id @default(uuid()) @db.Uuid
+  name       String
+  slug       String                    @unique
+  is_public  Boolean                   @default(false)
+  created_at DateTime                  @default(now())
 
-  members   OrganizationMember[]
-  invitations Invitation[]
+  roles       Role[]
+  memberships OrganizationMembership[]
+
+  @@map("organizations")
 }
 
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
+model OrganizationMembership {
+  id              String                    @id @default(uuid()) @db.Uuid
+  user_id         String                    @db.Uuid
+  organization_id String                    @db.Uuid
+  role_id         String                    @db.Uuid
+  status          String
+  created_at      DateTime                  @default(now())
 
-  organizations OrganizationMember[]
+  user           User                      @relation(fields: [user_id], references: [id])
+  organization   Organization              @relation(fields: [organization_id], references: [id])
+  role           Role                      @relation(fields: [role_id], references: [id])
+  permissionOverrides MembershipPermissionOverride[]
+
+  @@map("organization_memberships")
 }
 
-model OrganizationMember {
-  organizationId String
-  userId         String
-  role           Role     @default(MEMBER)
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  user           User         @relation(fields: [userId], references: [id])
+  rolePermissions                RolePermission[]
+  membershipPermissionOverrides  MembershipPermissionOverride[]
 
-  @@id([organizationId, userId])
+  @@map("permissions")
 }
 
-model Invitation {
-  id             String   @id @default(uuid())
-  email          String
-  organizationId String
-  role           Role     @default(MEMBER)
-  token          String   @unique @default(uuid()) // The secure string for the URL
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
+model Role {
+  id              String   @id @default(uuid()) @db.Uuid
+  organization_id String?  @db.Uuid
+  name            String
+  created_at      DateTime @default(now())
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organization_id], references: [id])
+  rolePermissions RolePermission[]
+  memberships     OrganizationMembership[]
 
-  // A user can only have one pending invite per organization
-  @@unique([email, organizationId])
+  @@map("roles")
 }
 
-enum Role {
-  OWNER
-  ADMIN
-  MEMBER
+model RolePermission {
+  role_id       String @db.Uuid
+  permission_id String @db.Uuid
+
+  role       Role       @relation(fields: [role_id], references: [id])
+  permission Permission @relation(fields: [permission_id], references: [id])
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model MembershipPermissionOverride {
+  id            String @id @default(uuid()) @db.Uuid
+  membership_id String @db.Uuid
+  permission_id String @db.Uuid
+  is_granted    Boolean
+
+  membership  OrganizationMembership @relation(fields: [membership_id], references: [id])
+  permission  Permission             @relation(fields: [permission_id], references: [id])
+
+  @@unique([membership_id, permission_id])
+  @@map("membership_permission_overrides")
 }

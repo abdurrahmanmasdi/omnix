@@ -1,17 +1,84 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto } from './login.dto';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { LoginDto } from './dtos/login.dto';
+import { RegisterDto } from './dtos/register.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Public } from './decorators/public/public.decorator';
 
-@ApiTags('Authentication')
+interface IUser {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  created_at: Date;
+}
+
+interface ILoginResponse {
+  access_token: string;
+}
+
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private authService: AuthService) {}
 
-  @ApiOperation({ summary: 'Log in to the application' })
-  @HttpCode(HttpStatus.OK) // Returns 200 OK instead of the default 201 Created for POSTs
+  @Public()
   @Post('login')
-  login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto.email, loginDto.password);
+  @ApiOperation({ summary: 'User login' })
+  @ApiResponse({
+    status: 201,
+    description: 'Login successful, returns access token',
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  async login(@Body() loginDto: LoginDto): Promise<ILoginResponse> {
+    const user = await this.authService.validateUser(
+      loginDto.email,
+      loginDto.password,
+    );
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+    return this.authService.login(user);
+  }
+
+  @Public()
+  @Post('register')
+  @ApiOperation({ summary: 'User registration' })
+  @ApiResponse({ status: 201, description: 'User created successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'User already exists or validation failed',
+  })
+  async register(@Body() registerDto: RegisterDto): Promise<IUser> {
+    const user = await this.authService.register(
+      registerDto.email,
+      registerDto.password,
+      registerDto.first_name,
+      registerDto.last_name,
+    );
+    return user;
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user info' })
+  @ApiResponse({ status: 200, description: 'Current user information' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getProfile(@Request() req: any): IUser {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return req.user as IUser;
   }
 }

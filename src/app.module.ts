@@ -7,11 +7,9 @@ import { validate } from './env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
-import { UsersModule } from './users/users.module';
-import { AuthModule } from './auth/auth.module';
-import { OrganizationsModule } from './organizations/organizations.module';
-import { InvitationsModule } from './invitations/invitations.module';
 import { GlobalExceptionFilter } from './global-exception.filter';
+import { AuthModule } from './auth/auth.module';
+import { GlobalAuthGuard } from './auth/guards/global-auth.guard';
 
 @Module({
   imports: [
@@ -35,14 +33,15 @@ import { GlobalExceptionFilter } from './global-exception.filter';
       },
     ]),
     PrismaModule,
-    UsersModule,
     AuthModule,
-    OrganizationsModule,
-    InvitationsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: GlobalAuthGuard, // JWT guard for all routes except @Public()
+    },
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard, // Applies rate limiting to all routes automatically
