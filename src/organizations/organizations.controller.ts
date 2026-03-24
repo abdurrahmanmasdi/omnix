@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Body,
-  UseGuards,
   Request,
   HttpCode,
   HttpStatus,
@@ -15,7 +14,6 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { OrganizationsService } from './organizations.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
@@ -39,9 +37,8 @@ export class OrganizationsController {
    * with role 'owner' and status 'active'
    */
   @Post()
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new organization' })
   @ApiResponse({
     status: 201,
@@ -72,9 +69,8 @@ export class OrganizationsController {
    * Creates a membership with status 'pending_approval'
    */
   @Post('join')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Request to join an organization',
     description: 'Creates a membership request with pending_approval status',
@@ -107,9 +103,8 @@ export class OrganizationsController {
    * Creates a membership with status 'invited'
    */
   @Post(':organizationId/invite')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Invite a user to an organization',
     description:

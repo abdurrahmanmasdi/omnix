@@ -27,6 +27,12 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+  redis:
+    image: redis:alpine
+    container_name: crm-redis
+    ports:
+      - "6379:6379" # Maps the Docker port to your local machine port
+    restart: always
 
 volumes:
   pgdata:

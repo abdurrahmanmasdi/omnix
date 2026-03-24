@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Get,
-  UseGuards,
-  Request,
-} from '@nestjs/common';
+import { Controller, Post, Body, Get, Request } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -16,7 +9,6 @@ import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { RegisterDto } from './dtos/register.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public/public.decorator';
 
 interface IUser {
@@ -72,7 +64,6 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user info' })
   @ApiResponse({ status: 200, description: 'Current user information' })
