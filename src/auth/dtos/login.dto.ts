@@ -1,12 +1,13 @@
 import { IsEmail, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class LoginDto {
   @ApiProperty({ example: 'user@example.com' })
-  @IsEmail()
+  @IsEmail({}, { message: i18nValidationMessage('errors.VALIDATION.IS_EMAIL') })
   email: string;
 
   @ApiProperty({ example: 'password123' })
-  @IsString()
+  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
   password: string;
 }

@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { I18nModule, AcceptLanguageResolver } from 'nestjs-i18n';
+import * as path from 'path';
 import { validate } from './env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -31,13 +33,30 @@ import { PermissionSeederService } from './seeders/permission-seeder.service';
             : undefined,
       },
     }),
-    // Rate Limiting: Allow max 10 requests every 60 seconds per IP
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 10,
+    // Internationalization (i18n)
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: path.join(
+          process.cwd(),
+          process.env.NODE_ENV === 'production' ? 'dist/i18n/' : 'src/i18n/',
+        ),
+        watch: true,
       },
-    ]),
+      resolvers: [AcceptLanguageResolver],
+    }),
+    // Rate Limiting: Allow max 10 requests every 60 seconds per IP
+    // Disabled during testing to avoid rate limit failures in test suite
+    ...(process.env.NODE_ENV === 'test'
+      ? []
+      : [
+          ThrottlerModule.forRoot([
+            {
+              ttl: 60000,
+              limit: 10,
+            },
+          ]),
+        ]),
     PrismaModule,
     RedisModule,
     AuthModule,
@@ -57,10 +76,15 @@ import { PermissionSeederService } from './seeders/permission-seeder.service';
       provide: APP_GUARD,
       useClass: GlobalAuthGuard, // JWT guard for all routes except @Public()
     },
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard, // Applies rate limiting to all routes automatically
-    },
+    // Throttler guard is disabled during testing
+    ...(process.env.NODE_ENV === 'test'
+      ? []
+      : [
+          {
+            provide: APP_GUARD,
+            useClass: ThrottlerGuard, // Applies rate limiting to all routes automatically
+          },
+        ]),
     {
       provide: APP_FILTER, // <-- Register the filter globally
       useClass: GlobalExceptionFilter,

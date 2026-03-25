@@ -1,7 +1,8 @@
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
+import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 
@@ -28,9 +29,9 @@ async function bootstrap() {
     defaultVersion: '1',
   });
 
-  // 4. Global Validation
+  // 4. Global Validation with i18n Support
   app.useGlobalPipes(
-    new ValidationPipe({
+    new I18nValidationPipe({
       whitelist: true, // Automatically strip out any extra data sent by the client that isn't in the DTO
       forbidNonWhitelisted: true, // Throw an error if the client sends extra, unexpected data
       transform: true, // Automatically transform payloads to be objects typed according to their DTO classes

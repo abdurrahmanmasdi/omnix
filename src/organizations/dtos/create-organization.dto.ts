@@ -7,27 +7,36 @@ import {
   Matches,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateOrganizationDto {
   @ApiProperty({
     example: 'Acme Corporation',
     description: 'The name of the organization',
   })
-  @IsString({ message: 'Name must be a string' })
-  @MinLength(3, { message: 'Name must be at least 3 characters long' })
-  @MaxLength(255, { message: 'Name must not exceed 255 characters' })
+  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  @MinLength(3, {
+    message: i18nValidationMessage('errors.VALIDATION.MIN_LENGTH'),
+  })
+  @MaxLength(255, {
+    message: i18nValidationMessage('errors.VALIDATION.MAX_LENGTH'),
+  })
   name: string;
 
   @ApiProperty({
     example: 'acme-corporation',
     description: 'The URL-friendly slug of the organization',
   })
-  @IsString({ message: 'Slug must be a string' })
+  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-    message: 'Slug must contain only lowercase letters, numbers, and hyphens',
+    message: i18nValidationMessage('errors.VALIDATION.SLUG_FORMAT'),
   })
-  @MinLength(3, { message: 'Slug must be at least 3 characters long' })
-  @MaxLength(255, { message: 'Slug must not exceed 255 characters' })
+  @MinLength(3, {
+    message: i18nValidationMessage('errors.VALIDATION.MIN_LENGTH'),
+  })
+  @MaxLength(255, {
+    message: i18nValidationMessage('errors.VALIDATION.MAX_LENGTH'),
+  })
   slug: string;
 
   @ApiProperty({
@@ -37,6 +46,6 @@ export class CreateOrganizationDto {
     default: false,
   })
   @IsOptional()
-  @IsBoolean({ message: 'is_public must be a boolean' })
+  @IsBoolean({ message: i18nValidationMessage('errors.VALIDATION.IS_BOOLEAN') })
   is_public?: boolean;
 }

@@ -1,0 +1,39 @@
+{
+  "USER_NOT_FOUND": "User could not be found.",
+  "VALIDATION": {
+    "IS_EMAIL": "Must be a valid email address.",
+    "MIN_LENGTH": "Value must be at least {constraint1} characters long.",
+    "MAX_LENGTH": "Value must not exceed {constraint1} characters.",
+    "IS_STRING": "Must be a string.",
+    "IS_BOOLEAN": "Must be a boolean value.",
+    "IS_ARRAY": "Must be an array.",
+    "IS_UUID": "Must be a valid UUID.",
+    "IS_STRONG_PASSWORD": "Password must contain uppercase, lowercase, numbers, and symbols.",
+    "MATCHES": "Value must match pattern {constraint1}.",
+    "SLUG_FORMAT": "Slug must contain only lowercase letters, numbers, and hyphens.",
+    "IS_UNIQUE": "This value already exists.",
+    "INVALID_PAGINATION": "Invalid pagination parameters. skip must be >= 0, take must be between 1 and 100."
+  },
+  "AUTH": {
+    "USER_ALREADY_EXISTS": "User with this email already exists."
+  },
+  "ORG": {
+    "SLUG_ALREADY_EXISTS": "Organization with this slug already exists.",
+    "NOT_FOUND": "Organization could not be found.",
+    "USER_ALREADY_MEMBER": "User is already a member of this organization.",
+    "CREATE_FAILED": "Failed to create organization. Please try again later.",
+    "FETCH_FAILED": "Failed to fetch organization. Please try again later.",
+    "FETCH_PUBLIC_FAILED": "Failed to fetch public organizations. Please try again later.",
+    "FETCH_USER_ORGS_FAILED": "Failed to fetch your organizations. Please try again later.",
+    "UPDATE_FAILED": "Failed to update organization. Please try again later.",
+    "DELETE_FAILED": "Failed to delete organization. Please try again later.",
+    "JOIN_FAILED": "Failed to join organization. Please try again later.",
+    "INVITE_FAILED": "Failed to invite user. Please try again later."
+  },
+  "UNAUTHORIZED": "Unauthorized access.",
+  "FORBIDDEN": "Access denied.",
+  "NOT_FOUND": "Resource not found.",
+  "CONFLICT": "Resource already exists.",
+  "BAD_REQUEST": "Invalid request.",
+  "INTERNAL_SERVER_ERROR": "An internal server error occurred."
+}

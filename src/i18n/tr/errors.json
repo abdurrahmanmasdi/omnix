@@ -1,0 +1,39 @@
+{
+  "USER_NOT_FOUND": "Kullanıcı bulunamadı.",
+  "VALIDATION": {
+    "IS_EMAIL": "Geçerli bir e-posta adresi olmalıdır.",
+    "MIN_LENGTH": "Değer en az {constraint1} karakter uzunluğunda olmalıdır.",
+    "MAX_LENGTH": "Değer {constraint1} karakteri aşmamalıdır.",
+    "IS_STRING": "Metin olmalıdır.",
+    "IS_BOOLEAN": "Boolean bir değer olmalıdır.",
+    "IS_ARRAY": "Bir dizi olmalıdır.",
+    "IS_UUID": "Geçerli bir UUID olmalıdır.",
+    "IS_STRONG_PASSWORD": "Şifre büyük harf, küçük harf, sayı ve sembol içermelidir.",
+    "MATCHES": "Değer {constraint1} deseniyle eşleşmelidir.",
+    "SLUG_FORMAT": "Slug yalnızca küçük harfler, sayılar ve kısa çizgiler içermelidir.",
+    "IS_UNIQUE": "Bu değer zaten var.",
+    "INVALID_PAGINATION": "Geçersiz sayfalandırma parametreleri. skip >= 0 olmalı, take 1 ile 100 arasında olmalıdır."
+  },
+  "AUTH": {
+    "USER_ALREADY_EXISTS": "Bu e-posta ile bir kullanıcı zaten var."
+  },
+  "ORG": {
+    "SLUG_ALREADY_EXISTS": "Bu slug ile bir kuruluş zaten var.",
+    "NOT_FOUND": "Kuruluş bulunamadı.",
+    "USER_ALREADY_MEMBER": "Kullanıcı zaten bu kuruluşun bir üyesidir.",
+    "CREATE_FAILED": "Kuruluş oluşturulurken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "FETCH_FAILED": "Kuruluş alınırken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "FETCH_PUBLIC_FAILED": "Halka açık kuruluşlar alınırken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "FETCH_USER_ORGS_FAILED": "Kuruluşlarınız alınırken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "UPDATE_FAILED": "Kuruluş güncellenirken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "DELETE_FAILED": "Kuruluş silinirken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "JOIN_FAILED": "Kuruluşa katılırken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "INVITE_FAILED": "Kullanıcı davet edilirken hata oluştu. Lütfen daha sonra tekrar deneyiniz."
+  },
+  "UNAUTHORIZED": "Yetkisiz erişim.",
+  "FORBIDDEN": "Erişim reddedildi.",
+  "NOT_FOUND": "Kaynak bulunamadı.",
+  "CONFLICT": "Kaynak zaten var.",
+  "BAD_REQUEST": "Geçersiz istek.",
+  "INTERNAL_SERVER_ERROR": "Bir iç sunucu hatası oluştu."
+}

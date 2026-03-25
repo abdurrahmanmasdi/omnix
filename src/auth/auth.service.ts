@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { I18nService } from 'nestjs-i18n';
 import * as bcrypt from 'bcryptjs';
 
 interface IUser {
@@ -26,6 +27,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private i18n: I18nService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<IUser | null> {
@@ -48,7 +50,11 @@ export class AuthService {
     last_name: string,
   ): Promise<IUser> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) throw new BadRequestException('User already exists');
+    if (existing) {
+      throw new BadRequestException(
+        this.i18n.t('errors.AUTH.USER_ALREADY_EXISTS'),
+      );
+    }
     const hashed = await bcrypt.hash(password, 10);
     const user = await this.prisma.user.create({
       data: { email, password_hash: hashed, first_name, last_name },

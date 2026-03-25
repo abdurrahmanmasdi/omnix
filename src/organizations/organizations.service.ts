@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
@@ -26,7 +27,10 @@ interface IOrganization {
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private i18n: I18nService,
+  ) {}
 
   /**
    * Create a new organization
@@ -46,7 +50,7 @@ export class OrganizationsService {
 
       if (!user) {
         this.logger.warn(`User with id ${userId} not found`);
-        throw new NotFoundException('User not found');
+        throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
       }
 
       // Check if slug is already in use
@@ -59,7 +63,7 @@ export class OrganizationsService {
           `Organization with slug '${createOrgDto.slug}' already exists`,
         );
         throw new ConflictException(
-          `Organization with slug '${createOrgDto.slug}' already exists`,
+          this.i18n.t('errors.ORG.SLUG_ALREADY_EXISTS'),
         );
       }
 
@@ -118,7 +122,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error creating organization: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to create organization. Please try again later.',
+        this.i18n.t('errors.ORG.CREATE_FAILED'),
       );
     }
   }
@@ -135,7 +139,7 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with id ${id} not found`);
-        throw new NotFoundException(`Organization with id '${id}' not found`);
+        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
       }
 
       return organization as IOrganization;
@@ -146,7 +150,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error fetching organization: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to fetch organization. Please try again later.',
+        this.i18n.t('errors.ORG.FETCH_FAILED'),
       );
     }
   }
@@ -163,9 +167,7 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with slug '${slug}' not found`);
-        throw new NotFoundException(
-          `Organization with slug '${slug}' not found`,
-        );
+        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
       }
 
       return organization as IOrganization;
@@ -176,7 +178,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error fetching organization by slug: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to fetch organization. Please try again later.',
+        this.i18n.t('errors.ORG.FETCH_FAILED'),
       );
     }
   }
@@ -192,7 +194,7 @@ export class OrganizationsService {
     try {
       if (skip < 0 || take < 1 || take > 100) {
         throw new BadRequestException(
-          'Invalid pagination parameters. skip must be >= 0, take must be between 1 and 100',
+          this.i18n.t('errors.VALIDATION.INVALID_PAGINATION'),
         );
       }
 
@@ -217,7 +219,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error fetching public organizations: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to fetch organizations. Please try again later.',
+        this.i18n.t('errors.ORG.FETCH_PUBLIC_FAILED'),
       );
     }
   }
@@ -234,7 +236,7 @@ export class OrganizationsService {
     try {
       if (skip < 0 || take < 1 || take > 100) {
         throw new BadRequestException(
-          'Invalid pagination parameters. skip must be >= 0, take must be between 1 and 100',
+          this.i18n.t('errors.VALIDATION.INVALID_PAGINATION'),
         );
       }
 
@@ -271,7 +273,7 @@ export class OrganizationsService {
         `Error fetching user organizations for ${userId}: ${error}`,
       );
       throw new InternalServerErrorException(
-        'Failed to fetch organizations. Please try again later.',
+        this.i18n.t('errors.ORG.FETCH_USER_ORGS_FAILED'),
       );
     }
   }
@@ -300,7 +302,7 @@ export class OrganizationsService {
             `Organization with slug '${updateOrgDto.slug}' already exists`,
           );
           throw new ConflictException(
-            `Organization with slug '${updateOrgDto.slug}' already exists`,
+            this.i18n.t('errors.ORG.SLUG_ALREADY_EXISTS'),
           );
         }
       }
@@ -329,7 +331,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error updating organization: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to update organization. Please try again later.',
+        this.i18n.t('errors.ORG.UPDATE_FAILED'),
       );
     }
   }
@@ -358,7 +360,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error deleting organization: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to delete organization. Please try again later.',
+        this.i18n.t('errors.ORG.DELETE_FAILED'),
       );
     }
   }
@@ -381,7 +383,7 @@ export class OrganizationsService {
 
       if (!user) {
         this.logger.warn(`User with id ${userId} not found`);
-        throw new NotFoundException('User not found');
+        throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
       }
 
       // Find organization by slug
@@ -393,9 +395,7 @@ export class OrganizationsService {
         this.logger.warn(
           `Organization with slug '${joinOrgDto.slug}' not found`,
         );
-        throw new NotFoundException(
-          `Organization with slug '${joinOrgDto.slug}' not found`,
-        );
+        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
       }
 
       // Check if user is already a member
@@ -412,7 +412,7 @@ export class OrganizationsService {
           `User ${userId} is already a member of organization ${organization.id}`,
         );
         throw new ConflictException(
-          'User is already a member of this organization',
+          this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
         );
       }
 
@@ -458,7 +458,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error joining organization: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to join organization. Please try again later.',
+        this.i18n.t('errors.ORG.JOIN_FAILED'),
       );
     }
   }
@@ -486,7 +486,7 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with id ${organizationId} not found`);
-        throw new NotFoundException('Organization not found');
+        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
       }
 
       // Check if user exists by email
@@ -529,7 +529,7 @@ export class OrganizationsService {
           `User ${user.id} is already a member of organization ${organizationId}`,
         );
         throw new ConflictException(
-          'User is already a member of this organization',
+          this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
         );
       }
 
@@ -578,7 +578,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error inviting user: ${error}`);
       throw new InternalServerErrorException(
-        'Failed to invite user. Please try again later.',
+        this.i18n.t('errors.ORG.INVITE_FAILED'),
       );
     }
   }
