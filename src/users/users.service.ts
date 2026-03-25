@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { OrganizationMembershipStatus } from '../organizations/constants/membership-status.enum';
 
 @Injectable()
 export class UsersService {
@@ -187,6 +188,47 @@ export class UsersService {
       membership_id: createdMembership.id,
       organization_name: createdMembership.organization?.name,
       role: createdMembership.role?.name,
+    };
+  }
+
+  /**
+   * Cancel the current user's pending join request.
+   * Deletes the membership so the user can join a different workspace.
+   */
+  async cancelJoinRequest(
+    userId: string,
+    membershipId: string,
+  ): Promise<{ message: string; membershipId: string }> {
+    this.logger.debug(
+      `[UsersService] Cancelling join request ${membershipId} for user ${userId}`,
+    );
+
+    const membership = await this.prisma.organizationMembership.findUnique({
+      where: { id: membershipId },
+      select: {
+        id: true,
+        user_id: true,
+        status: true,
+      },
+    });
+
+    if (!membership || membership.user_id !== userId) {
+      throw new NotFoundException('Membership request not found.');
+    }
+
+    const membershipStatus = String(membership.status);
+
+    if (membershipStatus !== String(OrganizationMembershipStatus.PENDING)) {
+      throw new BadRequestException('Only PENDING requests can be cancelled.');
+    }
+
+    await this.prisma.organizationMembership.delete({
+      where: { id: membershipId },
+    });
+
+    return {
+      message: 'Join request cancelled successfully.',
+      membershipId,
     };
   }
 }

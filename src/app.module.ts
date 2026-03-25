@@ -15,9 +15,7 @@ import { AuthModule } from './auth/auth.module';
 import { GlobalAuthGuard } from './auth/guards/global-auth.guard';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TenantInterceptor } from './organizations/interceptors/tenant.interceptor';
-import { AccessControlModule } from './access-control/access-control.module';
 import { UsersModule } from './users/users.module';
-import { PermissionSeederService } from './seeders/permission-seeder.service';
 
 @Module({
   imports: [
@@ -61,13 +59,11 @@ import { PermissionSeederService } from './seeders/permission-seeder.service';
     RedisModule,
     AuthModule,
     OrganizationsModule,
-    AccessControlModule,
     UsersModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    PermissionSeederService, // Auto-seeds permissions on app startup
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantInterceptor, // Extracts and verifies tenant from x-organization-id header

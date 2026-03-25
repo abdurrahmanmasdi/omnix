@@ -13,10 +13,12 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request as ExpressRequest } from 'express';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
+import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 
 export interface IOrganization {
   id: string;
@@ -24,6 +26,10 @@ export interface IOrganization {
   slug: string;
   is_public: boolean;
   created_at: Date;
+}
+
+interface AuthRequest extends ExpressRequest {
+  user: { id: string };
 }
 
 @ApiTags('organizations')
@@ -57,23 +63,22 @@ export class OrganizationsController {
   @ApiResponse({ status: 409, description: 'Organization slug already exists' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async create(
-    @Request() req: any,
+    @Request() req: AuthRequest,
     @Body() createOrgDto: CreateOrganizationDto,
   ): Promise<IOrganization> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
     return this.organizationsService.create(req.user.id, createOrgDto);
   }
 
   /**
    * Join an existing organization by slug
-   * Creates a membership with status 'pending_approval'
+   * Creates a membership with status 'PENDING'
    */
   @Post('join')
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Request to join an organization',
-    description: 'Creates a membership request with pending_approval status',
+    description: 'Creates a membership request with PENDING status',
   })
   @ApiResponse({
     status: 201,
@@ -90,10 +95,9 @@ export class OrganizationsController {
   @ApiResponse({ status: 409, description: 'User is already a member' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async join(
-    @Request() req: any,
+    @Request() req: AuthRequest,
     @Body() joinOrgDto: JoinOrganizationDto,
   ): Promise<{ message: string; organizationId: string }> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
     return this.organizationsService.join(req.user.id, joinOrgDto);
   }
 
@@ -129,7 +133,7 @@ export class OrganizationsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async invite(
     @Param('organizationId') organizationId: string,
-    @Request() req: any,
+    @Request() req: AuthRequest,
     @Body() inviteDto: InviteToOrganizationDto,
   ): Promise<{
     message: string;
@@ -137,5 +141,72 @@ export class OrganizationsController {
     status: 'invitation_created' | 'invitation_updated';
   }> {
     return this.organizationsService.invite(organizationId, inviteDto);
+  }
+
+  @Post(':id/requests/:membershipId/approve')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Approve a pending join request',
+    description:
+      'Approves a pending membership request and assigns a role to the user.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Join request approved successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request state or role' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only organization admins can approve requests',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Organization or membership not found',
+  })
+  async approveRequest(
+    @Param('id') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Request() req: AuthRequest,
+    @Body() approveDto: ApproveMembershipRequestDto,
+  ) {
+    return this.organizationsService.approveJoinRequest(
+      organizationId,
+      membershipId,
+      req.user.id,
+      approveDto,
+    );
+  }
+
+  @Post(':id/requests/:membershipId/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Reject a pending join request',
+    description: 'Rejects a pending membership request for an organization.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Join request rejected successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request state' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only organization admins can reject requests',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Organization or membership not found',
+  })
+  async rejectRequest(
+    @Param('id') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Request() req: AuthRequest,
+  ) {
+    return this.organizationsService.rejectJoinRequest(
+      organizationId,
+      membershipId,
+      req.user.id,
+    );
   }
 }

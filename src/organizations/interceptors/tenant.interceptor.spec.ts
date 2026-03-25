@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { TenantInterceptor } from './tenant.interceptor';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -14,6 +15,10 @@ describe('TenantInterceptor', () => {
     organizationMembership: {
       findFirst: jest.fn(),
     },
+  };
+
+  const mockI18nService = {
+    t: jest.fn((key: string) => key),
   };
 
   beforeEach(async () => {
@@ -29,6 +34,10 @@ describe('TenantInterceptor', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: I18nService,
+          useValue: mockI18nService,
         },
         {
           provide: Logger,

@@ -12,7 +12,9 @@ import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
+import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 import { Prisma } from '@prisma/client';
+import { OrganizationMembershipStatus } from './constants/membership-status.enum';
 
 interface IOrganization {
   id: string;
@@ -97,53 +99,6 @@ export class OrganizationsService {
             },
           }),
         ]);
-
-        // PBAC payload intent:
-        // Admin: {'*': true} -> all permissions in DB
-        // Manager: {'leads:read': true, 'leads:write': true, 'tours:read': true}
-        // Agent: {'leads:read': true, 'tours:read': true}
-        // Note: this codebase stores permissions relationally (RolePermission), so we map keys to permissions by name.
-        const allPermissions = await tx.permission.findMany({
-          select: { id: true, name: true },
-        });
-
-        const permissionIdsByName = new Map(
-          allPermissions.map((permission) => [permission.name, permission.id]),
-        );
-
-        const managerPermissionNames = [
-          'leads:read',
-          'leads:write',
-          'tours:read',
-        ];
-        const agentPermissionNames = ['leads:read', 'tours:read'];
-
-        const managerPermissionIds = managerPermissionNames
-          .map((name) => permissionIdsByName.get(name))
-          .filter((id): id is string => Boolean(id));
-
-        const agentPermissionIds = agentPermissionNames
-          .map((name) => permissionIdsByName.get(name))
-          .filter((id): id is string => Boolean(id));
-
-        await tx.rolePermission.createMany({
-          data: [
-            // Admin receives all available permissions
-            ...allPermissions.map((permission) => ({
-              role_id: adminRole.id,
-              permission_id: permission.id,
-            })),
-            ...managerPermissionIds.map((permissionId) => ({
-              role_id: managerRole.id,
-              permission_id: permissionId,
-            })),
-            ...agentPermissionIds.map((permissionId) => ({
-              role_id: agentRole.id,
-              permission_id: permissionId,
-            })),
-          ],
-          skipDuplicates: true,
-        });
 
         // 3) Assign creator as active member with Admin role
         await tx.organizationMembership.create({
@@ -428,7 +383,7 @@ export class OrganizationsService {
 
   /**
    * Join an organization by slug
-   * Creates a membership with status 'pending_approval'
+   * Creates a membership with status 'PENDING'
    * @throws NotFoundException if organization or user doesn't exist
    * @throws ConflictException if user is already a member
    */
@@ -491,13 +446,13 @@ export class OrganizationsService {
         });
       }
 
-      // Create membership with pending_approval status
+      // Create membership with PENDING status
       await this.prisma.organizationMembership.create({
         data: {
           user_id: userId,
           organization_id: organization.id,
           role_id: memberRole.id,
-          status: 'pending_approval',
+          status: OrganizationMembershipStatus.PENDING,
         },
       });
 
@@ -520,6 +475,120 @@ export class OrganizationsService {
       this.logger.error(`Error joining organization: ${error}`);
       throw new InternalServerErrorException(
         this.i18n.t('errors.ORG.JOIN_FAILED'),
+      );
+    }
+  }
+
+  async approveJoinRequest(
+    organizationId: string,
+    membershipId: string,
+    _requesterUserId: string,
+    dto: ApproveMembershipRequestDto,
+  ): Promise<{ message: string; membershipId: string; status: string }> {
+    try {
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+      });
+
+      if (!organization) {
+        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+      }
+
+      const role = await this.prisma.role.findUnique({
+        where: { id: dto.roleId },
+      });
+
+      if (!role || role.organization_id !== organizationId) {
+        throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
+      }
+
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: {
+          id: membershipId,
+          organization_id: organizationId,
+          status: OrganizationMembershipStatus.PENDING,
+        },
+      });
+
+      if (!membership) {
+        throw new NotFoundException('Pending membership request not found.');
+      }
+
+      await this.prisma.organizationMembership.update({
+        where: { id: membershipId },
+        data: {
+          status: OrganizationMembershipStatus.ACTIVE,
+          role_id: dto.roleId,
+        },
+      });
+
+      return {
+        message: 'Join request approved successfully.',
+        membershipId,
+        status: OrganizationMembershipStatus.ACTIVE,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(`Error approving join request: ${error}`);
+      throw new InternalServerErrorException(
+        this.i18n.t('errors.ORG.UPDATE_FAILED'),
+      );
+    }
+  }
+
+  async rejectJoinRequest(
+    organizationId: string,
+    membershipId: string,
+    _requesterUserId: string,
+  ): Promise<{ message: string; membershipId: string; status: string }> {
+    try {
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+      });
+
+      if (!organization) {
+        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+      }
+
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: {
+          id: membershipId,
+          organization_id: organizationId,
+          status: OrganizationMembershipStatus.PENDING,
+        },
+      });
+
+      if (!membership) {
+        throw new NotFoundException('Pending membership request not found.');
+      }
+
+      await this.prisma.organizationMembership.update({
+        where: { id: membershipId },
+        data: { status: OrganizationMembershipStatus.REJECTED },
+      });
+
+      return {
+        message: 'Join request rejected successfully.',
+        membershipId,
+        status: OrganizationMembershipStatus.REJECTED,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(`Error rejecting join request: ${error}`);
+      throw new InternalServerErrorException(
+        this.i18n.t('errors.ORG.UPDATE_FAILED'),
       );
     }
   }

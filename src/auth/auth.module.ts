@@ -8,8 +8,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { jwtConstants } from './constants';
 import { AuthController } from './auth.controller';
 import { GlobalAuthGuard } from './guards/global-auth.guard';
-import { PermissionsGuard } from './guards/permissions.guard';
-import { PermissionsService } from './services/permissions.service';
 
 @Module({
   imports: [
@@ -21,14 +19,8 @@ import { PermissionsService } from './services/permissions.service';
       signOptions: { expiresIn: '1d' },
     }),
   ],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    GlobalAuthGuard,
-    PermissionsGuard,
-    PermissionsService,
-  ],
-  exports: [AuthService, GlobalAuthGuard, PermissionsGuard, PermissionsService],
+  providers: [AuthService, JwtStrategy, GlobalAuthGuard],
+  exports: [AuthService, GlobalAuthGuard],
   controllers: [AuthController],
 })
 export class AuthModule {}

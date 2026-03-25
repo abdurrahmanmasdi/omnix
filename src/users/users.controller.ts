@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Request,
   HttpCode,
@@ -13,10 +14,11 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Request as ExpressRequest } from 'express';
 import { UsersService } from './users.service';
 
-interface AuthRequest extends Request {
-  user?: { id: string };
+interface AuthRequest extends ExpressRequest {
+  user: { id: string };
 }
 
 @ApiTags('users')
@@ -50,7 +52,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User profile not found' })
   async getCurrentUser(@Request() req: AuthRequest) {
-    return this.usersService.getCurrentUserProfile(req.user!.id);
+    return this.usersService.getCurrentUserProfile(req.user.id);
   }
 
   /**
@@ -76,7 +78,7 @@ export class UsersController {
           role_id: { type: 'string', format: 'uuid' },
           status: {
             type: 'string',
-            enum: ['active', 'pending_approval', 'invited'],
+            enum: ['PENDING', 'ACTIVE', 'REJECTED'],
           },
           created_at: { type: 'string', format: 'date-time' },
           organization: {
@@ -100,7 +102,7 @@ export class UsersController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getUserOrganizations(@Request() req: AuthRequest) {
-    return this.usersService.getUserOrganizations(req.user!.id);
+    return this.usersService.getUserOrganizations(req.user.id);
   }
 
   /**
@@ -137,6 +139,26 @@ export class UsersController {
     @Request() req: AuthRequest,
     @Param('inviteId') inviteId: string,
   ) {
-    return this.usersService.acceptOrganizationInvite(req.user!.id, inviteId);
+    return this.usersService.acceptOrganizationInvite(req.user.id, inviteId);
+  }
+
+  @Delete('me/requests/:membershipId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancel current user pending join request',
+    description:
+      'Deletes a pending join request that belongs to the authenticated user.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Join request cancelled successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Request is not in pending state' })
+  @ApiResponse({ status: 404, description: 'Membership request not found' })
+  async cancelJoinRequest(
+    @Request() req: AuthRequest,
+    @Param('membershipId') membershipId: string,
+  ): Promise<{ message: string; membershipId: string }> {
+    return await this.usersService.cancelJoinRequest(req.user.id, membershipId);
   }
 }
