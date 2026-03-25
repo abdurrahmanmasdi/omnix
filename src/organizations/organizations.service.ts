@@ -7,7 +7,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
@@ -34,7 +33,7 @@ export class OrganizationsService {
 
   /**
    * Create a new organization
-   * Automatically creates an OrganizationMembership for the creator with role 'owner' and status 'active'
+   * Automatically creates an OrganizationMembership for the creator with role 'Admin' and status 'active'
    * @throws ConflictException if slug already exists
    * @throws InternalServerErrorException on database errors
    */
@@ -43,62 +42,124 @@ export class OrganizationsService {
     createOrgDto: CreateOrganizationDto,
   ): Promise<IOrganization> {
     try {
-      // Validate that user exists
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
+      const organization = await this.prisma.$transaction(async (tx) => {
+        // Validate that user exists
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+        });
 
-      if (!user) {
-        this.logger.warn(`User with id ${userId} not found`);
-        throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
-      }
+        if (!user) {
+          this.logger.warn(`User with id ${userId} not found`);
+          throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
+        }
 
-      // Check if slug is already in use
-      const existingOrg = await this.prisma.organization.findUnique({
-        where: { slug: createOrgDto.slug },
-      });
+        // Check if slug is already in use
+        const existingOrg = await tx.organization.findUnique({
+          where: { slug: createOrgDto.slug },
+        });
 
-      if (existingOrg) {
-        this.logger.warn(
-          `Organization with slug '${createOrgDto.slug}' already exists`,
-        );
-        throw new ConflictException(
-          this.i18n.t('errors.ORG.SLUG_ALREADY_EXISTS'),
-        );
-      }
+        if (existingOrg) {
+          this.logger.warn(
+            `Organization with slug '${createOrgDto.slug}' already exists`,
+          );
+          throw new ConflictException(
+            this.i18n.t('errors.ORG.SLUG_ALREADY_EXISTS'),
+          );
+        }
 
-      // Get or create the 'owner' role for this organization
-      let ownerRole = await this.prisma.role.findFirst({
-        where: { name: 'owner', organization_id: null },
-      });
-
-      if (!ownerRole) {
-        ownerRole = await this.prisma.role.create({
+        // 1) Create organization
+        const createdOrg = await tx.organization.create({
           data: {
-            name: 'owner',
-            organization_id: null, // Global role
+            name: createOrgDto.name,
+            slug: createOrgDto.slug,
+            is_public: createOrgDto.is_public ?? false,
           },
         });
-      }
 
-      // Create organization and membership in a transaction
-      const organization = await this.prisma.organization.create({
-        data: {
-          name: createOrgDto.name,
-          slug: createOrgDto.slug,
-          is_public: createOrgDto.is_public ?? false,
-          memberships: {
-            create: {
-              user_id: userId,
-              role_id: ownerRole.id,
-              status: 'active',
+        // 2) Create default tenant roles
+        const [adminRole, managerRole, agentRole] = await Promise.all([
+          tx.role.create({
+            data: {
+              name: 'Admin',
+              organization_id: createdOrg.id,
             },
+          }),
+          tx.role.create({
+            data: {
+              name: 'Manager',
+              organization_id: createdOrg.id,
+            },
+          }),
+          tx.role.create({
+            data: {
+              name: 'Agent',
+              organization_id: createdOrg.id,
+            },
+          }),
+        ]);
+
+        // PBAC payload intent:
+        // Admin: {'*': true} -> all permissions in DB
+        // Manager: {'leads:read': true, 'leads:write': true, 'tours:read': true}
+        // Agent: {'leads:read': true, 'tours:read': true}
+        // Note: this codebase stores permissions relationally (RolePermission), so we map keys to permissions by name.
+        const allPermissions = await tx.permission.findMany({
+          select: { id: true, name: true },
+        });
+
+        const permissionIdsByName = new Map(
+          allPermissions.map((permission) => [permission.name, permission.id]),
+        );
+
+        const managerPermissionNames = [
+          'leads:read',
+          'leads:write',
+          'tours:read',
+        ];
+        const agentPermissionNames = ['leads:read', 'tours:read'];
+
+        const managerPermissionIds = managerPermissionNames
+          .map((name) => permissionIdsByName.get(name))
+          .filter((id): id is string => Boolean(id));
+
+        const agentPermissionIds = agentPermissionNames
+          .map((name) => permissionIdsByName.get(name))
+          .filter((id): id is string => Boolean(id));
+
+        await tx.rolePermission.createMany({
+          data: [
+            // Admin receives all available permissions
+            ...allPermissions.map((permission) => ({
+              role_id: adminRole.id,
+              permission_id: permission.id,
+            })),
+            ...managerPermissionIds.map((permissionId) => ({
+              role_id: managerRole.id,
+              permission_id: permissionId,
+            })),
+            ...agentPermissionIds.map((permissionId) => ({
+              role_id: agentRole.id,
+              permission_id: permissionId,
+            })),
+          ],
+          skipDuplicates: true,
+        });
+
+        // 3) Assign creator as active member with Admin role
+        await tx.organizationMembership.create({
+          data: {
+            user_id: userId,
+            organization_id: createdOrg.id,
+            role_id: adminRole.id,
+            status: 'active',
           },
-        },
+        });
+
+        return createdOrg;
       });
 
       this.logger.log(
-        `Organization '${organization.slug}' created by user ${userId} with owner membership`,
+        `Organization '${organization.slug}' created by user ${userId} with Admin membership`,
       );
 
       return organization as IOrganization;
@@ -445,7 +506,7 @@ export class OrganizationsService {
       );
 
       return {
-        message: 'Join request created successfully. Awaiting approval.',
+        message: this.i18n.t('errors.ORG.JOIN_REQUEST_CREATED'),
         organizationId: organization.id,
       };
     } catch (error) {
@@ -465,8 +526,7 @@ export class OrganizationsService {
 
   /**
    * Invite a user to an organization by email
-   * Creates a new user account if email doesn't exist
-   * Creates a membership with status 'invited'
+   * Creates (or updates) an invitation record with the selected role
    * @throws NotFoundException if organization doesn't exist
    * @throws ConflictException if user is already a member
    */
@@ -475,8 +535,8 @@ export class OrganizationsService {
     inviteDto: InviteToOrganizationDto,
   ): Promise<{
     message: string;
-    userId: string;
-    status: 'new_user_created' | 'existing_user_invited';
+    invitationId: string;
+    status: 'invitation_created' | 'invitation_updated';
   }> {
     try {
       // Verify organization exists
@@ -489,84 +549,79 @@ export class OrganizationsService {
         throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
       }
 
+      // Verify role exists and belongs to the same organization
+      const role = await this.prisma.role.findUnique({
+        where: { id: inviteDto.roleId },
+      });
+
+      if (!role || role.organization_id !== organizationId) {
+        throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
+      }
+
       // Check if user exists by email
-      let user = await this.prisma.user.findUnique({
+      const user = await this.prisma.user.findUnique({
         where: { email: inviteDto.email },
       });
 
-      let isNewUser = false;
-
-      // Create user if doesn't exist
-      if (!user) {
-        // Generate a random temporary password
-        const tempPassword = Math.random().toString(36).slice(-12);
-        const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-        user = await this.prisma.user.create({
-          data: {
-            email: inviteDto.email,
-            password_hash: passwordHash,
-            first_name: '',
-            last_name: '',
-          },
-        });
-
-        isNewUser = true;
-        this.logger.log(`New user created for email ${inviteDto.email}`);
-      }
-
       // Check if user is already a member
-      const existingMembership =
-        await this.prisma.organizationMembership.findFirst({
-          where: {
-            user_id: user.id,
-            organization_id: organizationId,
-          },
-        });
+      const existingMembership = user
+        ? await this.prisma.organizationMembership.findFirst({
+            where: {
+              user_id: user.id,
+              organization_id: organizationId,
+            },
+          })
+        : null;
 
       if (existingMembership) {
         this.logger.warn(
-          `User ${user.id} is already a member of organization ${organizationId}`,
+          `User ${user?.id ?? 'unknown'} is already a member of organization ${organizationId}`,
         );
         throw new ConflictException(
           this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
         );
       }
 
-      // Get or create the 'member' role
-      let memberRole = await this.prisma.role.findFirst({
-        where: { name: 'member', organization_id: null },
+      const existingInvitation = await this.prisma.invitation.findUnique({
+        where: {
+          email_organization_id: {
+            email: inviteDto.email,
+            organization_id: organizationId,
+          },
+        },
       });
 
-      if (!memberRole) {
-        memberRole = await this.prisma.role.create({
-          data: {
-            name: 'member',
-            organization_id: null, // Global role
+      // Create or update invitation with selected role
+      const invitation = await this.prisma.invitation.upsert({
+        where: {
+          email_organization_id: {
+            email: inviteDto.email,
+            organization_id: organizationId,
           },
-        });
-      }
-
-      // Create membership with invited status
-      await this.prisma.organizationMembership.create({
-        data: {
-          user_id: user.id,
+        },
+        update: {
+          role_id: inviteDto.roleId,
+          status: 'pending',
+          accepted_at: null,
+        },
+        create: {
+          email: inviteDto.email,
           organization_id: organizationId,
-          role_id: memberRole.id,
-          status: 'invited',
+          role_id: inviteDto.roleId,
+          status: 'pending',
         },
       });
 
       this.logger.log(
-        `User ${user.id} (${inviteDto.email}) invited to organization ${organizationId}`,
+        `Invitation ${invitation.id} created/updated for ${inviteDto.email} in organization ${organizationId} with role ${inviteDto.roleId}`,
       );
 
       return {
-        message: isNewUser
-          ? 'New user created and invited to organization'
-          : 'User invited to organization',
-        userId: user.id,
-        status: isNewUser ? 'new_user_created' : 'existing_user_invited',
+        message: this.i18n.t('errors.INVITATION.SAVED'),
+        invitationId: invitation.id,
+        status: existingInvitation
+          ? 'invitation_updated'
+          : 'invitation_created',
       };
     } catch (error) {
       if (

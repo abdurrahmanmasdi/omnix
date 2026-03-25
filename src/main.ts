@@ -22,14 +22,18 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // 3. API Versioning
-  // Automatically prefixes all your routes with /v1/ (e.g., localhost:3000/v1/auth/login)
+  // 3. Global API Prefix
+  // Prefixes all routes with /api
+  app.setGlobalPrefix('api');
+
+  // 4. API Versioning
+  // Combined with global prefix, routes become /api/v1/*
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: '1',
   });
 
-  // 4. Global Validation with i18n Support
+  // 5. Global Validation with i18n Support
   app.useGlobalPipes(
     new I18nValidationPipe({
       whitelist: true, // Automatically strip out any extra data sent by the client that isn't in the DTO
@@ -38,7 +42,7 @@ async function bootstrap() {
     }),
   );
 
-  // 5. Environment-Specific Swagger
+  // 6. Environment-Specific Swagger
   // Only builds and serves the /docs route if we are NOT in production
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()

@@ -5,7 +5,7 @@
  * Promotes DRY principle and code reusability.
  */
 
-import { INestApplication, Logger } from '@nestjs/common';
+import { INestApplication, Logger, VersioningType } from '@nestjs/common';
 import * as request from 'supertest';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import {
@@ -23,6 +23,14 @@ import {
 export async function initializeApp(app: INestApplication): Promise<void> {
   const logger = new Logger('E2E_SETUP');
   logger.log('Initializing NestJS application for E2E tests...');
+
+  // Mirror main.ts routing setup so e2e tests hit the same URLs as runtime.
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
+
   await app.init();
   logger.log('Application initialized successfully');
 }
@@ -78,7 +86,7 @@ export async function cleanupTestData(
 }
 
 /**
- * Register a user via POST /auth/register
+ * Register a user via POST /api/v1/auth/register
  */
 export async function registerUser(
   app: INestApplication,
@@ -86,7 +94,7 @@ export async function registerUser(
 ): Promise<IUser> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const response = await request(app.getHttpServer())
-    .post('/auth/register')
+    .post('/api/v1/auth/register')
 
     .send(payload)
     .expect(201);
@@ -95,7 +103,7 @@ export async function registerUser(
 }
 
 /**
- * Login user via POST /auth/login
+ * Login user via POST /api/v1/auth/login
  */
 export async function loginUser(
   app: INestApplication,
@@ -104,7 +112,7 @@ export async function loginUser(
 ): Promise<IAuthResponse> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const response = await request(app.getHttpServer())
-    .post('/auth/login')
+    .post('/api/v1/auth/login')
 
     .send({ email, password })
     .expect(201);
@@ -113,7 +121,7 @@ export async function loginUser(
 }
 
 /**
- * Create organization via POST /organizations
+ * Create organization via POST /api/v1/organizations
  */
 export async function createOrganization(
   app: INestApplication,
@@ -122,7 +130,7 @@ export async function createOrganization(
 ): Promise<IOrganization> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const response = await request(app.getHttpServer())
-    .post('/organizations')
+    .post('/api/v1/organizations')
     .set('Authorization', `Bearer ${jwtToken}`)
 
     .send(payload)
@@ -132,7 +140,7 @@ export async function createOrganization(
 }
 
 /**
- * Get user's organizations via GET /users/me/organizations
+ * Get user's organizations via GET /api/v1/users/me/organizations
  */
 export async function getUserOrganizations(
   app: INestApplication,
@@ -140,7 +148,7 @@ export async function getUserOrganizations(
 ): Promise<IOrganizationMembership[]> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const response = await request(app.getHttpServer())
-    .get('/users/me/organizations')
+    .get('/api/v1/users/me/organizations')
     .set('Authorization', `Bearer ${jwtToken}`)
     .expect(200);
 

@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { Observable } from 'rxjs';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,7 +21,10 @@ interface TenantRequest extends Request {
 export class TenantInterceptor implements NestInterceptor {
   private readonly logger = new Logger(TenantInterceptor.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly i18n: I18nService,
+  ) {}
 
   async intercept(
     context: ExecutionContext,
@@ -44,7 +48,9 @@ export class TenantInterceptor implements NestInterceptor {
 
     if (!userId) {
       this.logger.warn('TenantInterceptor: User ID not found in request');
-      throw new UnauthorizedException('User information not found');
+      throw new UnauthorizedException(
+        this.i18n.t('errors.TENANT.USER_INFO_MISSING'),
+      );
     }
 
     try {
@@ -62,7 +68,7 @@ export class TenantInterceptor implements NestInterceptor {
           `TenantInterceptor: User ${userId} does not have active membership to organization ${organizationId}`,
         );
         throw new UnauthorizedException(
-          'You do not have access to this organization',
+          this.i18n.t('errors.TENANT.NO_ORG_ACCESS'),
         );
       }
 
@@ -80,7 +86,9 @@ export class TenantInterceptor implements NestInterceptor {
       this.logger.error(
         `TenantInterceptor: Error verifying organization membership: ${error}`,
       );
-      throw new UnauthorizedException('Failed to verify organization access');
+      throw new UnauthorizedException(
+        this.i18n.t('errors.TENANT.VERIFY_FAILED'),
+      );
     }
 
     return next.handle();

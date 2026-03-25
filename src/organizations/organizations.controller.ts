@@ -99,8 +99,7 @@ export class OrganizationsController {
 
   /**
    * Invite a user to an organization by email
-   * Creates a new user account if email doesn't exist
-   * Creates a membership with status 'invited'
+   * Saves an invitation record with a required roleId
    */
   @Post(':organizationId/invite')
   @HttpCode(HttpStatus.CREATED)
@@ -108,7 +107,7 @@ export class OrganizationsController {
   @ApiOperation({
     summary: 'Invite a user to an organization',
     description:
-      'Creates a membership invitation. If user email does not exist, creates a new user account.',
+      'Creates or updates an invitation record and stores the selected role for acceptance.',
   })
   @ApiResponse({
     status: 201,
@@ -116,10 +115,10 @@ export class OrganizationsController {
     schema: {
       properties: {
         message: { type: 'string' },
-        userId: { type: 'string', format: 'uuid' },
+        invitationId: { type: 'string', format: 'uuid' },
         status: {
           type: 'string',
-          enum: ['new_user_created', 'existing_user_invited'],
+          enum: ['invitation_created', 'invitation_updated'],
         },
       },
     },
@@ -134,8 +133,8 @@ export class OrganizationsController {
     @Body() inviteDto: InviteToOrganizationDto,
   ): Promise<{
     message: string;
-    userId: string;
-    status: 'new_user_created' | 'existing_user_invited';
+    invitationId: string;
+    status: 'invitation_created' | 'invitation_updated';
   }> {
     return this.organizationsService.invite(organizationId, inviteDto);
   }

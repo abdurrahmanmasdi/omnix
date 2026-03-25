@@ -5,6 +5,7 @@
     "MIN_LENGTH": "Değer en az {constraint1} karakter uzunluğunda olmalıdır.",
     "MAX_LENGTH": "Değer {constraint1} karakteri aşmamalıdır.",
     "IS_STRING": "Metin olmalıdır.",
+    "IS_NOT_EMPTY": "Değer boş olmamalıdır.",
     "IS_BOOLEAN": "Boolean bir değer olmalıdır.",
     "IS_ARRAY": "Bir dizi olmalıdır.",
     "IS_UUID": "Geçerli bir UUID olmalıdır.",
@@ -15,7 +16,8 @@
     "INVALID_PAGINATION": "Geçersiz sayfalandırma parametreleri. skip >= 0 olmalı, take 1 ile 100 arasında olmalıdır."
   },
   "AUTH": {
-    "USER_ALREADY_EXISTS": "Bu e-posta ile bir kullanıcı zaten var."
+    "USER_ALREADY_EXISTS": "Bu e-posta ile bir kullanıcı zaten var.",
+    "INVALID_CREDENTIALS": "Geçersiz kimlik bilgileri."
   },
   "ORG": {
     "SLUG_ALREADY_EXISTS": "Bu slug ile bir kuruluş zaten var.",
@@ -28,7 +30,28 @@
     "UPDATE_FAILED": "Kuruluş güncellenirken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
     "DELETE_FAILED": "Kuruluş silinirken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
     "JOIN_FAILED": "Kuruluşa katılırken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
-    "INVITE_FAILED": "Kullanıcı davet edilirken hata oluştu. Lütfen daha sonra tekrar deneyiniz."
+    "INVITE_FAILED": "Kullanıcı davet edilirken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
+    "ROLE_NOT_FOUND": "Bu organizasyon için rol bulunamadı.",
+    "JOIN_REQUEST_CREATED": "Katılım isteği başarıyla oluşturuldu. Onay bekleniyor."
+  },
+  "INVITATION": {
+    "SAVED": "Davet başarıyla kaydedildi.",
+    "NOT_FOUND": "Davet bulunamadı.",
+    "NOT_OWNER": "Bu davet size ait değil.",
+    "INVALID_STATUS": "\"{status}\" durumundaki davet kabul edilemez.",
+    "ACCEPT_SUCCESS": "\"{organizationName}\" organizasyonuna başarıyla katıldınız."
+  },
+  "ACCESS": {
+    "ROLE_EXISTS": "\"{roleName}\" rolü bu organizasyonda zaten mevcut.",
+    "PERMISSIONS_NOT_FOUND": "Bir veya daha fazla izin bulunamadı.",
+    "ROLE_FORBIDDEN": "Bu role erişim yetkiniz yok.",
+    "MEMBERSHIP_FORBIDDEN": "Bu üyeliğe erişim yetkiniz yok.",
+    "MEMBERSHIP_NOT_FOUND": "Üyelik bulunamadı."
+  },
+  "TENANT": {
+    "USER_INFO_MISSING": "Kullanıcı bilgisi bulunamadı.",
+    "NO_ORG_ACCESS": "Bu organizasyona erişim yetkiniz yok.",
+    "VERIFY_FAILED": "Organizasyon erişimi doğrulanamadı."
   },
   "UNAUTHORIZED": "Yetkisiz erişim.",
   "FORBIDDEN": "Erişim reddedildi.",

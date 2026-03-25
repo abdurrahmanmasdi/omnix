@@ -105,10 +105,10 @@ export class UsersController {
 
   /**
    * Accept a pending organization invite
-   * Updates the membership status from 'invited' to 'active'
+   * Creates membership from invitation and marks invitation as accepted
    * Note: This endpoint does NOT require x-organization-id header
    */
-  @Post('invites/:membershipId/accept')
+  @Post('invites/:inviteId/accept')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Accept an organization invite',
@@ -135,11 +135,8 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'Invite not found' })
   async acceptInvite(
     @Request() req: AuthRequest,
-    @Param('membershipId') membershipId: string,
+    @Param('inviteId') inviteId: string,
   ) {
-    return this.usersService.acceptOrganizationInvite(
-      req.user!.id,
-      membershipId,
-    );
+    return this.usersService.acceptOrganizationInvite(req.user!.id, inviteId);
   }
 }

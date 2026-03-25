@@ -1,4 +1,4 @@
-import { IsEmail } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
@@ -9,4 +9,14 @@ export class InviteToOrganizationDto {
   })
   @IsEmail({}, { message: i18nValidationMessage('errors.VALIDATION.IS_EMAIL') })
   email: string;
+
+  @ApiProperty({
+    example: 'a6c29f00-3f8f-4d8b-b0ee-6f2ef2e20c11',
+    description: 'The role ID to assign when the invite is accepted',
+  })
+  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('errors.VALIDATION.IS_NOT_EMPTY'),
+  })
+  roleId: string;
 }

@@ -49,7 +49,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇬🇧 should accept valid registration with default language (English)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .send(testPayload)
         .expect(201);
 
@@ -64,7 +64,7 @@ describe('i18n Integration (E2E)', () => {
       };
 
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'tr')
         .send(turkishPayload)
         .expect(201);
@@ -80,7 +80,7 @@ describe('i18n Integration (E2E)', () => {
       };
 
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'ar')
         .send(arabicPayload)
         .expect(201);
@@ -99,12 +99,12 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇬🇧 should return 400 status with validation error for empty payload (English)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .send({});
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('statusCode', 400);
-      expect(response.body).toHaveProperty('path', '/auth/register');
+      expect(response.body).toHaveProperty('path', '/api/v1/auth/register');
       expect(response.body).toHaveProperty('message');
       // Message should not be empty
       expect(response.body.message).toBeTruthy();
@@ -112,13 +112,13 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇹🇷 should return 400 status with validation error with Turkish language header', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'tr')
         .send({});
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('statusCode', 400);
-      expect(response.body).toHaveProperty('path', '/auth/register');
+      expect(response.body).toHaveProperty('path', '/api/v1/auth/register');
       expect(response.body).toHaveProperty('message');
       // Message should not be empty
       expect(response.body.message).toBeTruthy();
@@ -126,13 +126,13 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇸🇦 should return 400 status with validation error with Arabic language header', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'ar')
         .send({});
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('statusCode', 400);
-      expect(response.body).toHaveProperty('path', '/auth/register');
+      expect(response.body).toHaveProperty('path', '/api/v1/auth/register');
       expect(response.body).toHaveProperty('message');
       // Message should not be empty
       expect(response.body.message).toBeTruthy();
@@ -146,7 +146,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇬🇧 should reject invalid email format (English)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .send({
           email: 'not-an-email',
           password: 'ValidPassword123!',
@@ -160,7 +160,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇹🇷 should reject invalid email format (Turkish)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'tr')
         .send({
           email: 'not-an-email',
@@ -175,7 +175,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇸🇦 should reject invalid email format (Arabic)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'ar')
         .send({
           email: 'not-an-email',
@@ -196,7 +196,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇬🇧 should reject short password (English)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .send({
           email: 'test@example.com',
           password: 'short',
@@ -210,7 +210,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇹🇷 should reject short password (Turkish)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'tr')
         .send({
           email: 'test@example.com',
@@ -225,7 +225,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇸🇦 should reject short password (Arabic)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'ar')
         .send({
           email: 'test@example.com',
@@ -246,7 +246,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇬🇧 should reject registration with missing first_name (English)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .send({
           email: 'test@example.com',
           password: 'ValidPassword123!',
@@ -259,7 +259,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇹🇷 should reject registration with missing first_name (Turkish)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'tr')
         .send({
           email: 'test@example.com',
@@ -273,7 +273,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇸🇦 should reject registration with missing first_name (Arabic)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'ar')
         .send({
           email: 'test@example.com',
@@ -287,7 +287,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇬🇧 should reject registration with missing last_name (English)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .send({
           email: 'test@example.com',
           password: 'ValidPassword123!',
@@ -300,7 +300,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇹🇷 should reject registration with missing last_name (Turkish)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'tr')
         .send({
           email: 'test@example.com',
@@ -314,7 +314,7 @@ describe('i18n Integration (E2E)', () => {
 
     it('🇸🇦 should reject registration with missing last_name (Arabic)', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/v1/auth/register')
         .set('Accept-Language', 'ar')
         .send({
           email: 'test@example.com',

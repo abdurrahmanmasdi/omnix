@@ -5,6 +5,7 @@
     "MIN_LENGTH": "Value must be at least {constraint1} characters long.",
     "MAX_LENGTH": "Value must not exceed {constraint1} characters.",
     "IS_STRING": "Must be a string.",
+    "IS_NOT_EMPTY": "Value must not be empty.",
     "IS_BOOLEAN": "Must be a boolean value.",
     "IS_ARRAY": "Must be an array.",
     "IS_UUID": "Must be a valid UUID.",
@@ -15,7 +16,8 @@
     "INVALID_PAGINATION": "Invalid pagination parameters. skip must be >= 0, take must be between 1 and 100."
   },
   "AUTH": {
-    "USER_ALREADY_EXISTS": "User with this email already exists."
+    "USER_ALREADY_EXISTS": "User with this email already exists.",
+    "INVALID_CREDENTIALS": "Invalid credentials."
   },
   "ORG": {
     "SLUG_ALREADY_EXISTS": "Organization with this slug already exists.",
@@ -28,7 +30,28 @@
     "UPDATE_FAILED": "Failed to update organization. Please try again later.",
     "DELETE_FAILED": "Failed to delete organization. Please try again later.",
     "JOIN_FAILED": "Failed to join organization. Please try again later.",
-    "INVITE_FAILED": "Failed to invite user. Please try again later."
+    "INVITE_FAILED": "Failed to invite user. Please try again later.",
+    "ROLE_NOT_FOUND": "Role not found for this organization.",
+    "JOIN_REQUEST_CREATED": "Join request created successfully. Awaiting approval."
+  },
+  "INVITATION": {
+    "SAVED": "Invitation saved successfully.",
+    "NOT_FOUND": "Invitation not found.",
+    "NOT_OWNER": "This invitation does not belong to you.",
+    "INVALID_STATUS": "Cannot accept invitation with status \"{status}\".",
+    "ACCEPT_SUCCESS": "Successfully joined organization \"{organizationName}\"."
+  },
+  "ACCESS": {
+    "ROLE_EXISTS": "Role \"{roleName}\" already exists in this organization.",
+    "PERMISSIONS_NOT_FOUND": "One or more permissions do not exist.",
+    "ROLE_FORBIDDEN": "You do not have access to this role.",
+    "MEMBERSHIP_FORBIDDEN": "You do not have access to this membership.",
+    "MEMBERSHIP_NOT_FOUND": "Membership not found."
+  },
+  "TENANT": {
+    "USER_INFO_MISSING": "User information not found.",
+    "NO_ORG_ACCESS": "You do not have access to this organization.",
+    "VERIFY_FAILED": "Failed to verify organization access."
   },
   "UNAUTHORIZED": "Unauthorized access.",
   "FORBIDDEN": "Access denied.",

@@ -38,6 +38,7 @@ model Organization {
   created_at DateTime                  @default(now())
 
   roles       Role[]
+  invitations Invitation[]
   memberships OrganizationMembership[]
 
   @@map("organizations")
@@ -79,8 +80,25 @@ model Role {
   organization   Organization? @relation(fields: [organization_id], references: [id])
   rolePermissions RolePermission[]
   memberships     OrganizationMembership[]
+  invitations     Invitation[]
 
   @@map("roles")
+}
+
+model Invitation {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String
+  organization_id String   @db.Uuid
+  role_id         String   @db.Uuid
+  status          String   @default("pending")
+  created_at      DateTime @default(now())
+  accepted_at     DateTime?
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+  role         Role         @relation(fields: [role_id], references: [id])
+
+  @@unique([email, organization_id])
+  @@map("invitations")
 }
 
 model RolePermission {

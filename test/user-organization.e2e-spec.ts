@@ -151,7 +151,7 @@ describe('User Registration, Authentication & Organization Management (E2E)', ()
   // ============================================================================
 
   describe('👥 Organization Membership Verification (GET /users/me/organizations)', () => {
-    it('should retrieve user organizations and verify owner membership status', async () => {
+    it('should retrieve user organizations and verify admin membership status', async () => {
       // Act
       const memberships: IOrganizationMembership[] = await getUserOrganizations(
         app,
@@ -172,7 +172,7 @@ describe('User Registration, Authentication & Organization Management (E2E)', ()
       // Assert - Membership details
       if (membership) {
         expect(membership.status).toBe(TEST_CONSTANTS.MEMBERSHIP_STATUS.ACTIVE);
-        expect(membership.role.name).toBe(TEST_CONSTANTS.ROLE.OWNER);
+        expect(membership.role.name).toBe(TEST_CONSTANTS.ROLE.ADMIN);
         expect(membership.organization_id).toBe(createdOrganization.id);
 
         // Assert - Nested organization data
@@ -209,7 +209,7 @@ describe('User Registration, Authentication & Organization Management (E2E)', ()
       expect(membership).toBeDefined();
       if (membership) {
         expect(membership.status).toBe(TEST_CONSTANTS.MEMBERSHIP_STATUS.ACTIVE);
-        expect(membership.role.name).toBe(TEST_CONSTANTS.ROLE.OWNER);
+        expect(membership.role.name).toBe(TEST_CONSTANTS.ROLE.ADMIN);
       }
     });
   });

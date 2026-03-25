@@ -3,14 +3,19 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly i18n: I18nService,
+  ) {}
 
   /**
    * Get the current authenticated user's profile
@@ -30,7 +35,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User profile not found');
+      throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
     }
 
     return user;
@@ -84,62 +89,104 @@ export class UsersService {
 
   /**
    * Accept a pending organization invite
-   * Validates the membership belongs to the user and has 'invited' status
+   * Validates invitation belongs to the user's email and creates active membership
    */
-  async acceptOrganizationInvite(userId: string, membershipId: string) {
+  async acceptOrganizationInvite(userId: string, inviteId: string) {
     this.logger.debug(
-      `[UsersService] Processing invite acceptance for membership ${membershipId} by user ${userId}`,
+      `[UsersService] Processing invite acceptance for invitation ${inviteId} by user ${userId}`,
     );
 
-    // Step 1: Verify membership exists and belongs to this user
-    const membership = await this.prisma.organizationMembership.findUnique({
-      where: { id: membershipId },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
+    }
+
+    // Step 1: Verify invitation exists
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { id: inviteId },
       include: {
-        organization: { select: { name: true } },
-        user: { select: { email: true } },
+        organization: { select: { id: true, name: true, slug: true } },
+        role: { select: { id: true, name: true } },
       },
     });
 
-    if (!membership) {
-      throw new NotFoundException(`Invite ${membershipId} not found`);
+    if (!invitation) {
+      throw new NotFoundException(this.i18n.t('errors.INVITATION.NOT_FOUND'));
     }
 
-    // Step 2: Verify membership belongs to the current user
-    if (membership.user_id !== userId) {
+    // Step 2: Verify invitation belongs to the current user's email
+    if (invitation.email.toLowerCase() !== user.email.toLowerCase()) {
       this.logger.warn(
-        `[UsersService] Unauthorized invite acceptance attempt: User ${userId} tried to accept invite ${membershipId} belonging to user ${membership.user_id}`,
+        `[UsersService] Unauthorized invite acceptance attempt: User ${userId} tried to accept invite ${inviteId} for email ${invitation.email}`,
       );
-      throw new BadRequestException('This invite does not belong to you');
+      throw new BadRequestException(this.i18n.t('errors.INVITATION.NOT_OWNER'));
     }
 
-    // Step 3: Verify membership status is 'invited'
-    if (membership.status !== 'invited') {
+    // Step 3: Verify invitation status is pending
+    if (invitation.status !== 'pending') {
       throw new BadRequestException(
-        `Cannot accept invite with status "${membership.status}". Only "invited" invites can be accepted.`,
+        this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+          args: { status: invitation.status },
+        }),
       );
     }
 
-    // Step 4: Update status to 'active'
-    const updatedMembership = await this.prisma.organizationMembership.update({
-      where: { id: membershipId },
-      data: {
-        status: 'active',
-      },
-      include: {
-        organization: { select: { name: true, slug: true } },
-        role: { select: { name: true } },
-      },
+    // Step 4: Ensure user is not already a member of this organization
+    const existingMembership =
+      await this.prisma.organizationMembership.findFirst({
+        where: {
+          user_id: user.id,
+          organization_id: invitation.organization_id,
+        },
+      });
+
+    if (existingMembership) {
+      throw new ConflictException(
+        this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
+      );
+    }
+
+    // Step 5: Create membership from invitation role and mark invitation accepted
+    const createdMembership = await this.prisma.$transaction(async (tx) => {
+      const membership = await tx.organizationMembership.create({
+        data: {
+          user_id: user.id,
+          organization_id: invitation.organization_id,
+          role_id: invitation.role_id,
+          status: 'active',
+        },
+        include: {
+          organization: { select: { name: true, slug: true } },
+          role: { select: { name: true } },
+        },
+      });
+
+      await tx.invitation.update({
+        where: { id: inviteId },
+        data: {
+          status: 'accepted',
+          accepted_at: new Date(),
+        },
+      });
+
+      return membership;
     });
 
     this.logger.log(
-      `[UsersService] User ${userId} accepted invite to organization "${updatedMembership.organization?.name}"`,
+      `[UsersService] User ${userId} accepted invite ${inviteId} to organization "${createdMembership.organization?.name}"`,
     );
 
     return {
-      message: `Successfully joined organization "${updatedMembership.organization?.name}"`,
-      membership_id: updatedMembership.id,
-      organization_name: updatedMembership.organization?.name,
-      role: updatedMembership.role?.name,
+      message: this.i18n.t('errors.INVITATION.ACCEPT_SUCCESS', {
+        args: { organizationName: createdMembership.organization?.name ?? '' },
+      }),
+      membership_id: createdMembership.id,
+      organization_name: createdMembership.organization?.name,
+      role: createdMembership.role?.name,
     };
   }
 }

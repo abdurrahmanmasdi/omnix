@@ -6,6 +6,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UnauthorizedException } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { RegisterDto } from './dtos/register.dto';
@@ -26,7 +27,10 @@ interface ILoginResponse {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Public()
   @Post('login')
@@ -41,7 +45,11 @@ export class AuthController {
       loginDto.email,
       loginDto.password,
     );
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      throw new UnauthorizedException(
+        this.i18n.t('errors.AUTH.INVALID_CREDENTIALS'),
+      );
+    }
     return this.authService.login(user);
   }
 

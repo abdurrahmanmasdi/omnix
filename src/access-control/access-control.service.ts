@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionsService } from '../auth/services/permissions.service';
 import {
@@ -21,6 +22,7 @@ export class AccessControlService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissionsService: PermissionsService,
+    private readonly i18n: I18nService,
   ) {}
 
   /**
@@ -41,7 +43,9 @@ export class AccessControlService {
 
     if (existingRole) {
       throw new BadRequestException(
-        `Role "${dto.name}" already exists in this organization`,
+        this.i18n.t('errors.ACCESS.ROLE_EXISTS', {
+          args: { roleName: dto.name },
+        }),
       );
     }
 
@@ -83,14 +87,14 @@ export class AccessControlService {
     });
 
     if (!role) {
-      throw new NotFoundException(`Role ${roleId} not found`);
+      throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
     }
 
     if (role.organization_id && role.organization_id !== tenantId) {
       this.logger.warn(
         `[AccessControlService] Unauthorized access attempt: User from tenant ${tenantId} tried to access role ${roleId} from tenant ${role.organization_id}`,
       );
-      throw new ForbiddenException('You do not have access to this role');
+      throw new ForbiddenException(this.i18n.t('errors.ACCESS.ROLE_FORBIDDEN'));
     }
 
     // Step 2: Verify all permissions exist
@@ -103,7 +107,9 @@ export class AccessControlService {
     });
 
     if (permissions.length !== dto.permission_ids.length) {
-      throw new BadRequestException('One or more permissions do not exist');
+      throw new BadRequestException(
+        this.i18n.t('errors.ACCESS.PERMISSIONS_NOT_FOUND'),
+      );
     }
 
     // Step 3: Get existing role-permission associations
@@ -165,14 +171,18 @@ export class AccessControlService {
     });
 
     if (!membership) {
-      throw new NotFoundException(`Membership ${membershipId} not found`);
+      throw new NotFoundException(
+        this.i18n.t('errors.ACCESS.MEMBERSHIP_NOT_FOUND'),
+      );
     }
 
     if (membership.organization_id !== tenantId) {
       this.logger.warn(
         `[AccessControlService] Unauthorized access attempt: User from tenant ${tenantId} tried to access membership ${membershipId} from tenant ${membership.organization_id}`,
       );
-      throw new ForbiddenException('You do not have access to this membership');
+      throw new ForbiddenException(
+        this.i18n.t('errors.ACCESS.MEMBERSHIP_FORBIDDEN'),
+      );
     }
 
     // Step 2: Verify new role exists and belongs to this tenant
@@ -181,11 +191,11 @@ export class AccessControlService {
     });
 
     if (!newRole) {
-      throw new NotFoundException(`Role ${dto.role_id} not found`);
+      throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
     }
 
     if (newRole.organization_id && newRole.organization_id !== tenantId) {
-      throw new ForbiddenException('You do not have access to this role');
+      throw new ForbiddenException(this.i18n.t('errors.ACCESS.ROLE_FORBIDDEN'));
     }
 
     // Step 3: Update the membership
@@ -245,7 +255,9 @@ export class AccessControlService {
       this.logger.warn(
         `[AccessControlService] Unauthorized access attempt: User from tenant ${tenantId} tried to access membership ${membershipId} from tenant ${membership.organization_id}`,
       );
-      throw new ForbiddenException('You do not have access to this membership');
+      throw new ForbiddenException(
+        this.i18n.t('errors.ACCESS.MEMBERSHIP_FORBIDDEN'),
+      );
     }
 
     // Step 2: Verify permission exists
@@ -417,7 +429,7 @@ export class AccessControlService {
     });
 
     if (!role) {
-      throw new NotFoundException(`Role ${roleId} not found`);
+      throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
     }
 
     // Validate tenant access (allow access to global roles or tenant's own roles)
@@ -425,7 +437,7 @@ export class AccessControlService {
       this.logger.warn(
         `[AccessControlService] Unauthorized access attempt: User from tenant ${tenantId} tried to access role ${roleId} from tenant ${role.organization_id}`,
       );
-      throw new ForbiddenException('You do not have access to this role');
+      throw new ForbiddenException(this.i18n.t('errors.ACCESS.ROLE_FORBIDDEN'));
     }
 
     return {
@@ -539,7 +551,9 @@ export class AccessControlService {
     });
 
     if (!membership) {
-      throw new NotFoundException(`Membership ${membershipId} not found`);
+      throw new NotFoundException(
+        this.i18n.t('errors.ACCESS.MEMBERSHIP_NOT_FOUND'),
+      );
     }
 
     // Validate tenant access
@@ -547,7 +561,9 @@ export class AccessControlService {
       this.logger.warn(
         `[AccessControlService] Unauthorized access attempt: User from tenant ${tenantId} tried to access membership ${membershipId} from tenant ${membership.organization_id}`,
       );
-      throw new ForbiddenException('You do not have access to this membership');
+      throw new ForbiddenException(
+        this.i18n.t('errors.ACCESS.MEMBERSHIP_FORBIDDEN'),
+      );
     }
 
     return {

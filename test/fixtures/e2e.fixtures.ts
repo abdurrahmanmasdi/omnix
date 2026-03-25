@@ -46,8 +46,8 @@ export const TEST_CONSTANTS = {
 
   ROLE: {
     OWNER: 'owner',
-    MEMBER: 'member',
-    ADMIN: 'admin',
+    Agent: 'agent',
+    ADMIN: 'Admin',
   },
 
   HTTP_STATUS: {
