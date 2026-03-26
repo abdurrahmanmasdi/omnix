@@ -876,4 +876,86 @@ export class AccessControlService {
       throw error;
     }
   }
+
+  /**
+   * Get a detailed breakdown of a member's permissions
+   * Shows which permissions come from their assigned role vs explicit overrides
+   * Security: Only Owner can view permission breakdowns
+   * Returns: { rolePermissionIds: string[], grantedOverrideIds: string[] }
+   */
+  async getMemberPermissionBreakdown(
+    organizationId: string,
+    membershipId: string,
+    currentUserId: string,
+  ): Promise<{ rolePermissionIds: string[]; grantedOverrideIds: string[] }> {
+    try {
+      // Verify caller is Owner
+      await this.verifyIsOwner(organizationId, currentUserId);
+
+      // Fetch the membership with role and role permissions
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: {
+          id: membershipId,
+          organization_id: organizationId,
+        },
+        include: {
+          role: {
+            include: {
+              rolePermissions: {
+                select: {
+                  permission_id: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!membership) {
+        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+      }
+
+      // Fetch permission overrides where is_granted === true
+      const overrides = await this.prisma.membershipPermissionOverride.findMany(
+        {
+          where: {
+            membership_id: membershipId,
+            is_granted: true,
+          },
+          select: {
+            permission_id: true,
+          },
+        },
+      );
+
+      // Extract permission IDs from role
+      const rolePermissionIds = membership.role.rolePermissions.map(
+        (rp) => rp.permission_id,
+      );
+
+      // Extract permission IDs from granted overrides
+      const grantedOverrideIds = overrides.map((o) => o.permission_id);
+
+      this.logger.debug(
+        `[AccessControlService] Retrieved permission breakdown for membership ${membershipId}: ${rolePermissionIds.length} from role, ${grantedOverrideIds.length} overrides`,
+      );
+
+      return {
+        rolePermissionIds,
+        grantedOverrideIds,
+      };
+    } catch (error) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `[AccessControlService] Error retrieving permission breakdown for membership ${membershipId}: ${error}`,
+      );
+      throw error;
+    }
+  }
 }

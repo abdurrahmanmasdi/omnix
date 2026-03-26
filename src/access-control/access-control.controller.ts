@@ -417,4 +417,65 @@ export class AccessControlController {
       req.user.id,
     );
   }
+
+  /**
+   * Get a detailed breakdown of a member's permissions
+   * Shows which permissions come from their assigned role vs explicit overrides
+   * Security: Only the organization Owner can view permission breakdowns
+   * Secured: User must be the Owner of the organization
+   */
+  @Get('memberships/:membershipId/permissions-breakdown')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Get a member's permission breakdown",
+    description:
+      "Retrieves a detailed breakdown of a member's permissions, distinguishing between role-inherited permissions and explicit permission overrides.",
+  })
+  @ApiParam({
+    name: 'orgId',
+    description: 'The organization ID',
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'membershipId',
+    description: 'The membership ID to retrieve permissions for',
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Permission breakdown retrieved successfully',
+    schema: {
+      properties: {
+        rolePermissionIds: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          description:
+            "Permission IDs inherited from the member's assigned role",
+        },
+        grantedOverrideIds: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          description: 'Permission IDs granted as explicit overrides',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Membership not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the organization Owner can perform this action',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMemberPermissionBreakdown(
+    @Param('orgId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Request() req: AuthRequest,
+  ): Promise<{ rolePermissionIds: string[]; grantedOverrideIds: string[] }> {
+    return this.accessControlService.getMemberPermissionBreakdown(
+      organizationId,
+      membershipId,
+      req.user.id,
+    );
+  }
 }
