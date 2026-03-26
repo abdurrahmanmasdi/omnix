@@ -26,6 +26,8 @@ model User {
   created_at    DateTime                  @default(now())
 
   memberships   OrganizationMembership[]
+  conversationParticipants ConversationParticipant[]
+  sentMessages  Message[]                 @relation("SentMessages")
 
   @@map("users")
 }
@@ -37,9 +39,10 @@ model Organization {
   is_public  Boolean                   @default(false)
   created_at DateTime                  @default(now())
 
-  roles       Role[]
-  invitations Invitation[]
-  memberships OrganizationMembership[]
+  roles        Role[]
+  invitations  Invitation[]
+  memberships  OrganizationMembership[]
+  conversations Conversation[]
 
   @@map("organizations")
 }
@@ -128,5 +131,47 @@ enum MembershipStatus {
   PENDING
   ACTIVE
   REJECTED
+}
+
+model Conversation {
+  id              String                    @id @default(uuid()) @db.Uuid
+  organization_id String                    @db.Uuid
+  is_group        Boolean                   @default(false)
+  name            String?
+  created_at      DateTime                  @default(now())
+  updated_at      DateTime                  @updatedAt
+
+  organization    Organization             @relation(fields: [organization_id], references: [id])
+  participants    ConversationParticipant[]
+  messages        Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id              String                    @id @default(uuid()) @db.Uuid
+  conversation_id String                    @db.Uuid
+  user_id         String                    @db.Uuid
+  joined_at       DateTime                  @default(now())
+
+  conversation    Conversation              @relation(fields: [conversation_id], references: [id])
+  user            User                      @relation(fields: [user_id], references: [id])
+
+  @@unique([conversation_id, user_id])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String                    @id @default(uuid()) @db.Uuid
+  conversation_id String                    @db.Uuid
+  sender_id       String                    @db.Uuid
+  content         String                    @db.Text
+  created_at      DateTime                  @default(now())
+  updated_at      DateTime                  @updatedAt
+
+  conversation    Conversation              @relation(fields: [conversation_id], references: [id])
+  sender          User                      @relation("SentMessages", fields: [sender_id], references: [id])
+
+  @@map("messages")
 }
 

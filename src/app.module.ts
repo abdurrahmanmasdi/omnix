@@ -19,6 +19,7 @@ import { TenantInterceptor } from './organizations/interceptors/tenant.intercept
 import { UsersModule } from './users/users.module';
 import { SeederModule } from './seeders/seeder.module';
 import { AccessControlModule } from './access-control/access-control.module';
+import { ChatModule } from './chat/chat.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -87,6 +88,7 @@ mkdirSync(logsDir, { recursive: true });
     UsersModule,
     SeederModule,
     AccessControlModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

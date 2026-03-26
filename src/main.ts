@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
 import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './redis/redis-io.adapter';
 import helmet from 'helmet';
 
 async function bootstrap() {
@@ -11,6 +12,19 @@ async function bootstrap() {
 
   app.useLogger(app.get(Logger));
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
+
+  // WebSocket Adapter - Redis for Pub/Sub (Scalability)
+  const redisIoAdapter = new RedisIoAdapter();
+  try {
+    await redisIoAdapter.connectToRedis();
+    app.useWebSocketAdapter(redisIoAdapter);
+  } catch (error) {
+    console.error(
+      'Failed to setup Redis WebSocket adapter. WebSockets may not work correctly.',
+      error,
+    );
+    // Continue without Redis adapter - WebSockets will still work, just not distributed
+  }
 
   // 1. Security Headers
   app.use(helmet());

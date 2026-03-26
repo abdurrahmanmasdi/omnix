@@ -6,4 +6,3 @@ ALTER TABLE "permissions" RENAME COLUMN "name" TO "action";
 
 -- CreateIndex
 CREATE UNIQUE INDEX "permissions_action_key" ON "permissions"("action");
-
