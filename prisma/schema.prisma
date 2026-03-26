@@ -49,7 +49,7 @@ model OrganizationMembership {
   user_id         String                    @db.Uuid
   organization_id String                    @db.Uuid
   role_id         String                    @db.Uuid
-  status          String
+  status          MembershipStatus          @default(PENDING)
   created_at      DateTime                  @default(now())
 
   user           User                      @relation(fields: [user_id], references: [id])
@@ -124,3 +124,9 @@ model MembershipPermissionOverride {
   @@unique([membership_id, permission_id])
   @@map("membership_permission_overrides")
 }
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+

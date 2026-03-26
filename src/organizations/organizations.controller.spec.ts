@@ -1,3 +1,4 @@
+import { MembershipStatus } from '@prisma/client';
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrganizationsController } from './organizations.controller';
@@ -8,6 +9,7 @@ describe('OrganizationsController', () => {
 
   const mockOrganizationsService = {
     create: jest.fn(),
+    getPendingRequests: jest.fn(),
     join: jest.fn(),
     invite: jest.fn(),
     approveJoinRequest: jest.fn(),
@@ -30,6 +32,21 @@ describe('OrganizationsController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('should delegate getPendingRequests', async () => {
+    mockOrganizationsService.getPendingRequests.mockResolvedValue([
+      { membershipId: 'm1' },
+    ]);
+    const req = { user: { id: 'u1' } } as any;
+
+    const result = await controller.getPendingRequests('org1', req);
+
+    expect(mockOrganizationsService.getPendingRequests).toHaveBeenCalledWith(
+      'org1',
+      'u1',
+    );
+    expect(result).toEqual([{ membershipId: 'm1' }]);
   });
 
   it('should delegate create', async () => {
@@ -89,7 +106,7 @@ describe('OrganizationsController', () => {
     mockOrganizationsService.approveJoinRequest.mockResolvedValue({
       message: 'approved',
       membershipId: 'm1',
-      status: 'ACTIVE',
+      status: MembershipStatus.ACTIVE,
     });
     const req = { user: { id: 'admin1' } } as any;
 
@@ -103,14 +120,14 @@ describe('OrganizationsController', () => {
       'admin1',
       { roleId: 'r1' },
     );
-    expect(result.status).toBe('ACTIVE');
+    expect(result.status).toBe(MembershipStatus.ACTIVE);
   });
 
   it('should delegate reject request', async () => {
     mockOrganizationsService.rejectJoinRequest.mockResolvedValue({
       message: 'rejected',
       membershipId: 'm1',
-      status: 'REJECTED',
+      status: MembershipStatus.REJECTED,
     });
     const req = { user: { id: 'admin1' } } as any;
 
@@ -121,6 +138,6 @@ describe('OrganizationsController', () => {
       'm1',
       'admin1',
     );
-    expect(result.status).toBe('REJECTED');
+    expect(result.status).toBe(MembershipStatus.REJECTED);
   });
 });

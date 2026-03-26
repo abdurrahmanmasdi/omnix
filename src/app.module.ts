@@ -4,6 +4,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { I18nModule, AcceptLanguageResolver } from 'nestjs-i18n';
+import { mkdirSync } from 'fs';
 import * as path from 'path';
 import { validate } from './env.validation';
 import { AppController } from './app.controller';
@@ -17,6 +18,9 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { TenantInterceptor } from './organizations/interceptors/tenant.interceptor';
 import { UsersModule } from './users/users.module';
 
+const logsDir = path.join(process.cwd(), 'logs');
+mkdirSync(logsDir, { recursive: true });
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -25,10 +29,29 @@ import { UsersModule } from './users/users.module';
     }),
     LoggerModule.forRoot({
       pinoHttp: {
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? { target: 'pino-pretty', options: { singleLine: true } }
-            : undefined,
+        transport: {
+          targets: [
+            ...(process.env.NODE_ENV !== 'production'
+              ? [
+                  {
+                    target: 'pino-pretty',
+                    options: {
+                      singleLine: true,
+                      colorize: true,
+                      translateTime: 'SYS:standard',
+                    },
+                  },
+                ]
+              : []),
+            {
+              target: 'pino/file',
+              options: {
+                destination: path.join(logsDir, 'app.log'),
+                mkdir: true,
+              },
+            },
+          ],
+        },
       },
     }),
     // Internationalization (i18n)

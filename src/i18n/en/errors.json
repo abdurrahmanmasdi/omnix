@@ -32,7 +32,11 @@
     "JOIN_FAILED": "Failed to join organization. Please try again later.",
     "INVITE_FAILED": "Failed to invite user. Please try again later.",
     "ROLE_NOT_FOUND": "Role not found for this organization.",
-    "JOIN_REQUEST_CREATED": "Join request created successfully. Awaiting approval."
+    "JOIN_REQUEST_CREATED": "Join request created successfully. Awaiting approval.",
+    "MEMBERSHIP_REQUEST_NOT_FOUND": "Membership request not found.",
+    "MEMBERSHIP_CANCEL_FORBIDDEN": "You are not allowed to cancel this request.",
+    "MEMBERSHIP_CANCEL_ONLY_PENDING": "You can only cancel pending requests.",
+    "MEMBERSHIP_CANCELLED_SUCCESS": "Request cancelled successfully."
   },
   "INVITATION": {
     "SAVED": "Invitation saved successfully.",
@@ -53,6 +57,7 @@
     "NO_ORG_ACCESS": "You do not have access to this organization.",
     "VERIFY_FAILED": "Failed to verify organization access."
   },
+  "UNAUTHORIZED_ACCESS": "You are not authorized to access this resource.",
   "UNAUTHORIZED": "Unauthorized access.",
   "FORBIDDEN": "Access denied.",
   "NOT_FOUND": "Resource not found.",

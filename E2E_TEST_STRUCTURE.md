@@ -110,9 +110,9 @@ export function createTestUser(): IRegisterPayload {
 // Constants for assertions
 export const TEST_CONSTANTS = {
   MEMBERSHIP_STATUS: {
-    ACTIVE: 'active',
-    PENDING: 'pending_approval',
-    INVITED: 'invited',
+    ACTIVE: 'ACTIVE',
+    PENDING: 'PENDING',
+    INVITED: 'INVITED',
   },
   // ...
 };

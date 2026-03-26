@@ -32,7 +32,11 @@
     "JOIN_FAILED": "Kuruluşa katılırken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
     "INVITE_FAILED": "Kullanıcı davet edilirken hata oluştu. Lütfen daha sonra tekrar deneyiniz.",
     "ROLE_NOT_FOUND": "Bu organizasyon için rol bulunamadı.",
-    "JOIN_REQUEST_CREATED": "Katılım isteği başarıyla oluşturuldu. Onay bekleniyor."
+    "JOIN_REQUEST_CREATED": "Katılım isteği başarıyla oluşturuldu. Onay bekleniyor.",
+    "MEMBERSHIP_REQUEST_NOT_FOUND": "Üyelik isteği bulunamadı.",
+    "MEMBERSHIP_CANCEL_FORBIDDEN": "Bu isteği iptal etme yetkiniz yok.",
+    "MEMBERSHIP_CANCEL_ONLY_PENDING": "Sadece bekleyen istekleri iptal edebilirsiniz.",
+    "MEMBERSHIP_CANCELLED_SUCCESS": "İstek başarıyla iptal edildi."
   },
   "INVITATION": {
     "SAVED": "Davet başarıyla kaydedildi.",
@@ -53,6 +57,7 @@
     "NO_ORG_ACCESS": "Bu organizasyona erişim yetkiniz yok.",
     "VERIFY_FAILED": "Organizasyon erişimi doğrulanamadı."
   },
+  "UNAUTHORIZED_ACCESS": "Bu kaynağa erişim yetkiniz yok.",
   "UNAUTHORIZED": "Yetkisiz erişim.",
   "FORBIDDEN": "Erişim reddedildi.",
   "NOT_FOUND": "Kaynak bulunamadı.",

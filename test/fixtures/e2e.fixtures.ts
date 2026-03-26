@@ -1,3 +1,4 @@
+import { MembershipStatus } from '@prisma/client';
 /**
  * E2E Test Fixtures
  *
@@ -39,9 +40,8 @@ export function createTestOrganization(): ICreateOrganizationPayload {
  */
 export const TEST_CONSTANTS = {
   MEMBERSHIP_STATUS: {
-    ACTIVE: 'active',
-    PENDING: 'pending_approval',
-    INVITED: 'invited',
+    ACTIVE: MembershipStatus.ACTIVE,
+    PENDING: MembershipStatus.PENDING,
   },
 
   ROLE: {

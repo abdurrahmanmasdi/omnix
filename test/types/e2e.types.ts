@@ -50,7 +50,7 @@ export interface IOrganizationMembership {
   user_id: string;
   organization_id: string;
   role: IRole;
-  status: 'active' | 'pending_approval' | 'invited';
+  status: string;
   organization: IOrganization;
 }
 

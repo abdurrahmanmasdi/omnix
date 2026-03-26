@@ -1,8 +1,10 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   Request,
+  UseGuards,
   HttpCode,
   HttpStatus,
   Param,
@@ -19,6 +21,7 @@ import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 export interface IOrganization {
   id: string;
@@ -36,6 +39,33 @@ interface AuthRequest extends ExpressRequest {
 @Controller('organizations')
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
+
+  /**
+   * List pending join requests for a specific organization.
+   *
+   * Security:
+   * - Requires a valid JWT
+   * - Service layer verifies the current user has active membership in the target organization
+   */
+  @Get(':id/requests')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get pending join requests for an organization' })
+  @ApiResponse({ status: 200, description: 'Pending join requests retrieved' })
+  @ApiResponse({
+    status: 403,
+    description: 'User is not authorized for this organization',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPendingRequests(
+    @Param('id') organizationId: string,
+    @Request() req: AuthRequest,
+  ) {
+    return this.organizationsService.getPendingRequests(
+      organizationId,
+      req.user.id,
+    );
+  }
 
   /**
    * Create a new organization

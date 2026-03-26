@@ -1,3 +1,4 @@
+import { MembershipStatus } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   ExecutionContext,
@@ -196,7 +197,7 @@ describe('TenantInterceptor', () => {
         user_id: 'user-123',
         organization_id: 'org-123',
         role_id: 'role-123',
-        status: 'active',
+        status: MembershipStatus.ACTIVE,
       });
 
       // Act
@@ -216,7 +217,7 @@ describe('TenantInterceptor', () => {
         where: {
           user_id: 'user-123',
           organization_id: 'org-123',
-          status: 'active',
+          status: MembershipStatus.ACTIVE,
         },
       });
     });

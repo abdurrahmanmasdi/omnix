@@ -24,6 +24,7 @@ import {
 import {
   initializeApp,
   cleanupTestData,
+  clearDatabase,
   registerUser,
   loginUser,
   createOrganization,
@@ -55,6 +56,7 @@ describe('User Registration, Authentication & Organization Management (E2E)', ()
     await initializeApp(app);
 
     prismaService = moduleFixture.get<PrismaService>(PrismaService);
+    await clearDatabase(prismaService);
   });
 
   afterAll(async () => {

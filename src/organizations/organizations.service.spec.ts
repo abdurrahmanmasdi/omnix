@@ -1,13 +1,15 @@
 import {
+  BadRequestException,
   ConflictException,
   NotFoundException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrganizationMembershipStatus } from './constants/membership-status.enum';
 import { OrganizationsService } from './organizations.service';
+import { MembershipStatus } from '@prisma/client';
 
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
@@ -89,7 +91,7 @@ describe('OrganizationsService', () => {
         user_id: 'u1',
         organization_id: 'org1',
         role_id: 'role1',
-        status: OrganizationMembershipStatus.PENDING,
+        status: MembershipStatus.PENDING,
       },
     });
     expect(result).toEqual({
@@ -126,16 +128,96 @@ describe('OrganizationsService', () => {
     );
   });
 
-  it('should throw ConflictException when joining existing membership', async () => {
+  it('should throw BadRequestException when joining with ACTIVE membership', async () => {
     mockPrismaService.user.findUnique.mockResolvedValue({ id: 'u1' });
     mockPrismaService.organization.findUnique.mockResolvedValue({ id: 'org1' });
     mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
       id: 'm1',
+      status: MembershipStatus.ACTIVE,
     });
 
     await expect(service.join('u1', { slug: 'acme' })).rejects.toThrow(
-      ConflictException,
+      BadRequestException,
     );
+  });
+
+  it('should throw BadRequestException when joining with PENDING membership', async () => {
+    mockPrismaService.user.findUnique.mockResolvedValue({ id: 'u1' });
+    mockPrismaService.organization.findUnique.mockResolvedValue({ id: 'org1' });
+    mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
+      id: 'm1',
+      status: MembershipStatus.PENDING,
+    });
+
+    await expect(service.join('u1', { slug: 'acme' })).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('should update REJECTED membership back to PENDING instead of creating new record', async () => {
+    mockPrismaService.user.findUnique.mockResolvedValue({ id: 'u1' });
+    mockPrismaService.organization.findUnique.mockResolvedValue({ id: 'org1' });
+    mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
+      id: 'm1',
+      status: MembershipStatus.REJECTED,
+    });
+    mockPrismaService.organizationMembership.update.mockResolvedValue({
+      id: 'm1',
+      status: MembershipStatus.PENDING,
+    });
+
+    const result = await service.join('u1', { slug: 'acme' });
+
+    expect(
+      mockPrismaService.organizationMembership.update,
+    ).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data: { status: MembershipStatus.PENDING },
+    });
+    expect(
+      mockPrismaService.organizationMembership.create,
+    ).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      message: 'errors.ORG.JOIN_REQUEST_CREATED',
+      organizationId: 'org1',
+    });
+  });
+
+  it('should handle lowercase rejected status by updating to PENDING', async () => {
+    mockPrismaService.user.findUnique.mockResolvedValue({ id: 'u1' });
+    mockPrismaService.organization.findUnique.mockResolvedValue({ id: 'org1' });
+    mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
+      id: 'm1',
+      status: 'rejected',
+    });
+    mockPrismaService.organizationMembership.update.mockResolvedValue({
+      id: 'm1',
+      status: MembershipStatus.PENDING,
+    });
+
+    await service.join('u1', { slug: 'acme' });
+
+    expect(mockPrismaService.organizationMembership.update).toHaveBeenCalled();
+    expect(
+      mockPrismaService.organizationMembership.create,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('should continue to create membership when no existing record exists', async () => {
+    mockPrismaService.user.findUnique.mockResolvedValue({ id: 'u1' });
+    mockPrismaService.organization.findUnique.mockResolvedValue({ id: 'org1' });
+    mockPrismaService.organizationMembership.findFirst.mockResolvedValue(null);
+    mockPrismaService.role.findFirst.mockResolvedValue({ id: 'role1' });
+    mockPrismaService.organizationMembership.create.mockResolvedValue({
+      id: 'm1',
+    });
+
+    await service.join('u1', { slug: 'acme' });
+
+    expect(mockPrismaService.organizationMembership.create).toHaveBeenCalled();
+    expect(
+      mockPrismaService.organizationMembership.update,
+    ).not.toHaveBeenCalled();
   });
 
   it('should approve pending request and set ACTIVE with roleId', async () => {
@@ -146,7 +228,7 @@ describe('OrganizationsService', () => {
     });
     mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
       id: 'm1',
-      status: OrganizationMembershipStatus.PENDING,
+      status: MembershipStatus.PENDING,
     });
     mockPrismaService.organizationMembership.update.mockResolvedValue({
       id: 'm1',
@@ -161,11 +243,11 @@ describe('OrganizationsService', () => {
     ).toHaveBeenCalledWith({
       where: { id: 'm1' },
       data: {
-        status: OrganizationMembershipStatus.ACTIVE,
+        status: MembershipStatus.ACTIVE,
         role_id: 'r2',
       },
     });
-    expect(result.status).toBe(OrganizationMembershipStatus.ACTIVE);
+    expect(result.status).toBe(MembershipStatus.ACTIVE);
   });
 
   it('should reject request when pending membership is not found on approve', async () => {
@@ -185,7 +267,7 @@ describe('OrganizationsService', () => {
     mockPrismaService.organization.findUnique.mockResolvedValue({ id: 'org1' });
     mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
       id: 'm1',
-      status: OrganizationMembershipStatus.PENDING,
+      status: MembershipStatus.PENDING,
     });
     mockPrismaService.organizationMembership.update.mockResolvedValue({
       id: 'm1',
@@ -197,9 +279,9 @@ describe('OrganizationsService', () => {
       mockPrismaService.organizationMembership.update,
     ).toHaveBeenCalledWith({
       where: { id: 'm1' },
-      data: { status: OrganizationMembershipStatus.REJECTED },
+      data: { status: MembershipStatus.REJECTED },
     });
-    expect(result.status).toBe(OrganizationMembershipStatus.REJECTED);
+    expect(result.status).toBe(MembershipStatus.REJECTED);
   });
 
   it('should create invitation when no existing invite exists', async () => {
@@ -267,5 +349,78 @@ describe('OrganizationsService', () => {
     await expect(
       service.approveJoinRequest('org1', 'm1', 'admin1', { roleId: 'r1' }),
     ).rejects.toThrow(InternalServerErrorException);
+  });
+
+  it('should throw ForbiddenException when requester has no active org membership in getPendingRequests', async () => {
+    mockPrismaService.organizationMembership.findFirst.mockResolvedValue(null);
+
+    await expect(service.getPendingRequests('org1', 'u1')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('should return mapped pending requests ordered by newest first', async () => {
+    const createdAt = new Date('2026-03-26T10:00:00.000Z');
+    const userCreatedAt = new Date('2026-03-25T10:00:00.000Z');
+
+    mockPrismaService.organizationMembership.findFirst.mockResolvedValue({
+      id: 'membership-active',
+    });
+    mockPrismaService.organizationMembership.findMany.mockResolvedValue([
+      {
+        id: 'm1',
+        organization_id: 'org1',
+        status: MembershipStatus.PENDING,
+        created_at: createdAt,
+        user: {
+          id: 'u2',
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'john@example.com',
+          created_at: userCreatedAt,
+        },
+      },
+    ]);
+
+    const result = await service.getPendingRequests('org1', 'u1');
+
+    expect(
+      mockPrismaService.organizationMembership.findMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        organization_id: 'org1',
+        status: MembershipStatus.PENDING,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            created_at: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    expect(result).toEqual([
+      {
+        membershipId: 'm1',
+        organizationId: 'org1',
+        status: MembershipStatus.PENDING,
+        requestedAt: createdAt,
+        user: {
+          id: 'u2',
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john@example.com',
+          createdAt: userCreatedAt,
+        },
+      },
+    ]);
   });
 });

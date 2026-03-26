@@ -2,12 +2,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ForbiddenException,
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrganizationMembershipStatus } from '../organizations/constants/membership-status.enum';
+import { MembershipStatus } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -158,7 +159,7 @@ export class UsersService {
           user_id: user.id,
           organization_id: invitation.organization_id,
           role_id: invitation.role_id,
-          status: 'active',
+          status: MembershipStatus.ACTIVE,
         },
         include: {
           organization: { select: { name: true, slug: true } },
@@ -198,7 +199,7 @@ export class UsersService {
   async cancelJoinRequest(
     userId: string,
     membershipId: string,
-  ): Promise<{ message: string; membershipId: string }> {
+  ): Promise<{ message: string }> {
     this.logger.debug(
       `[UsersService] Cancelling join request ${membershipId} for user ${userId}`,
     );
@@ -211,15 +212,24 @@ export class UsersService {
         status: true,
       },
     });
+    if (!membership) {
+      throw new NotFoundException(
+        this.i18n.t('errors.ORG.MEMBERSHIP_REQUEST_NOT_FOUND'),
+      );
+    }
 
-    if (!membership || membership.user_id !== userId) {
-      throw new NotFoundException('Membership request not found.');
+    if (membership.user_id !== userId) {
+      throw new ForbiddenException(
+        this.i18n.t('errors.ORG.MEMBERSHIP_CANCEL_FORBIDDEN'),
+      );
     }
 
     const membershipStatus = String(membership.status);
 
-    if (membershipStatus !== String(OrganizationMembershipStatus.PENDING)) {
-      throw new BadRequestException('Only PENDING requests can be cancelled.');
+    if (membershipStatus !== String(MembershipStatus.PENDING)) {
+      throw new BadRequestException(
+        this.i18n.t('errors.ORG.MEMBERSHIP_CANCEL_ONLY_PENDING'),
+      );
     }
 
     await this.prisma.organizationMembership.delete({
@@ -227,8 +237,7 @@ export class UsersService {
     });
 
     return {
-      message: 'Join request cancelled successfully.',
-      membershipId,
+      message: this.i18n.t('errors.ORG.MEMBERSHIP_CANCELLED_SUCCESS'),
     };
   }
 }

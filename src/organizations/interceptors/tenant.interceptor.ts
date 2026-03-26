@@ -1,3 +1,4 @@
+import { MembershipStatus } from '@prisma/client';
 import {
   Injectable,
   NestInterceptor,
@@ -59,7 +60,7 @@ export class TenantInterceptor implements NestInterceptor {
         where: {
           user_id: userId,
           organization_id: organizationId,
-          status: 'active',
+          status: MembershipStatus.ACTIVE,
         },
       });
 

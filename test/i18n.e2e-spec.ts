@@ -4,9 +4,12 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { clearDatabase, initializeApp } from './utils/e2e.utils';
 
 describe('i18n Integration (E2E)', () => {
   let app: INestApplication;
+  let prismaService: PrismaService;
 
   /**
    * Bootstrap the NestJS application with the AppModule
@@ -28,7 +31,10 @@ describe('i18n Integration (E2E)', () => {
       }),
     );
 
-    await app.init();
+    prismaService = moduleFixture.get<PrismaService>(PrismaService);
+    await clearDatabase(prismaService);
+
+    await initializeApp(app);
   });
 
   afterAll(async () => {

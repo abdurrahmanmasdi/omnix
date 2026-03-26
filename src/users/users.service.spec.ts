@@ -1,12 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { OrganizationMembershipStatus } from '../organizations/constants/membership-status.enum';
+import { MembershipStatus } from '@prisma/client';
 import { UsersService } from './users.service';
 
 describe('UsersService', () => {
@@ -74,7 +75,7 @@ describe('UsersService', () => {
         id: 'm1',
         organization_id: 'org1',
         role_id: 'r1',
-        status: 'ACTIVE',
+        status: MembershipStatus.ACTIVE,
         created_at: createdAt,
         organization: {
           id: 'org1',
@@ -94,7 +95,7 @@ describe('UsersService', () => {
         membership_id: 'm1',
         organization_id: 'org1',
         role_id: 'r1',
-        status: 'ACTIVE',
+        status: MembershipStatus.ACTIVE,
         created_at: createdAt,
         organization: {
           id: 'org1',
@@ -218,7 +219,7 @@ describe('UsersService', () => {
     expect(result.role).toBe('Manager');
   });
 
-  it('should throw NotFoundException when cancel request membership is missing or not owned', async () => {
+  it('should throw NotFoundException when cancel request membership is missing', async () => {
     mockPrisma.organizationMembership.findUnique.mockResolvedValue(null);
 
     await expect(service.cancelJoinRequest('u1', 'm1')).rejects.toThrow(
@@ -226,11 +227,23 @@ describe('UsersService', () => {
     );
   });
 
+  it('should throw ForbiddenException when cancel request does not belong to user', async () => {
+    mockPrisma.organizationMembership.findUnique.mockResolvedValue({
+      id: 'm1',
+      user_id: 'u2',
+      status: 'pending',
+    });
+
+    await expect(service.cancelJoinRequest('u1', 'm1')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
   it('should throw BadRequestException when cancel request status is not PENDING', async () => {
     mockPrisma.organizationMembership.findUnique.mockResolvedValue({
       id: 'm1',
       user_id: 'u1',
-      status: OrganizationMembershipStatus.ACTIVE,
+      status: MembershipStatus.ACTIVE,
     });
 
     await expect(service.cancelJoinRequest('u1', 'm1')).rejects.toThrow(
@@ -242,7 +255,7 @@ describe('UsersService', () => {
     mockPrisma.organizationMembership.findUnique.mockResolvedValue({
       id: 'm1',
       user_id: 'u1',
-      status: OrganizationMembershipStatus.PENDING,
+      status: MembershipStatus.PENDING,
     });
     mockPrisma.organizationMembership.delete.mockResolvedValue({ id: 'm1' });
 
@@ -252,8 +265,7 @@ describe('UsersService', () => {
       where: { id: 'm1' },
     });
     expect(result).toEqual({
-      message: 'Join request cancelled successfully.',
-      membershipId: 'm1',
+      message: 'errors.ORG.MEMBERSHIP_CANCELLED_SUCCESS',
     });
   });
 });

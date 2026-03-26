@@ -86,6 +86,41 @@ export async function cleanupTestData(
 }
 
 /**
+ * Clear all application tables for deterministic E2E runs.
+ * This must only run against the dedicated test database.
+ */
+export async function clearDatabase(
+  prismaService: PrismaService | undefined,
+): Promise<void> {
+  if (!prismaService) {
+    return;
+  }
+
+  const logger = new Logger('E2E_DB_RESET');
+
+  try {
+    logger.log('Clearing database state before E2E suite...');
+
+    await prismaService.$transaction([
+      prismaService.membershipPermissionOverride.deleteMany(),
+      prismaService.rolePermission.deleteMany(),
+      prismaService.invitation.deleteMany(),
+      prismaService.organizationMembership.deleteMany(),
+      prismaService.role.deleteMany(),
+      prismaService.permission.deleteMany(),
+      prismaService.organization.deleteMany(),
+      prismaService.user.deleteMany(),
+    ]);
+
+    logger.log('✓ Database cleared successfully');
+  } catch (error) {
+    const resetLogger = new Logger('E2E_DB_RESET_ERROR');
+    resetLogger.error(`Failed to clear database: ${String(error)}`);
+    throw error;
+  }
+}
+
+/**
  * Register a user via POST /api/v1/auth/register
  */
 export async function registerUser(

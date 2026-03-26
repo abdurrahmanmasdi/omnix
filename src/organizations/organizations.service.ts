@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ForbiddenException,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
@@ -14,7 +15,7 @@ import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 import { Prisma } from '@prisma/client';
-import { OrganizationMembershipStatus } from './constants/membership-status.enum';
+import { MembershipStatus } from '@prisma/client';
 
 interface IOrganization {
   id: string;
@@ -32,6 +33,79 @@ export class OrganizationsService {
     private prisma: PrismaService,
     private i18n: I18nService,
   ) {}
+
+  /**
+   * Returns pending join requests for an organization after validating that
+   * the current user has an active membership in the same organization.
+   */
+  async getPendingRequests(organizationId: string, currentUserId: string) {
+    try {
+      const activeMembership =
+        await this.prisma.organizationMembership.findFirst({
+          where: {
+            organization_id: organizationId,
+            user_id: currentUserId,
+            status: {
+              // Keep backward compatibility while transitioning from legacy lowercase statuses.
+              in: [MembershipStatus.ACTIVE],
+            },
+          },
+          select: { id: true },
+        });
+
+      if (!activeMembership) {
+        throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+      }
+
+      const pendingRequests = await this.prisma.organizationMembership.findMany(
+        {
+          where: {
+            organization_id: organizationId,
+            status: MembershipStatus.PENDING,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                created_at: true,
+              },
+            },
+          },
+          orderBy: {
+            created_at: 'desc',
+          },
+        },
+      );
+
+      return pendingRequests.map((request) => ({
+        membershipId: request.id,
+        organizationId: request.organization_id,
+        status: request.status,
+        requestedAt: request.created_at,
+        user: {
+          id: request.user.id,
+          firstName: request.user.first_name,
+          lastName: request.user.last_name,
+          email: request.user.email,
+          createdAt: request.user.created_at,
+        },
+      }));
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error fetching pending join requests for organization ${organizationId}: ${error}`,
+      );
+      throw new InternalServerErrorException(
+        this.i18n.t('errors.ORG.FETCH_FAILED'),
+      );
+    }
+  }
 
   /**
    * Create a new organization
@@ -106,7 +180,7 @@ export class OrganizationsService {
             user_id: userId,
             organization_id: createdOrg.id,
             role_id: adminRole.id,
-            status: 'active',
+            status: MembershipStatus.ACTIVE,
           },
         });
 
@@ -260,7 +334,7 @@ export class OrganizationsService {
         this.prisma.organization.findMany({
           where: {
             memberships: {
-              some: { user_id: userId, status: 'active' },
+              some: { user_id: userId, status: MembershipStatus.ACTIVE },
             },
           },
           skip,
@@ -270,7 +344,7 @@ export class OrganizationsService {
         this.prisma.organization.count({
           where: {
             memberships: {
-              some: { user_id: userId, status: 'active' },
+              some: { user_id: userId, status: MembershipStatus.ACTIVE },
             },
           },
         }),
@@ -363,9 +437,8 @@ export class OrganizationsService {
 
       // TODO: Implement proper deletion strategy
       // For now, deactivate all memberships
-      await this.prisma.organizationMembership.updateMany({
+      await this.prisma.organizationMembership.deleteMany({
         where: { organization_id: id },
-        data: { status: 'inactive' },
       });
 
       this.logger.log(`Organization ${id} deleted`);
@@ -385,7 +458,7 @@ export class OrganizationsService {
    * Join an organization by slug
    * Creates a membership with status 'PENDING'
    * @throws NotFoundException if organization or user doesn't exist
-   * @throws ConflictException if user is already a member
+   * @throws BadRequestException if user is active or already pending
    */
   async join(
     userId: string,
@@ -424,12 +497,33 @@ export class OrganizationsService {
         });
 
       if (existingMembership) {
-        this.logger.warn(
-          `User ${userId} is already a member of organization ${organization.id}`,
-        );
-        throw new ConflictException(
-          this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
-        );
+        const currentStatus = String(existingMembership.status).toUpperCase();
+
+        if (currentStatus === MembershipStatus.ACTIVE) {
+          throw new BadRequestException('You are already a member');
+        }
+
+        if (currentStatus === MembershipStatus.PENDING) {
+          throw new BadRequestException('You already have a pending request');
+        }
+
+        if (currentStatus === MembershipStatus.REJECTED) {
+          await this.prisma.organizationMembership.update({
+            where: { id: existingMembership.id },
+            data: {
+              status: MembershipStatus.PENDING,
+            },
+          });
+
+          this.logger.log(
+            `User ${userId} re-applied to organization ${organization.id} from REJECTED to PENDING`,
+          );
+
+          return {
+            message: this.i18n.t('errors.ORG.JOIN_REQUEST_CREATED'),
+            organizationId: organization.id,
+          };
+        }
       }
 
       // Get or create the 'member' role
@@ -452,7 +546,7 @@ export class OrganizationsService {
           user_id: userId,
           organization_id: organization.id,
           role_id: memberRole.id,
-          status: OrganizationMembershipStatus.PENDING,
+          status: MembershipStatus.PENDING,
         },
       });
 
@@ -467,7 +561,8 @@ export class OrganizationsService {
     } catch (error) {
       if (
         error instanceof NotFoundException ||
-        error instanceof ConflictException
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
       ) {
         throw error;
       }
@@ -506,7 +601,7 @@ export class OrganizationsService {
         where: {
           id: membershipId,
           organization_id: organizationId,
-          status: OrganizationMembershipStatus.PENDING,
+          status: MembershipStatus.PENDING,
         },
       });
 
@@ -517,7 +612,7 @@ export class OrganizationsService {
       await this.prisma.organizationMembership.update({
         where: { id: membershipId },
         data: {
-          status: OrganizationMembershipStatus.ACTIVE,
+          status: MembershipStatus.ACTIVE,
           role_id: dto.roleId,
         },
       });
@@ -525,7 +620,7 @@ export class OrganizationsService {
       return {
         message: 'Join request approved successfully.',
         membershipId,
-        status: OrganizationMembershipStatus.ACTIVE,
+        status: MembershipStatus.ACTIVE,
       };
     } catch (error) {
       if (
@@ -560,7 +655,7 @@ export class OrganizationsService {
         where: {
           id: membershipId,
           organization_id: organizationId,
-          status: OrganizationMembershipStatus.PENDING,
+          status: MembershipStatus.PENDING,
         },
       });
 
@@ -570,13 +665,13 @@ export class OrganizationsService {
 
       await this.prisma.organizationMembership.update({
         where: { id: membershipId },
-        data: { status: OrganizationMembershipStatus.REJECTED },
+        data: { status: MembershipStatus.REJECTED },
       });
 
       return {
         message: 'Join request rejected successfully.',
         membershipId,
-        status: OrganizationMembershipStatus.REJECTED,
+        status: MembershipStatus.REJECTED,
       };
     } catch (error) {
       if (
@@ -670,14 +765,14 @@ export class OrganizationsService {
         },
         update: {
           role_id: inviteDto.roleId,
-          status: 'pending',
+          status: MembershipStatus.PENDING,
           accepted_at: null,
         },
         create: {
           email: inviteDto.email,
           organization_id: organizationId,
           role_id: inviteDto.roleId,
-          status: 'pending',
+          status: MembershipStatus.PENDING,
         },
       });
 

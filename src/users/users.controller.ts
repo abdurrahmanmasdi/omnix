@@ -5,6 +5,7 @@ import {
   Delete,
   Param,
   Request,
+  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 
 interface AuthRequest extends ExpressRequest {
@@ -142,7 +144,8 @@ export class UsersController {
     return this.usersService.acceptOrganizationInvite(req.user.id, inviteId);
   }
 
-  @Delete('me/requests/:membershipId')
+  @Delete('me/requests/:id/cancel')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancel current user pending join request',
@@ -157,8 +160,8 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'Membership request not found' })
   async cancelJoinRequest(
     @Request() req: AuthRequest,
-    @Param('membershipId') membershipId: string,
-  ): Promise<{ message: string; membershipId: string }> {
-    return await this.usersService.cancelJoinRequest(req.user.id, membershipId);
+    @Param('id') id: string,
+  ): Promise<{ message: string }> {
+    return await this.usersService.cancelJoinRequest(req.user.id, id);
   }
 }
