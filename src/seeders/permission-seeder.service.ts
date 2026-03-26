@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SYSTEM_PERMISSIONS } from '../constants/permissions.list';
+import { PERMISSIONS_LIST } from '../constants/permissions.registry';
 
 /**
  * PermissionSeederService
@@ -41,7 +41,7 @@ export class PermissionSeederService implements OnApplicationBootstrap {
       let updatedCount = 0;
 
       // Upsert each permission
-      for (const permission of SYSTEM_PERMISSIONS) {
+      for (const permission of PERMISSIONS_LIST) {
         const result = await this.prisma.permission.upsert({
           where: {
             action: permission.action,
@@ -86,7 +86,7 @@ export class PermissionSeederService implements OnApplicationBootstrap {
     statusMsg: string;
   }> {
     const total = await this.prisma.permission.count();
-    const expectedCount = SYSTEM_PERMISSIONS.length;
+    const expectedCount = PERMISSIONS_LIST.length;
 
     const statusMsg =
       total === expectedCount

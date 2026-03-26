@@ -30,7 +30,7 @@ interface AuthenticatedRequest extends Request {
  *
  * 2. Or apply to specific routes:
  *    @UseGuards(PermissionsGuard)
- *    @RequirePermissions('READ', 'WRITE')
+ *    @RequirePermissions(AppPermission.LEADS_READ, AppPermission.LEADS_WRITE)
  *    async myMethod() { ... }
  *
  * orgId Extraction Priority:

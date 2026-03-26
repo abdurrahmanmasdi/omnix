@@ -24,6 +24,7 @@ import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.d
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { AppPermission } from '../constants/permissions.registry';
 
 export interface IOrganization {
   id: string;
@@ -177,13 +178,13 @@ export class OrganizationsController {
 
   @Post(':id/requests/:membershipId/approve')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermissions('members:manage')
+  @RequirePermissions(AppPermission.TEAM_MEMBERS_MANAGE)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Approve a pending join request',
     description:
-      'Approves a pending membership request and assigns a role to the user. Requires members:manage permission.',
+      'Approves a pending membership request and assigns a role to the user. Requires team_members:manage permission.',
   })
   @ApiResponse({
     status: 200,
