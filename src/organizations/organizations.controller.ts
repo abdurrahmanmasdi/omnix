@@ -239,4 +239,60 @@ export class OrganizationsController {
       req.user.id,
     );
   }
+
+  /**
+   * Get all active members of an organization with their assigned roles.
+   *
+   * Security:
+   * - Requires a valid JWT
+   * - Service layer verifies the current user has active membership in the target organization
+   */
+  @Get(':id/members')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all active members of an organization' })
+  @ApiResponse({
+    status: 200,
+    description: 'Active members retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        properties: {
+          membershipId: { type: 'string', format: 'uuid' },
+          organizationId: { type: 'string', format: 'uuid' },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              firstName: { type: 'string' },
+              lastName: { type: 'string' },
+              email: { type: 'string', format: 'email' },
+            },
+          },
+          role: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+            },
+          },
+          status: { type: 'string', enum: ['ACTIVE'] },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'User is not authorized for this organization',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMembers(
+    @Param('id') organizationId: string,
+    @Request() req: AuthRequest,
+  ) {
+    return this.organizationsService.getOrganizationMembers(
+      organizationId,
+      req.user.id,
+    );
+  }
 }

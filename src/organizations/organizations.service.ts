@@ -6,9 +6,12 @@ import {
   ForbiddenException,
   InternalServerErrorException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionsService } from '../auth/services/permissions.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
@@ -33,6 +36,8 @@ export class OrganizationsService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
+    @Inject(forwardRef(() => PermissionsService))
+    private permissionsService: PermissionsService,
   ) {}
 
   /**
@@ -466,20 +471,63 @@ export class OrganizationsService {
 
   /**
    * Delete organization (soft delete via membership deactivation)
+   *
+   * This method performs the following in a single transaction:
+   * 1. Verifies the organization exists
+   * 2. Queries all active memberships to capture user IDs
+   * 3. Updates all memberships to REJECTED status (deactivation)
+   * 4. Clears Redis permission cache for all affected users
+   *
+   * This ensures that when an organization is deleted, users can no longer
+   * make API calls using stale cached permissions.
+   *
+   * @param id - Organization ID to delete
    * @throws NotFoundException if organization doesn't exist
+   * @throws InternalServerErrorException on database or cache errors
    */
   async remove(id: string): Promise<void> {
     try {
-      // Verify organization exists
+      // Step 1: Verify organization exists
       await this.findById(id);
 
-      // TODO: Implement proper deletion strategy
-      // For now, deactivate all memberships
-      await this.prisma.organizationMembership.deleteMany({
-        where: { organization_id: id },
-      });
+      // Step 2 & 3: Deactivate all memberships in a transaction
+      const affectedMembershipCount = await this.prisma.$transaction(
+        async (tx) => {
+          // Query all memberships before deactivation to capture user IDs
+          const affectedMemberships = await tx.organizationMembership.findMany({
+            where: { organization_id: id },
+            select: { user_id: true },
+          });
 
-      this.logger.log(`Organization ${id} deleted`);
+          // Update all memberships to REJECTED status (deactivation)
+          await tx.organizationMembership.updateMany({
+            where: { organization_id: id },
+            data: { status: MembershipStatus.REJECTED },
+          });
+
+          // Step 4: Clear Redis cache for all affected users
+          if (affectedMemberships.length > 0) {
+            await Promise.all(
+              affectedMemberships.map((membership) =>
+                this.permissionsService.clearUserPermissionsCache(
+                  membership.user_id,
+                  id,
+                ),
+              ),
+            );
+
+            this.logger.debug(
+              `[OrganizationsService] Cleared permissions cache for ${affectedMemberships.length} users from deleted organization ${id}`,
+            );
+          }
+
+          return affectedMemberships.length;
+        },
+      );
+
+      this.logger.log(
+        `Organization ${id} deleted: deactivated ${affectedMembershipCount} memberships and cleared their permission caches`,
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -836,6 +884,93 @@ export class OrganizationsService {
       this.logger.error(`Error inviting user: ${error}`);
       throw new InternalServerErrorException(
         this.i18n.t('errors.ORG.INVITE_FAILED'),
+      );
+    }
+  }
+
+  /**
+   * Get all active members of an organization with their assigned roles.
+   *
+   * Security: Verifies that the current user has an ACTIVE membership in the organization.
+   *
+   * @param organizationId - The ID of the organization
+   * @param currentUserId - The ID of the user making the request
+   * @returns Array of active members with their roles, ordered by firstName
+   * @throws ForbiddenException if the current user is not an active member
+   * @throws InternalServerErrorException on database errors
+   */
+  async getOrganizationMembers(organizationId: string, currentUserId: string) {
+    try {
+      // ========== SECURITY CHECK: Verify current user has ACTIVE membership ==========
+      const activeMembership =
+        await this.prisma.organizationMembership.findFirst({
+          where: {
+            organization_id: organizationId,
+            user_id: currentUserId,
+            status: MembershipStatus.ACTIVE,
+          },
+          select: { id: true },
+        });
+
+      if (!activeMembership) {
+        throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+      }
+
+      // ========== DATA FETCH: Query active members with their roles ==========
+      const members = await this.prisma.organizationMembership.findMany({
+        where: {
+          organization_id: organizationId,
+          status: MembershipStatus.ACTIVE,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              email: true,
+            },
+          },
+          role: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          user: {
+            first_name: 'asc',
+          },
+        },
+      });
+
+      // ========== TRANSFORM: Map snake_case database fields to camelCase ==========
+      return members.map((membership) => ({
+        membershipId: membership.id,
+        organizationId: membership.organization_id,
+        user: {
+          id: membership.user.id,
+          firstName: membership.user.first_name,
+          lastName: membership.user.last_name,
+          email: membership.user.email,
+        },
+        role: {
+          id: membership.role.id,
+          name: membership.role.name,
+        },
+        status: membership.status,
+      }));
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error fetching organization members for organization ${organizationId}: ${error}`,
+      );
+      throw new InternalServerErrorException(
+        this.i18n.t('errors.ORG.FETCH_FAILED'),
       );
     }
   }

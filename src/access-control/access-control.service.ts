@@ -4,9 +4,12 @@ import {
   ForbiddenException,
   NotFoundException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionsService } from '../auth/services/permissions.service';
 import { CreateRoleDto } from './dtos/create-role.dto';
 import { UpdateRoleDto } from './dtos/update-role.dto';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
@@ -36,6 +39,8 @@ export class AccessControlService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
+    @Inject(forwardRef(() => PermissionsService))
+    private permissionsService: PermissionsService,
   ) {}
 
   /**
@@ -57,6 +62,34 @@ export class AccessControlService {
 
     if (!membership) {
       throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+    }
+  }
+
+  /**
+   * Verify that the current user is the Owner of the organization
+   * Throws ForbiddenException if user is not Owner
+   */
+  private async verifyIsOwner(
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        organization_id: organizationId,
+        user_id: userId,
+        status: MembershipStatus.ACTIVE,
+      },
+      include: {
+        role: {
+          select: { name: true },
+        },
+      },
+    });
+
+    if (!membership || membership.role.name !== 'Owner') {
+      throw new ForbiddenException(
+        this.i18n.t('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+      );
     }
   }
 
@@ -205,6 +238,7 @@ export class AccessControlService {
   /**
    * Update a role's name and/or permissions
    * Operation is wrapped in a transaction
+   * If permissions are modified, invalidates cache for all users holding this role
    */
   async updateRole(
     organizationId: string,
@@ -229,6 +263,13 @@ export class AccessControlService {
         throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
       }
 
+      // Check if role is protected system role (Owner, Admin cannot be modified)
+      if (PROTECTED_ROLES.includes(role.name)) {
+        throw new BadRequestException(
+          this.i18n.t('errors.CANNOT_MODIFY_PROTECTED_ROLE'),
+        );
+      }
+
       // Validate permissions if provided
       if (dto.permissionIds && dto.permissionIds.length > 0) {
         const permissions = await this.prisma.permission.findMany({
@@ -247,6 +288,11 @@ export class AccessControlService {
         }
       }
 
+      // Track whether permissions were modified
+      const isPermissionsModified = !!(
+        dto.permissionIds && dto.permissionIds.length > 0
+      );
+
       // Update role and permissions in a transaction
       const result = await this.prisma.$transaction(async (tx) => {
         // Step 1: Update role name if provided
@@ -258,7 +304,7 @@ export class AccessControlService {
         }
 
         // Step 2: Update permissions if provided
-        if (dto.permissionIds && dto.permissionIds.length > 0) {
+        if (isPermissionsModified) {
           // Delete old role-permission associations
           await tx.rolePermission.deleteMany({
             where: { role_id: roleId },
@@ -266,7 +312,7 @@ export class AccessControlService {
 
           // Create new role-permission associations
           await tx.rolePermission.createMany({
-            data: dto.permissionIds.map((permissionId) => ({
+            data: dto.permissionIds!.map((permissionId) => ({
               role_id: roleId,
               permission_id: permissionId,
             })),
@@ -294,6 +340,38 @@ export class AccessControlService {
 
         return updatedRole;
       });
+
+      // Step 4: If permissions were modified, invalidate cache for all users holding this role
+      if (isPermissionsModified) {
+        // Query all memberships in the organization with this roleId
+        const affectedMemberships =
+          await this.prisma.organizationMembership.findMany({
+            where: {
+              organization_id: organizationId,
+              role_id: roleId,
+              status: MembershipStatus.ACTIVE,
+            },
+            select: {
+              user_id: true,
+            },
+          });
+
+        // Clear cache for each affected user
+        await Promise.all(
+          affectedMemberships.map((membership) =>
+            this.permissionsService.clearUserPermissionsCache(
+              membership.user_id,
+              organizationId,
+            ),
+          ),
+        );
+
+        if (affectedMemberships.length > 0) {
+          this.logger.debug(
+            `[AccessControlService] Invalidated permissions cache for ${affectedMemberships.length} users holding role ${roleId} in organization ${organizationId}`,
+          );
+        }
+      }
 
       this.logger.debug(
         `[AccessControlService] Updated role ${roleId} for organization ${organizationId}`,
@@ -466,6 +544,95 @@ export class AccessControlService {
   }
 
   /**
+   * Change a member's role within an organization
+   * Security: Only Owner can perform this action
+   * Restriction: Cannot change the role of a member who currently has Owner role
+   */
+  async changeMemberRole(
+    organizationId: string,
+    membershipId: string,
+    newRoleId: string,
+    currentUserId: string,
+  ): Promise<{ id: string; role_id: string; message: string }> {
+    try {
+      // Verify caller is Owner
+      await this.verifyIsOwner(organizationId, currentUserId);
+
+      // Fetch the membership with role to check immutability
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: {
+          id: membershipId,
+          organization_id: organizationId,
+        },
+        select: {
+          id: true,
+          user_id: true,
+          role: { select: { name: true } },
+        },
+      });
+
+      if (!membership) {
+        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+      }
+
+      // Check if target member has Owner role - cannot change Owner
+      if (membership.role.name === 'Owner') {
+        throw new BadRequestException(
+          this.i18n.t('errors.CANNOT_MODIFY_OWNER_ROLE'),
+        );
+      }
+
+      // Verify new role exists and belongs to organization
+      const newRole = await this.prisma.role.findFirst({
+        where: {
+          id: newRoleId,
+          organization_id: organizationId,
+        },
+        select: { id: true },
+      });
+
+      if (!newRole) {
+        throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
+      }
+
+      // Update membership role
+      await this.prisma.organizationMembership.update({
+        where: { id: membershipId },
+        data: { role_id: newRoleId },
+      });
+
+      this.logger.debug(
+        `[AccessControlService] Owner ${currentUserId} changed member ${membershipId} role to ${newRoleId} in organization ${organizationId}`,
+      );
+
+      // Invalidate cached permissions for the affected user
+      await this.permissionsService.clearUserPermissionsCache(
+        membership.user_id,
+        organizationId,
+      );
+
+      return {
+        id: membershipId,
+        role_id: newRoleId,
+        message: this.i18n.t('messages.MEMBER_ROLE_CHANGED_SUCCESSFULLY'),
+      };
+    } catch (error) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `[AccessControlService] Error changing member role for membership ${membershipId}: ${error}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Create or update a permission override for a membership
    * Allows granting or revoking specific permissions for a member regardless of role
    * Verifies caller is ACTIVE in the organization
@@ -492,7 +659,7 @@ export class AccessControlService {
           id: membershipId,
           organization_id: organizationId,
         },
-        select: { id: true },
+        select: { id: true, user_id: true },
       });
 
       if (!membership) {
@@ -536,6 +703,12 @@ export class AccessControlService {
         `[AccessControlService] Created/updated permission override for membership ${membershipId}, permission ${dto.permission_id}, granted=${dto.is_granted}`,
       );
 
+      // Invalidate cached permissions for the affected user
+      await this.permissionsService.clearUserPermissionsCache(
+        membership.user_id,
+        organizationId,
+      );
+
       return {
         id: override.id,
         permission_id: override.permission_id,
@@ -554,6 +727,118 @@ export class AccessControlService {
 
       this.logger.error(
         `[AccessControlService] Error creating permission override for membership ${membershipId}: ${error}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Assign a permission override for a membership
+   * Security: Only Owner can perform this action
+   * Restriction: Cannot assign permission overrides to a member who has Owner role
+   */
+  async assignPermissionOverride(
+    organizationId: string,
+    membershipId: string,
+    permissionId: string,
+    isGranted: boolean,
+    currentUserId: string,
+  ): Promise<{
+    id: string;
+    permission_id: string;
+    is_granted: boolean;
+    message: string;
+  }> {
+    try {
+      // Verify caller is Owner
+      await this.verifyIsOwner(organizationId, currentUserId);
+
+      // Fetch the membership with role to check immutability
+      const membership = await this.prisma.organizationMembership.findFirst({
+        where: {
+          id: membershipId,
+          organization_id: organizationId,
+        },
+        select: {
+          id: true,
+          user_id: true,
+          role: { select: { name: true } },
+        },
+      });
+
+      if (!membership) {
+        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+      }
+
+      // Check if target member has Owner role - cannot override Owner permissions
+      if (membership.role.name === 'Owner') {
+        throw new BadRequestException(
+          this.i18n.t('errors.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
+        );
+      }
+
+      // Verify permission exists
+      const permission = await this.prisma.permission.findFirst({
+        where: { id: permissionId },
+        select: { id: true },
+      });
+
+      if (!permission) {
+        throw new NotFoundException(this.i18n.t('errors.PERMISSION_NOT_FOUND'));
+      }
+
+      // Upsert the permission override
+      const override = await this.prisma.membershipPermissionOverride.upsert({
+        where: {
+          membership_id_permission_id: {
+            membership_id: membershipId,
+            permission_id: permissionId,
+          },
+        },
+        update: {
+          is_granted: isGranted,
+        },
+        create: {
+          membership_id: membershipId,
+          permission_id: permissionId,
+          is_granted: isGranted,
+        },
+        select: {
+          id: true,
+          permission_id: true,
+          is_granted: true,
+        },
+      });
+
+      this.logger.debug(
+        `[AccessControlService] Owner ${currentUserId} assigned permission override for membership ${membershipId}, permission ${permissionId}, granted=${isGranted}`,
+      );
+
+      // Invalidate cached permissions for the affected user
+      await this.permissionsService.clearUserPermissionsCache(
+        membership.user_id,
+        organizationId,
+      );
+
+      return {
+        id: override.id,
+        permission_id: override.permission_id,
+        is_granted: override.is_granted,
+        message: this.i18n.t(
+          'messages.PERMISSION_OVERRIDE_ASSIGNED_SUCCESSFULLY',
+        ),
+      };
+    } catch (error) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `[AccessControlService] Error assigning permission override for membership ${membershipId}: ${error}`,
       );
       throw error;
     }

@@ -289,4 +289,132 @@ export class AccessControlController {
       req.user.id,
     );
   }
+
+  /**
+   * Change a member's role within an organization
+   * Security: Only the organization Owner can perform this action
+   * Restriction: Cannot change the role of a member who has the Owner role
+   * Secured: User must be the Owner of the organization
+   */
+  @Patch('memberships/:membershipId/role')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Change a member's role",
+    description:
+      "Allows the organization Owner to change another member's role. Cannot change the role of the Owner.",
+  })
+  @ApiParam({
+    name: 'orgId',
+    description: 'The organization ID',
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'membershipId',
+    description: 'The membership ID to update',
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Member role changed successfully',
+    schema: {
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        role_id: { type: 'string', format: 'uuid' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot modify Owner role or invalid role',
+  })
+  @ApiResponse({ status: 404, description: 'Membership or role not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the organization Owner can perform this action',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async changeMemberRole(
+    @Param('orgId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Request() req: AuthRequest,
+    @Body() updateMemberRoleDto: UpdateMemberRoleDto,
+  ): Promise<{ id: string; role_id: string; message: string }> {
+    return this.accessControlService.changeMemberRole(
+      organizationId,
+      membershipId,
+      updateMemberRoleDto.role_id,
+      req.user.id,
+    );
+  }
+
+  /**
+   * Assign a permission override for a membership
+   * Security: Only the organization Owner can perform this action
+   * Restriction: Cannot assign permission overrides to a member who has the Owner role
+   * Secured: User must be the Owner of the organization
+   */
+  @Post('memberships/:membershipId/overrides')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Assign a permission override to a member',
+    description:
+      'Allows the organization Owner to grant or revoke specific permissions to a member via permission overrides. Cannot override permissions for the Owner.',
+  })
+  @ApiParam({
+    name: 'orgId',
+    description: 'The organization ID',
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'membershipId',
+    description: 'The membership ID to assign override to',
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Permission override assigned successfully',
+    schema: {
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        permission_id: { type: 'string', format: 'uuid' },
+        is_granted: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot override Owner permissions or invalid permission',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Membership or permission not found',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the organization Owner can perform this action',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async assignPermissionOverride(
+    @Param('orgId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Request() req: AuthRequest,
+    @Body() createPermissionOverrideDto: CreatePermissionOverrideDto,
+  ): Promise<{
+    id: string;
+    permission_id: string;
+    is_granted: boolean;
+    message: string;
+  }> {
+    return this.accessControlService.assignPermissionOverride(
+      organizationId,
+      membershipId,
+      createPermissionOverrideDto.permission_id,
+      createPermissionOverrideDto.is_granted,
+      req.user.id,
+    );
+  }
 }
