@@ -50,7 +50,8 @@
     "PERMISSIONS_NOT_FOUND": "Bir veya daha fazla izin bulunamadı.",
     "ROLE_FORBIDDEN": "Bu role erişim yetkiniz yok.",
     "MEMBERSHIP_FORBIDDEN": "Bu üyeliğe erişim yetkiniz yok.",
-    "MEMBERSHIP_NOT_FOUND": "Üyelik bulunamadı."
+    "MEMBERSHIP_NOT_FOUND": "Üyelik bulunamadı.",
+    "PERMISSION_NOT_FOUND": "İzin bulunamadı."
   },
   "TENANT": {
     "USER_INFO_MISSING": "Kullanıcı bilgisi bulunamadı.",

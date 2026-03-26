@@ -36,6 +36,18 @@ export function createTestOrganization(): ICreateOrganizationPayload {
 }
 
 /**
+ * Generate test role payload for role creation
+ */
+export function createTestRole(roleName?: string) {
+  return {
+    name: roleName || `Test Role ${Date.now()}`,
+    // Note: Permission IDs will be fetched from the database in E2E tests
+    // This is a placeholder - actual IDs come from the system
+    permissionIds: [] as string[],
+  };
+}
+
+/**
  * Test data constants for assertion values
  */
 export const TEST_CONSTANTS = {

@@ -14,6 +14,7 @@ import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
+import { DEFAULT_ROLE_MATRIX } from './constants/default-role-matrix';
 import { Prisma } from '@prisma/client';
 import { MembershipStatus } from '@prisma/client';
 
@@ -108,9 +109,19 @@ export class OrganizationsService {
   }
 
   /**
-   * Create a new organization
-   * Automatically creates an OrganizationMembership for the creator with role 'Admin' and status 'active'
+   * Create a new organization with default roles and permissions
+   *
+   * This method performs the following in a single transaction:
+   * 1. Creates the organization
+   * 2. Fetches all global permissions from the database
+   * 3. Creates default roles (Owner, Manager, Agent) with their permissions
+   * 4. Assigns the creator as Owner with ACTIVE status
+   *
+   * The transaction ensures that if anything fails, the organization is not created,
+   * preventing orphaned data.
+   *
    * @throws ConflictException if slug already exists
+   * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException on database errors
    */
   async create(
@@ -119,7 +130,7 @@ export class OrganizationsService {
   ): Promise<IOrganization> {
     try {
       const organization = await this.prisma.$transaction(async (tx) => {
-        // Validate that user exists
+        // ========== STEP 1: Validate User ==========
         const user = await tx.user.findUnique({
           where: { id: userId },
         });
@@ -129,7 +140,7 @@ export class OrganizationsService {
           throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
         }
 
-        // Check if slug is already in use
+        // ========== STEP 2: Validate Slug Availability ==========
         const existingOrg = await tx.organization.findUnique({
           where: { slug: createOrgDto.slug },
         });
@@ -143,7 +154,7 @@ export class OrganizationsService {
           );
         }
 
-        // 1) Create organization
+        // ========== STEP 3: Create Organization ==========
         const createdOrg = await tx.organization.create({
           data: {
             name: createOrgDto.name,
@@ -152,34 +163,59 @@ export class OrganizationsService {
           },
         });
 
-        // 2) Create default tenant roles
-        const [adminRole, managerRole, agentRole] = await Promise.all([
-          tx.role.create({
-            data: {
-              name: 'Admin',
-              organization_id: createdOrg.id,
-            },
-          }),
-          tx.role.create({
-            data: {
-              name: 'Manager',
-              organization_id: createdOrg.id,
-            },
-          }),
-          tx.role.create({
-            data: {
-              name: 'Agent',
-              organization_id: createdOrg.id,
-            },
-          }),
-        ]);
+        // ========== STEP 4: Fetch All Global Permissions ==========
+        const allPermissions = await tx.permission.findMany();
+        const permissionMap = new Map(
+          allPermissions.map((p) => [p.action, p.id]),
+        );
 
-        // 3) Assign creator as active member with Admin role
+        // ========== STEP 5: Create Default Roles with Permissions ==========
+        const createdRoles = await Promise.all(
+          DEFAULT_ROLE_MATRIX.map(async (roleTemplate) => {
+            // Create the role
+            const role = await tx.role.create({
+              data: {
+                name: roleTemplate.name,
+                organization_id: createdOrg.id,
+              },
+            });
+
+            // Map permission actions to permission IDs
+            const rolePermissions = roleTemplate.permissionActions
+              .map((action) => permissionMap.get(action))
+              .filter((id) => id !== undefined) as string[];
+
+            // Batch create RolePermission join records
+            if (rolePermissions.length > 0) {
+              await tx.rolePermission.createMany({
+                data: rolePermissions.map((permissionId) => ({
+                  role_id: role.id,
+                  permission_id: permissionId,
+                })),
+                skipDuplicates: true,
+              });
+            }
+
+            return role;
+          }),
+        );
+
+        // Map roles by name for easy access
+        const rolesByName = new Map(createdRoles.map((r) => [r.name, r]));
+        const ownerRole = rolesByName.get('Owner');
+
+        if (!ownerRole) {
+          throw new InternalServerErrorException(
+            'Failed to create Owner role during organization setup',
+          );
+        }
+
+        // ========== STEP 6: Assign Creator as Owner with ACTIVE Status ==========
         await tx.organizationMembership.create({
           data: {
             user_id: userId,
             organization_id: createdOrg.id,
-            role_id: adminRole.id,
+            role_id: ownerRole.id,
             status: MembershipStatus.ACTIVE,
           },
         });
@@ -188,7 +224,9 @@ export class OrganizationsService {
       });
 
       this.logger.log(
-        `Organization '${organization.slug}' created by user ${userId} with Admin membership`,
+        `Organization '${organization.slug}' created by user ${userId} ` +
+          `with Owner membership and 3 default roles (Owner, Manager, Agent) ` +
+          `with permissions assigned`,
       );
 
       return organization as IOrganization;

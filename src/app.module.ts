@@ -17,6 +17,8 @@ import { GlobalAuthGuard } from './auth/guards/global-auth.guard';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { TenantInterceptor } from './organizations/interceptors/tenant.interceptor';
 import { UsersModule } from './users/users.module';
+import { SeederModule } from './seeders/seeder.module';
+import { AccessControlModule } from './access-control/access-control.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -83,6 +85,8 @@ mkdirSync(logsDir, { recursive: true });
     AuthModule,
     OrganizationsModule,
     UsersModule,
+    SeederModule,
+    AccessControlModule,
   ],
   controllers: [AppController],
   providers: [

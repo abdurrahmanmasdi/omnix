@@ -50,7 +50,8 @@
     "PERMISSIONS_NOT_FOUND": "واحد أو أكثر من الأذونات غير موجود.",
     "ROLE_FORBIDDEN": "ليس لديك صلاحية الوصول إلى هذا الدور.",
     "MEMBERSHIP_FORBIDDEN": "ليس لديك صلاحية الوصول إلى هذه العضوية.",
-    "MEMBERSHIP_NOT_FOUND": "لم يتم العثور على العضوية."
+    "MEMBERSHIP_NOT_FOUND": "لم يتم العثور على العضوية.",
+    "PERMISSION_NOT_FOUND": "لم يتم العثور على الإذن."
   },
   "TENANT": {
     "USER_INFO_MISSING": "لم يتم العثور على معلومات المستخدم.",

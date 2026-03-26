@@ -79,3 +79,33 @@ export interface ICreateOrganizationPayload {
   name: string;
   slug: string;
 }
+
+/**
+ * Permission resource with ID, action, and description
+ */
+export interface IPermission {
+  id: string;
+  action: string;
+  description: string | null;
+}
+
+/**
+ * Role resource with ID, name, and associated permissions
+ */
+export interface IRoleWithPermissions {
+  id: string;
+  name: string;
+  organization_id: string;
+  created_at: Date;
+  rolePermissions: Array<{
+    permission: IPermission;
+  }>;
+}
+
+/**
+ * Request payload for creating a role
+ */
+export interface ICreateRolePayload {
+  name: string;
+  permissionIds: string[];
+}

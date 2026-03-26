@@ -62,7 +62,7 @@ model OrganizationMembership {
 
 model Permission {
   id          String   @id @default(uuid()) @db.Uuid
-  name        String   @unique
+  action      String   @unique
   description String?
 
   rolePermissions                RolePermission[]

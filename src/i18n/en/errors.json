@@ -50,7 +50,8 @@
     "PERMISSIONS_NOT_FOUND": "One or more permissions do not exist.",
     "ROLE_FORBIDDEN": "You do not have access to this role.",
     "MEMBERSHIP_FORBIDDEN": "You do not have access to this membership.",
-    "MEMBERSHIP_NOT_FOUND": "Membership not found."
+    "MEMBERSHIP_NOT_FOUND": "Membership not found.",
+    "PERMISSION_NOT_FOUND": "Permission not found."
   },
   "TENANT": {
     "USER_INFO_MISSING": "User information not found.",

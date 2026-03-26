@@ -15,6 +15,8 @@ import {
   IOrganizationMembership,
   IRegisterPayload,
   ICreateOrganizationPayload,
+  IRoleWithPermissions,
+  ICreateRolePayload,
 } from '../types/e2e.types';
 
 /**
@@ -88,6 +90,7 @@ export async function cleanupTestData(
 /**
  * Clear all application tables for deterministic E2E runs.
  * This must only run against the dedicated test database.
+ * Note: Permissions table is NOT cleared as it contains system data seeded on startup.
  */
 export async function clearDatabase(
   prismaService: PrismaService | undefined,
@@ -107,7 +110,8 @@ export async function clearDatabase(
       prismaService.invitation.deleteMany(),
       prismaService.organizationMembership.deleteMany(),
       prismaService.role.deleteMany(),
-      prismaService.permission.deleteMany(),
+      // NOTE: Intentionally NOT deleting permissions - they are system data seeded on startup
+      // prismaService.permission.deleteMany(),
       prismaService.organization.deleteMany(),
       prismaService.user.deleteMany(),
     ]);
@@ -206,4 +210,58 @@ export function findMembershipByOrganizationId(
   organizationId: string,
 ): IOrganizationMembership | undefined {
   return memberships.find((m) => m.organization_id === organizationId);
+}
+
+/**
+ * Create a new role via POST /api/v1/organizations/:orgId/roles
+ */
+export async function createRole(
+  app: INestApplication,
+  jwtToken: string,
+  organizationId: string,
+  payload: ICreateRolePayload,
+): Promise<IRoleWithPermissions> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  const response = await request(app.getHttpServer())
+    .post(`/api/v1/organizations/${organizationId}/roles`)
+    .set('Authorization', `Bearer ${jwtToken}`)
+    .set('x-organization-id', organizationId)
+    .send(payload);
+
+  // If not a 201 status, throw an error with the status attached
+  if (response.status !== 201) {
+    const error = new Error(`Expected 201 but got ${response.status}`);
+    (error as any).status = response.status;
+    throw error;
+  }
+
+  return response.body as IRoleWithPermissions;
+}
+
+/**
+ * Get all roles for an organization via GET /api/v1/organizations/:orgId/roles
+ */
+export async function getRoles(
+  app: INestApplication,
+  jwtToken: string,
+  organizationId: string,
+): Promise<IRoleWithPermissions[]> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  const response = await request(app.getHttpServer())
+    .get(`/api/v1/organizations/${organizationId}/roles`)
+    .set('Authorization', `Bearer ${jwtToken}`)
+    .set('x-organization-id', organizationId)
+    .expect(200);
+
+  return response.body as IRoleWithPermissions[];
+}
+
+/**
+ * Helper to find a role by name from roles array
+ */
+export function findRoleByName(
+  roles: IRoleWithPermissions[],
+  name: string,
+): IRoleWithPermissions | undefined {
+  return roles.find((r) => r.name === name);
 }
