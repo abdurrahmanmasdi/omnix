@@ -683,6 +683,13 @@ export class OrganizationsService {
         throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
       }
 
+      // Prevent assigning Owner role directly from approval
+      if (role.name === 'Owner') {
+        throw new BadRequestException(
+          this.i18n.t('errors.CANNOT_ASSIGN_OWNER_ROLE_FROM_APPROVAL'),
+        );
+      }
+
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {
           id: membershipId,

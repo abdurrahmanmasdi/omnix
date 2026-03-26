@@ -59,6 +59,7 @@
     "VERIFY_FAILED": "Failed to verify organization access."
   },
   "UNAUTHORIZED_ACCESS": "You are not authorized to access this resource.",
+  "INSUFFICIENT_PERMISSIONS": "Insufficient permissions to perform this action.",
   "UNAUTHORIZED": "Unauthorized access.",
   "FORBIDDEN": "Access denied.",
   "NOT_FOUND": "Resource not found.",

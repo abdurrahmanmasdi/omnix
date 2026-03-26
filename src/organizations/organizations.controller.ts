@@ -22,6 +22,8 @@ import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 
 export interface IOrganization {
   id: string;
@@ -174,12 +176,14 @@ export class OrganizationsController {
   }
 
   @Post(':id/requests/:membershipId/approve')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('members:manage')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Approve a pending join request',
     description:
-      'Approves a pending membership request and assigns a role to the user.',
+      'Approves a pending membership request and assigns a role to the user. Requires members:manage permission.',
   })
   @ApiResponse({
     status: 200,
@@ -188,7 +192,7 @@ export class OrganizationsController {
   @ApiResponse({ status: 400, description: 'Invalid request state or role' })
   @ApiResponse({
     status: 403,
-    description: 'Only organization admins can approve requests',
+    description: 'Insufficient permissions to approve requests',
   })
   @ApiResponse({
     status: 404,

@@ -59,6 +59,7 @@
     "VERIFY_FAILED": "Organizasyon erişimi doğrulanamadı."
   },
   "UNAUTHORIZED_ACCESS": "Bu kaynağa erişim yetkiniz yok.",
+  "INSUFFICIENT_PERMISSIONS": "Bu işlemi gerçekleştirmek için yetersiz izinler.",
   "UNAUTHORIZED": "Yetkisiz erişim.",
   "FORBIDDEN": "Erişim reddedildi.",
   "NOT_FOUND": "Kaynak bulunamadı.",
