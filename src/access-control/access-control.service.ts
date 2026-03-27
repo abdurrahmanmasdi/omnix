@@ -19,6 +19,8 @@ import { MembershipStatus } from '@prisma/client';
 export interface RoleWithPermissions {
   id: string;
   name: string;
+  is_system: boolean;
+  slug?: string | null;
   name_translations?: Record<string, string> | null;
   organization_id: string;
   created_at: Date;
@@ -30,8 +32,6 @@ export interface RoleWithPermissions {
     };
   }>;
 }
-
-const PROTECTED_ROLES = ['Owner', 'Admin'];
 
 @Injectable()
 export class AccessControlService {
@@ -82,12 +82,16 @@ export class AccessControlService {
       },
       include: {
         role: {
-          select: { name: true },
+          select: { slug: true },
         },
       },
     });
 
-    if (!membership || membership.role.name !== 'Owner') {
+    const roleSlug =
+      (membership as { role?: { slug?: string | null } } | null)?.role?.slug ??
+      null;
+
+    if (!membership || roleSlug !== 'owner') {
       throw new ForbiddenException(
         this.i18n.t('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
       );
@@ -260,17 +264,17 @@ export class AccessControlService {
           id: roleId,
           organization_id: organizationId,
         },
-        select: { id: true, name: true },
+        select: { id: true, is_system: true },
       });
 
       if (!role) {
         throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
       }
 
-      // Check if role is protected system role (Owner, Admin cannot be modified)
-      if (PROTECTED_ROLES.includes(role.name)) {
-        throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_MODIFY_PROTECTED_ROLE'),
+      // System roles are immutable and cannot be modified.
+      if (role.is_system) {
+        throw new ForbiddenException(
+          'System roles cannot be deleted or modified.',
         );
       }
 
@@ -433,17 +437,17 @@ export class AccessControlService {
           id: roleId,
           organization_id: organizationId,
         },
-        select: { id: true, name: true },
+        select: { id: true, is_system: true },
       });
 
       if (!role) {
         throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
       }
 
-      // Validation: Check if role is protected
-      if (PROTECTED_ROLES.includes(role.name)) {
-        throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_DELETE_PROTECTED_ROLE'),
+      // System roles are immutable and cannot be deleted.
+      if (role.is_system) {
+        throw new ForbiddenException(
+          'System roles cannot be deleted or modified.',
         );
       }
 
@@ -585,7 +589,7 @@ export class AccessControlService {
         select: {
           id: true,
           user_id: true,
-          role: { select: { name: true } },
+          role: { select: { slug: true } },
         },
       });
 
@@ -593,8 +597,14 @@ export class AccessControlService {
         throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
       }
 
+      const targetRoleSlug = (
+        membership as {
+          role?: { slug?: string | null };
+        }
+      ).role?.slug;
+
       // Check if target member has Owner role - cannot change Owner
-      if (membership.role.name === 'Kurucu') {
+      if (targetRoleSlug === 'owner') {
         throw new BadRequestException(
           this.i18n.t('errors.CANNOT_MODIFY_OWNER_ROLE'),
         );
@@ -780,7 +790,7 @@ export class AccessControlService {
         select: {
           id: true,
           user_id: true,
-          role: { select: { name: true } },
+          role: { select: { slug: true } },
         },
       });
 
@@ -788,8 +798,14 @@ export class AccessControlService {
         throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
       }
 
+      const targetRoleSlug = (
+        membership as {
+          role?: { slug?: string | null };
+        }
+      ).role?.slug;
+
       // Check if target member has Owner role - cannot override Owner permissions
-      if (membership.role.name === 'Kurucu') {
+      if (targetRoleSlug === 'owner') {
         throw new BadRequestException(
           this.i18n.t('errors.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
         );

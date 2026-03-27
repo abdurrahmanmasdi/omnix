@@ -17,71 +17,74 @@ generator erd {
 datasource db {
   provider = "postgresql"
 }
+
 model User {
-  id            String                    @id @default(uuid()) @db.Uuid
-  email         String                    @unique
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
   password_hash String
   first_name    String
   last_name     String
-  created_at    DateTime                  @default(now())
+  created_at    DateTime @default(now())
 
-  memberships   OrganizationMembership[]
+  memberships              OrganizationMembership[]
   conversationParticipants ConversationParticipant[]
-  sentMessages  Message[]                 @relation("SentMessages")
+  sentMessages             Message[]                 @relation("SentMessages")
 
   @@map("users")
 }
 
 model Organization {
-  id         String                    @id @default(uuid()) @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
   name       String
-  slug       String                    @unique
-  is_public  Boolean                   @default(false)
-  created_at DateTime                  @default(now())
+  slug       String   @unique
+  is_public  Boolean  @default(false)
+  created_at DateTime @default(now())
 
-  roles        Role[]
-  invitations  Invitation[]
-  memberships  OrganizationMembership[]
+  roles         Role[]
+  invitations   Invitation[]
+  memberships   OrganizationMembership[]
   conversations Conversation[]
 
   @@map("organizations")
 }
 
 model OrganizationMembership {
-  id              String                    @id @default(uuid()) @db.Uuid
-  user_id         String                    @db.Uuid
-  organization_id String                    @db.Uuid
-  role_id         String                    @db.Uuid
-  status          MembershipStatus          @default(PENDING)
-  created_at      DateTime                  @default(now())
+  id              String           @id @default(uuid()) @db.Uuid
+  user_id         String           @db.Uuid
+  organization_id String           @db.Uuid
+  role_id         String           @db.Uuid
+  status          MembershipStatus @default(PENDING)
+  created_at      DateTime         @default(now())
 
-  user           User                      @relation(fields: [user_id], references: [id])
-  organization   Organization              @relation(fields: [organization_id], references: [id])
-  role           Role                      @relation(fields: [role_id], references: [id])
+  user                User                           @relation(fields: [user_id], references: [id])
+  organization        Organization                   @relation(fields: [organization_id], references: [id])
+  role                Role                           @relation(fields: [role_id], references: [id])
   permissionOverrides MembershipPermissionOverride[]
 
   @@map("organization_memberships")
 }
 
 model Permission {
-  id          String   @id @default(uuid()) @db.Uuid
-  action      String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  action      String  @unique
   description String?
 
-  rolePermissions                RolePermission[]
-  membershipPermissionOverrides  MembershipPermissionOverride[]
+  rolePermissions               RolePermission[]
+  membershipPermissionOverrides MembershipPermissionOverride[]
 
   @@map("permissions")
 }
 
 model Role {
-  id              String   @id @default(uuid()) @db.Uuid
-  organization_id String?  @db.Uuid
-  name            String
+  id                String   @id @default(uuid()) @db.Uuid
+  organization_id   String?  @db.Uuid
+  name              String
   name_translations Json?
-  created_at      DateTime @default(now())
+  is_system         Boolean  @default(false)
+  slug              String?
+  created_at        DateTime @default(now())
 
-  organization   Organization? @relation(fields: [organization_id], references: [id])
+  organization    Organization?            @relation(fields: [organization_id], references: [id])
   rolePermissions RolePermission[]
   memberships     OrganizationMembership[]
   invitations     Invitation[]
@@ -90,12 +93,12 @@ model Role {
 }
 
 model Invitation {
-  id              String   @id @default(uuid()) @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
   email           String
-  organization_id String   @db.Uuid
-  role_id         String   @db.Uuid
-  status          String   @default("pending")
-  created_at      DateTime @default(now())
+  organization_id String    @db.Uuid
+  role_id         String    @db.Uuid
+  status          String    @default("pending")
+  created_at      DateTime  @default(now())
   accepted_at     DateTime?
 
   organization Organization @relation(fields: [organization_id], references: [id])
@@ -117,17 +120,18 @@ model RolePermission {
 }
 
 model MembershipPermissionOverride {
-  id            String @id @default(uuid()) @db.Uuid
-  membership_id String @db.Uuid
-  permission_id String @db.Uuid
+  id            String  @id @default(uuid()) @db.Uuid
+  membership_id String  @db.Uuid
+  permission_id String  @db.Uuid
   is_granted    Boolean
 
-  membership  OrganizationMembership @relation(fields: [membership_id], references: [id])
-  permission  Permission             @relation(fields: [permission_id], references: [id])
+  membership OrganizationMembership @relation(fields: [membership_id], references: [id])
+  permission Permission             @relation(fields: [permission_id], references: [id])
 
   @@unique([membership_id, permission_id])
   @@map("membership_permission_overrides")
 }
+
 enum MembershipStatus {
   PENDING
   ACTIVE
@@ -135,44 +139,43 @@ enum MembershipStatus {
 }
 
 model Conversation {
-  id              String                    @id @default(uuid()) @db.Uuid
-  organization_id String                    @db.Uuid
-  is_group        Boolean                   @default(false)
+  id              String   @id @default(uuid()) @db.Uuid
+  organization_id String   @db.Uuid
+  is_group        Boolean  @default(false)
   name            String?
-  created_at      DateTime                  @default(now())
-  updated_at      DateTime                  @updatedAt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
-  organization    Organization             @relation(fields: [organization_id], references: [id])
-  participants    ConversationParticipant[]
-  messages        Message[]
+  organization Organization              @relation(fields: [organization_id], references: [id])
+  participants ConversationParticipant[]
+  messages     Message[]
 
   @@map("conversations")
 }
 
 model ConversationParticipant {
-  id              String                    @id @default(uuid()) @db.Uuid
-  conversation_id String                    @db.Uuid
-  user_id         String                    @db.Uuid
-  joined_at       DateTime                  @default(now())
+  id              String   @id @default(uuid()) @db.Uuid
+  conversation_id String   @db.Uuid
+  user_id         String   @db.Uuid
+  joined_at       DateTime @default(now())
 
-  conversation    Conversation              @relation(fields: [conversation_id], references: [id])
-  user            User                      @relation(fields: [user_id], references: [id])
+  conversation Conversation @relation(fields: [conversation_id], references: [id])
+  user         User         @relation(fields: [user_id], references: [id])
 
   @@unique([conversation_id, user_id])
   @@map("conversation_participants")
 }
 
 model Message {
-  id              String                    @id @default(uuid()) @db.Uuid
-  conversation_id String                    @db.Uuid
-  sender_id       String                    @db.Uuid
-  content         String                    @db.Text
-  created_at      DateTime                  @default(now())
-  updated_at      DateTime                  @updatedAt
+  id              String   @id @default(uuid()) @db.Uuid
+  conversation_id String   @db.Uuid
+  sender_id       String   @db.Uuid
+  content         String   @db.Text
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
-  conversation    Conversation              @relation(fields: [conversation_id], references: [id])
-  sender          User                      @relation("SentMessages", fields: [sender_id], references: [id])
+  conversation Conversation @relation(fields: [conversation_id], references: [id])
+  sender       User         @relation("SentMessages", fields: [sender_id], references: [id])
 
   @@map("messages")
 }
-

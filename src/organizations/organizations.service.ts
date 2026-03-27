@@ -183,6 +183,8 @@ export class OrganizationsService {
             ...(ownerTranslations && {
               name_translations: ownerTranslations as Prisma.InputJsonValue,
             }),
+            is_system: true,
+            slug: 'owner',
             organization_id: createdOrg.id,
             rolePermissions: {
               create: allPermissions.map((perm) => ({
@@ -201,6 +203,11 @@ export class OrganizationsService {
           Temsilci: { en: 'Agent', ar: 'وكيل' },
         };
 
+        const systemRoleSlugs: Record<string, string> = {
+          Yönetici: 'manager',
+          Temsilci: 'agent',
+        };
+
         await Promise.all(
           DEFAULT_ROLE_MATRIX.filter((role) => role.name !== 'Kurucu').map(
             async (roleTemplate) => {
@@ -214,6 +221,8 @@ export class OrganizationsService {
                   ...(translations && {
                     name_translations: translations,
                   }),
+                  is_system: true,
+                  slug: systemRoleSlugs[roleTemplate.name],
                   organization_id: createdOrg.id,
                 },
               });
@@ -707,8 +716,8 @@ export class OrganizationsService {
         throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
       }
 
-      // Prevent assigning Owner (Kurucu) role directly from approval
-      if (role.name === 'Kurucu') {
+      // Prevent assigning system Owner role directly from approval.
+      if (role.slug === 'owner') {
         throw new BadRequestException(
           this.i18n.t('errors.CANNOT_ASSIGN_OWNER_ROLE_FROM_APPROVAL'),
         );
