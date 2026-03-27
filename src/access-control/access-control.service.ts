@@ -14,7 +14,7 @@ import { CreateRoleDto } from './dtos/create-role.dto';
 import { UpdateRoleDto } from './dtos/update-role.dto';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
 import { CreatePermissionOverrideDto } from './dtos/create-permission-override.dto';
-import { MembershipStatus } from '@prisma/client';
+import { MembershipStatus, Prisma } from '@prisma/client';
 
 export interface RoleWithPermissions {
   id: string;
@@ -255,11 +255,11 @@ export class AccessControlService {
     dto: UpdateRoleDto,
   ): Promise<RoleWithPermissions> {
     try {
-      // Verify user has access to this organization
-      await this.verifyUserInOrganization(organizationId, currentUserId);
+      // Verify caller is owner for role mutation operations.
+      await this.verifyIsOwner(organizationId, currentUserId);
 
-      // Verify the role belongs to this organization
-      const role = await this.prisma.role.findFirst({
+      // Verify the role belongs to this organization and is mutable.
+      const existingRole = await this.prisma.role.findFirst({
         where: {
           id: roleId,
           organization_id: organizationId,
@@ -267,74 +267,101 @@ export class AccessControlService {
         select: { id: true, is_system: true },
       });
 
-      if (!role) {
+      if (!existingRole) {
         throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
       }
 
-      // System roles are immutable and cannot be modified.
-      if (role.is_system) {
-        throw new ForbiddenException(
-          'System roles cannot be deleted or modified.',
-        );
+      if (existingRole.is_system) {
+        throw new ForbiddenException('System roles cannot be modified.');
       }
 
-      // Validate permissions if provided
-      if (dto.permissionIds && dto.permissionIds.length > 0) {
+      const updateRoleDto = dto as {
+        name?: string;
+        name_translations?: Record<string, string>;
+        permissionIds?: string[];
+        permissionsToRemove?: string[];
+        permissionsToAdd?: string[];
+      };
+
+      // Support both incremental updates (permissionsToAdd/permissionsToRemove)
+      // and full replacement mode (permissionIds) for backward compatibility.
+      let permissionsToRemove: string[] =
+        updateRoleDto.permissionsToRemove ?? [];
+      let permissionsToAdd: string[] = updateRoleDto.permissionsToAdd ?? [];
+
+      if (updateRoleDto.permissionIds) {
+        const requestedPermissionIds = [
+          ...new Set(updateRoleDto.permissionIds),
+        ];
         const permissions = await this.prisma.permission.findMany({
           where: {
             id: {
-              in: dto.permissionIds,
+              in: requestedPermissionIds,
             },
           },
           select: { id: true },
         });
 
-        if (permissions.length !== dto.permissionIds.length) {
+        if (permissions.length !== requestedPermissionIds.length) {
           throw new BadRequestException(
             this.i18n.t('errors.INVALID_PERMISSIONS'),
           );
         }
+
+        const currentRolePermissions =
+          await this.prisma.rolePermission.findMany({
+            where: { role_id: roleId },
+            select: { permission_id: true },
+          });
+
+        const currentPermissionSet = new Set(
+          currentRolePermissions.map((p) => p.permission_id),
+        );
+        const requestedPermissionSet = new Set(requestedPermissionIds);
+
+        permissionsToRemove = [...currentPermissionSet].filter(
+          (permissionId) => !requestedPermissionSet.has(permissionId),
+        );
+        permissionsToAdd = [...requestedPermissionSet].filter(
+          (permissionId) => !currentPermissionSet.has(permissionId),
+        );
+      } else {
+        const permissionIdsToValidate = [
+          ...new Set([...permissionsToAdd, ...permissionsToRemove]),
+        ];
+
+        if (permissionIdsToValidate.length > 0) {
+          const permissions = await this.prisma.permission.findMany({
+            where: {
+              id: {
+                in: permissionIdsToValidate,
+              },
+            },
+            select: { id: true },
+          });
+
+          if (permissions.length !== permissionIdsToValidate.length) {
+            throw new BadRequestException(
+              this.i18n.t('errors.INVALID_PERMISSIONS'),
+            );
+          }
+        }
       }
 
-      // Track whether permissions were modified
-      const isPermissionsModified = !!(
-        dto.permissionIds && dto.permissionIds.length > 0
-      );
-
-      // Update role and permissions in a transaction
+      // Optimized transaction: batch delete/add permissions, then update metadata.
       const result = await this.prisma.$transaction(async (tx) => {
-        // Step 1: Update role name and/or translations if provided
-        if (dto.name || dto.name_translations) {
-          const updatePayload: {
-            name?: string;
-            name_translations?: Record<string, string> | null;
-          } = {};
-
-          if (dto.name) {
-            updatePayload.name = dto.name;
-          }
-          if (dto.name_translations) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            updatePayload.name_translations = dto.name_translations as any;
-          }
-
-          await tx.role.update({
-            where: { id: roleId },
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            data: updatePayload as any,
+        if (permissionsToRemove.length > 0) {
+          await tx.rolePermission.deleteMany({
+            where: {
+              role_id: roleId,
+              permission_id: { in: permissionsToRemove },
+            },
           });
         }
 
-        // Step 2: Update permissions if provided
-        if (isPermissionsModified) {
-          // Delete old role-permission associations
-          await tx.rolePermission.deleteMany({
-            where: { role_id: roleId },
-          });
-
-          // Create new role-permission associations
+        if (permissionsToAdd.length > 0) {
           await tx.rolePermission.createMany({
-            data: dto.permissionIds!.map((permissionId) => ({
+            data: permissionsToAdd.map((permissionId) => ({
               role_id: roleId,
               permission_id: permissionId,
             })),
@@ -342,9 +369,23 @@ export class AccessControlService {
           });
         }
 
-        // Step 3: Fetch the updated role with all permissions
-        const updatedRole = await tx.role.findUnique({
+        const roleUpdateData: {
+          name?: string;
+          name_translations?: Prisma.InputJsonValue;
+        } = {};
+
+        if (updateRoleDto.name !== undefined) {
+          roleUpdateData.name = updateRoleDto.name;
+        }
+
+        if (updateRoleDto.name_translations !== undefined) {
+          roleUpdateData.name_translations =
+            updateRoleDto.name_translations as Prisma.InputJsonValue;
+        }
+
+        const updatedRole = await tx.role.update({
           where: { id: roleId },
+          data: roleUpdateData,
           include: {
             rolePermissions: {
               include: {
@@ -363,9 +404,11 @@ export class AccessControlService {
         return updatedRole;
       });
 
-      // Step 4: If permissions were modified, invalidate cache for all users holding this role
+      const isPermissionsModified =
+        permissionsToRemove.length > 0 || permissionsToAdd.length > 0;
+
+      // If permissions were modified, invalidate cache for all users holding this role.
       if (isPermissionsModified) {
-        // Query all memberships in the organization with this roleId
         const affectedMemberships =
           await this.prisma.organizationMembership.findMany({
             where: {
@@ -378,7 +421,6 @@ export class AccessControlService {
             },
           });
 
-        // Clear cache for each affected user
         await Promise.all(
           affectedMemberships.map((membership) =>
             this.permissionsService.clearUserPermissionsCache(

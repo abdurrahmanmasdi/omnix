@@ -57,4 +57,32 @@ export class UpdateRoleDto {
     message: i18nValidationMessage('errors.VALIDATION.INVALID_UUID'),
   })
   permissionIds?: string[];
+
+  @ApiProperty({
+    example: ['550e8400-e29b-41d4-a716-446655440000'],
+    description: 'Permission IDs to remove from the role incrementally',
+    type: [String],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: i18nValidationMessage('errors.VALIDATION.IS_ARRAY') })
+  @IsUUID('4', {
+    each: true,
+    message: i18nValidationMessage('errors.VALIDATION.INVALID_UUID'),
+  })
+  permissionsToRemove?: string[];
+
+  @ApiProperty({
+    example: ['550e8400-e29b-41d4-a716-446655440001'],
+    description: 'Permission IDs to add to the role incrementally',
+    type: [String],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: i18nValidationMessage('errors.VALIDATION.IS_ARRAY') })
+  @IsUUID('4', {
+    each: true,
+    message: i18nValidationMessage('errors.VALIDATION.INVALID_UUID'),
+  })
+  permissionsToAdd?: string[];
 }
