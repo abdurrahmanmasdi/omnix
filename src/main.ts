@@ -14,7 +14,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new LoggerErrorInterceptor());
 
   // WebSocket Adapter - Redis for Pub/Sub (Scalability)
-  const redisIoAdapter = new RedisIoAdapter();
+  const redisIoAdapter = new RedisIoAdapter(app);
   try {
     await redisIoAdapter.connectToRedis();
     app.useWebSocketAdapter(redisIoAdapter);

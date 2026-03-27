@@ -203,29 +203,45 @@ export class ChatService {
   }
 
   /**
-   * Create a new conversation
+   * Create a new 1-on-1 conversation (Direct Message)
+   * Or return existing conversation if one already exists between the two users
    * @param orgId - The organization ID
-   * @param participantIds - Array of user IDs to add as participants
-   * @param isGroup - Whether this is a group conversation
-   * @param name - Optional conversation name (for group chats)
-   * @returns The created conversation
+   * @param currentUserId - The user initiating the conversation
+   * @param targetUserId - The user to start a DM with
+   * @returns The created or existing conversation
+   * @throws NotFoundException if target user doesn't exist
    */
   async createConversation(
     orgId: string,
-    participantIds: string[],
-    isGroup: boolean,
-    name?: string,
+    currentUserId: string,
+    targetUserId: string,
   ) {
-    const conversation = await this.prisma.conversation.create({
-      data: {
+    // Validate that target user exists (and is in the same org if needed)
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('Target user not found');
+    }
+
+    // Check if a 1-on-1 conversation already exists between these two users in this organization
+    const existingConversation = await this.prisma.conversation.findFirst({
+      where: {
         organization_id: orgId,
-        is_group: isGroup,
-        name,
+        is_group: false,
         participants: {
-          createMany: {
-            data: participantIds.map((userId) => ({
-              user_id: userId,
-            })),
+          every: {
+            user_id: {
+              in: [currentUserId, targetUserId],
+            },
+          },
+        },
+        AND: {
+          participants: {
+            every: {
+              OR: [{ user_id: currentUserId }, { user_id: targetUserId }],
+            },
           },
         },
       },
@@ -242,11 +258,93 @@ export class ChatService {
             },
           },
         },
+        messages: {
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    this.logger.log(`[ChatService] Conversation created: ${conversation.id}`);
+    // If conversation exists, return it
+    if (existingConversation) {
+      this.logger.log(
+        `[ChatService] Existing conversation found: ${existingConversation.id}`,
+      );
+      return existingConversation;
+    }
 
-    return conversation;
+    // Create new conversation using a transaction
+    const newConversation = await this.prisma.$transaction(async (tx) => {
+      // Create the conversation
+      const conversation = await tx.conversation.create({
+        data: {
+          organization_id: orgId,
+          is_group: false,
+        },
+      });
+
+      // Add both participants
+      await tx.conversationParticipant.createMany({
+        data: [
+          {
+            conversation_id: conversation.id,
+            user_id: currentUserId,
+          },
+          {
+            conversation_id: conversation.id,
+            user_id: targetUserId,
+          },
+        ],
+      });
+
+      // Return the conversation with all necessary relations
+      return tx.conversation.findUnique({
+        where: { id: conversation.id },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  first_name: true,
+                  last_name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          messages: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  first_name: true,
+                  last_name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    this.logger.log(
+      `[ChatService] New conversation created: ${newConversation?.id}`,
+    );
+
+    return newConversation;
   }
 }

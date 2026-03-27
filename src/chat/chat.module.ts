@@ -4,6 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { jwtConstants } from '../auth/constants';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
+import { ChatController } from './chat.controller';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { ChatGateway } from './chat.gateway';
       signOptions: { expiresIn: '1d' },
     }),
   ],
+  controllers: [ChatController],
   providers: [ChatService, ChatGateway],
   exports: [ChatService],
 })

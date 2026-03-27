@@ -34,8 +34,11 @@ interface SendMessagePayload {
 }
 
 @WebSocketGateway({
-  cors: true,
   namespace: '/chat',
+  cors: {
+    origin: '*', // Allow all origins for now (we can lock this down in production)
+    credentials: true,
+  },
 })
 @Injectable()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
