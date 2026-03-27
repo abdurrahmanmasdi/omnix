@@ -37,12 +37,10 @@ export class PermissionSeederService implements OnApplicationBootstrap {
       this.logger.log('🌱 Starting permission seeding...');
       const startTime = Date.now();
 
-      let createdCount = 0;
-      let updatedCount = 0;
-
       // Upsert each permission
       for (const permission of PERMISSIONS_LIST) {
-        const result = await this.prisma.permission.upsert({
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _result = await this.prisma.permission.upsert({
           where: {
             action: permission.action,
           },

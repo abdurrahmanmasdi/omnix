@@ -188,7 +188,7 @@ export class OrganizationsService {
             // Map permission actions to permission IDs
             const rolePermissions = roleTemplate.permissionActions
               .map((action) => permissionMap.get(action))
-              .filter((id) => id !== undefined) as string[];
+              .filter((id) => id !== undefined);
 
             // Batch create RolePermission join records
             if (rolePermissions.length > 0) {
@@ -733,7 +733,6 @@ export class OrganizationsService {
   async rejectJoinRequest(
     organizationId: string,
     membershipId: string,
-    _requesterUserId: string,
   ): Promise<{ message: string; membershipId: string; status: string }> {
     try {
       const organization = await this.prisma.organization.findUnique({

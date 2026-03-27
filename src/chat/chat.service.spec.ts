@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ChatService } from './chat.service';
@@ -5,26 +6,36 @@ import { PrismaService } from '../prisma/prisma.service';
 
 describe('ChatService', () => {
   let service: ChatService;
-  let prisma: PrismaService;
-
-  const mockPrismaService = {
-    conversationParticipant: {
-      findUnique: jest.fn(),
-    },
-    message: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-    },
-    conversation: {
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      create: jest.fn(),
-    },
-  };
+  let mockPrismaService: any;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    // Recreate mocks fresh for each test
+    mockPrismaService = {
+      conversationParticipant: {
+        findUnique: jest.fn(),
+        createMany: jest.fn(),
+      },
+      message: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+      },
+      conversation: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
+      },
+      $transaction: jest.fn(),
+    };
+
+    // Setup $transaction to pass the mockPrismaService itself as the tx parameter
+    mockPrismaService.$transaction.mockImplementation(async (cb) => {
+      return cb(mockPrismaService);
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,7 +48,6 @@ describe('ChatService', () => {
     }).compile();
 
     service = module.get<ChatService>(ChatService);
-    prisma = module.get<PrismaService>(PrismaService);
   });
 
   describe('sendMessage', () => {
@@ -436,114 +446,142 @@ describe('ChatService', () => {
 
   describe('createConversation', () => {
     const orgId = 'org-123';
-    const participantIds = ['user-1', 'user-2', 'user-3'];
+    const currentUserId = 'user-1';
+    const targetUserId = 'user-2';
 
-    it('should create a new group conversation', async () => {
+    beforeEach(() => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: targetUserId,
+        first_name: 'User',
+        last_name: 'Two',
+        email: 'user2@example.com',
+      });
+    });
+
+    it('should create a new 1-on-1 conversation', async () => {
       // Arrange
       const mockConversation = {
         id: 'conv-new',
-        organization_id: orgId,
-        is_group: true,
-        name: 'New Group Chat',
-        created_at: new Date(),
-        updated_at: new Date(),
-        participants: participantIds.map((userId) => ({
-          id: `participant-${userId}`,
-          conversation_id: 'conv-new',
-          user_id: userId,
-          joined_at: new Date(),
-          user: {
-            id: userId,
-            first_name: `User${userId}`,
-            last_name: 'Test',
-            email: `user${userId}@example.com`,
-          },
-        })),
-      };
-
-      mockPrismaService.conversation.create.mockResolvedValue(mockConversation);
-
-      // Act
-      const result = await service.createConversation(
-        orgId,
-        participantIds,
-        true,
-        'New Group Chat',
-      );
-
-      // Assert
-      expect(mockPrismaService.conversation.create).toHaveBeenCalledWith({
-        data: {
-          organization_id: orgId,
-          is_group: true,
-          name: 'New Group Chat',
-          participants: {
-            createMany: {
-              data: participantIds.map((userId) => ({
-                user_id: userId,
-              })),
-            },
-          },
-        },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  first_name: true,
-                  last_name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      expect(result).toEqual(mockConversation);
-      expect(result.participants).toHaveLength(3);
-    });
-
-    it('should create a direct message conversation', async () => {
-      // Arrange
-      const directMessageIds = ['user-sender', 'user-recipient'];
-      const mockDirectMessage = {
-        id: 'conv-dm',
         organization_id: orgId,
         is_group: false,
         name: null,
         created_at: new Date(),
         updated_at: new Date(),
-        participants: directMessageIds.map((userId) => ({
-          id: `participant-${userId}`,
-          conversation_id: 'conv-dm',
-          user_id: userId,
-          joined_at: new Date(),
-          user: {
-            id: userId,
-            first_name: `User${userId}`,
-            last_name: 'Test',
-            email: `user${userId}@example.com`,
+        participants: [
+          {
+            id: 'participant-1',
+            conversation_id: 'conv-new',
+            user_id: currentUserId,
+            joined_at: new Date(),
+            user: {
+              id: currentUserId,
+              first_name: 'User',
+              last_name: 'One',
+              email: 'user1@example.com',
+            },
           },
-        })),
+          {
+            id: 'participant-2',
+            conversation_id: 'conv-new',
+            user_id: targetUserId,
+            joined_at: new Date(),
+            user: {
+              id: targetUserId,
+              first_name: 'User',
+              last_name: 'Two',
+              email: 'user2@example.com',
+            },
+          },
+        ],
       };
 
-      mockPrismaService.conversation.create.mockResolvedValue(
-        mockDirectMessage,
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: targetUserId,
+        first_name: 'User',
+        last_name: 'Two',
+        email: 'user2@example.com',
+      });
+
+      mockPrismaService.conversation.findFirst.mockResolvedValue(null);
+
+      // Mock conversation.create to return an object with id
+      mockPrismaService.conversation.create.mockResolvedValue({
+        id: 'conv-new',
+      });
+
+      // Mock conversation.findUnique to return the full conversation with participants
+      mockPrismaService.conversation.findUnique.mockResolvedValue(
+        mockConversation,
       );
 
       // Act
       const result = await service.createConversation(
         orgId,
-        directMessageIds,
-        false,
+        currentUserId,
+        targetUserId,
       );
 
       // Assert
-      expect(result.is_group).toBe(false);
-      expect(result.name).toBeNull();
-      expect(result.participants).toHaveLength(2);
+      expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
+        where: { id: targetUserId },
+      });
+      expect(result).toBeDefined();
+      expect(result!.is_group).toBe(false);
+      expect(result!.participants).toHaveLength(2);
+    });
+
+    it('should return existing conversation if found', async () => {
+      // Arrange
+      const existingConversation = {
+        id: 'conv-existing',
+        organization_id: orgId,
+        is_group: false,
+        name: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+        participants: [
+          {
+            id: 'participant-1',
+            conversation_id: 'conv-existing',
+            user_id: currentUserId,
+            joined_at: new Date(),
+            user: {
+              id: currentUserId,
+              first_name: 'User',
+              last_name: 'One',
+              email: 'user1@example.com',
+            },
+          },
+          {
+            id: 'participant-2',
+            conversation_id: 'conv-existing',
+            user_id: targetUserId,
+            joined_at: new Date(),
+            user: {
+              id: targetUserId,
+              first_name: 'User',
+              last_name: 'Two',
+              email: 'user2@example.com',
+            },
+          },
+        ],
+      };
+
+      mockPrismaService.conversation.findFirst.mockResolvedValue(
+        existingConversation,
+      );
+
+      // Act
+      const result = await service.createConversation(
+        orgId,
+        currentUserId,
+        targetUserId,
+      );
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result!.is_group).toBe(false);
+      expect(result!.participants).toHaveLength(2);
     });
   });
 

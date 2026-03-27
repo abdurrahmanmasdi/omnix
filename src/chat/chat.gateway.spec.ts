@@ -1,13 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
-import { Socket, Server } from 'socket.io';
+import { Server } from 'socket.io';
 
 describe('ChatGateway', () => {
   let gateway: ChatGateway;
-  let chatService: ChatService;
   let jwtService: JwtService;
   let mockServer: Partial<Server>;
   let mockSocket: any;
@@ -67,7 +67,6 @@ describe('ChatGateway', () => {
     }).compile();
 
     gateway = module.get<ChatGateway>(ChatGateway);
-    chatService = module.get<ChatService>(ChatService);
     jwtService = module.get<JwtService>(JwtService);
 
     // Attach the mock server to the gateway
@@ -138,6 +137,7 @@ describe('ChatGateway', () => {
 
         // Assert
         expect(mockSocket.disconnect).toHaveBeenCalled();
+        /* eslint-disable-next-line @typescript-eslint/unbound-method */
         expect(jwtService.verify).not.toHaveBeenCalled();
       });
 
@@ -427,12 +427,12 @@ describe('ChatGateway', () => {
     });
 
     describe('Success Case', () => {
-      it('should leave conversation room and broadcast user_left event', async () => {
+      it('should leave conversation room and broadcast user_left event', () => {
         // Arrange
         const payload = { conversationId };
 
         // Act
-        await gateway.handleLeaveConversation(mockSocket, payload);
+        gateway.handleLeaveConversation(mockSocket, payload);
 
         // Assert
         expect(mockSocket.leave).toHaveBeenCalledWith(conversationId);
@@ -527,7 +527,7 @@ describe('ChatGateway', () => {
       );
 
       // Act 4: Leave conversation
-      await gateway.handleLeaveConversation(mockSocket, { conversationId });
+      gateway.handleLeaveConversation(mockSocket, { conversationId });
       expect(mockSocket.leave).toHaveBeenCalledWith(conversationId);
 
       // Assert: All operations succeeded without errors

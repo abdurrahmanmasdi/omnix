@@ -1,17 +1,12 @@
-import { Controller, Get, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccessControlService } from './access-control.service';
-
-interface AuthRequest extends ExpressRequest {
-  user: { id: string };
-}
 
 @ApiTags('permissions')
 @Controller('permissions')
@@ -58,10 +53,10 @@ export class PermissionsController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAllPermissions(
-    @Request() req: AuthRequest,
-  ): Promise<{ id: string; action: string; description: string | null }[]> {
-    req.user; // Ensure user is authenticated (guard verification)
+  async getAllPermissions(): Promise<
+    { id: string; action: string; description: string | null }[]
+  > {
+    // Guard verification ensures user is authenticated
     return this.accessControlService.getAllPermissions();
   }
 }

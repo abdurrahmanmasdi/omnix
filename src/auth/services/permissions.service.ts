@@ -204,9 +204,7 @@ export class PermissionsService {
    *
    * @param orgId - The organization ID
    */
-  async clearOrganizationPermissionsCache(orgId: string): Promise<void> {
-    const pattern = `org:${orgId}:user:*:permissions`;
-
+  clearOrganizationPermissionsCache(orgId: string): void {
     try {
       // Note: This uses SCAN pattern matching which is efficient
       // Alternative: If Redis client doesn't support SCAN, implement user-by-user clearing

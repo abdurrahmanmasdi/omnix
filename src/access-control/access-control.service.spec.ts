@@ -12,12 +12,11 @@ import { MembershipStatus } from '@prisma/client';
 
 describe('AccessControlService', () => {
   let service: AccessControlService;
-  let prismaService: PrismaService;
-  let i18nService: I18nService;
 
   const mockPrismaService = {
     organizationMembership: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
     },
@@ -65,8 +64,6 @@ describe('AccessControlService', () => {
     }).compile();
 
     service = module.get<AccessControlService>(AccessControlService);
-    prismaService = module.get<PrismaService>(PrismaService);
-    i18nService = module.get<I18nService>(I18nService);
   });
 
   it('should be defined', () => {
@@ -946,8 +943,12 @@ describe('AccessControlService', () => {
         mockPrismaService.permission.findMany.mockResolvedValueOnce([
           { id: permissionId },
         ]);
+        // Query affected memberships with this role
+        mockPrismaService.organizationMembership.findMany.mockResolvedValueOnce(
+          [{ user_id: userId }],
+        );
         // Transaction mock
-        mockPrismaService.$transaction.mockImplementationOnce(async (cb) => {
+        mockPrismaService.$transaction.mockImplementationOnce((cb) => {
           const txClient = {
             role: {
               update: jest.fn(),
@@ -970,6 +971,7 @@ describe('AccessControlService', () => {
               createMany: jest.fn(),
             },
           };
+          /* eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
           return cb(txClient);
         });
 

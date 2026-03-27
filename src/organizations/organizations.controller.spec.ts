@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { MembershipStatus } from '@prisma/client';
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
+import { I18nService } from 'nestjs-i18n';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
+import { PermissionsService } from '../auth/services/permissions.service';
 
 describe('OrganizationsController', () => {
   let controller: OrganizationsController;
@@ -16,6 +18,15 @@ describe('OrganizationsController', () => {
     rejectJoinRequest: jest.fn(),
   };
 
+  const mockPermissionsService = {
+    clearUserPermissionsCache: jest.fn().mockResolvedValue(undefined),
+    clearOrganizationPermissionsCache: jest.fn(),
+  };
+
+  const mockI18nService = {
+    t: jest.fn((key: string) => key),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OrganizationsController],
@@ -23,6 +34,14 @@ describe('OrganizationsController', () => {
         {
           provide: OrganizationsService,
           useValue: mockOrganizationsService,
+        },
+        {
+          provide: PermissionsService,
+          useValue: mockPermissionsService,
+        },
+        {
+          provide: I18nService,
+          useValue: mockI18nService,
         },
       ],
     }).compile();
@@ -136,7 +155,6 @@ describe('OrganizationsController', () => {
     expect(mockOrganizationsService.rejectJoinRequest).toHaveBeenCalledWith(
       'org1',
       'm1',
-      'admin1',
     );
     expect(result.status).toBe(MembershipStatus.REJECTED);
   });

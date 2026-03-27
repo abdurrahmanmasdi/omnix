@@ -8,6 +8,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionsService } from '../auth/services/permissions.service';
 import { OrganizationsService } from './organizations.service';
 import { MembershipStatus } from '@prisma/client';
 
@@ -49,6 +50,11 @@ describe('OrganizationsService', () => {
     t: jest.fn((key: string) => key),
   };
 
+  const mockPermissionsService = {
+    clearUserPermissionsCache: jest.fn().mockResolvedValue(undefined),
+    clearOrganizationPermissionsCache: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -62,6 +68,10 @@ describe('OrganizationsService', () => {
         {
           provide: I18nService,
           useValue: mockI18n,
+        },
+        {
+          provide: PermissionsService,
+          useValue: mockPermissionsService,
         },
       ],
     }).compile();
@@ -273,7 +283,7 @@ describe('OrganizationsService', () => {
       id: 'm1',
     });
 
-    const result = await service.rejectJoinRequest('org1', 'm1', 'admin1');
+    const result = await service.rejectJoinRequest('org1', 'm1');
 
     expect(
       mockPrismaService.organizationMembership.update,

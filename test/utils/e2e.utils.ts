@@ -6,6 +6,7 @@
  */
 
 import { INestApplication, Logger, VersioningType } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import * as request from 'supertest';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import {

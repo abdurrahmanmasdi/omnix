@@ -236,12 +236,12 @@ export class OrganizationsController {
   async rejectRequest(
     @Param('id') organizationId: string,
     @Param('membershipId') membershipId: string,
-    @Request() req: AuthRequest,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Request() _req: AuthRequest,
   ) {
     return this.organizationsService.rejectJoinRequest(
       organizationId,
       membershipId,
-      req.user.id,
     );
   }
 

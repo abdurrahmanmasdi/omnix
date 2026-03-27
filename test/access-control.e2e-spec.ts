@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 /**
  * E2E Tests: Role Management (PBAC Endpoints)
  *
@@ -23,8 +24,6 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import {
   createTestUser,
   createTestOrganization,
-  createTestRole,
-  TEST_CONSTANTS,
 } from './fixtures/e2e.fixtures';
 import {
   initializeApp,
@@ -41,7 +40,6 @@ import {
   IUser,
   IAuthResponse,
   IOrganization,
-  IRoleWithPermissions,
   ICreateRolePayload,
 } from './types/e2e.types';
 
@@ -432,7 +430,6 @@ describe('Role Management - PBAC Endpoints (E2E)', () => {
         );
         fail('Should have thrown 401 Unauthorized');
       } catch (error: any) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         expect(error.status).toBe(401);
       }
     });
@@ -466,6 +463,7 @@ describe('Role Management - PBAC Endpoints (E2E)', () => {
   describe('🔐 Global Permissions Endpoint', () => {
     it('should return 200 OK and fetch all system permissions', async () => {
       // Act
+
       const response = await request(app.getHttpServer())
         .get('/api/v1/permissions')
         .set('Authorization', `Bearer ${authToken}`)
@@ -475,6 +473,7 @@ describe('Role Management - PBAC Endpoints (E2E)', () => {
 
       // Assert - Response structure
       expect(Array.isArray(permissions)).toBe(true);
+
       expect(permissions.length).toBeGreaterThan(0);
     });
 
