@@ -1,541 +1,487 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import {
+  THROTTLER_LIMIT,
+  THROTTLER_TTL,
+} from '@nestjs/throttler/dist/throttler.constants';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
-import { Server } from 'socket.io';
+import { UsersService } from '../users/users.service';
+
+type MockSocket = {
+  id: string;
+  data: Record<string, unknown>;
+  disconnect: jest.Mock;
+  join: jest.Mock;
+  leave: jest.Mock;
+  emit: jest.Mock;
+  handshake: {
+    auth: Record<string, unknown>;
+    headers: Record<string, unknown>;
+  };
+};
 
 describe('ChatGateway', () => {
   let gateway: ChatGateway;
-  let jwtService: JwtService;
-  let mockServer: Partial<Server>;
-  let mockSocket: any;
+  let mockSocket: MockSocket;
 
-  const mockChatService = {
-    sendMessage: jest.fn(),
-    getConversation: jest.fn(),
-    getUserConversations: jest.fn(),
-    getConversationMessages: jest.fn(),
-    createConversation: jest.fn(),
+  const roomEmitter = {
+    emit: jest.fn(),
+  };
+
+  const mockServer = {
+    to: jest.fn().mockReturnValue(roomEmitter),
+    emit: jest.fn(),
   };
 
   const mockJwtService = {
     verify: jest.fn(),
-    sign: jest.fn(),
+  };
+
+  const mockUsersService = {
+    getUserOrganizations: jest.fn(),
+  };
+
+  const mockChatService = {
+    sendMessage: jest.fn(),
+    getConversation: jest.fn(),
+    getConversationMessages: jest.fn(),
+    getUserConversations: jest.fn(),
+    createConversation: jest.fn(),
+    createGroupConversation: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    // Create a fake Server object with mocked methods
-    const toChain = {
-      emit: jest.fn().mockReturnValue(undefined),
-    };
-
-    mockServer = {
-      to: jest.fn().mockReturnValue(toChain),
-      emit: jest.fn(),
-    };
-
-    // Create a fake Socket object with necessary methods and properties
     mockSocket = {
       id: 'socket-123',
       data: {},
       disconnect: jest.fn(),
-      join: jest.fn(),
-      leave: jest.fn(),
+      join: jest.fn().mockResolvedValue(undefined),
+      leave: jest.fn().mockResolvedValue(undefined),
       emit: jest.fn(),
       handshake: {
-        auth: {} as any,
-        headers: {} as any,
+        auth: {},
+        headers: {},
       },
     };
 
     const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        ThrottlerModule.forRoot([
+          {
+            ttl: 60000,
+            limit: 20,
+          },
+        ]),
+      ],
       providers: [
         ChatGateway,
         {
-          provide: ChatService,
-          useValue: mockChatService,
-        },
-        {
           provide: JwtService,
           useValue: mockJwtService,
+        },
+        {
+          provide: UsersService,
+          useValue: mockUsersService,
+        },
+        {
+          provide: ChatService,
+          useValue: mockChatService,
         },
       ],
     }).compile();
 
     gateway = module.get<ChatGateway>(ChatGateway);
-    jwtService = module.get<JwtService>(JwtService);
+    gateway.server = mockServer as any;
+  });
 
-    // Attach the mock server to the gateway
-    gateway.server = mockServer as Server;
+  describe('security decorators', () => {
+    it('applies ThrottlerGuard and throttle config to send_message handler', () => {
+      const handler = ChatGateway.prototype.handleSendMessage as any;
+
+      const guards = Reflect.getMetadata(GUARDS_METADATA, handler) as any[];
+      const limit = Reflect.getMetadata(`${THROTTLER_LIMIT}default`, handler);
+      const ttl = Reflect.getMetadata(`${THROTTLER_TTL}default`, handler);
+
+      expect(guards).toContain(ThrottlerGuard);
+      expect(limit).toBe(20);
+      expect(ttl).toBe(60000);
+    });
   });
 
   describe('handleConnection', () => {
-    const validToken = 'valid-jwt-token';
-    const userId = 'user-456';
-    const orgId = 'org-123';
-    const validPayload = { sub: userId };
+    const userId = 'user-1';
+    const orgId = 'org-1';
 
-    describe('Success Case', () => {
-      it('should authenticate client with valid token from handshake.auth', async () => {
-        // Arrange
-        mockSocket.handshake.auth.token = validToken;
-        mockSocket.handshake.headers['x-organization-id'] = orgId;
-        mockJwtService.verify.mockReturnValue(validPayload);
+    it('authenticates from handshake auth token, stores identity, and joins org room', async () => {
+      mockSocket.handshake.auth.token = 'Bearer jwt-token';
+      mockJwtService.verify.mockReturnValue({ sub: userId, orgId });
+      mockUsersService.getUserOrganizations.mockResolvedValue([
+        { organization_id: orgId, status: 'ACTIVE' },
+      ]);
 
-        // Act
-        await gateway.handleConnection(mockSocket);
+      await gateway.handleConnection(mockSocket as any);
 
-        // Assert
-        expect(mockJwtService.verify).toHaveBeenCalledWith(validToken);
-        expect(mockSocket.data.userId).toBe(userId);
-        expect(mockSocket.data.orgId).toBe(orgId);
-        expect(mockSocket.disconnect).not.toHaveBeenCalled();
-      });
-
-      it('should authenticate client with token from Authorization header', async () => {
-        // Arrange
-        mockSocket.handshake.headers.authorization = `Bearer ${validToken}`;
-        mockSocket.handshake.headers['x-organization-id'] = orgId;
-        mockJwtService.verify.mockReturnValue(validPayload);
-
-        // Act
-        await gateway.handleConnection(mockSocket);
-
-        // Assert
-        expect(mockJwtService.verify).toHaveBeenCalledWith(validToken);
-        expect(mockSocket.data.userId).toBe(userId);
-        expect(mockSocket.data.orgId).toBe(orgId);
-        expect(mockSocket.disconnect).not.toHaveBeenCalled();
-      });
-
-      it('should accept organization ID from handshake.auth if available', async () => {
-        // Arrange
-        mockSocket.handshake.auth.token = validToken;
-        mockSocket.handshake.auth.orgId = orgId;
-        mockJwtService.verify.mockReturnValue(validPayload);
-
-        // Act
-        await gateway.handleConnection(mockSocket);
-
-        // Assert
-        expect(mockSocket.data.orgId).toBe(orgId);
-      });
+      expect(mockJwtService.verify).toHaveBeenCalledWith('jwt-token');
+      expect(mockUsersService.getUserOrganizations).toHaveBeenCalledWith(
+        userId,
+      );
+      expect(mockSocket.data.userId).toBe(userId);
+      expect(mockSocket.data.orgId).toBe(orgId);
+      expect(mockSocket.join).toHaveBeenCalledWith(`org:${orgId}`);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
     });
 
-    describe('Failure Cases', () => {
-      it('should disconnect client when no token is provided', async () => {
-        // Arrange
-        mockSocket.handshake.auth = {};
-        mockSocket.handshake.headers = {};
+    it('authenticates from authorization header and org id header fallback', async () => {
+      mockSocket.handshake.headers.authorization = 'Bearer header-token';
+      mockSocket.handshake.headers['x-organization-id'] = orgId;
+      mockJwtService.verify.mockReturnValue({ sub: userId });
+      mockUsersService.getUserOrganizations.mockResolvedValue([
+        { organization_id: orgId, status: 'ACTIVE' },
+      ]);
 
-        // Act
-        await gateway.handleConnection(mockSocket);
+      await gateway.handleConnection(mockSocket as any);
 
-        // Assert
-        expect(mockSocket.disconnect).toHaveBeenCalled();
-        /* eslint-disable-next-line @typescript-eslint/unbound-method */
-        expect(jwtService.verify).not.toHaveBeenCalled();
-      });
-
-      it('should disconnect client when token verification fails', async () => {
-        // Arrange
-        mockSocket.handshake.auth.token = 'invalid-token';
-        mockSocket.handshake.headers['x-organization-id'] = orgId;
-        mockJwtService.verify.mockImplementation(() => {
-          throw new UnauthorizedException('Invalid token');
-        });
-
-        // Act
-        await gateway.handleConnection(mockSocket);
-
-        // Assert
-        expect(mockJwtService.verify).toHaveBeenCalledWith('invalid-token');
-        expect(mockSocket.disconnect).toHaveBeenCalled();
-        expect(mockSocket.data.userId).toBeUndefined();
-      });
-
-      it('should disconnect client when token payload has no sub (userId)', async () => {
-        // Arrange
-        mockSocket.handshake.auth.token = validToken;
-        mockSocket.handshake.headers['x-organization-id'] = orgId;
-        mockJwtService.verify.mockReturnValue({}); // No 'sub' field
-
-        // Act
-        await gateway.handleConnection(mockSocket);
-
-        // Assert
-        expect(mockSocket.disconnect).toHaveBeenCalled();
-      });
-
-      it('should disconnect client when no organization ID is provided', async () => {
-        // Arrange
-        mockSocket.handshake.auth = { token: validToken };
-        mockSocket.handshake.headers = {};
-        mockJwtService.verify.mockReturnValue(validPayload);
-
-        // Act
-        await gateway.handleConnection(mockSocket);
-
-        // Assert
-        expect(mockJwtService.verify).toHaveBeenCalled();
-        expect(mockSocket.disconnect).toHaveBeenCalled();
-        expect(mockSocket.data.userId).toBeUndefined(); // Not set because org check failed before assignment
-      });
-    });
-  });
-
-  describe('handleSendMessage', () => {
-    const conversationId = 'conv-123';
-    const userId = 'user-456';
-    const content = 'Hello, everyone!';
-
-    beforeEach(() => {
-      // Setup authenticated socket
-      mockSocket.data.userId = userId;
-      mockSocket.data.orgId = 'org-123';
+      expect(mockJwtService.verify).toHaveBeenCalledWith('header-token');
+      expect(mockSocket.join).toHaveBeenCalledWith(`org:${orgId}`);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
     });
 
-    describe('Success Case', () => {
-      it('should send message and broadcast to conversation room', async () => {
-        // Arrange
-        const payload = { conversationId, content };
-        const mockSavedMessage = {
-          id: 'msg-789',
-          conversation_id: conversationId,
-          sender_id: userId,
-          content,
-          created_at: new Date(),
-          updated_at: new Date(),
-          sender: {
-            id: userId,
-            first_name: 'John',
-            last_name: 'Doe',
-            email: 'john@example.com',
-          },
-        };
+    it('disconnects when token is missing', async () => {
+      await gateway.handleConnection(mockSocket as any);
 
-        mockChatService.sendMessage.mockResolvedValue(mockSavedMessage);
-
-        // Act
-        await gateway.handleSendMessage(mockSocket, payload);
-
-        // Assert
-        expect(mockChatService.sendMessage).toHaveBeenCalledWith(
-          conversationId,
-          userId,
-          content,
-        );
-
-        // Verify broadcasting to room
-        expect(mockServer.to).toHaveBeenCalledWith(conversationId);
-        const toChain = (mockServer.to as jest.Mock).mock.results[0].value;
-        expect(toChain.emit).toHaveBeenCalledWith(
-          'new_message',
-          mockSavedMessage,
-        );
-      });
-
-      it('should include sender information in broadcasted message', async () => {
-        // Arrange
-        const payload = { conversationId, content };
-        const mockSavedMessage = {
-          id: 'msg-789',
-          conversation_id: conversationId,
-          sender_id: userId,
-          content: 'Test message',
-          created_at: new Date(),
-          updated_at: new Date(),
-          sender: {
-            id: userId,
-            first_name: 'Jane',
-            last_name: 'Smith',
-            email: 'jane@example.com',
-          },
-        };
-
-        mockChatService.sendMessage.mockResolvedValue(mockSavedMessage);
-
-        // Act
-        await gateway.handleSendMessage(mockSocket, payload);
-
-        // Assert
-        const toChain = (mockServer.to as jest.Mock).mock.results[0].value;
-        const emittedMessage = (toChain.emit as jest.Mock).mock.calls[0][1];
-
-        expect(emittedMessage.sender.first_name).toBe('Jane');
-        expect(emittedMessage.sender.last_name).toBe('Smith');
-      });
+      expect(mockJwtService.verify).not.toHaveBeenCalled();
+      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
     });
 
-    describe('Failure Cases', () => {
-      it('should send error event when message content is empty', async () => {
-        // Arrange
-        const payload = { conversationId, content: '   ' }; // Empty/whitespace content
-
-        // Act
-        await gateway.handleSendMessage(mockSocket, payload);
-
-        // Assert
-        expect(mockSocket.emit).toHaveBeenCalledWith('error', {
-          message: 'Message content cannot be empty',
-        });
-        expect(mockChatService.sendMessage).not.toHaveBeenCalled();
-        expect(mockServer.to).not.toHaveBeenCalled();
+    it('disconnects when JWT verification fails', async () => {
+      mockSocket.handshake.auth.token = 'bad-token';
+      mockJwtService.verify.mockImplementation(() => {
+        throw new Error('invalid jwt');
       });
 
-      it('should send error event when user is not a conversation member', async () => {
-        // Arrange
-        const payload = { conversationId, content };
-        mockChatService.sendMessage.mockRejectedValue(
-          new ForbiddenException('You are not a member of this conversation'),
-        );
+      await gateway.handleConnection(mockSocket as any);
 
-        // Act
-        await gateway.handleSendMessage(mockSocket, payload);
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
+    });
 
-        // Assert
-        expect(mockSocket.emit).toHaveBeenCalledWith('error', {
-          message: 'You are not a member of this conversation',
-        });
-        expect(mockServer.to).not.toHaveBeenCalled();
-      });
+    it('disconnects when payload has no sub', async () => {
+      mockSocket.handshake.auth.token = 'jwt-token';
+      mockJwtService.verify.mockReturnValue({ orgId });
 
-      it('should send generic error when chatService throws unexpected error', async () => {
-        // Arrange
-        const payload = { conversationId, content };
-        mockChatService.sendMessage.mockRejectedValue(
-          new Error('Database connection error'),
-        );
+      await gateway.handleConnection(mockSocket as any);
 
-        // Act
-        await gateway.handleSendMessage(mockSocket, payload);
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
+    });
 
-        // Assert
-        expect(mockSocket.emit).toHaveBeenCalledWith(
-          'error',
-          expect.objectContaining({
-            message: 'Failed to send message',
-            error: 'Database connection error',
-          }),
-        );
-        expect(mockServer.to).not.toHaveBeenCalled();
-      });
+    it('disconnects when org id is absent in payload, auth, and headers', async () => {
+      mockSocket.handshake.auth.token = 'jwt-token';
+      mockJwtService.verify.mockReturnValue({ sub: userId });
+
+      await gateway.handleConnection(mockSocket as any);
+
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
+    });
+
+    it('disconnects when membership is not active', async () => {
+      mockSocket.handshake.auth.token = 'jwt-token';
+      mockJwtService.verify.mockReturnValue({ sub: userId, orgId });
+      mockUsersService.getUserOrganizations.mockResolvedValue([
+        { organization_id: orgId, status: 'PENDING' },
+      ]);
+
+      await gateway.handleConnection(mockSocket as any);
+
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(mockSocket.join).not.toHaveBeenCalled();
+    });
+
+    it('disconnects when active membership belongs to another org', async () => {
+      mockSocket.handshake.auth.token = 'jwt-token';
+      mockJwtService.verify.mockReturnValue({ sub: userId, orgId });
+      mockUsersService.getUserOrganizations.mockResolvedValue([
+        { organization_id: 'org-other', status: 'ACTIVE' },
+      ]);
+
+      await gateway.handleConnection(mockSocket as any);
+
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(mockSocket.join).not.toHaveBeenCalled();
     });
   });
 
   describe('handleJoinConversation', () => {
-    const conversationId = 'conv-123';
-    const userId = 'user-456';
+    const userId = 'user-1';
+    const orgId = 'org-1';
+    const conversationId = 'conv-1';
 
     beforeEach(() => {
       mockSocket.data.userId = userId;
-      mockSocket.data.orgId = 'org-123';
+      mockSocket.data.orgId = orgId;
     });
 
-    describe('Success Case', () => {
-      it('should join conversation room when user is a valid participant', async () => {
-        // Arrange
-        const payload = { conversationId };
-        const mockConversation = {
-          id: conversationId,
-          organization_id: 'org-123',
-          is_group: true,
-          name: 'Test Group',
-          created_at: new Date(),
-          updated_at: new Date(),
-          participants: [],
-        };
-
-        mockChatService.getConversation.mockResolvedValue(mockConversation);
-
-        // Act
-        await gateway.handleJoinConversation(mockSocket, payload);
-
-        // Assert
-        expect(mockChatService.getConversation).toHaveBeenCalledWith(
-          conversationId,
-          userId,
-        );
-        expect(mockSocket.join).toHaveBeenCalledWith(conversationId);
+    it('joins room and emits user_joined when conversation is in same tenant', async () => {
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: orgId,
       });
 
-      it('should broadcast user_joined event to room', async () => {
-        // Arrange
-        const payload = { conversationId };
-        const mockConversation = {
-          id: conversationId,
-          organization_id: 'org-123',
-          is_group: true,
-          name: 'Test Group',
-          created_at: new Date(),
-          updated_at: new Date(),
-          participants: [],
-        };
+      await gateway.handleJoinConversation(mockSocket as any, {
+        conversationId,
+      });
 
-        mockChatService.getConversation.mockResolvedValue(mockConversation);
+      expect(mockChatService.getConversation).toHaveBeenCalledWith(
+        conversationId,
+        userId,
+      );
+      expect(mockSocket.join).toHaveBeenCalledWith(conversationId);
+      expect(mockServer.to).toHaveBeenCalledWith(conversationId);
+      expect(roomEmitter.emit).toHaveBeenCalledWith(
+        'user_joined',
+        expect.objectContaining({ userId, conversationId }),
+      );
+    });
 
-        // Act
-        await gateway.handleJoinConversation(mockSocket, payload);
+    it('rejects when conversation belongs to different organization', async () => {
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: 'org-other',
+      });
 
-        // Assert
-        expect(mockServer.to).toHaveBeenCalledWith(conversationId);
-        const toChain = (mockServer.to as jest.Mock).mock.results[0].value;
-        expect(toChain.emit).toHaveBeenCalledWith(
-          'user_joined',
-          expect.objectContaining({
-            userId,
-            conversationId,
-          }),
-        );
+      await gateway.handleJoinConversation(mockSocket as any, {
+        conversationId,
+      });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: 'Failed to join conversation' }),
+      );
+      expect(mockSocket.join).not.toHaveBeenCalled();
+    });
+
+    it('rejects when socket identity is missing', async () => {
+      mockSocket.data = {};
+
+      await gateway.handleJoinConversation(mockSocket as any, {
+        conversationId,
+      });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: 'Failed to join conversation' }),
+      );
+      expect(mockChatService.getConversation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleSendMessage', () => {
+    const userId = 'user-1';
+    const orgId = 'org-1';
+    const conversationId = 'conv-1';
+    const content = 'hello secure world';
+
+    beforeEach(() => {
+      mockSocket.data.userId = userId;
+      mockSocket.data.orgId = orgId;
+    });
+
+    it('sends and broadcasts message for authorized conversation in tenant scope', async () => {
+      const savedMessage = { id: 'msg-1', conversation_id: conversationId };
+
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: orgId,
+      });
+      mockChatService.sendMessage.mockResolvedValue(savedMessage);
+
+      await gateway.handleSendMessage(mockSocket as any, {
+        conversationId,
+        content,
+      });
+
+      expect(mockChatService.sendMessage).toHaveBeenCalledWith(
+        conversationId,
+        userId,
+        content,
+      );
+      expect(mockServer.to).toHaveBeenCalledWith(conversationId);
+      expect(roomEmitter.emit).toHaveBeenCalledWith(
+        'new_message',
+        savedMessage,
+      );
+    });
+
+    it('blocks send when conversation is outside tenant scope', async () => {
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: 'org-other',
+      });
+
+      await gateway.handleSendMessage(mockSocket as any, {
+        conversationId,
+        content,
+      });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'You are not a member of this conversation',
+      });
+      expect(mockChatService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns membership error when ChatService throws ForbiddenException', async () => {
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: orgId,
+      });
+      mockChatService.sendMessage.mockRejectedValue(
+        new ForbiddenException('Not allowed'),
+      );
+
+      await gateway.handleSendMessage(mockSocket as any, {
+        conversationId,
+        content,
+      });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'You are not a member of this conversation',
       });
     });
 
-    describe('Failure Case', () => {
-      it('should send error event when user is not a conversation member', async () => {
-        // Arrange
-        const payload = { conversationId };
-        mockChatService.getConversation.mockRejectedValue(
-          new ForbiddenException('You are not a member of this conversation'),
-        );
-
-        // Act
-        await gateway.handleJoinConversation(mockSocket, payload);
-
-        // Assert
-        expect(mockSocket.emit).toHaveBeenCalledWith(
-          'error',
-          expect.objectContaining({
-            message: 'Failed to join conversation',
-          }),
-        );
-        expect(mockSocket.join).not.toHaveBeenCalled();
+    it('returns generic error for unexpected failures', async () => {
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: orgId,
       });
+      mockChatService.sendMessage.mockRejectedValue(new Error('db down'));
+
+      await gateway.handleSendMessage(mockSocket as any, {
+        conversationId,
+        content,
+      });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({
+          message: 'Failed to send message',
+          error: 'db down',
+        }),
+      );
+    });
+
+    it('returns membership error when socket identity is missing', async () => {
+      mockSocket.data = {};
+
+      await gateway.handleSendMessage(mockSocket as any, {
+        conversationId,
+        content,
+      });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'You are not a member of this conversation',
+      });
+      expect(mockChatService.getConversation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleGetMessages', () => {
+    const userId = 'user-1';
+    const orgId = 'org-1';
+    const conversationId = 'conv-1';
+
+    beforeEach(() => {
+      mockSocket.data.userId = userId;
+      mockSocket.data.orgId = orgId;
+    });
+
+    it('returns conversation messages for valid tenant conversation', async () => {
+      const messages = [{ id: 'm1' }, { id: 'm2' }];
+
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: orgId,
+      });
+      mockChatService.getConversationMessages.mockResolvedValue(messages);
+
+      await gateway.handleGetMessages(mockSocket as any, { conversationId });
+
+      expect(mockChatService.getConversationMessages).toHaveBeenCalledWith(
+        conversationId,
+        userId,
+      );
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'conversation_messages',
+        expect.objectContaining({ conversationId, messages }),
+      );
+    });
+
+    it('returns membership error for tenant mismatch', async () => {
+      mockChatService.getConversation.mockResolvedValue({
+        id: conversationId,
+        organization_id: 'org-other',
+      });
+
+      await gateway.handleGetMessages(mockSocket as any, { conversationId });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', {
+        message: 'You are not a member of this conversation',
+      });
+      expect(mockChatService.getConversationMessages).not.toHaveBeenCalled();
     });
   });
 
   describe('handleLeaveConversation', () => {
-    const conversationId = 'conv-123';
-    const userId = 'user-456';
+    it('leaves room and emits user_left when identity exists', () => {
+      mockSocket.data.userId = 'user-1';
+      mockSocket.data.orgId = 'org-1';
 
-    beforeEach(() => {
-      mockSocket.data.userId = userId;
-      mockSocket.data.orgId = 'org-123';
+      gateway.handleLeaveConversation(mockSocket as any, {
+        conversationId: 'conv-1',
+      });
+
+      expect(mockSocket.leave).toHaveBeenCalledWith('conv-1');
+      expect(mockServer.to).toHaveBeenCalledWith('conv-1');
+      expect(roomEmitter.emit).toHaveBeenCalledWith(
+        'user_left',
+        expect.objectContaining({
+          userId: 'user-1',
+          conversationId: 'conv-1',
+        }),
+      );
     });
 
-    describe('Success Case', () => {
-      it('should leave conversation room and broadcast user_left event', () => {
-        // Arrange
-        const payload = { conversationId };
+    it('does not throw if unauthenticated socket tries to leave', () => {
+      mockSocket.data = {};
 
-        // Act
-        gateway.handleLeaveConversation(mockSocket, payload);
-
-        // Assert
-        expect(mockSocket.leave).toHaveBeenCalledWith(conversationId);
-        expect(mockServer.to).toHaveBeenCalledWith(conversationId);
-        const toChain = (mockServer.to as jest.Mock).mock.results[0].value;
-        expect(toChain.emit).toHaveBeenCalledWith(
-          'user_left',
-          expect.objectContaining({
-            userId,
-            conversationId,
-          }),
-        );
-      });
+      expect(() =>
+        gateway.handleLeaveConversation(mockSocket as any, {
+          conversationId: 'conv-1',
+        }),
+      ).not.toThrow();
+      expect(mockSocket.leave).not.toHaveBeenCalled();
     });
   });
 
   describe('handleDisconnect', () => {
-    it('should log client disconnection', () => {
-      // Arrange
+    it('logs disconnection', () => {
       const loggerSpy = jest.spyOn(gateway['logger'], 'log');
 
-      // Act
-      gateway.handleDisconnect(mockSocket);
+      gateway.handleDisconnect(mockSocket as any);
 
-      // Assert
       expect(loggerSpy).toHaveBeenCalledWith(
         `[ChatGateway] Client disconnected: ${mockSocket.id}`,
       );
 
       loggerSpy.mockRestore();
-    });
-  });
-
-  describe('Integration Scenarios', () => {
-    it('should handle complete flow: connect -> join -> send message -> leave', async () => {
-      // Arrange
-      const conversationId = 'conv-123';
-      const userId = 'user-456';
-      const orgId = 'org-123';
-      const validToken = 'valid-jwt-token';
-
-      // Setup authentication
-      mockSocket.handshake.auth.token = validToken;
-      mockSocket.handshake.headers['x-organization-id'] = orgId;
-      mockJwtService.verify.mockReturnValue({ sub: userId });
-
-      const mockConversation = {
-        id: conversationId,
-        organization_id: orgId,
-        is_group: true,
-        name: 'Test Group',
-        created_at: new Date(),
-        updated_at: new Date(),
-        participants: [],
-      };
-
-      const mockMessage = {
-        id: 'msg-789',
-        conversation_id: conversationId,
-        sender_id: userId,
-        content: 'Hello!',
-        created_at: new Date(),
-        updated_at: new Date(),
-        sender: {
-          id: userId,
-          first_name: 'John',
-          last_name: 'Doe',
-          email: 'john@example.com',
-        },
-      };
-
-      mockChatService.getConversation.mockResolvedValue(mockConversation);
-      mockChatService.sendMessage.mockResolvedValue(mockMessage);
-
-      // Act 1: Connect
-      await gateway.handleConnection(mockSocket);
-      expect(mockSocket.data.userId).toBe(userId);
-
-      // Act 2: Join conversation
-      await gateway.handleJoinConversation(mockSocket, { conversationId });
-      expect(mockSocket.join).toHaveBeenCalledWith(conversationId);
-
-      // Act 3: Send message
-      await gateway.handleSendMessage(mockSocket, {
-        conversationId,
-        content: 'Hello!',
-      });
-      expect(mockChatService.sendMessage).toHaveBeenCalledWith(
-        conversationId,
-        userId,
-        'Hello!',
-      );
-
-      // Act 4: Leave conversation
-      gateway.handleLeaveConversation(mockSocket, { conversationId });
-      expect(mockSocket.leave).toHaveBeenCalledWith(conversationId);
-
-      // Assert: All operations succeeded without errors
-      expect(mockSocket.disconnect).not.toHaveBeenCalled();
-      expect(mockSocket.emit).not.toHaveBeenCalledWith(
-        'error',
-        expect.any(Object),
-      );
     });
   });
 });
