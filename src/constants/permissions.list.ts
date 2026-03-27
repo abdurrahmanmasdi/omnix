@@ -18,6 +18,10 @@ export interface ISystemPermission {
  */
 const LEADS_PERMISSIONS: ISystemPermission[] = [
   {
+    action: 'leads:manage',
+    description: 'Manage all leads in the organization',
+  },
+  {
     action: 'leads:read',
     description: 'Read assigned leads',
   },
@@ -51,127 +55,135 @@ const LEADS_PERMISSIONS: ISystemPermission[] = [
   },
 ];
 
-/**
- * Contacts Management Permissions
- */
-const CONTACTS_PERMISSIONS: ISystemPermission[] = [
-  {
-    action: 'contacts:read',
-    description: 'Read assigned contacts',
-  },
-  {
-    action: 'contacts:read_all',
-    description: 'Read all contacts in the organization',
-  },
-  {
-    action: 'contacts:create',
-    description: 'Create new contacts',
-  },
-  {
-    action: 'contacts:edit',
-    description: 'Edit assigned contacts',
-  },
-  {
-    action: 'contacts:edit_all',
-    description: 'Edit all contacts in the organization',
-  },
-  {
-    action: 'contacts:delete',
-    description: 'Delete assigned contacts',
-  },
-  {
-    action: 'contacts:delete_all',
-    description: 'Delete all contacts in the organization',
-  },
-  {
-    action: 'contacts:restore',
-    description: 'Restore deleted contacts',
-  },
-];
+// /**
+//  * Contacts Management Permissions
+//  */
+// const CONTACTS_PERMISSIONS: ISystemPermission[] = [
+//   {
+//     action: 'contacts:read',
+//     description: 'Read assigned contacts',
+//   },
+//   {
+//     action: 'contacts:read_all',
+//     description: 'Read all contacts in the organization',
+//   },
+//   {
+//     action: 'contacts:create',
+//     description: 'Create new contacts',
+//   },
+//   {
+//     action: 'contacts:edit',
+//     description: 'Edit assigned contacts',
+//   },
+//   {
+//     action: 'contacts:edit_all',
+//     description: 'Edit all contacts in the organization',
+//   },
+//   {
+//     action: 'contacts:delete',
+//     description: 'Delete assigned contacts',
+//   },
+//   {
+//     action: 'contacts:delete_all',
+//     description: 'Delete all contacts in the organization',
+//   },
+//   {
+//     action: 'contacts:restore',
+//     description: 'Restore deleted contacts',
+//   },
+// ];
 
-/**
- * Deals Management Permissions
- */
-const DEALS_PERMISSIONS: ISystemPermission[] = [
-  {
-    action: 'deals:read',
-    description: 'Read assigned deals',
-  },
-  {
-    action: 'deals:read_all',
-    description: 'Read all deals in the organization',
-  },
-  {
-    action: 'deals:create',
-    description: 'Create new deals',
-  },
-  {
-    action: 'deals:edit',
-    description: 'Edit assigned deals',
-  },
-  {
-    action: 'deals:edit_all',
-    description: 'Edit all deals in the organization',
-  },
-  {
-    action: 'deals:delete',
-    description: 'Delete assigned deals',
-  },
-  {
-    action: 'deals:delete_all',
-    description: 'Delete all deals in the organization',
-  },
-  {
-    action: 'deals:restore',
-    description: 'Restore deleted deals',
-  },
-];
+// /**
+//  * Deals Management Permissions
+//  */
+// const DEALS_PERMISSIONS: ISystemPermission[] = [
+//   {
+//     action: 'deals:read',
+//     description: 'Read assigned deals',
+//   },
+//   {
+//     action: 'deals:read_all',
+//     description: 'Read all deals in the organization',
+//   },
+//   {
+//     action: 'deals:create',
+//     description: 'Create new deals',
+//   },
+//   {
+//     action: 'deals:edit',
+//     description: 'Edit assigned deals',
+//   },
+//   {
+//     action: 'deals:edit_all',
+//     description: 'Edit all deals in the organization',
+//   },
+//   {
+//     action: 'deals:delete',
+//     description: 'Delete assigned deals',
+//   },
+//   {
+//     action: 'deals:delete_all',
+//     description: 'Delete all deals in the organization',
+//   },
+//   {
+//     action: 'deals:restore',
+//     description: 'Restore deleted deals',
+//   },
+// ];
 
-/**
- * Tasks Management Permissions
- */
-const TASKS_PERMISSIONS: ISystemPermission[] = [
-  {
-    action: 'tasks:read',
-    description: 'Read assigned tasks',
-  },
-  {
-    action: 'tasks:read_all',
-    description: 'Read all tasks in the organization',
-  },
-  {
-    action: 'tasks:create',
-    description: 'Create new tasks',
-  },
-  {
-    action: 'tasks:edit',
-    description: 'Edit assigned tasks',
-  },
-  {
-    action: 'tasks:edit_all',
-    description: 'Edit all tasks in the organization',
-  },
-  {
-    action: 'tasks:delete',
-    description: 'Delete assigned tasks',
-  },
-  {
-    action: 'tasks:delete_all',
-    description: 'Delete all tasks in the organization',
-  },
-  {
-    action: 'tasks:restore',
-    description: 'Restore deleted tasks',
-  },
-];
+// /**
+//  * Tasks Management Permissions
+//  */
+// const TASKS_PERMISSIONS: ISystemPermission[] = [
+//   {
+//     action: 'tasks:read',
+//     description: 'Read assigned tasks',
+//   },
+//   {
+//     action: 'tasks:read_all',
+//     description: 'Read all tasks in the organization',
+//   },
+//   {
+//     action: 'tasks:create',
+//     description: 'Create new tasks',
+//   },
+//   {
+//     action: 'tasks:edit',
+//     description: 'Edit assigned tasks',
+//   },
+//   {
+//     action: 'tasks:edit_all',
+//     description: 'Edit all tasks in the organization',
+//   },
+//   {
+//     action: 'tasks:delete',
+//     description: 'Delete assigned tasks',
+//   },
+//   {
+//     action: 'tasks:delete_all',
+//     description: 'Delete all tasks in the organization',
+//   },
+//   {
+//     action: 'tasks:restore',
+//     description: 'Restore deleted tasks',
+//   },
+// ];
 
 /**
  * Team Management Permissions
  */
 const TEAM_PERMISSIONS: ISystemPermission[] = [
   {
+    action: 'team_members:manage',
+    description: 'Manage team members',
+  },
+  {
     action: 'team_members:read',
     description: 'View team members',
+  },
+  {
+    action: 'team_members:read_all',
+    description: 'View all team members',
   },
   {
     action: 'team_members:create',
@@ -182,8 +194,20 @@ const TEAM_PERMISSIONS: ISystemPermission[] = [
     description: 'Edit team member details and roles',
   },
   {
+    action: 'team_members:edit_all',
+    description: 'Edit all team member details and roles',
+  },
+  {
     action: 'team_members:delete',
     description: 'Remove team members from organization',
+  },
+  {
+    action: 'team_members:delete_all',
+    description: 'Delete all team members from organization',
+  },
+  {
+    action: 'team_members:restore',
+    description: 'Restore deleted team members',
   },
 ];
 
@@ -192,8 +216,16 @@ const TEAM_PERMISSIONS: ISystemPermission[] = [
  */
 const ROLE_PERMISSIONS: ISystemPermission[] = [
   {
+    action: 'roles:manage',
+    description: 'Full role management (deprecated - use specific actions)',
+  },
+  {
     action: 'roles:read',
     description: 'View organization roles',
+  },
+  {
+    action: 'roles:read_all',
+    description: 'View all organization roles',
   },
   {
     action: 'roles:create',
@@ -204,12 +236,20 @@ const ROLE_PERMISSIONS: ISystemPermission[] = [
     description: 'Edit existing roles and their permissions',
   },
   {
+    action: 'roles:edit_all',
+    description: 'Edit all organization roles and their permissions',
+  },
+  {
     action: 'roles:delete',
     description: 'Delete roles',
   },
   {
-    action: 'roles:manage',
-    description: 'Full role management (deprecated - use specific actions)',
+    action: 'roles:delete_all',
+    description: 'Delete all organization roles',
+  },
+  {
+    action: 'roles:restore',
+    description: 'Restore deleted roles',
   },
 ];
 
@@ -218,68 +258,92 @@ const ROLE_PERMISSIONS: ISystemPermission[] = [
  */
 const ORGANIZATION_PERMISSIONS: ISystemPermission[] = [
   {
+    action: 'organization:manage',
+    description: 'Full organization management',
+  },
+  {
     action: 'organization:read',
     description: 'View organization details',
   },
+  {
+    action: 'organization:read_all',
+    description: 'View all organization details',
+  },
+  // {
+  //   action: 'organization:create',
+  //   description: 'Create new organization',
+  // },
   {
     action: 'organization:edit',
     description: 'Edit organization settings',
   },
   {
-    action: 'organization:manage',
-    description: 'Full organization management',
+    action: 'organization:edit_all',
+    description: 'Edit all organization settings',
+  },
+  {
+    action: 'organization:delete',
+    description: 'Delete organization settings',
+  },
+  {
+    action: 'organization:delete_all',
+    description: 'Delete all organization settings',
+  },
+  {
+    action: 'organization:restore',
+    description: 'Restore deleted organization settings',
   },
 ];
 
-/**
- * Billing & Subscription Permissions
- */
-const BILLING_PERMISSIONS: ISystemPermission[] = [
-  {
-    action: 'billing:read',
-    description: 'View billing and subscription information',
-  },
-  {
-    action: 'billing:manage',
-    description: 'Manage billing, subscriptions, and payments',
-  },
-];
+// /**
+//  * Billing & Subscription Permissions
+//  */
+// const BILLING_PERMISSIONS: ISystemPermission[] = [
+//   {
+//     action: 'billing:read',
+//     description: 'View billing and subscription information',
+//   },
+//   {
+//     action: 'billing:manage',
+//     description: 'Manage billing, subscriptions, and payments',
+//   },
+// ];
 
-/**
- * Reports & Analytics Permissions
- */
-const REPORTS_PERMISSIONS: ISystemPermission[] = [
-  {
-    action: 'reports:read',
-    description: 'View reports and analytics',
-  },
-  {
-    action: 'reports:create',
-    description: 'Create custom reports',
-  },
-  {
-    action: 'reports:edit',
-    description: 'Edit custom reports',
-  },
-  {
-    action: 'reports:delete',
-    description: 'Delete custom reports',
-  },
-];
+// /**
+//  * Reports & Analytics Permissions
+//  */
+// const REPORTS_PERMISSIONS: ISystemPermission[] = [
+//   {
+//     action: 'reports:read',
+//     description: 'View reports and analytics',
+//   },
+//   {
+//     action: 'reports:create',
+//     description: 'Create custom reports',
+//   },
+//   {
+//     action: 'reports:edit',
+//     description: 'Edit custom reports',
+//   },
+//   {
+//     action: 'reports:delete',
+//     description: 'Delete custom reports',
+//   },
+// ];
 
 /**
  * Complete list of all system permissions
  */
 export const SYSTEM_PERMISSIONS: ISystemPermission[] = [
   ...LEADS_PERMISSIONS,
-  ...CONTACTS_PERMISSIONS,
-  ...DEALS_PERMISSIONS,
-  ...TASKS_PERMISSIONS,
+  // ...CONTACTS_PERMISSIONS,
+  // ...DEALS_PERMISSIONS,
+  // ...TASKS_PERMISSIONS,
   ...TEAM_PERMISSIONS,
   ...ROLE_PERMISSIONS,
   ...ORGANIZATION_PERMISSIONS,
-  ...BILLING_PERMISSIONS,
-  ...REPORTS_PERMISSIONS,
+  // ...BILLING_PERMISSIONS,
+  // ...REPORTS_PERMISSIONS,
 ];
 
 /**

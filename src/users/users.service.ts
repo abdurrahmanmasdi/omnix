@@ -240,4 +240,98 @@ export class UsersService {
       message: this.i18n.t('errors.ORG.MEMBERSHIP_CANCELLED_SUCCESS'),
     };
   }
+
+  /**
+   * Calculate a user's effective permissions for an organization
+   *
+   * Process:
+   * 1. Guard: If no organizationId, return []
+   * 2. Query the user's OrganizationMembership with its Role and RolePermissions
+   * 3. If membership is null, return []
+   * 4. Query MembershipPermissionOverride records for this membership
+   * 5. Start with base role permissions (Set)
+   * 6. Apply overrides: add if is_granted=true, remove if is_granted=false
+   * 7. Return sorted array of permission action strings
+   */
+  async getEffectivePermissions(
+    userId: string,
+    organizationId?: string,
+  ): Promise<string[]> {
+    // Guard clause: if no organization ID provided, return empty permissions
+    if (!organizationId) {
+      this.logger.debug(
+        `[UsersService] No organization ID provided for user ${userId}, returning empty permissions`,
+      );
+      return [];
+    }
+
+    this.logger.debug(
+      `[UsersService] Calculating effective permissions for user ${userId} in organization ${organizationId}`,
+    );
+
+    // Query 1: Get the membership with role and role permissions
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+      include: {
+        role: {
+          include: {
+            rolePermissions: {
+              include: {
+                permission: {
+                  select: {
+                    action: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!membership) {
+      this.logger.debug(
+        `[UsersService] No membership found for user ${userId} in organization ${organizationId}`,
+      );
+      return [];
+    }
+
+    // Start with base role permissions in a Set
+    const permissionsSet = new Set<string>();
+    membership.role.rolePermissions.forEach((rp) => {
+      permissionsSet.add(rp.permission.action);
+    });
+
+    // Query 2: Get membership-level overrides
+    const overrides = await this.prisma.membershipPermissionOverride.findMany({
+      where: {
+        membership_id: membership.id,
+      },
+      include: {
+        permission: {
+          select: {
+            action: true,
+          },
+        },
+      },
+    });
+
+    // Apply overrides to the set
+    overrides.forEach((override) => {
+      if (override.is_granted) {
+        permissionsSet.add(override.permission.action);
+      } else {
+        permissionsSet.delete(override.permission.action);
+      }
+    });
+
+    const result = Array.from(permissionsSet).sort();
+    this.logger.debug(
+      `[UsersService] User ${userId} has ${result.length} permissions in organization ${organizationId}`,
+    );
+    return result;
+  }
 }

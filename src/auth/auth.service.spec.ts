@@ -14,6 +14,13 @@ describe('AuthService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    organizationMembership: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    membershipPermissionOverride: {
+      findMany: jest.fn(),
+    },
   };
 
   const mockJwtService = {
@@ -87,16 +94,72 @@ describe('AuthService', () => {
     expect(result).not.toHaveProperty('password_hash');
   });
 
-  it('should sign and return access token on login', () => {
+  it('should sign and return access token with permissions on login', async () => {
+    const createdAt = new Date();
+    const user = {
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    };
+
+    // Mock membership with role and permissions
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue({
+      id: 'membership-1',
+      user_id: 'u1',
+      organization_id: 'org-1',
+      status: 'ACTIVE',
+      role: {
+        rolePermissions: [
+          { permission: { action: 'leads:read' } },
+          { permission: { action: 'leads:create' } },
+        ],
+      },
+    });
+
+    // Mock no overrides
+    mockPrisma.membershipPermissionOverride.findMany.mockResolvedValue([]);
+
     mockJwtService.sign.mockReturnValue('jwt-token');
 
-    const result = service.login({ id: 'u1', email: 'user@example.com' });
+    const result = await service.login(user);
 
     expect(mockJwtService.sign).toHaveBeenCalledWith({
       sub: 'u1',
       email: 'user@example.com',
     });
-    expect(result).toEqual({ access_token: 'jwt-token' });
+    expect(result).toEqual({
+      access_token: 'jwt-token',
+      user: {
+        ...user,
+        permissions: ['leads:create', 'leads:read'],
+      },
+    });
+  });
+
+  it('should return empty permissions if user has no active membership on login', async () => {
+    const createdAt = new Date();
+    const user = {
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    };
+
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue(null);
+    mockJwtService.sign.mockReturnValue('jwt-token');
+
+    const result = await service.login(user);
+
+    expect(result).toEqual({
+      access_token: 'jwt-token',
+      user: {
+        ...user,
+        permissions: [],
+      },
+    });
   });
 
   it('should throw BadRequestException if user already exists on register', async () => {
@@ -143,5 +206,74 @@ describe('AuthService', () => {
       last_name: 'B',
       created_at: createdAt,
     });
+  });
+
+  it('should calculate effective permissions from role permissions with overrides', async () => {
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue({
+      id: 'membership-1',
+      user_id: 'u1',
+      organization_id: 'org-1',
+      role: {
+        rolePermissions: [
+          { permission: { action: 'leads:read' } },
+          { permission: { action: 'leads:create' } },
+          { permission: { action: 'leads:delete' } },
+        ],
+      },
+    });
+
+    // Override: revoke delete, grant update
+    mockPrisma.membershipPermissionOverride.findMany.mockResolvedValue([
+      { permission: { action: 'leads:delete' }, is_granted: false },
+      { permission: { action: 'leads:update' }, is_granted: true },
+    ]);
+
+    const result = await service.getEffectivePermissions('u1', 'org-1');
+
+    expect(result).toEqual(['leads:create', 'leads:read', 'leads:update']);
+  });
+
+  it('should return empty array if user has no membership', async () => {
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue(null);
+
+    const result = await service.getEffectivePermissions('u1', 'org-1');
+
+    expect(result).toEqual([]);
+  });
+
+  it('should sort permissions alphabetically', async () => {
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue({
+      id: 'membership-1',
+      user_id: 'u1',
+      organization_id: 'org-1',
+      role: {
+        rolePermissions: [
+          { permission: { action: 'zebra:action' } },
+          { permission: { action: 'apple:action' } },
+          { permission: { action: 'middle:action' } },
+        ],
+      },
+    });
+
+    mockPrisma.membershipPermissionOverride.findMany.mockResolvedValue([]);
+
+    const result = await service.getEffectivePermissions('u1', 'org-1');
+
+    expect(result).toEqual(['apple:action', 'middle:action', 'zebra:action']);
+  });
+
+  it('should return empty array when organizationId is not provided', async () => {
+    const result = await service.getEffectivePermissions('u1', '');
+
+    expect(result).toEqual([]);
+    expect(mockPrisma.organizationMembership.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('should return empty array and not query overrides if organizationId is null', async () => {
+    // @ts-expect-error - testing null case
+    const result = await service.getEffectivePermissions('u1', null);
+
+    expect(result).toEqual([]);
+    expect(mockPrisma.organizationMembership.findFirst).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ describe('AuthController', () => {
     register: jest.fn(),
     login: jest.fn(),
     validateUser: jest.fn(),
+    getEffectivePermissions: jest.fn(),
   };
 
   const mockI18n = {
@@ -39,20 +40,31 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should return access token when login credentials are valid', async () => {
-    mockAuthService.validateUser.mockResolvedValue({
+  it('should return access token and user with permissions when login credentials are valid', async () => {
+    const createdAt = new Date();
+    const user = {
       id: 'u1',
       email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    };
+    mockAuthService.validateUser.mockResolvedValue(user);
+    mockAuthService.login.mockResolvedValue({
+      access_token: 'jwt-token',
+      user: { ...user, permissions: ['leads:read'] },
     });
-    mockAuthService.login.mockReturnValue({ access_token: 'jwt-token' });
 
     const result = await controller.login({
       email: 'user@example.com',
       password: 'secret',
     });
 
-    expect(result).toEqual({ access_token: 'jwt-token' });
-    expect(mockAuthService.login).toHaveBeenCalled();
+    expect(result).toEqual({
+      access_token: 'jwt-token',
+      user: { ...user, permissions: ['leads:read'] },
+    });
+    expect(mockAuthService.login).toHaveBeenCalledWith(user);
   });
 
   it('should throw UnauthorizedException when login credentials are invalid', async () => {
@@ -89,19 +101,50 @@ describe('AuthController', () => {
     expect(result).toEqual(created);
   });
 
-  it('should return request user in getProfile', () => {
-    const req = {
-      user: {
-        id: 'u1',
-        email: 'user@example.com',
-        first_name: 'A',
-        last_name: 'B',
-        created_at: new Date(),
-      },
+  it('should return user with effective permissions in getProfile', async () => {
+    const createdAt = new Date();
+    const user = {
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
     };
+    const req = { user };
 
-    const result = controller.getProfile(req);
+    mockAuthService.getEffectivePermissions.mockResolvedValue([
+      'leads:read',
+      'leads:create',
+    ]);
 
-    expect(result).toEqual(req.user);
+    const result = await controller.getProfile(req, 'org-1');
+
+    expect(mockAuthService.getEffectivePermissions).toHaveBeenCalledWith(
+      'u1',
+      'org-1',
+    );
+    expect(result).toEqual({
+      ...user,
+      permissions: ['leads:read', 'leads:create'],
+    });
+  });
+
+  it('should return empty permissions when x-organization-id header is missing in getProfile', async () => {
+    const createdAt = new Date();
+    const user = {
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    };
+    const req = { user };
+
+    const result = await controller.getProfile(req, undefined);
+
+    expect(result).toEqual({
+      ...user,
+      permissions: [],
+    });
   });
 });

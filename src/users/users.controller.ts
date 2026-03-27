@@ -8,6 +8,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -32,11 +34,13 @@ export class UsersController {
   /**
    * Get the currently authenticated user's profile
    * Note: This endpoint does NOT require x-organization-id header
+   * If provided, includes effective permissions for that organization
    */
   @Get('me')
   @ApiOperation({
-    summary: 'Get current user profile',
-    description: "Returns the authenticated user's profile information",
+    summary: 'Get current user profile with optional permissions',
+    description:
+      "Returns the authenticated user's profile information. Include x-organization-id header to get permissions for that organization.",
   })
   @ApiResponse({
     status: 200,
@@ -48,13 +52,79 @@ export class UsersController {
         first_name: { type: 'string' },
         last_name: { type: 'string' },
         created_at: { type: 'string', format: 'date-time' },
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'User permissions for the specified organization',
+        },
       },
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User profile not found' })
-  async getCurrentUser(@Request() req: AuthRequest) {
-    return this.usersService.getCurrentUserProfile(req.user.id);
+  async getCurrentUser(
+    @Request() req: AuthRequest,
+    @Headers('x-organization-id') organizationId?: string,
+  ) {
+    const user = await this.usersService.getCurrentUserProfile(req.user.id);
+
+    // Calculate effective permissions if organization ID is provided
+    const permissions = await this.usersService.getEffectivePermissions(
+      req.user.id,
+      organizationId,
+    );
+
+    return {
+      ...user,
+      permissions,
+    };
+  }
+
+  /**
+   * Get the current user's effective permissions for their organization
+   * Requires x-organization-id header to determine which organization's permissions to fetch
+   */
+  @Get('me/permissions')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Get user permissions for organization',
+    description:
+      'Returns the effective permissions for the authenticated user in their active organization context. Requires x-organization-id header.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Permissions retrieved successfully',
+    schema: {
+      properties: {
+        permissions: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'List of permission actions (e.g., "leads:create", "users:manage")',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Organization context required (missing x-organization-id header)',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getPermissions(
+    @Request() req: AuthRequest,
+    @Headers('x-organization-id') organizationId?: string,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization context required');
+    }
+
+    const permissions = await this.usersService.getEffectivePermissions(
+      req.user.id,
+      organizationId,
+    );
+
+    return { permissions };
   }
 
   /**
