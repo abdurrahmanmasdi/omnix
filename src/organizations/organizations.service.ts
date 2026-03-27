@@ -208,45 +208,41 @@ export class OrganizationsService {
           Temsilci: 'agent',
         };
 
-        await Promise.all(
-          DEFAULT_ROLE_MATRIX.filter((role) => role.name !== 'Kurucu').map(
-            async (roleTemplate) => {
-              // Get translations for this role
-              const translations = roleTranslations[roleTemplate.name];
+        for (const roleTemplate of DEFAULT_ROLE_MATRIX.filter(
+          (role) => role.name !== 'Kurucu',
+        )) {
+          // Get translations for this role
+          const translations = roleTranslations[roleTemplate.name];
 
-              // Create the role
-              const role = await tx.role.create({
-                data: {
-                  name: roleTemplate.name,
-                  ...(translations && {
-                    name_translations: translations,
-                  }),
-                  is_system: true,
-                  slug: systemRoleSlugs[roleTemplate.name],
-                  organization_id: createdOrg.id,
-                },
-              });
-
-              // Map permission actions to permission IDs from the matrix
-              const rolePermissions = roleTemplate.permissionActions
-                .map((action) => permissionMap.get(action))
-                .filter((id) => id !== undefined);
-
-              // Batch create RolePermission join records
-              if (rolePermissions.length > 0) {
-                await tx.rolePermission.createMany({
-                  data: rolePermissions.map((permissionId) => ({
-                    role_id: role.id,
-                    permission_id: permissionId,
-                  })),
-                  skipDuplicates: true,
-                });
-              }
-
-              return role;
+          // Create the role
+          const role = await tx.role.create({
+            data: {
+              name: roleTemplate.name,
+              ...(translations && {
+                name_translations: translations,
+              }),
+              is_system: true,
+              slug: systemRoleSlugs[roleTemplate.name],
+              organization_id: createdOrg.id,
             },
-          ),
-        );
+          });
+
+          // Map permission actions to permission IDs from the matrix
+          const rolePermissions = roleTemplate.permissionActions
+            .map((action) => permissionMap.get(action))
+            .filter((id) => id !== undefined);
+
+          // Batch create RolePermission join records
+          if (rolePermissions.length > 0) {
+            await tx.rolePermission.createMany({
+              data: rolePermissions.map((permissionId) => ({
+                role_id: role.id,
+                permission_id: permissionId,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
 
         // ========== STEP 8: Assign Creator as Owner with ACTIVE Status ==========
         await tx.organizationMembership.create({
