@@ -2,6 +2,7 @@ import {
   Injectable,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -346,5 +347,103 @@ export class ChatService {
     );
 
     return newConversation;
+  }
+
+  /**
+   * Create a new group conversation
+   * @param orgId - The organization ID
+   * @param creatorId - The user ID creating the group
+   * @param name - The name of the group
+   * @param participantIds - Array of user IDs to add to the group (should not include creator)
+   * @returns The created conversation with all participants
+   * @throws BadRequestException if participantIds is empty
+   * @throws NotFoundException if any participant user doesn't exist
+   */
+  async createGroupConversation(
+    orgId: string,
+    creatorId: string,
+    name: string,
+    participantIds: string[],
+  ) {
+    // Validate that at least one participant is provided
+    if (!participantIds || participantIds.length === 0) {
+      throw new BadRequestException(
+        'At least one participant must be included in a group conversation',
+      );
+    }
+
+    // Verify all participant users exist
+    const allParticipantIds = [creatorId, ...participantIds];
+    const participants = await this.prisma.user.findMany({
+      where: {
+        id: {
+          in: allParticipantIds,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (participants.length !== allParticipantIds.length) {
+      throw new NotFoundException('One or more participants do not exist');
+    }
+
+    // Create group conversation using a transaction
+    const groupConversation = await this.prisma.$transaction(async (tx) => {
+      // Create the conversation
+      const conversation = await tx.conversation.create({
+        data: {
+          organization_id: orgId,
+          is_group: true,
+          name,
+        },
+      });
+
+      // Add all participants (creator + requested participants)
+      await tx.conversationParticipant.createMany({
+        data: allParticipantIds.map((userId) => ({
+          conversation_id: conversation.id,
+          user_id: userId,
+        })),
+      });
+
+      // Return the conversation with all necessary relations
+      return tx.conversation.findUnique({
+        where: { id: conversation.id },
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  first_name: true,
+                  last_name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          messages: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  first_name: true,
+                  last_name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    this.logger.log(
+      `[ChatService] New group conversation created: ${groupConversation?.id}`,
+    );
+
+    return groupConversation;
   }
 }

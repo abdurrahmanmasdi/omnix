@@ -28,6 +28,7 @@ describe('ChatService', () => {
       },
       user: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -693,6 +694,213 @@ describe('ChatService', () => {
 
       // Assert
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('createGroupConversation', () => {
+    const orgId = 'org-123';
+    const creatorId = 'creator-user-id';
+    const participantIds = ['participant1', 'participant2', 'participant3'];
+    const groupName = 'Test Group Chat';
+
+    it('should create a new group conversation with all participants', async () => {
+      // Arrange
+      const mockGroupConversation = {
+        id: 'group-conv-123',
+        organization_id: orgId,
+        is_group: true,
+        name: groupName,
+        participants: [
+          {
+            conversation_id: 'group-conv-123',
+            user_id: creatorId,
+            user: {
+              id: creatorId,
+              first_name: 'Creator',
+              last_name: 'User',
+              email: 'creator@example.com',
+            },
+          },
+          {
+            conversation_id: 'group-conv-123',
+            user_id: 'participant1',
+            user: {
+              id: 'participant1',
+              first_name: 'Participant',
+              last_name: 'One',
+              email: 'p1@example.com',
+            },
+          },
+          {
+            conversation_id: 'group-conv-123',
+            user_id: 'participant2',
+            user: {
+              id: 'participant2',
+              first_name: 'Participant',
+              last_name: 'Two',
+              email: 'p2@example.com',
+            },
+          },
+          {
+            conversation_id: 'group-conv-123',
+            user_id: 'participant3',
+            user: {
+              id: 'participant3',
+              first_name: 'Participant',
+              last_name: 'Three',
+              email: 'p3@example.com',
+            },
+          },
+        ],
+        messages: [],
+      };
+
+      // Mock user.findMany to verify all participants exist
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: creatorId },
+        { id: 'participant1' },
+        { id: 'participant2' },
+        { id: 'participant3' },
+      ]);
+
+      mockPrismaService.conversation.create.mockResolvedValue({
+        id: 'group-conv-123',
+        organization_id: orgId,
+        is_group: true,
+        name: groupName,
+      });
+
+      mockPrismaService.conversationParticipant.createMany.mockResolvedValue({
+        count: 4,
+      });
+
+      mockPrismaService.conversation.findUnique.mockResolvedValue(
+        mockGroupConversation,
+      );
+
+      // Act
+      const result = await service.createGroupConversation(
+        orgId,
+        creatorId,
+        groupName,
+        participantIds,
+      );
+
+      // Assert
+      expect(mockPrismaService.user.findMany).toHaveBeenCalledWith({
+        where: {
+          id: {
+            in: [creatorId, ...participantIds],
+          },
+        },
+        select: { id: true },
+      });
+      expect(mockPrismaService.conversation.create).toHaveBeenCalled();
+      expect(
+        mockPrismaService.conversationParticipant.createMany,
+      ).toHaveBeenCalled();
+      expect(result).toBeDefined();
+      expect(result!.is_group).toBe(true);
+      expect(result!.name).toBe(groupName);
+      expect(result!.participants).toHaveLength(4);
+    });
+
+    it('should throw BadRequestException when no participants are provided', async () => {
+      // Arrange & Act & Assert
+      await expect(
+        service.createGroupConversation(orgId, creatorId, groupName, []),
+      ).rejects.toThrow(
+        'At least one participant must be included in a group conversation',
+      );
+    });
+
+    it('should throw NotFoundException when one or more participants do not exist', async () => {
+      // Arrange
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: creatorId },
+        { id: 'participant1' },
+        // Missing participant2 and participant3
+      ]);
+
+      // Act & Assert
+      await expect(
+        service.createGroupConversation(
+          orgId,
+          creatorId,
+          groupName,
+          participantIds,
+        ),
+      ).rejects.toThrow('One or more participants do not exist');
+    });
+
+    it('should include creator in the participants list', async () => {
+      // Arrange
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: creatorId },
+        { id: 'participant1' },
+      ]);
+
+      mockPrismaService.conversation.create.mockResolvedValue({
+        id: 'group-conv-456',
+        organization_id: orgId,
+        is_group: true,
+        name: groupName,
+      });
+
+      mockPrismaService.conversationParticipant.createMany.mockResolvedValue({
+        count: 2,
+      });
+
+      mockPrismaService.conversation.findUnique.mockResolvedValue({
+        id: 'group-conv-456',
+        organization_id: orgId,
+        is_group: true,
+        name: groupName,
+        participants: [
+          {
+            conversation_id: 'group-conv-456',
+            user_id: creatorId,
+            user: {
+              id: creatorId,
+              first_name: 'Creator',
+              last_name: 'User',
+              email: 'creator@example.com',
+            },
+          },
+          {
+            conversation_id: 'group-conv-456',
+            user_id: 'participant1',
+            user: {
+              id: 'participant1',
+              first_name: 'P',
+              last_name: '1',
+              email: 'p1@example.com',
+            },
+          },
+        ],
+        messages: [],
+      });
+
+      // Act
+      const result = await service.createGroupConversation(
+        orgId,
+        creatorId,
+        groupName,
+        ['participant1'],
+      );
+
+      // Assert
+      // Verify the participants array includes the creator
+      expect(result!.participants.map((p) => p.user_id)).toContain(creatorId);
+      expect(
+        mockPrismaService.conversationParticipant.createMany,
+      ).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            user_id: creatorId,
+          }),
+        ]),
+      });
     });
   });
 });
