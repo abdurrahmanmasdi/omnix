@@ -19,6 +19,7 @@ import { MembershipStatus } from '@prisma/client';
 export interface RoleWithPermissions {
   id: string;
   name: string;
+  name_translations?: Record<string, string> | null;
   organization_id: string;
   created_at: Date;
   rolePermissions: Array<{
@@ -179,6 +180,9 @@ export class AccessControlService {
         const role = await tx.role.create({
           data: {
             name: dto.name,
+            ...(dto.name_translations && {
+              name_translations: dto.name_translations,
+            }),
             organization_id: organizationId,
           },
         });
@@ -295,11 +299,25 @@ export class AccessControlService {
 
       // Update role and permissions in a transaction
       const result = await this.prisma.$transaction(async (tx) => {
-        // Step 1: Update role name if provided
-        if (dto.name) {
+        // Step 1: Update role name and/or translations if provided
+        if (dto.name || dto.name_translations) {
+          const updatePayload: {
+            name?: string;
+            name_translations?: Record<string, string> | null;
+          } = {};
+
+          if (dto.name) {
+            updatePayload.name = dto.name;
+          }
+          if (dto.name_translations) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            updatePayload.name_translations = dto.name_translations as any;
+          }
+
           await tx.role.update({
             where: { id: roleId },
-            data: { name: dto.name },
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            data: updatePayload as any,
           });
         }
 
@@ -576,7 +594,7 @@ export class AccessControlService {
       }
 
       // Check if target member has Owner role - cannot change Owner
-      if (membership.role.name === 'Owner') {
+      if (membership.role.name === 'Kurucu') {
         throw new BadRequestException(
           this.i18n.t('errors.CANNOT_MODIFY_OWNER_ROLE'),
         );
@@ -771,7 +789,7 @@ export class AccessControlService {
       }
 
       // Check if target member has Owner role - cannot override Owner permissions
-      if (membership.role.name === 'Owner') {
+      if (membership.role.name === 'Kurucu') {
         throw new BadRequestException(
           this.i18n.t('errors.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
         );

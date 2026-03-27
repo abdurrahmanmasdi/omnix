@@ -168,54 +168,78 @@ export class OrganizationsService {
           },
         });
 
-        // ========== STEP 4: Fetch All Global Permissions ==========
+        // ========== STEP 5: FETCH ALL PERMISSIONS WITH SAFETY CHECK ==========
         const allPermissions = await tx.permission.findMany();
+
         const permissionMap = new Map(
           allPermissions.map((p) => [p.action, p.id]),
         );
+        // ========== STEP 6: CREATE OWNER ROLE WITH ALL PERMISSIONS ==========
+        // Owner role gets ALL system permissions in a single atomic create operation
+        const ownerTranslations = { en: 'Owner', ar: 'المالك' };
+        const ownerRole = await tx.role.create({
+          data: {
+            name: 'Kurucu',
+            ...(ownerTranslations && {
+              name_translations: ownerTranslations as Prisma.InputJsonValue,
+            }),
+            organization_id: createdOrg.id,
+            rolePermissions: {
+              create: allPermissions.map((perm) => ({
+                permission_id: perm.id,
+              })),
+            },
+          },
+          include: { rolePermissions: true },
+        });
 
-        // ========== STEP 5: Create Default Roles with Permissions ==========
-        const createdRoles = await Promise.all(
-          DEFAULT_ROLE_MATRIX.map(async (roleTemplate) => {
-            // Create the role
-            const role = await tx.role.create({
-              data: {
-                name: roleTemplate.name,
-                organization_id: createdOrg.id,
-              },
-            });
+        // ========== STEP 7: CREATE OTHER ROLES (MANAGER, AGENT) WITH MATRIX PERMISSIONS ==========
+        // Create remaining roles from the matrix (excluding Owner which we just created)
+        // Map Turkish role names to their English and Arabic translations
+        const roleTranslations: Record<string, { en: string; ar: string }> = {
+          Yönetici: { en: 'Manager', ar: 'مدير' },
+          Temsilci: { en: 'Agent', ar: 'وكيل' },
+        };
 
-            // Map permission actions to permission IDs
-            const rolePermissions = roleTemplate.permissionActions
-              .map((action) => permissionMap.get(action))
-              .filter((id) => id !== undefined);
+        await Promise.all(
+          DEFAULT_ROLE_MATRIX.filter((role) => role.name !== 'Kurucu').map(
+            async (roleTemplate) => {
+              // Get translations for this role
+              const translations = roleTranslations[roleTemplate.name];
 
-            // Batch create RolePermission join records
-            if (rolePermissions.length > 0) {
-              await tx.rolePermission.createMany({
-                data: rolePermissions.map((permissionId) => ({
-                  role_id: role.id,
-                  permission_id: permissionId,
-                })),
-                skipDuplicates: true,
+              // Create the role
+              const role = await tx.role.create({
+                data: {
+                  name: roleTemplate.name,
+                  ...(translations && {
+                    name_translations: translations,
+                  }),
+                  organization_id: createdOrg.id,
+                },
               });
-            }
 
-            return role;
-          }),
+              // Map permission actions to permission IDs from the matrix
+              const rolePermissions = roleTemplate.permissionActions
+                .map((action) => permissionMap.get(action))
+                .filter((id) => id !== undefined);
+
+              // Batch create RolePermission join records
+              if (rolePermissions.length > 0) {
+                await tx.rolePermission.createMany({
+                  data: rolePermissions.map((permissionId) => ({
+                    role_id: role.id,
+                    permission_id: permissionId,
+                  })),
+                  skipDuplicates: true,
+                });
+              }
+
+              return role;
+            },
+          ),
         );
 
-        // Map roles by name for easy access
-        const rolesByName = new Map(createdRoles.map((r) => [r.name, r]));
-        const ownerRole = rolesByName.get('Owner');
-
-        if (!ownerRole) {
-          throw new InternalServerErrorException(
-            'Failed to create Owner role during organization setup',
-          );
-        }
-
-        // ========== STEP 6: Assign Creator as Owner with ACTIVE Status ==========
+        // ========== STEP 8: Assign Creator as Owner with ACTIVE Status ==========
         await tx.organizationMembership.create({
           data: {
             user_id: userId,
@@ -683,8 +707,8 @@ export class OrganizationsService {
         throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
       }
 
-      // Prevent assigning Owner role directly from approval
-      if (role.name === 'Owner') {
+      // Prevent assigning Owner (Kurucu) role directly from approval
+      if (role.name === 'Kurucu') {
         throw new BadRequestException(
           this.i18n.t('errors.CANNOT_ASSIGN_OWNER_ROLE_FROM_APPROVAL'),
         );

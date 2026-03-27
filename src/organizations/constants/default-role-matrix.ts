@@ -21,13 +21,15 @@ export interface IRoleTemplate {
  * OWNER
  * - Full organizational control
  * - Can manage all resources, users, roles, and settings
+ * - Has ALL permissions in the system
  * - Usually only one owner per organization
  */
 const OWNER_ROLE: IRoleTemplate = {
-  name: 'Owner',
+  name: 'Kurucu',
   description: 'Full organizational control and management',
   permissionActions: [
-    // Leads
+    // Leads - full access
+    'leads:manage',
     'leads:read',
     'leads:read_all',
     'leads:create',
@@ -37,78 +39,52 @@ const OWNER_ROLE: IRoleTemplate = {
     'leads:delete_all',
     'leads:restore',
 
-    // Contacts
-    'contacts:read',
-    'contacts:read_all',
-    'contacts:create',
-    'contacts:edit',
-    'contacts:edit_all',
-    'contacts:delete',
-    'contacts:delete_all',
-    'contacts:restore',
-
-    // Deals
-    'deals:read',
-    'deals:read_all',
-    'deals:create',
-    'deals:edit',
-    'deals:edit_all',
-    'deals:delete',
-    'deals:delete_all',
-    'deals:restore',
-
-    // Tasks
-    'tasks:read',
-    'tasks:read_all',
-    'tasks:create',
-    'tasks:edit',
-    'tasks:edit_all',
-    'tasks:delete',
-    'tasks:delete_all',
-    'tasks:restore',
-
-    // Team Members
+    // Team Members - full access
+    'team_members:manage',
     'team_members:read',
+    'team_members:read_all',
     'team_members:create',
     'team_members:edit',
+    'team_members:edit_all',
     'team_members:delete',
+    'team_members:delete_all',
+    'team_members:restore',
 
-    // Roles
+    // Roles - full access
+    'roles:manage',
     'roles:read',
+    'roles:read_all',
     'roles:create',
     'roles:edit',
+    'roles:edit_all',
     'roles:delete',
-    'roles:manage',
+    'roles:delete_all',
+    'roles:restore',
 
-    // Organization
-    'organization:read',
-    'organization:edit',
+    // Organization - full access
     'organization:manage',
-
-    // Billing
-    'billing:read',
-    'billing:manage',
-
-    // Reports
-    'reports:read',
-    'reports:create',
-    'reports:edit',
-    'reports:delete',
+    'organization:read',
+    'organization:read_all',
+    'organization:edit',
+    'organization:edit_all',
+    'organization:delete',
+    'organization:delete_all',
+    'organization:restore',
   ],
 };
 
 /**
  * MANAGER
- * - Can manage leads, contacts, deals, and tasks
- * - Can manage team members and view reports
- * - Cannot manage organization settings or billing
- * - Cannot manage roles
+ * - Can manage leads and team members
+ * - Can view and manage roles
+ * - Cannot manage organization settings
  */
 const MANAGER_ROLE: IRoleTemplate = {
-  name: 'Manager',
+  name: 'Yönetici',
   description: 'Manage team members and core business resources',
   permissionActions: [
     // Leads - full access
+    'leads:manage',
     'leads:read',
     'leads:read_all',
     'leads:create',
@@ -118,95 +94,58 @@ const MANAGER_ROLE: IRoleTemplate = {
     'leads:delete_all',
     'leads:restore',
 
-    // Contacts - full access
-    'contacts:read',
-    'contacts:read_all',
-    'contacts:create',
-    'contacts:edit',
-    'contacts:edit_all',
-    'contacts:delete',
-    'contacts:delete_all',
-    'contacts:restore',
-
-    // Deals - full access
-    'deals:read',
-    'deals:read_all',
-    'deals:create',
-    'deals:edit',
-    'deals:edit_all',
-    'deals:delete',
-    'deals:delete_all',
-    'deals:restore',
-
-    // Tasks - full access
-    'tasks:read',
-    'tasks:read_all',
-    'tasks:create',
-    'tasks:edit',
-    'tasks:edit_all',
-    'tasks:delete',
-    'tasks:delete_all',
-    'tasks:restore',
-
-    // Team Members
+    // Team Members - full access
+    'team_members:manage',
     'team_members:read',
+    'team_members:read_all',
     'team_members:create',
     'team_members:edit',
+    'team_members:edit_all',
     'team_members:delete',
+    'team_members:delete_all',
+    'team_members:restore',
 
-    // Roles - read only
+    // Roles - manage only
+    'roles:manage',
     'roles:read',
+    'roles:read_all',
+    'roles:create',
+    'roles:edit',
+    'roles:edit_all',
+    'roles:delete',
+    'roles:delete_all',
+    'roles:restore',
 
     // Organization - read only
+    'organization:manage',
     'organization:read',
-
-    // Reports
-    'reports:read',
-    'reports:create',
-    'reports:edit',
-    'reports:delete',
+    'organization:read_all',
   ],
 };
 
 /**
  * AGENT
- * - Can read and edit assigned resources only
- * - Can create new leads, contacts, tasks
- * - Cannot delete resources or view all data
+ * - Can read and create leads
+ * - Can read team members
+ * - Cannot delete resources or manage other entities
  * - No administrative capabilities
  */
 const AGENT_ROLE: IRoleTemplate = {
-  name: 'Agent',
+  name: 'Temsilci',
   description: 'Create and manage assigned resources',
   permissionActions: [
     // Leads - assigned only
     'leads:read',
+    'leads:read_all',
     'leads:create',
     'leads:edit',
 
-    // Contacts - assigned only
-    'contacts:read',
-    'contacts:create',
-    'contacts:edit',
-
-    // Deals - assigned only
-    'deals:read',
-    'deals:create',
-    'deals:edit',
-
-    // Tasks - assigned only
-    'tasks:read',
-    'tasks:create',
-    'tasks:edit',
-
     // Team Members - read only
     'team_members:read',
+    'team_members:read_all',
 
     // Organization - read only
     'organization:read',
-
-    // Reports - read only
-    'reports:read',
   ],
 };
 

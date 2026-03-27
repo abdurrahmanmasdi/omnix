@@ -2,19 +2,19 @@ import {
   IsString,
   IsArray,
   IsUUID,
+  IsObject,
   IsOptional,
   MinLength,
   MaxLength,
   ArrayMinSize,
-  ArrayMaxSize,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class UpdateRoleDto {
   @ApiProperty({
-    example: 'Senior Manager',
-    description: 'The updated name of the role',
+    example: 'Sistem Yöneticisi',
+    description: 'The updated Turkish name of the role',
     minLength: 3,
     maxLength: 255,
     required: false,
@@ -30,6 +30,14 @@ export class UpdateRoleDto {
   name?: string;
 
   @ApiProperty({
+    example: { en: 'System Admin', ar: 'مسؤول النظام' },
+    description: 'Updated translations of the role name',
+  })
+  @IsOptional()
+  @IsObject({ message: i18nValidationMessage('errors.VALIDATION.IS_OBJECT') })
+  name_translations?: Record<string, string>;
+
+  @ApiProperty({
     example: [
       '550e8400-e29b-41d4-a716-446655440000',
       '550e8400-e29b-41d4-a716-446655440001',
@@ -43,9 +51,6 @@ export class UpdateRoleDto {
   @IsArray({ message: i18nValidationMessage('errors.VALIDATION.IS_ARRAY') })
   @ArrayMinSize(1, {
     message: i18nValidationMessage('errors.VALIDATION.MIN_ARRAY_SIZE'),
-  })
-  @ArrayMaxSize(100, {
-    message: i18nValidationMessage('errors.VALIDATION.MAX_ARRAY_SIZE'),
   })
   @IsUUID('4', {
     each: true,

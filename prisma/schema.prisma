@@ -78,6 +78,7 @@ model Role {
   id              String   @id @default(uuid()) @db.Uuid
   organization_id String?  @db.Uuid
   name            String
+  name_translations Json?
   created_at      DateTime @default(now())
 
   organization   Organization? @relation(fields: [organization_id], references: [id])
