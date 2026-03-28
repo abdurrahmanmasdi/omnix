@@ -6,12 +6,10 @@ import {
   ForbiddenException,
   InternalServerErrorException,
   Logger,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { PermissionsService } from '../auth/services/permissions.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
@@ -36,9 +34,18 @@ export class OrganizationsService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
-    @Inject(forwardRef(() => PermissionsService))
-    private permissionsService: PermissionsService,
+    private eventEmitter: EventEmitter2,
   ) {}
+
+  private async emitPermissionCacheClearEvent(
+    userId: string,
+    organizationId: string,
+  ): Promise<void> {
+    await this.eventEmitter.emitAsync('permissions.cache.clear-user', {
+      userId,
+      organizationId,
+    });
+  }
 
   /**
    * Returns pending join requests for an organization after validating that
@@ -520,42 +527,37 @@ export class OrganizationsService {
       await this.findById(id);
 
       // Step 2 & 3: Deactivate all memberships in a transaction
-      const affectedMembershipCount = await this.prisma.$transaction(
-        async (tx) => {
-          // Query all memberships before deactivation to capture user IDs
-          const affectedMemberships = await tx.organizationMembership.findMany({
-            where: { organization_id: id },
-            select: { user_id: true },
-          });
+      const affectedUserIds = await this.prisma.$transaction(async (tx) => {
+        // Query all memberships before deactivation to capture user IDs
+        const affectedMemberships = await tx.organizationMembership.findMany({
+          where: { organization_id: id },
+          select: { user_id: true },
+        });
 
-          // Update all memberships to REJECTED status (deactivation)
-          await tx.organizationMembership.updateMany({
-            where: { organization_id: id },
-            data: { status: MembershipStatus.REJECTED },
-          });
+        // Update all memberships to REJECTED status (deactivation)
+        await tx.organizationMembership.updateMany({
+          where: { organization_id: id },
+          data: { status: MembershipStatus.REJECTED },
+        });
 
-          // Step 4: Clear Redis cache for all affected users
-          if (affectedMemberships.length > 0) {
-            await Promise.all(
-              affectedMemberships.map((membership) =>
-                this.permissionsService.clearUserPermissionsCache(
-                  membership.user_id,
-                  id,
-                ),
-              ),
-            );
+        return [...new Set(affectedMemberships.map((m) => m.user_id))];
+      });
 
-            this.logger.debug(
-              `[OrganizationsService] Cleared permissions cache for ${affectedMemberships.length} users from deleted organization ${id}`,
-            );
-          }
+      // Step 4: Clear cached permissions through event handlers
+      if (affectedUserIds.length > 0) {
+        await Promise.all(
+          affectedUserIds.map((userId) =>
+            this.emitPermissionCacheClearEvent(userId, id),
+          ),
+        );
 
-          return affectedMemberships.length;
-        },
-      );
+        this.logger.debug(
+          `[OrganizationsService] Emitted permission cache clear events for ${affectedUserIds.length} users from deleted organization ${id}`,
+        );
+      }
 
       this.logger.log(
-        `Organization ${id} deleted: deactivated ${affectedMembershipCount} memberships and cleared their permission caches`,
+        `Organization ${id} deleted: deactivated ${affectedUserIds.length} memberships and cleared their permission caches`,
       );
     } catch (error) {
       if (error instanceof NotFoundException) {

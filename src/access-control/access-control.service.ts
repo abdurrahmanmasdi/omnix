@@ -4,12 +4,10 @@ import {
   ForbiddenException,
   NotFoundException,
   Logger,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { PermissionsService } from '../auth/services/permissions.service';
 import { CreateRoleDto } from './dtos/create-role.dto';
 import { UpdateRoleDto } from './dtos/update-role.dto';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
@@ -40,9 +38,18 @@ export class AccessControlService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
-    @Inject(forwardRef(() => PermissionsService))
-    private permissionsService: PermissionsService,
+    private eventEmitter: EventEmitter2,
   ) {}
+
+  private async emitPermissionCacheClearEvent(
+    userId: string,
+    organizationId: string,
+  ): Promise<void> {
+    await this.eventEmitter.emitAsync('permissions.cache.clear-user', {
+      userId,
+      organizationId,
+    });
+  }
 
   /**
    * Verify that the current user has ACTIVE membership in the organization
@@ -423,7 +430,7 @@ export class AccessControlService {
 
         await Promise.all(
           affectedMemberships.map((membership) =>
-            this.permissionsService.clearUserPermissionsCache(
+            this.emitPermissionCacheClearEvent(
               membership.user_id,
               organizationId,
             ),
@@ -676,7 +683,7 @@ export class AccessControlService {
       );
 
       // Invalidate cached permissions for the affected user
-      await this.permissionsService.clearUserPermissionsCache(
+      await this.emitPermissionCacheClearEvent(
         membership.user_id,
         organizationId,
       );
@@ -774,7 +781,7 @@ export class AccessControlService {
       );
 
       // Invalidate cached permissions for the affected user
-      await this.permissionsService.clearUserPermissionsCache(
+      await this.emitPermissionCacheClearEvent(
         membership.user_id,
         organizationId,
       );
@@ -891,7 +898,7 @@ export class AccessControlService {
       );
 
       // Invalidate cached permissions for the affected user
-      await this.permissionsService.clearUserPermissionsCache(
+      await this.emitPermissionCacheClearEvent(
         membership.user_id,
         organizationId,
       );

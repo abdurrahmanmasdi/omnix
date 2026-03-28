@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
 import { MembershipStatus } from '@prisma/client';
+
+interface ClearUserPermissionsCacheEvent {
+  userId: string;
+  organizationId: string;
+}
 
 /**
  * PermissionsService handles permission-based access control (PBAC) with Redis caching.
@@ -194,6 +200,16 @@ export class PermissionsService {
       );
       // Silently fail - Redis unavailability is handled by RedisService
     }
+  }
+
+  @OnEvent('permissions.cache.clear-user')
+  async handleClearUserPermissionsCacheEvent(
+    payload: ClearUserPermissionsCacheEvent,
+  ): Promise<void> {
+    await this.clearUserPermissionsCache(
+      payload.userId,
+      payload.organizationId,
+    );
   }
 
   /**

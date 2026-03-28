@@ -4,9 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
-import { PermissionsService } from '../auth/services/permissions.service';
 import { AccessControlService } from './access-control.service';
 import { MembershipStatus } from '@prisma/client';
 
@@ -38,8 +38,8 @@ describe('AccessControlService', () => {
     t: jest.fn((key: string) => key),
   };
 
-  const mockPermissionsService = {
-    clearUserPermissionsCache: jest.fn().mockResolvedValue(undefined),
+  const mockEventEmitter = {
+    emitAsync: jest.fn().mockResolvedValue([]),
   };
 
   beforeEach(async () => {
@@ -57,8 +57,8 @@ describe('AccessControlService', () => {
           useValue: mockI18nService,
         },
         {
-          provide: PermissionsService,
-          useValue: mockPermissionsService,
+          provide: EventEmitter2,
+          useValue: mockEventEmitter,
         },
       ],
     }).compile();

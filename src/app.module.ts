@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
@@ -30,6 +31,7 @@ mkdirSync(logsDir, { recursive: true });
       isGlobal: true, // This makes the .env variables available everywhere
       validate, // Use our custom validation function to ensure the .env file is correct
     }),
+    EventEmitterModule.forRoot(),
     LoggerModule.forRoot({
       pinoHttp: {
         transport: {
