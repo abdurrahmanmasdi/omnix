@@ -97,6 +97,7 @@ describe('AuthController', () => {
       'secret',
       'A',
       'B',
+      undefined,
     );
     expect(result).toEqual(created);
   });

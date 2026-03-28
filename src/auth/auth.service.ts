@@ -1,8 +1,15 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { I18nService } from 'nestjs-i18n';
 import * as bcrypt from 'bcryptjs';
+import { INVITATION_STATUS } from '../constants/invitation-status';
 
 interface IUser {
   id: string;
@@ -15,6 +22,14 @@ interface IUser {
 interface ILoginResponse {
   access_token: string;
   user: IUser & { permissions: string[] };
+}
+
+interface InvitationTokenRecord {
+  id: string;
+  email: string;
+  status: string;
+  organization_id: string;
+  role_id: string;
 }
 
 function excludePassword(user: any): IUser {
@@ -179,6 +194,7 @@ export class AuthService {
     password: string,
     first_name: string,
     last_name: string,
+    inviteToken?: string,
   ): Promise<IUser> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -186,10 +202,91 @@ export class AuthService {
         this.i18n.t('errors.AUTH.USER_ALREADY_EXISTS'),
       );
     }
+
     const hashed = await bcrypt.hash(password, 10);
-    const user = await this.prisma.user.create({
-      data: { email, password_hash: hashed, first_name, last_name },
+
+    if (!inviteToken) {
+      const user = await this.prisma.user.create({
+        data: { email, password_hash: hashed, first_name, last_name },
+      });
+      return excludePassword(user);
+    }
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const invitation = await tx.invitation.findFirst({
+        where: { token: inviteToken },
+        select: {
+          id: true,
+          email: true,
+          status: true,
+          organization_id: true,
+          role_id: true,
+        },
+      });
+
+      const validInvitation = this.validateInvitationForRegistration(
+        invitation,
+        email,
+      );
+
+      const invitationUpdate = await tx.invitation.updateMany({
+        where: {
+          id: validInvitation.id,
+          status: INVITATION_STATUS.PENDING,
+        },
+        data: {
+          status: INVITATION_STATUS.ACCEPTED,
+          accepted_at: new Date(),
+        },
+      });
+
+      if (invitationUpdate.count !== 1) {
+        throw new BadRequestException(
+          this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+            args: { status: validInvitation.status },
+          }),
+        );
+      }
+
+      const createdUser = await tx.user.create({
+        data: { email, password_hash: hashed, first_name, last_name },
+      });
+
+      await tx.organizationMembership.create({
+        data: {
+          user_id: createdUser.id,
+          organization_id: validInvitation.organization_id,
+          role_id: validInvitation.role_id,
+          status: MembershipStatus.ACTIVE,
+        },
+      });
+
+      return createdUser;
     });
+
     return excludePassword(user);
+  }
+
+  private validateInvitationForRegistration(
+    invitation: InvitationTokenRecord | null,
+    email: string,
+  ): InvitationTokenRecord {
+    if (!invitation) {
+      throw new NotFoundException(this.i18n.t('errors.INVITATION.NOT_FOUND'));
+    }
+
+    if (invitation.status !== INVITATION_STATUS.PENDING) {
+      throw new BadRequestException(
+        this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+          args: { status: invitation.status },
+        }),
+      );
+    }
+
+    if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+      throw new BadRequestException(this.i18n.t('errors.INVITATION.NOT_OWNER'));
+    }
+
+    return invitation;
   }
 }

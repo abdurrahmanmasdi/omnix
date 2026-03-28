@@ -26,6 +26,9 @@ describe('OrganizationsController', () => {
 
   const mockInvitationsService = {
     invite: jest.fn(),
+    getInvitationByToken: jest.fn(),
+    acceptInvitation: jest.fn(),
+    listPendingInvitations: jest.fn(),
   };
 
   const mockPermissionsService = {
@@ -120,9 +123,8 @@ describe('OrganizationsController', () => {
 
   it('should delegate invite', async () => {
     mockInvitationsService.invite.mockResolvedValue({
-      message: 'saved',
-      invitationId: 'inv1',
-      status: 'invitation_created',
+      inviteUrl: 'https://frontend.example.com/invite/token-123',
+      token: 'token-123',
     });
     const req = { user: { id: 'u1' } } as any;
 
@@ -135,7 +137,10 @@ describe('OrganizationsController', () => {
       email: 'invitee@example.com',
       roleId: 'r1',
     });
-    expect(result.invitationId).toBe('inv1');
+    expect(result.token).toBe('token-123');
+    expect(result.inviteUrl).toBe(
+      'https://frontend.example.com/invite/token-123',
+    );
   });
 
   it('should throw ForbiddenException for non-admin invite attempts', async () => {
@@ -200,5 +205,92 @@ describe('OrganizationsController', () => {
     await expect(controller.rejectRequest('org1', 'm1', req)).rejects.toThrow(
       ForbiddenException,
     );
+  });
+
+  it('should delegate getInvitationByToken', async () => {
+    mockInvitationsService.getInvitationByToken.mockResolvedValue({
+      organizationName: 'Acme Inc',
+      roleName: 'Agent',
+      email: 'invitee@example.com',
+      status: 'pending',
+    });
+
+    const result = await controller.getInvitationByToken('token-123');
+
+    expect(mockInvitationsService.getInvitationByToken).toHaveBeenCalledWith(
+      'token-123',
+    );
+    expect(result).toEqual({
+      organizationName: 'Acme Inc',
+      roleName: 'Agent',
+      email: 'invitee@example.com',
+      status: 'pending',
+    });
+  });
+
+  it('should delegate acceptInvitation', async () => {
+    mockInvitationsService.acceptInvitation.mockResolvedValue({
+      message: 'Accepted',
+      organizationId: 'org-1',
+      membershipId: 'membership-1',
+    });
+    const req = {
+      user: {
+        id: 'u1',
+        email: 'invitee@example.com',
+      },
+    } as any;
+
+    const result = await controller.acceptInvitation('token-123', req);
+
+    expect(mockInvitationsService.acceptInvitation).toHaveBeenCalledWith(
+      'token-123',
+      'u1',
+      'invitee@example.com',
+    );
+    expect(result).toEqual({
+      message: 'Accepted',
+      organizationId: 'org-1',
+      membershipId: 'membership-1',
+    });
+  });
+
+  it('should delegate listPendingInvitations', async () => {
+    mockInvitationsService.listPendingInvitations.mockResolvedValue([
+      {
+        id: 'invite-1',
+        token: 'token-1',
+        email: 'invitee@example.com',
+        status: 'pending',
+        created_at: new Date('2026-03-28T10:00:00.000Z'),
+        inviteUrl: 'https://frontend.example.com/invite/token-1',
+        role: {
+          id: 'role-1',
+          name: 'Agent',
+        },
+      },
+    ]);
+    const req = { user: { id: 'owner-1' } } as any;
+
+    const result = await controller.listPendingInvitations('org-1', req);
+
+    expect(mockInvitationsService.listPendingInvitations).toHaveBeenCalledWith(
+      'org-1',
+      'owner-1',
+    );
+    expect(result).toEqual([
+      {
+        id: 'invite-1',
+        token: 'token-1',
+        email: 'invitee@example.com',
+        status: 'pending',
+        created_at: new Date('2026-03-28T10:00:00.000Z'),
+        inviteUrl: 'https://frontend.example.com/invite/token-1',
+        role: {
+          id: 'role-1',
+          name: 'Agent',
+        },
+      },
+    ]);
   });
 });

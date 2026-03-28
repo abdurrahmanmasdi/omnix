@@ -26,6 +26,7 @@ import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.d
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { Public } from '../auth/decorators/public/public.decorator';
 import { AppPermission } from '../constants/permissions.registry';
 
 export interface IOrganization {
@@ -37,7 +38,36 @@ export interface IOrganization {
 }
 
 interface AuthRequest extends ExpressRequest {
-  user: { id: string };
+  user: {
+    id: string;
+    email: string;
+  };
+}
+
+interface InvitationPreviewResponse {
+  organizationName: string;
+  roleName: string;
+  email: string;
+  status: string;
+}
+
+interface InvitationAcceptResponse {
+  message: string;
+  organizationId: string;
+  membershipId: string;
+}
+
+interface PendingInvitationResponse {
+  id: string;
+  token: string;
+  email: string;
+  status: string;
+  created_at: Date;
+  inviteUrl: string;
+  role: {
+    id: string;
+    name: string;
+  };
 }
 
 @ApiTags('organizations')
@@ -159,12 +189,8 @@ export class OrganizationsController {
     description: 'User invited successfully',
     schema: {
       properties: {
-        message: { type: 'string' },
-        invitationId: { type: 'string', format: 'uuid' },
-        status: {
-          type: 'string',
-          enum: ['invitation_created', 'invitation_updated'],
-        },
+        inviteUrl: { type: 'string' },
+        token: { type: 'string' },
       },
     },
   })
@@ -177,14 +203,121 @@ export class OrganizationsController {
     @Request() req: AuthRequest,
     @Body() inviteDto: InviteToOrganizationDto,
   ): Promise<{
-    message: string;
-    invitationId: string;
-    status: 'invitation_created' | 'invitation_updated';
+    inviteUrl: string;
+    token: string;
   }> {
     return this.invitationsService.invite(
       organizationId,
       req.user.id,
       inviteDto,
+    );
+  }
+
+  @Get(':id/invitations')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List pending invitations for an organization',
+    description:
+      'Returns pending invitations for the organization. Access is restricted to owner/admin/manager users of that organization.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending invitations retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          token: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          status: { type: 'string' },
+          created_at: { type: 'string', format: 'date-time' },
+          inviteUrl: { type: 'string' },
+          role: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async listPendingInvitations(
+    @Param('id') organizationId: string,
+    @Request() req: AuthRequest,
+  ): Promise<PendingInvitationResponse[]> {
+    return this.invitationsService.listPendingInvitations(
+      organizationId,
+      req.user.id,
+    );
+  }
+
+  @Get('invitations/:token')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get invitation details by token',
+    description:
+      'Returns non-sensitive invitation details used by the invitation landing page.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation details retrieved successfully',
+    schema: {
+      properties: {
+        organizationName: { type: 'string' },
+        roleName: { type: 'string' },
+        email: { type: 'string', format: 'email' },
+        status: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Invitation not found' })
+  async getInvitationByToken(
+    @Param('token') token: string,
+  ): Promise<InvitationPreviewResponse> {
+    return this.invitationsService.getInvitationByToken(token);
+  }
+
+  @Post('invitations/:token/accept')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Accept invitation by token for authenticated users',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation accepted and membership created',
+    schema: {
+      properties: {
+        message: { type: 'string' },
+        organizationId: { type: 'string', format: 'uuid' },
+        membershipId: { type: 'string', format: 'uuid' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid invitation state' })
+  @ApiResponse({ status: 404, description: 'Invitation not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'User already has active membership',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async acceptInvitation(
+    @Param('token') token: string,
+    @Request() req: AuthRequest,
+  ): Promise<InvitationAcceptResponse> {
+    return this.invitationsService.acceptInvitation(
+      token,
+      req.user.id,
+      req.user.email,
     );
   }
 

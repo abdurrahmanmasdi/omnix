@@ -99,6 +99,7 @@ model Role {
 
 model Invitation {
   id              String    @id @default(uuid()) @db.Uuid
+  token           String    @unique
   email           String
   organization_id String    @db.Uuid
   role_id         String    @db.Uuid

@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
@@ -21,4 +21,12 @@ export class RegisterDto {
   @ApiProperty({ example: 'Doe' })
   @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
   last_name: string;
+
+  @ApiProperty({
+    example: '8f31aee2d5210bcf2a452f4c7c68f4dfc84f057d55f4a4d1389d8b02cf30c5f2',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  inviteToken?: string;
 }

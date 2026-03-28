@@ -86,6 +86,7 @@ export class AuthController {
       registerDto.password,
       registerDto.first_name,
       registerDto.last_name,
+      registerDto.inviteToken,
     );
     return user;
   }

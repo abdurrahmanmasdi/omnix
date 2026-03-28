@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { I18nService } from 'nestjs-i18n';
@@ -17,10 +17,16 @@ describe('AuthService', () => {
     organizationMembership: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
+      create: jest.fn(),
     },
     membershipPermissionOverride: {
       findMany: jest.fn(),
     },
+    invitation: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    $transaction: jest.fn(),
   };
 
   const mockJwtService = {
@@ -33,6 +39,10 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof mockPrisma) => Promise<unknown>) =>
+        callback(mockPrisma),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -206,6 +216,116 @@ describe('AuthService', () => {
       last_name: 'B',
       created_at: createdAt,
     });
+  });
+
+  it('should consume invitation token and create active membership during register', async () => {
+    const createdAt = new Date();
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-password' as never);
+    mockPrisma.invitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      email: 'user@example.com',
+      status: 'pending',
+      organization_id: 'org-1',
+      role_id: 'role-1',
+    });
+    mockPrisma.invitation.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.user.create.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      password_hash: 'hashed-password',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    });
+    mockPrisma.organizationMembership.create.mockResolvedValue({ id: 'm1' });
+
+    const result = await service.register(
+      'user@example.com',
+      'secret',
+      'A',
+      'B',
+      'token-123',
+    );
+
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+    expect(mockPrisma.invitation.findFirst).toHaveBeenCalledWith({
+      where: { token: 'token-123' },
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        organization_id: true,
+        role_id: true,
+      },
+    });
+    expect(mockPrisma.invitation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'invite-1',
+        status: 'pending',
+      },
+      data: {
+        status: 'accepted',
+        accepted_at: expect.any(Date),
+      },
+    });
+    expect(mockPrisma.organizationMembership.create).toHaveBeenCalledWith({
+      data: {
+        user_id: 'u1',
+        organization_id: 'org-1',
+        role_id: 'role-1',
+        status: 'ACTIVE',
+      },
+    });
+    expect(result).toEqual({
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    });
+  });
+
+  it('should throw NotFoundException when invite token does not exist during register', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-password' as never);
+    mockPrisma.invitation.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.register('user@example.com', 'secret', 'A', 'B', 'missing-token'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('should throw BadRequestException when invite token email does not match register email', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-password' as never);
+    mockPrisma.invitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      email: 'different@example.com',
+      status: 'pending',
+      organization_id: 'org-1',
+      role_id: 'role-1',
+    });
+
+    await expect(
+      service.register('user@example.com', 'secret', 'A', 'B', 'token-123'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('should throw BadRequestException when invite token status is not pending during register', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+    jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-password' as never);
+    mockPrisma.invitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      email: 'user@example.com',
+      status: 'accepted',
+      organization_id: 'org-1',
+      role_id: 'role-1',
+    });
+
+    await expect(
+      service.register('user@example.com', 'secret', 'A', 'B', 'token-123'),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('should calculate effective permissions from role permissions with overrides', async () => {
