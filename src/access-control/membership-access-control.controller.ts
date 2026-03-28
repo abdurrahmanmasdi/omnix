@@ -18,10 +18,13 @@ import {
 } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { AccessVerificationService } from './access-verification.service';
 import { PermissionOverridesService } from './permission-overrides.service';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
 import { CreatePermissionOverrideDto } from './dtos/create-permission-override.dto';
+import { AppPermission } from '../constants/permissions.registry';
 
 interface AuthRequest extends ExpressRequest {
   user: { id: string };
@@ -41,7 +44,8 @@ export class MembershipAccessControlController {
    * Secured: User must have ACTIVE membership in the organization
    */
   @Patch('role')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.TEAM_MEMBERS_MANAGE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Assign a role to a member',
@@ -102,7 +106,8 @@ export class MembershipAccessControlController {
    * Secured: User must have ACTIVE membership in the organization
    */
   @Post('overrides')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.TEAM_MEMBERS_MANAGE)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create or update a permission override for a member',

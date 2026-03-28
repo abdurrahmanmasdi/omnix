@@ -87,6 +87,38 @@ describe('AccessVerificationService', () => {
     });
   });
 
+  describe('verifyIsOwnerOrAdmin', () => {
+    it('throws ForbiddenException when caller role is not privileged', async () => {
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'm-agent',
+        role: { slug: 'agent' as string | null },
+      });
+
+      await expect(
+        service.verifyIsOwnerOrAdmin('org-1', 'user-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows owner and manager roles', async () => {
+      mockPrismaService.organizationMembership.findFirst
+        .mockResolvedValueOnce({
+          id: 'm-owner',
+          role: { slug: 'owner' as string | null },
+        })
+        .mockResolvedValueOnce({
+          id: 'm-manager',
+          role: { slug: 'manager' as string | null },
+        });
+
+      await expect(
+        service.verifyIsOwnerOrAdmin('org-1', 'owner-1'),
+      ).resolves.toBeUndefined();
+      await expect(
+        service.verifyIsOwnerOrAdmin('org-1', 'manager-1'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('assignRoleToMember', () => {
     const orgId = 'org-1';
     const membershipId = 'membership-1';
@@ -94,7 +126,10 @@ describe('AccessVerificationService', () => {
 
     it('throws NotFoundException when target membership does not exist', async () => {
       mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce({ id: 'caller-membership' })
+        .mockResolvedValueOnce({
+          id: 'caller-membership',
+          role: { slug: 'manager' as string | null },
+        })
         .mockResolvedValueOnce(null);
 
       await expect(
@@ -106,7 +141,10 @@ describe('AccessVerificationService', () => {
 
     it('updates role when membership and role are valid', async () => {
       mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce({ id: 'caller-membership' })
+        .mockResolvedValueOnce({
+          id: 'caller-membership',
+          role: { slug: 'manager' as string | null },
+        })
         .mockResolvedValueOnce({ id: membershipId });
       mockPrismaService.role.findFirst.mockResolvedValueOnce({ id: 'role-2' });
       mockPrismaService.organizationMembership.update.mockResolvedValueOnce({
@@ -128,6 +166,19 @@ describe('AccessVerificationService', () => {
         role_id: 'role-2',
         message: 'messages.ROLE_ASSIGNED_SUCCESSFULLY',
       });
+    });
+
+    it('throws ForbiddenException when caller is not owner/admin', async () => {
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'caller-membership',
+        role: { slug: 'agent' as string | null },
+      });
+
+      await expect(
+        service.assignRoleToMember(orgId, membershipId, callerId, {
+          role_id: 'role-2',
+        }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

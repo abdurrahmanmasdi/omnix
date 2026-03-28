@@ -48,10 +48,28 @@ interface AuthenticatedSocket extends Socket {
   };
 }
 
+const isDevelopmentEnvironment =
+  (process.env.NODE_ENV ?? 'development') === 'development';
+
+const developmentCorsOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+];
+
+const configuredFrontendOrigin = process.env.FRONTEND_URL?.trim();
+
+const chatCorsOrigin = configuredFrontendOrigin
+  ? configuredFrontendOrigin
+  : isDevelopmentEnvironment
+    ? developmentCorsOrigins
+    : false;
+
 @WebSocketGateway({
   namespace: '/chat',
   cors: {
-    origin: '*', // Allow all origins for now (we can lock this down in production)
+    origin: chatCorsOrigin,
     credentials: true,
   },
 })

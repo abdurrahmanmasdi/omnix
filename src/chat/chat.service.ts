@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -12,6 +13,37 @@ export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
   constructor(private prisma: PrismaService) {}
+
+  private async assertActiveOrganizationMembers(
+    orgId: string,
+    userIds: string[],
+  ): Promise<void> {
+    const uniqueUserIds = Array.from(new Set(userIds));
+
+    const activeMemberships = await this.prisma.organizationMembership.findMany(
+      {
+        where: {
+          organization_id: orgId,
+          status: MembershipStatus.ACTIVE,
+          user_id: {
+            in: uniqueUserIds,
+          },
+        },
+        select: {
+          user_id: true,
+        },
+      },
+    );
+
+    const activeUserIds = new Set(activeMemberships.map((m) => m.user_id));
+    const invalidUserIds = uniqueUserIds.filter((id) => !activeUserIds.has(id));
+
+    if (invalidUserIds.length > 0) {
+      throw new ForbiddenException(
+        'One or more participants are outside tenant scope',
+      );
+    }
+  }
 
   /**
    * Send a message to a conversation
@@ -226,6 +258,11 @@ export class ChatService {
       throw new NotFoundException('Target user not found');
     }
 
+    await this.assertActiveOrganizationMembers(orgId, [
+      currentUserId,
+      targetUserId,
+    ]);
+
     // Check if a 1-on-1 conversation already exists between these two users in this organization
     const existingConversation = await this.prisma.conversation.findFirst({
       where: {
@@ -386,6 +423,8 @@ export class ChatService {
     if (participants.length !== allParticipantIds.length) {
       throw new NotFoundException('One or more participants do not exist');
     }
+
+    await this.assertActiveOrganizationMembers(orgId, allParticipantIds);
 
     // Create group conversation using a transaction
     const groupConversation = await this.prisma.$transaction(async (tx) => {

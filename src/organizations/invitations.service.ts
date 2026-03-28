@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   InternalServerErrorException,
   Logger,
@@ -9,6 +10,7 @@ import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { MembershipStatus } from '@prisma/client';
+import { AccessVerificationService } from '../access-control/access-verification.service';
 
 @Injectable()
 export class InvitationsService {
@@ -17,6 +19,7 @@ export class InvitationsService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
+    private accessVerificationService: AccessVerificationService,
   ) {}
 
   /**
@@ -27,6 +30,7 @@ export class InvitationsService {
    */
   async invite(
     organizationId: string,
+    currentUserId: string,
     inviteDto: InviteToOrganizationDto,
   ): Promise<{
     message: string;
@@ -34,6 +38,11 @@ export class InvitationsService {
     status: 'invitation_created' | 'invitation_updated';
   }> {
     try {
+      await this.accessVerificationService.verifyIsOwnerOrAdmin(
+        organizationId,
+        currentUserId,
+      );
+
       // Verify organization exists
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
@@ -120,6 +129,7 @@ export class InvitationsService {
       };
     } catch (error) {
       if (
+        error instanceof ForbiddenException ||
         error instanceof NotFoundException ||
         error instanceof ConflictException
       ) {

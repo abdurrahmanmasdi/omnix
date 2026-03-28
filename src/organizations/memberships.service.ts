@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 import { MembershipStatus } from '@prisma/client';
+import { AccessVerificationService } from '../access-control/access-verification.service';
 
 @Injectable()
 export class MembershipsService {
@@ -20,6 +21,7 @@ export class MembershipsService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
+    private accessVerificationService: AccessVerificationService,
   ) {}
 
   /**
@@ -288,8 +290,14 @@ export class MembershipsService {
   async rejectJoinRequest(
     organizationId: string,
     membershipId: string,
+    requesterUserId: string,
   ): Promise<{ message: string; membershipId: string; status: string }> {
     try {
+      await this.accessVerificationService.verifyIsOwnerOrAdmin(
+        organizationId,
+        requesterUserId,
+      );
+
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
       });
@@ -322,6 +330,7 @@ export class MembershipsService {
       };
     } catch (error) {
       if (
+        error instanceof ForbiddenException ||
         error instanceof NotFoundException ||
         error instanceof BadRequestException
       ) {

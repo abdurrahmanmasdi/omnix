@@ -145,6 +145,8 @@ export class OrganizationsController {
    * Saves an invitation record with a required roleId
    */
   @Post(':organizationId/invite')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.TEAM_MEMBERS_MANAGE)
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth()
   @ApiOperation({
@@ -179,7 +181,11 @@ export class OrganizationsController {
     invitationId: string;
     status: 'invitation_created' | 'invitation_updated';
   }> {
-    return this.invitationsService.invite(organizationId, inviteDto);
+    return this.invitationsService.invite(
+      organizationId,
+      req.user.id,
+      inviteDto,
+    );
   }
 
   @Post(':id/requests/:membershipId/approve')
@@ -220,6 +226,8 @@ export class OrganizationsController {
   }
 
   @Post(':id/requests/:membershipId/reject')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.TEAM_MEMBERS_MANAGE)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({
@@ -242,12 +250,12 @@ export class OrganizationsController {
   async rejectRequest(
     @Param('id') organizationId: string,
     @Param('membershipId') membershipId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    @Request() _req: AuthRequest,
+    @Request() req: AuthRequest,
   ) {
     return this.membershipsService.rejectJoinRequest(
       organizationId,
       membershipId,
+      req.user.id,
     );
   }
 

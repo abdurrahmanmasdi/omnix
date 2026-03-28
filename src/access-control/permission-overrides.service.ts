@@ -44,7 +44,7 @@ export class PermissionOverridesService {
     message: string;
   }> {
     try {
-      await this.accessVerificationService.verifyUserInOrganization(
+      await this.accessVerificationService.verifyIsOwnerOrAdmin(
         organizationId,
         currentUserId,
       );

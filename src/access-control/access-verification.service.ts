@@ -14,6 +14,7 @@ import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
 @Injectable()
 export class AccessVerificationService {
   private readonly logger = new Logger(AccessVerificationService.name);
+  private readonly privilegedRoleSlugs = new Set(['owner', 'admin', 'manager']);
 
   constructor(
     private prisma: PrismaService,
@@ -74,6 +75,34 @@ export class AccessVerificationService {
     }
   }
 
+  async verifyIsOwnerOrAdmin(
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        organization_id: organizationId,
+        user_id: userId,
+        status: MembershipStatus.ACTIVE,
+      },
+      include: {
+        role: {
+          select: { slug: true },
+        },
+      },
+    });
+
+    const roleSlug =
+      (membership as { role?: { slug?: string | null } } | null)?.role?.slug ??
+      null;
+
+    if (!membership || !roleSlug || !this.privilegedRoleSlugs.has(roleSlug)) {
+      throw new ForbiddenException(
+        this.i18n.t('errors.INSUFFICIENT_PERMISSIONS'),
+      );
+    }
+  }
+
   async assignRoleToMember(
     organizationId: string,
     membershipId: string,
@@ -81,7 +110,7 @@ export class AccessVerificationService {
     dto: UpdateMemberRoleDto,
   ): Promise<{ id: string; role_id: string; message: string }> {
     try {
-      await this.verifyUserInOrganization(organizationId, currentUserId);
+      await this.verifyIsOwnerOrAdmin(organizationId, currentUserId);
 
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {

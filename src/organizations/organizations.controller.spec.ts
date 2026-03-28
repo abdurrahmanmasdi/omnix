@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 import { MembershipStatus } from '@prisma/client';
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { OrganizationsController } from './organizations.controller';
@@ -130,11 +131,25 @@ describe('OrganizationsController', () => {
       roleId: 'r1',
     });
 
-    expect(mockInvitationsService.invite).toHaveBeenCalledWith('org1', {
+    expect(mockInvitationsService.invite).toHaveBeenCalledWith('org1', 'u1', {
       email: 'invitee@example.com',
       roleId: 'r1',
     });
     expect(result.invitationId).toBe('inv1');
+  });
+
+  it('should throw ForbiddenException for non-admin invite attempts', async () => {
+    mockInvitationsService.invite.mockRejectedValueOnce(
+      new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+    );
+    const req = { user: { id: 'member1' } } as any;
+
+    await expect(
+      controller.invite('org1', req, {
+        email: 'invitee@example.com',
+        roleId: 'r1',
+      }),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('should delegate approve request', async () => {
@@ -171,7 +186,19 @@ describe('OrganizationsController', () => {
     expect(mockMembershipsService.rejectJoinRequest).toHaveBeenCalledWith(
       'org1',
       'm1',
+      'admin1',
     );
     expect(result.status).toBe(MembershipStatus.REJECTED);
+  });
+
+  it('should throw ForbiddenException for non-admin reject attempts', async () => {
+    mockMembershipsService.rejectJoinRequest.mockRejectedValueOnce(
+      new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+    );
+    const req = { user: { id: 'member1' } } as any;
+
+    await expect(controller.rejectRequest('org1', 'm1', req)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 });

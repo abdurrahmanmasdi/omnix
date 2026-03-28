@@ -11,6 +11,9 @@ describe('ChatService', () => {
   beforeEach(async () => {
     // Recreate mocks fresh for each test
     mockPrismaService = {
+      organizationMembership: {
+        findMany: jest.fn(),
+      },
       conversationParticipant: {
         findUnique: jest.fn(),
         createMany: jest.fn(),
@@ -37,6 +40,14 @@ describe('ChatService', () => {
     mockPrismaService.$transaction.mockImplementation(async (cb) => {
       return cb(mockPrismaService);
     });
+
+    // Default to all provided users being active members in the requested org.
+    mockPrismaService.organizationMembership.findMany.mockImplementation(
+      async (args: { where?: { user_id?: { in?: string[] } } }) => {
+        const ids = args?.where?.user_id?.in ?? [];
+        return ids.map((id) => ({ user_id: id }));
+      },
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -584,6 +595,16 @@ describe('ChatService', () => {
       expect(result!.is_group).toBe(false);
       expect(result!.participants).toHaveLength(2);
     });
+
+    it('should throw ForbiddenException when target user is outside tenant scope', async () => {
+      mockPrismaService.organizationMembership.findMany.mockResolvedValueOnce([
+        { user_id: currentUserId },
+      ]);
+
+      await expect(
+        service.createConversation(orgId, currentUserId, targetUserId),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('getUserConversations', () => {
@@ -831,6 +852,22 @@ describe('ChatService', () => {
           participantIds,
         ),
       ).rejects.toThrow('One or more participants do not exist');
+    });
+
+    it('should throw ForbiddenException when a participant is outside tenant scope', async () => {
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: creatorId },
+        { id: 'participant1' },
+      ]);
+      mockPrismaService.organizationMembership.findMany.mockResolvedValueOnce([
+        { user_id: creatorId },
+      ]);
+
+      await expect(
+        service.createGroupConversation(orgId, creatorId, groupName, [
+          'participant1',
+        ]),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should include creator in the participants list', async () => {

@@ -39,6 +39,7 @@ describe('PermissionOverridesService', () => {
   const mockAccessVerificationService = {
     verifyUserInOrganization: jest.fn(),
     verifyIsOwner: jest.fn(),
+    verifyIsOwnerOrAdmin: jest.fn(),
   };
 
   const ownerCaller = {
@@ -176,7 +177,23 @@ describe('PermissionOverridesService', () => {
   });
 
   describe('createPermissionOverride', () => {
+    it('throws ForbiddenException when caller is not owner/admin', async () => {
+      mockAccessVerificationService.verifyIsOwnerOrAdmin.mockRejectedValueOnce(
+        new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+      );
+
+      await expect(
+        service.createPermissionOverride('org', 'membership', 'user', {
+          permission_id: 'perm',
+          is_granted: true,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
     it('throws NotFoundException when membership does not exist', async () => {
+      mockAccessVerificationService.verifyIsOwnerOrAdmin.mockResolvedValueOnce(
+        undefined,
+      );
       mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
         null,
       );
