@@ -9,8 +9,8 @@ import {
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
-import { MembershipStatus } from '@prisma/client';
 import { AccessVerificationService } from '../access-control/access-verification.service';
+import { INVITATION_STATUS } from '../constants/invitation-status';
 
 @Injectable()
 export class InvitationsService {
@@ -105,14 +105,14 @@ export class InvitationsService {
         },
         update: {
           role_id: inviteDto.roleId,
-          status: MembershipStatus.PENDING,
+          status: INVITATION_STATUS.PENDING,
           accepted_at: null,
         },
         create: {
           email: inviteDto.email,
           organization_id: organizationId,
           role_id: inviteDto.roleId,
-          status: MembershipStatus.PENDING,
+          status: INVITATION_STATUS.PENDING,
         },
       });
 

@@ -9,6 +9,7 @@ import {
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { MembershipStatus } from '@prisma/client';
+import { INVITATION_STATUS } from '../constants/invitation-status';
 
 @Injectable()
 export class UsersService {
@@ -129,7 +130,7 @@ export class UsersService {
     }
 
     // Step 3: Verify invitation status is pending
-    if (invitation.status !== 'pending') {
+    if (invitation.status !== INVITATION_STATUS.PENDING) {
       throw new BadRequestException(
         this.i18n.t('errors.INVITATION.INVALID_STATUS', {
           args: { status: invitation.status },
@@ -170,7 +171,7 @@ export class UsersService {
       await tx.invitation.update({
         where: { id: inviteId },
         data: {
-          status: 'accepted',
+          status: INVITATION_STATUS.ACCEPTED,
           accepted_at: new Date(),
         },
       });
