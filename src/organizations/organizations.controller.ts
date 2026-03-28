@@ -17,6 +17,8 @@ import {
 } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { OrganizationsService } from './organizations.service';
+import { MembershipsService } from './memberships.service';
+import { InvitationsService } from './invitations.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
@@ -41,7 +43,11 @@ interface AuthRequest extends ExpressRequest {
 @ApiTags('organizations')
 @Controller('organizations')
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(
+    private readonly organizationsService: OrganizationsService,
+    private readonly membershipsService: MembershipsService,
+    private readonly invitationsService: InvitationsService,
+  ) {}
 
   /**
    * List pending join requests for a specific organization.
@@ -64,7 +70,7 @@ export class OrganizationsController {
     @Param('id') organizationId: string,
     @Request() req: AuthRequest,
   ) {
-    return this.organizationsService.getPendingRequests(
+    return this.membershipsService.getPendingRequests(
       organizationId,
       req.user.id,
     );
@@ -131,7 +137,7 @@ export class OrganizationsController {
     @Request() req: AuthRequest,
     @Body() joinOrgDto: JoinOrganizationDto,
   ): Promise<{ message: string; organizationId: string }> {
-    return this.organizationsService.join(req.user.id, joinOrgDto);
+    return this.membershipsService.join(req.user.id, joinOrgDto);
   }
 
   /**
@@ -173,7 +179,7 @@ export class OrganizationsController {
     invitationId: string;
     status: 'invitation_created' | 'invitation_updated';
   }> {
-    return this.organizationsService.invite(organizationId, inviteDto);
+    return this.invitationsService.invite(organizationId, inviteDto);
   }
 
   @Post(':id/requests/:membershipId/approve')
@@ -205,7 +211,7 @@ export class OrganizationsController {
     @Request() req: AuthRequest,
     @Body() approveDto: ApproveMembershipRequestDto,
   ) {
-    return this.organizationsService.approveJoinRequest(
+    return this.membershipsService.approveJoinRequest(
       organizationId,
       membershipId,
       req.user.id,
@@ -239,7 +245,7 @@ export class OrganizationsController {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     @Request() _req: AuthRequest,
   ) {
-    return this.organizationsService.rejectJoinRequest(
+    return this.membershipsService.rejectJoinRequest(
       organizationId,
       membershipId,
     );
@@ -295,7 +301,7 @@ export class OrganizationsController {
     @Param('id') organizationId: string,
     @Request() req: AuthRequest,
   ) {
-    return this.organizationsService.getOrganizationMembers(
+    return this.membershipsService.getOrganizationMembers(
       organizationId,
       req.user.id,
     );

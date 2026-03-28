@@ -4,6 +4,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
+import { MembershipsService } from './memberships.service';
+import { InvitationsService } from './invitations.service';
 import { PermissionsService } from '../auth/services/permissions.service';
 
 describe('OrganizationsController', () => {
@@ -11,16 +13,22 @@ describe('OrganizationsController', () => {
 
   const mockOrganizationsService = {
     create: jest.fn(),
+  };
+
+  const mockMembershipsService = {
     getPendingRequests: jest.fn(),
     join: jest.fn(),
-    invite: jest.fn(),
     approveJoinRequest: jest.fn(),
     rejectJoinRequest: jest.fn(),
+    getOrganizationMembers: jest.fn(),
+  };
+
+  const mockInvitationsService = {
+    invite: jest.fn(),
   };
 
   const mockPermissionsService = {
-    clearUserPermissionsCache: jest.fn().mockResolvedValue(undefined),
-    clearOrganizationPermissionsCache: jest.fn(),
+    getEffectivePermissions: jest.fn().mockResolvedValue([]),
   };
 
   const mockI18nService = {
@@ -34,6 +42,14 @@ describe('OrganizationsController', () => {
         {
           provide: OrganizationsService,
           useValue: mockOrganizationsService,
+        },
+        {
+          provide: MembershipsService,
+          useValue: mockMembershipsService,
+        },
+        {
+          provide: InvitationsService,
+          useValue: mockInvitationsService,
         },
         {
           provide: PermissionsService,
@@ -54,14 +70,14 @@ describe('OrganizationsController', () => {
   });
 
   it('should delegate getPendingRequests', async () => {
-    mockOrganizationsService.getPendingRequests.mockResolvedValue([
+    mockMembershipsService.getPendingRequests.mockResolvedValue([
       { membershipId: 'm1' },
     ]);
     const req = { user: { id: 'u1' } } as any;
 
     const result = await controller.getPendingRequests('org1', req);
 
-    expect(mockOrganizationsService.getPendingRequests).toHaveBeenCalledWith(
+    expect(mockMembershipsService.getPendingRequests).toHaveBeenCalledWith(
       'org1',
       'u1',
     );
@@ -87,7 +103,7 @@ describe('OrganizationsController', () => {
   });
 
   it('should delegate join', async () => {
-    mockOrganizationsService.join.mockResolvedValue({
+    mockMembershipsService.join.mockResolvedValue({
       message: 'ok',
       organizationId: 'org1',
     });
@@ -95,14 +111,14 @@ describe('OrganizationsController', () => {
 
     const result = await controller.join(req, { slug: 'org' });
 
-    expect(mockOrganizationsService.join).toHaveBeenCalledWith('u1', {
+    expect(mockMembershipsService.join).toHaveBeenCalledWith('u1', {
       slug: 'org',
     });
     expect(result.organizationId).toBe('org1');
   });
 
   it('should delegate invite', async () => {
-    mockOrganizationsService.invite.mockResolvedValue({
+    mockInvitationsService.invite.mockResolvedValue({
       message: 'saved',
       invitationId: 'inv1',
       status: 'invitation_created',
@@ -114,7 +130,7 @@ describe('OrganizationsController', () => {
       roleId: 'r1',
     });
 
-    expect(mockOrganizationsService.invite).toHaveBeenCalledWith('org1', {
+    expect(mockInvitationsService.invite).toHaveBeenCalledWith('org1', {
       email: 'invitee@example.com',
       roleId: 'r1',
     });
@@ -122,7 +138,7 @@ describe('OrganizationsController', () => {
   });
 
   it('should delegate approve request', async () => {
-    mockOrganizationsService.approveJoinRequest.mockResolvedValue({
+    mockMembershipsService.approveJoinRequest.mockResolvedValue({
       message: 'approved',
       membershipId: 'm1',
       status: MembershipStatus.ACTIVE,
@@ -133,7 +149,7 @@ describe('OrganizationsController', () => {
       roleId: 'r1',
     });
 
-    expect(mockOrganizationsService.approveJoinRequest).toHaveBeenCalledWith(
+    expect(mockMembershipsService.approveJoinRequest).toHaveBeenCalledWith(
       'org1',
       'm1',
       'admin1',
@@ -143,7 +159,7 @@ describe('OrganizationsController', () => {
   });
 
   it('should delegate reject request', async () => {
-    mockOrganizationsService.rejectJoinRequest.mockResolvedValue({
+    mockMembershipsService.rejectJoinRequest.mockResolvedValue({
       message: 'rejected',
       membershipId: 'm1',
       status: MembershipStatus.REJECTED,
@@ -152,7 +168,7 @@ describe('OrganizationsController', () => {
 
     const result = await controller.rejectRequest('org1', 'm1', req);
 
-    expect(mockOrganizationsService.rejectJoinRequest).toHaveBeenCalledWith(
+    expect(mockMembershipsService.rejectJoinRequest).toHaveBeenCalledWith(
       'org1',
       'm1',
     );
