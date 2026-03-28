@@ -115,8 +115,9 @@ export class PermissionsGuard implements CanActivate {
   /**
    * Extract organization ID from request in priority order:
    * 1. request.params.orgId (standard naming)
-   * 2. request.params.id (single resource routes)
-   * 3. request.headers['x-organization-id'] (header-based)
+   * 2. request.params.organizationId (alternative naming)
+   * 3. request.params.id (single resource routes)
+   * 4. request.headers['x-organization-id'] (header-based)
    *
    * @param request - Express request object
    * @returns Organization ID or null if not found
@@ -130,12 +131,17 @@ export class PermissionsGuard implements CanActivate {
       return params.orgId;
     }
 
-    // Priority 2: ID param (for organization-scoped single resources)
+    // Priority 2: Alternative organizationId param
+    if (params?.organizationId) {
+      return params.organizationId;
+    }
+
+    // Priority 3: ID param (for organization-scoped single resources)
     if (params?.id) {
       return params.id;
     }
 
-    // Priority 3: Custom header
+    // Priority 4: Custom header
     const headerOrgId = req.headers?.['x-organization-id'];
     if (typeof headerOrgId === 'string') {
       return headerOrgId;

@@ -58,6 +58,13 @@
     "NO_ORG_ACCESS": "You do not have access to this organization.",
     "VERIFY_FAILED": "Failed to verify organization access."
   },
+  "LEADS": {
+    "NOT_FOUND": "Lead not found in this organization.",
+    "ACCESS_FORBIDDEN": "You are not allowed to access this lead.",
+    "PIPELINE_STAGE_OUTSIDE_SCOPE": "Pipeline stage is outside the tenant scope.",
+    "SOURCE_OUTSIDE_SCOPE": "Lead source is outside the tenant scope.",
+    "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Assigned agent must be an active member in this organization."
+  },
   "UNAUTHORIZED_ACCESS": "You are not authorized to access this resource.",
   "INSUFFICIENT_PERMISSIONS": "Insufficient permissions to perform this action.",
   "UNAUTHORIZED": "Unauthorized access.",

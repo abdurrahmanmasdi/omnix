@@ -1,0 +1,144 @@
+import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsDateString,
+  IsEmail,
+  IsEnum,
+  IsNumberString,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
+import { Currency, Gender, LeadStatus, Priority } from '@prisma/client';
+
+export class CreateLeadDto {
+  @ApiProperty({ example: 'John' })
+  @IsString()
+  first_name: string;
+
+  @ApiProperty({ example: 'Doe' })
+  @IsString()
+  last_name: string;
+
+  @ApiProperty({ example: '+905551112233' })
+  @IsString()
+  phone_number: string;
+
+  @ApiProperty({ example: 'Turkey' })
+  @IsString()
+  country: string;
+
+  @ApiProperty({ example: 'Europe/Istanbul' })
+  @IsString()
+  timezone: string;
+
+  @ApiProperty({ example: 'tr' })
+  @IsString()
+  primary_language: string;
+
+  @ApiProperty({ example: 'Ahmet', required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  native_name?: string | null;
+
+  @ApiProperty({ enum: Gender, required: false, default: Gender.UNKNOWN })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiProperty({
+    example: 'john.doe@company.com',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsEmail()
+  email?: string | null;
+
+  @ApiProperty({ example: 'en', required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  preferred_language?: string | null;
+
+  @ApiProperty({
+    example: {
+      linkedin: 'https://linkedin.com/in/johndoe',
+      website: 'https://example.com',
+    },
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsObject()
+  social_links?: Record<string, unknown> | null;
+
+  @ApiProperty({ enum: LeadStatus, required: false, default: LeadStatus.OPEN })
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  status?: LeadStatus;
+
+  @ApiProperty({ enum: Priority, required: false, default: Priority.WARM })
+  @IsOptional()
+  @IsEnum(Priority)
+  priority?: Priority;
+
+  @ApiProperty({
+    example: '15000.50',
+    description: 'Decimal value represented as string to preserve precision',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumberString()
+  estimated_value?: string | null;
+
+  @ApiProperty({ enum: Currency, required: false, default: Currency.USD })
+  @IsOptional()
+  @IsEnum(Currency)
+  currency?: Currency;
+
+  @ApiProperty({
+    example: '2026-04-10T09:00:00.000Z',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  expected_service_date?: string | null;
+
+  @ApiProperty({
+    example: '2026-04-01T12:00:00.000Z',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsDateString()
+  next_follow_up_at?: string | null;
+
+  @ApiProperty({
+    example: '2f41db92-cdf8-4a6c-a40f-a35e9f8d9f2a',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('4')
+  pipeline_stage_id?: string | null;
+
+  @ApiProperty({
+    example: 'f9ce8f72-9ec8-4db0-bf07-614ec2ec6143',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('4')
+  assigned_agent_id?: string | null;
+
+  @ApiProperty({
+    example: 'c9a3874e-ebed-4fdf-8c14-f299f4d75668',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('4')
+  source_id?: string | null;
+}

@@ -58,6 +58,13 @@
     "NO_ORG_ACCESS": "Bu organizasyona erişim yetkiniz yok.",
     "VERIFY_FAILED": "Organizasyon erişimi doğrulanamadı."
   },
+  "LEADS": {
+    "NOT_FOUND": "Bu organizasyonda lead bulunamadı.",
+    "ACCESS_FORBIDDEN": "Bu lead'e erişim yetkiniz yok.",
+    "PIPELINE_STAGE_OUTSIDE_SCOPE": "Pipeline aşaması tenant kapsamı dışında.",
+    "SOURCE_OUTSIDE_SCOPE": "Lead kaynağı tenant kapsamı dışında.",
+    "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Atanan temsilci bu organizasyonda aktif üye olmalıdır."
+  },
   "UNAUTHORIZED_ACCESS": "Bu kaynağa erişim yetkiniz yok.",
   "INSUFFICIENT_PERMISSIONS": "Bu işlemi gerçekleştirmek için yetersiz izinler.",
   "UNAUTHORIZED": "Yetkisiz erişim.",
