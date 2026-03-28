@@ -1,0 +1,257 @@
+{
+  "analysis_metadata": {
+    "generated_at": "2026-03-28T12:00:00Z",
+    "backend_path": "/Users/abdurrahman/Desktop/wp_crm/backend",
+    "analysis_scope": "Current workspace re-evaluation after refactoring sprint",
+    "analysis_mode": "code-first audit (not historical reports)",
+    "tooling": {
+      "build_status": "PASS",
+      "tests_status": "PASS",
+      "tests_summary": {
+        "test_suites": 13,
+        "tests": 120,
+        "passing": 120,
+        "failing": 0
+      },
+      "coverage_summary": {
+        "statements_pct": 45.82,
+        "branches_pct": 38.39,
+        "functions_pct": 45.0,
+        "lines_pct": 45.52
+      }
+    },
+    "codebase_metrics": {
+      "total_typescript_files": 75,
+      "total_lines_of_code": 11781,
+      "unit_test_files": 13,
+      "e2e_test_files": 3
+    }
+  },
+  "architecture_state": {
+    "major_refactors_validated": [
+      "Access control domain split into RolesService, PermissionOverridesService, AccessVerificationService",
+      "Organizations domain split into OrganizationsService, MembershipsService, InvitationsService",
+      "Event-driven cache invalidation via EventEmitter2",
+      "Role update permissions mutation uses batched deleteMany and createMany",
+      "JWT and org-scoped checks implemented in chat gateway",
+      "Global environment validation with class-validator",
+      "Global request payload validation via I18nValidationPipe"
+    ],
+    "major_modules": {
+      "access_control": {
+        "services": [
+          "src/access-control/roles.service.ts",
+          "src/access-control/permission-overrides.service.ts",
+          "src/access-control/access-verification.service.ts"
+        ],
+        "controllers": [
+          "src/access-control/access-control.controller.ts",
+          "src/access-control/membership-access-control.controller.ts",
+          "src/access-control/permissions.controller.ts"
+        ]
+      },
+      "organizations": {
+        "services": [
+          "src/organizations/organizations.service.ts",
+          "src/organizations/memberships.service.ts",
+          "src/organizations/invitations.service.ts"
+        ],
+        "controller": "src/organizations/organizations.controller.ts"
+      },
+      "chat": {
+        "gateway": "src/chat/chat.gateway.ts",
+        "service": "src/chat/chat.service.ts",
+        "controller": "src/chat/chat.controller.ts"
+      },
+      "auth": {
+        "core": [
+          "src/auth/auth.service.ts",
+          "src/auth/guards/global-auth.guard.ts",
+          "src/auth/guards/permissions.guard.ts",
+          "src/auth/services/permissions.service.ts"
+        ]
+      }
+    }
+  },
+  "verified_risk_register": {
+    "critical": [
+      {
+        "id": "SEC-ORG-001",
+        "title": "Organization invite endpoint lacks explicit permission guard and service-side caller authorization",
+        "impact": "Any authenticated user may invite users into organizations they should not administer",
+        "evidence": [
+          "src/organizations/organizations.controller.ts:147",
+          "src/organizations/invitations.service.ts:28"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "SEC-ORG-002",
+        "title": "Organization reject-request endpoint lacks explicit permission guard and service-side caller authorization",
+        "impact": "Unauthorized rejection of membership requests",
+        "evidence": [
+          "src/organizations/organizations.controller.ts:222",
+          "src/organizations/memberships.service.ts:288"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "SEC-AC-001",
+        "title": "Membership access-control role assignment path checks membership only, not owner/admin policy",
+        "impact": "Privilege escalation inside tenant by non-admin members",
+        "evidence": [
+          "src/access-control/membership-access-control.controller.ts:43",
+          "src/access-control/access-verification.service.ts:77",
+          "src/access-control/access-verification.service.ts:84"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "SEC-AC-002",
+        "title": "Membership override creation path checks membership only, not owner/admin policy",
+        "impact": "Permission manipulation by non-admin members",
+        "evidence": [
+          "src/access-control/membership-access-control.controller.ts:104",
+          "src/access-control/permission-overrides.service.ts:35",
+          "src/access-control/permission-overrides.service.ts:47"
+        ],
+        "confidence": "high"
+      }
+    ],
+    "high": [
+      {
+        "id": "SEC-AUTH-001",
+        "title": "JWT secret uses fallback literal when env is absent at constant evaluation",
+        "impact": "Token forgery risk in misconfigured deployments",
+        "evidence": [
+          "src/auth/constants.ts:2",
+          "src/auth/auth.module.ts:20",
+          "src/chat/chat.module.ts:15"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "SEC-CHAT-001",
+        "title": "Chat gateway CORS allows all origins with credentials",
+        "impact": "Expanded attack surface for socket abuse and token replay contexts",
+        "evidence": ["src/chat/chat.gateway.ts:54"],
+        "confidence": "high"
+      },
+      {
+        "id": "DATA-INV-001",
+        "title": "Invitation status casing mismatch between creation and acceptance logic",
+        "impact": "Legitimate invites may fail to be accepted",
+        "evidence": [
+          "src/organizations/invitations.service.ts:99",
+          "src/users/users.service.ts:132",
+          "src/users/users.service.ts:173"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "TENANT-CHAT-001",
+        "title": "Chat conversation creation validates users, not tenant membership for all participants",
+        "impact": "Cross-tenant data bleed risk through conversation linkage",
+        "evidence": [
+          "src/chat/chat.service.ts:215",
+          "src/chat/chat.service.ts:362",
+          "src/chat/chat.controller.ts:90"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "medium": [
+      {
+        "id": "VALIDATION-ORG-001",
+        "title": "Invite DTO roleId is string validated, not UUID validated",
+        "impact": "Input quality degradation and avoidable runtime lookup errors",
+        "evidence": [
+          "src/organizations/dtos/invite-organization.dto.ts:17",
+          "src/organizations/dtos/invite-organization.dto.ts:21"
+        ],
+        "confidence": "high"
+      },
+      {
+        "id": "QUALITY-TS-001",
+        "title": "TypeScript config allows non-strict patterns (noImplicitAny false)",
+        "impact": "Type safety gaps can reach runtime",
+        "evidence": ["tsconfig.json:14"],
+        "confidence": "high"
+      },
+      {
+        "id": "TEST-001",
+        "title": "Coverage remains below production-grade baseline",
+        "impact": "Increased regression and hidden edge-case risk",
+        "evidence": [
+          "Coverage statements 45.82%",
+          "Coverage branches 38.39%",
+          "Coverage functions 45.00%",
+          "Coverage lines 45.52%"
+        ],
+        "confidence": "high"
+      }
+    ]
+  },
+  "category_ratings": {
+    "speed_and_performance": {
+      "score": 7.2,
+      "justification": "Major transaction and batch-update fixes are in place, and service decomposition helps tuning. Remaining risk is mostly query policy consistency and some chat/org validation overhead."
+    },
+    "security": {
+      "score": 4.3,
+      "justification": "Core auth exists, but several high-impact authorization gaps are still present in organization and membership access-control mutations. JWT fallback secret and open socket CORS further reduce launch confidence."
+    },
+    "readability_clean_code": {
+      "score": 7.6,
+      "justification": "The God Object split significantly improved cohesion and local reasoning. Inconsistencies in policy enforcement and some status/naming mismatches still hurt reliability."
+    },
+    "enterprise_scalability_multi_tenancy": {
+      "score": 5.4,
+      "justification": "Eventing, Redis adapter, and tenant-aware checks are good foundations. Tenant and admin authorization is not uniformly enforced across all entry points yet."
+    },
+    "error_handling_resilience": {
+      "score": 6.1,
+      "justification": "Global exception handling and validation are correctly wired, but business-logic inconsistencies can still produce high-impact failures not covered by generic error wrappers."
+    }
+  },
+  "production_readiness": {
+    "status": "NOT_READY",
+    "blocking_issues_count": 4,
+    "blocking_issue_ids": [
+      "SEC-ORG-001",
+      "SEC-ORG-002",
+      "SEC-AC-001",
+      "SEC-AC-002"
+    ],
+    "estimated_hardening_time": "2-4 engineering days for blocker fixes and regression validation"
+  },
+  "recommended_fix_order": [
+    {
+      "phase": 1,
+      "goal": "Close authorization bypasses",
+      "items": [
+        "Apply ownership or permission guard to invite and reject routes",
+        "Enforce caller authorization in invitations and memberships services",
+        "Restrict membership access-control mutation routes to owner/admin permissions"
+      ]
+    },
+    {
+      "phase": 2,
+      "goal": "Secure auth and tenant boundaries",
+      "items": [
+        "Remove JWT fallback secret and fail startup when secret missing",
+        "Restrict WebSocket CORS origins to trusted frontend URL(s)",
+        "Enforce org membership for all chat participants on conversation creation"
+      ]
+    },
+    {
+      "phase": 3,
+      "goal": "Stability and quality hardening",
+      "items": [
+        "Normalize invitation status values across services",
+        "Tighten Invite DTO roleId to UUID validation",
+        "Raise branch coverage for auth, permissions, organizations mutation flows"
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -18,16 +18,59 @@ interface ClearUserPermissionsCacheEvent {
  * All permission data is cached in Redis with a 1-hour TTL for performance.
  */
 @Injectable()
-export class PermissionsService {
+export class PermissionsService implements OnModuleInit {
   private readonly logger = new Logger(PermissionsService.name);
 
   // 1 hour in seconds
   private readonly PERMISSIONS_CACHE_TTL = 3600;
+  private readonly ORG_KEYSET_TTL = this.PERMISSIONS_CACHE_TTL * 2;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
+
+  onModuleInit(): void {
+    const keySetMode = this.redis.isConnected() ? 'active' : 'degraded';
+    this.logger.log(
+      `[PermissionsService] Redis key-set invalidation mode: ${keySetMode} (scan_fallback=enabled)`,
+    );
+  }
+
+  private getPermissionCacheKey(userId: string, orgId: string): string {
+    return `org:${orgId}:user:${userId}:permissions`;
+  }
+
+  private getOrganizationKeySetKey(orgId: string): string {
+    return `org:${orgId}:permissions:keys`;
+  }
+
+  private getOrganizationPermissionPatterns(orgId: string): string[] {
+    // Include both current and legacy key formats for safe cleanup.
+    return [`org:${orgId}:user:*:permissions`, `permissions:${orgId}:*`];
+  }
+
+  private async trackCacheKeyForOrganization(
+    orgId: string,
+    cacheKey: string,
+  ): Promise<void> {
+    const keySetKey = this.getOrganizationKeySetKey(orgId);
+    await this.redis.sAdd(keySetKey, [cacheKey]);
+    await this.redis.expire(keySetKey, this.ORG_KEYSET_TTL);
+  }
+
+  private async cachePermissions(
+    orgId: string,
+    cacheKey: string,
+    permissions: string[],
+  ): Promise<void> {
+    await this.redis.set(
+      cacheKey,
+      JSON.stringify(permissions),
+      this.PERMISSIONS_CACHE_TTL,
+    );
+    await this.trackCacheKeyForOrganization(orgId, cacheKey);
+  }
 
   /**
    * Get effective permissions for a user in an organization
@@ -49,7 +92,7 @@ export class PermissionsService {
     userId: string,
     orgId: string,
   ): Promise<string[]> {
-    const cacheKey = `org:${orgId}:user:${userId}:permissions`;
+    const cacheKey = this.getPermissionCacheKey(userId, orgId);
 
     // Step 1: Cache Check
     try {
@@ -110,11 +153,7 @@ export class PermissionsService {
         `[PermissionsService] No active membership found for user ${userId} in org ${orgId}`,
       );
       // Cache empty permissions to avoid repeated database queries
-      await this.redis.set(
-        cacheKey,
-        JSON.stringify([]),
-        this.PERMISSIONS_CACHE_TTL,
-      );
+      await this.cachePermissions(orgId, cacheKey, []);
       return [];
     }
 
@@ -148,11 +187,7 @@ export class PermissionsService {
 
     // Step 4: Cache Storage
     try {
-      await this.redis.set(
-        cacheKey,
-        JSON.stringify(effectivePermissions),
-        this.PERMISSIONS_CACHE_TTL,
-      );
+      await this.cachePermissions(orgId, cacheKey, effectivePermissions);
       this.logger.debug(
         `[PermissionsService] Cached permissions for ${cacheKey} (TTL: ${this.PERMISSIONS_CACHE_TTL}s)`,
       );
@@ -181,10 +216,13 @@ export class PermissionsService {
     userId: string,
     orgId: string,
   ): Promise<void> {
-    const cacheKey = `org:${orgId}:user:${userId}:permissions`;
+    const cacheKey = this.getPermissionCacheKey(userId, orgId);
+    const keySetKey = this.getOrganizationKeySetKey(orgId);
 
     try {
       const deletedCount = await this.redis.del(cacheKey);
+      await this.redis.sRem(keySetKey, [cacheKey]);
+
       if (deletedCount > 0) {
         this.logger.debug(
           `[PermissionsService] Cleared permissions cache for ${cacheKey}`,
@@ -220,14 +258,32 @@ export class PermissionsService {
    *
    * @param orgId - The organization ID
    */
-  clearOrganizationPermissionsCache(orgId: string): void {
+  async clearOrganizationPermissionsCache(orgId: string): Promise<void> {
+    const keySetKey = this.getOrganizationKeySetKey(orgId);
+    let deletedCount = 0;
+
     try {
-      // Note: This uses SCAN pattern matching which is efficient
-      // Alternative: If Redis client doesn't support SCAN, implement user-by-user clearing
       this.logger.debug(
         `[PermissionsService] Attempting to clear all permissions cache for org ${orgId}`,
       );
-      // TODO: Implement SCAN-based pattern deletion if needed
+
+      // Fast path: delete tracked cache keys for this organization.
+      const trackedKeys = await this.redis.sMembers(keySetKey);
+      if (trackedKeys.length > 0) {
+        deletedCount += await this.redis.delMany(trackedKeys);
+      }
+
+      // Remove the index set itself to keep memory clean.
+      await this.redis.del(keySetKey);
+
+      // Safety path: SCAN for any missed keys (including legacy format keys).
+      for (const pattern of this.getOrganizationPermissionPatterns(orgId)) {
+        deletedCount += await this.redis.deleteByPattern(pattern);
+      }
+
+      this.logger.debug(
+        `[PermissionsService] Cleared ${deletedCount} permission cache keys for org ${orgId}`,
+      );
     } catch (error) {
       this.logger.warn(
         `[PermissionsService] Error clearing org permissions cache for ${orgId}: ${error}`,

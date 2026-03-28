@@ -61,6 +61,10 @@ model OrganizationMembership {
   role                Role                           @relation(fields: [role_id], references: [id])
   permissionOverrides MembershipPermissionOverride[]
 
+  @@index([organization_id])
+  @@index([organization_id, status])
+  @@index([user_id])
+  @@index([role_id])
   @@map("organization_memberships")
 }
 
@@ -89,6 +93,7 @@ model Role {
   memberships     OrganizationMembership[]
   invitations     Invitation[]
 
+  @@index([organization_id])
   @@map("roles")
 }
 
@@ -105,6 +110,8 @@ model Invitation {
   role         Role         @relation(fields: [role_id], references: [id])
 
   @@unique([email, organization_id])
+  @@index([organization_id])
+  @@index([role_id])
   @@map("invitations")
 }
 
@@ -116,6 +123,8 @@ model RolePermission {
   permission Permission @relation(fields: [permission_id], references: [id])
 
   @@id([role_id, permission_id])
+  @@index([role_id])
+  @@index([permission_id])
   @@map("role_permissions")
 }
 
@@ -129,6 +138,8 @@ model MembershipPermissionOverride {
   permission Permission             @relation(fields: [permission_id], references: [id])
 
   @@unique([membership_id, permission_id])
+  @@index([membership_id])
+  @@index([permission_id])
   @@map("membership_permission_overrides")
 }
 
@@ -150,6 +161,7 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
 
+  @@index([organization_id])
   @@map("conversations")
 }
 
@@ -163,6 +175,8 @@ model ConversationParticipant {
   user         User         @relation(fields: [user_id], references: [id])
 
   @@unique([conversation_id, user_id])
+  @@index([conversation_id])
+  @@index([user_id])
   @@map("conversation_participants")
 }
 
@@ -177,5 +191,8 @@ model Message {
   conversation Conversation @relation(fields: [conversation_id], references: [id])
   sender       User         @relation("SentMessages", fields: [sender_id], references: [id])
 
+  @@index([conversation_id])
+  @@index([conversation_id, created_at])
+  @@index([sender_id])
   @@map("messages")
 }

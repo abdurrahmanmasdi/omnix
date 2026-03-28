@@ -125,6 +125,139 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Delete multiple keys from Redis in a single operation.
+   */
+  async delMany(keys: string[]): Promise<number> {
+    if (!this.isAvailable || !this.client || keys.length === 0) {
+      return 0;
+    }
+
+    try {
+      return await this.client.del(keys);
+    } catch (error) {
+      this.logger.debug(
+        `[RedisService] Multi-delete operation failed for ${keys.length} keys: ${error}`,
+      );
+      this.isAvailable = false;
+      return 0;
+    }
+  }
+
+  /**
+   * Add members to a Redis set.
+   */
+  async sAdd(key: string, members: string[]): Promise<number> {
+    if (!this.isAvailable || !this.client || members.length === 0) {
+      return 0;
+    }
+
+    try {
+      return await this.client.sAdd(key, members);
+    } catch (error) {
+      this.logger.debug(
+        `[RedisService] sAdd operation failed for key ${key}: ${error}`,
+      );
+      this.isAvailable = false;
+      return 0;
+    }
+  }
+
+  /**
+   * Read all members from a Redis set.
+   */
+  async sMembers(key: string): Promise<string[]> {
+    if (!this.isAvailable || !this.client) {
+      return [];
+    }
+
+    try {
+      return await this.client.sMembers(key);
+    } catch (error) {
+      this.logger.debug(
+        `[RedisService] sMembers operation failed for key ${key}: ${error}`,
+      );
+      this.isAvailable = false;
+      return [];
+    }
+  }
+
+  /**
+   * Remove members from a Redis set.
+   */
+  async sRem(key: string, members: string[]): Promise<number> {
+    if (!this.isAvailable || !this.client || members.length === 0) {
+      return 0;
+    }
+
+    try {
+      return await this.client.sRem(key, members);
+    } catch (error) {
+      this.logger.debug(
+        `[RedisService] sRem operation failed for key ${key}: ${error}`,
+      );
+      this.isAvailable = false;
+      return 0;
+    }
+  }
+
+  /**
+   * Set/refresh expiry for a Redis key.
+   */
+  async expire(key: string, ttlSeconds: number): Promise<number> {
+    if (!this.isAvailable || !this.client) {
+      return 0;
+    }
+
+    try {
+      return await this.client.expire(key, ttlSeconds);
+    } catch (error) {
+      this.logger.debug(
+        `[RedisService] Expire operation failed for key ${key}: ${error}`,
+      );
+      this.isAvailable = false;
+      return 0;
+    }
+  }
+
+  /**
+   * Delete keys using SCAN to avoid blocking Redis.
+   */
+  async deleteByPattern(
+    pattern: string,
+    scanCount: number = 200,
+  ): Promise<number> {
+    if (!this.isAvailable || !this.client) {
+      return 0;
+    }
+
+    let cursor = '0';
+    let deletedCount = 0;
+
+    try {
+      do {
+        const reply = await this.client.scan(cursor, {
+          MATCH: pattern,
+          COUNT: scanCount,
+        });
+
+        cursor = reply.cursor;
+
+        if (reply.keys.length > 0) {
+          deletedCount += await this.delMany(reply.keys);
+        }
+      } while (cursor !== '0');
+
+      return deletedCount;
+    } catch (error) {
+      this.logger.debug(
+        `[RedisService] deleteByPattern failed for pattern ${pattern}: ${error}`,
+      );
+      this.isAvailable = false;
+      return deletedCount;
+    }
+  }
+
+  /**
    * Check if Redis is connected and available
    */
   isConnected(): boolean {
