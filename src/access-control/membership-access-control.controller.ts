@@ -18,7 +18,8 @@ import {
 } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AccessControlService } from './access-control.service';
+import { AccessVerificationService } from './access-verification.service';
+import { PermissionOverridesService } from './permission-overrides.service';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
 import { CreatePermissionOverrideDto } from './dtos/create-permission-override.dto';
 
@@ -30,7 +31,10 @@ interface AuthRequest extends ExpressRequest {
 @Controller('organizations/:orgId/memberships/:membershipId')
 @ApiBearerAuth()
 export class MembershipAccessControlController {
-  constructor(private readonly accessControlService: AccessControlService) {}
+  constructor(
+    private readonly accessVerificationService: AccessVerificationService,
+    private readonly permissionOverridesService: PermissionOverridesService,
+  ) {}
 
   /**
    * Assign a role to an organization member
@@ -84,7 +88,7 @@ export class MembershipAccessControlController {
     @Request() req: AuthRequest,
     @Body() updateMemberRoleDto: UpdateMemberRoleDto,
   ): Promise<{ id: string; role_id: string; message: string }> {
-    return this.accessControlService.assignRoleToMember(
+    return this.accessVerificationService.assignRoleToMember(
       organizationId,
       membershipId,
       req.user.id,
@@ -151,7 +155,7 @@ export class MembershipAccessControlController {
     is_granted: boolean;
     message: string;
   }> {
-    return this.accessControlService.createPermissionOverride(
+    return this.permissionOverridesService.createPermissionOverride(
       organizationId,
       membershipId,
       req.user.id,

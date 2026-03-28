@@ -6,13 +6,15 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AccessControlService } from './access-control.service';
+import { PermissionOverridesService } from './permission-overrides.service';
 
 @ApiTags('permissions')
 @Controller('permissions')
 @ApiBearerAuth()
 export class PermissionsController {
-  constructor(private readonly accessControlService: AccessControlService) {}
+  constructor(
+    private readonly permissionOverridesService: PermissionOverridesService,
+  ) {}
 
   /**
    * Get all global system permissions
@@ -57,6 +59,6 @@ export class PermissionsController {
     { id: string; action: string; description: string | null }[]
   > {
     // Guard verification ensures user is authenticated
-    return this.accessControlService.getAllPermissions();
+    return this.permissionOverridesService.getAllPermissions();
   }
 }

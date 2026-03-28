@@ -8,17 +8,16 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from 'nestjs-i18n';
 import { MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessControlService } from './access-control.service';
+import { AccessVerificationService } from './access-verification.service';
+import { RolesService } from './roles.service';
 
-describe('AccessControlService', () => {
-  let service: AccessControlService;
+describe('RolesService', () => {
+  let service: RolesService;
 
   const mockPrismaService = {
     organizationMembership: {
-      findFirst: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
-      update: jest.fn(),
     },
     role: {
       findFirst: jest.fn(),
@@ -27,11 +26,7 @@ describe('AccessControlService', () => {
     rolePermission: {
       findMany: jest.fn(),
     },
-    membershipPermissionOverride: {
-      upsert: jest.fn(),
-    },
     permission: {
-      findFirst: jest.fn(),
       findMany: jest.fn(),
     },
     $transaction: jest.fn(),
@@ -45,9 +40,9 @@ describe('AccessControlService', () => {
     emitAsync: jest.fn().mockResolvedValue([]),
   };
 
-  const ownerCaller = {
-    id: 'membership-owner',
-    role: { slug: 'owner' as string | null },
+  const mockAccessVerificationService = {
+    verifyUserInOrganization: jest.fn(),
+    verifyIsOwner: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -55,7 +50,7 @@ describe('AccessControlService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        AccessControlService,
+        RolesService,
         {
           provide: PrismaService,
           useValue: mockPrismaService,
@@ -68,10 +63,14 @@ describe('AccessControlService', () => {
           provide: EventEmitter2,
           useValue: mockEventEmitter,
         },
+        {
+          provide: AccessVerificationService,
+          useValue: mockAccessVerificationService,
+        },
       ],
     }).compile();
 
-    service = module.get<AccessControlService>(AccessControlService);
+    service = module.get<RolesService>(RolesService);
   });
 
   it('should be defined', () => {
@@ -84,8 +83,8 @@ describe('AccessControlService', () => {
     const userId = 'user-1';
 
     it('throws ForbiddenException when caller is not in organization', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
-        null,
+      mockAccessVerificationService.verifyUserInOrganization.mockRejectedValueOnce(
+        new ForbiddenException('errors.UNAUTHORIZED_ACCESS'),
       );
 
       await expect(
@@ -94,9 +93,6 @@ describe('AccessControlService', () => {
     });
 
     it('throws NotFoundException when role does not exist', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm1',
-      });
       mockPrismaService.role.findFirst.mockResolvedValueOnce(null);
 
       await expect(
@@ -113,9 +109,6 @@ describe('AccessControlService', () => {
     });
 
     it('throws ForbiddenException when role is system role', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm1',
-      });
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: true,
@@ -130,9 +123,6 @@ describe('AccessControlService', () => {
     });
 
     it('throws BadRequestException when role has active members', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm1',
-      });
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: false,
@@ -150,9 +140,6 @@ describe('AccessControlService', () => {
     });
 
     it('deletes custom role when no active members', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm1',
-      });
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: false,
@@ -172,227 +159,15 @@ describe('AccessControlService', () => {
     });
   });
 
-  describe('changeMemberRole', () => {
-    const orgId = 'org-2';
-    const membershipId = 'membership-2';
-    const newRoleId = 'role-2';
-    const ownerId = 'owner-1';
-    const managerId = 'manager-1';
-
-    it('throws ForbiddenException when caller is not owner', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm-manager',
-        role: { slug: 'manager' as string | null },
-      });
-
-      await expect(
-        service.changeMemberRole(orgId, membershipId, newRoleId, managerId),
-      ).rejects.toThrow(ForbiddenException);
-
-      expect(
-        mockPrismaService.organizationMembership.findFirst,
-      ).toHaveBeenCalledWith({
-        where: {
-          organization_id: orgId,
-          user_id: managerId,
-          status: MembershipStatus.ACTIVE,
-        },
-        include: {
-          role: {
-            select: { slug: true },
-          },
-        },
-      });
-    });
-
-    it('throws BadRequestException when target membership has owner role', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce({
-          id: membershipId,
-          user_id: 'target-user',
-          role: { slug: 'owner' as string | null },
-        });
-
-      await expect(
-        service.changeMemberRole(orgId, membershipId, newRoleId, ownerId),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(mockI18nService.t).toHaveBeenCalledWith(
-        'errors.CANNOT_MODIFY_OWNER_ROLE',
-      );
-    });
-
-    it('throws NotFoundException when target membership does not exist', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce(null);
-
-      await expect(
-        service.changeMemberRole(orgId, membershipId, newRoleId, ownerId),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when new role does not exist', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce({
-          id: membershipId,
-          user_id: 'target-user',
-          role: { slug: 'agent' as string | null },
-        });
-      mockPrismaService.role.findFirst.mockResolvedValueOnce(null);
-
-      await expect(
-        service.changeMemberRole(orgId, membershipId, newRoleId, ownerId),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('updates membership role and emits cache clear event on success', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce({
-          id: membershipId,
-          user_id: 'target-user',
-          role: { slug: 'agent' as string | null },
-        });
-      mockPrismaService.role.findFirst.mockResolvedValueOnce({ id: newRoleId });
-      mockPrismaService.organizationMembership.update.mockResolvedValueOnce({
-        id: membershipId,
-        role_id: newRoleId,
-      });
-
-      const result = await service.changeMemberRole(
-        orgId,
-        membershipId,
-        newRoleId,
-        ownerId,
-      );
-
-      expect(result.role_id).toBe(newRoleId);
-      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
-        'permissions.cache.clear-user',
-        {
-          userId: 'target-user',
-          organizationId: orgId,
-        },
-      );
-    });
-  });
-
-  describe('assignPermissionOverride', () => {
-    const orgId = 'org-3';
-    const membershipId = 'membership-3';
-    const permissionId = 'permission-1';
-    const ownerId = 'owner-2';
-    const managerId = 'manager-2';
-
-    it('throws ForbiddenException when caller is not owner', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm-manager',
-        role: { slug: 'manager' as string | null },
-      });
-
-      await expect(
-        service.assignPermissionOverride(
-          orgId,
-          membershipId,
-          permissionId,
-          true,
-          managerId,
-        ),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('throws BadRequestException when trying to override owner permissions', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce({
-          id: membershipId,
-          user_id: 'target-user',
-          role: { slug: 'owner' as string | null },
-        });
-
-      await expect(
-        service.assignPermissionOverride(
-          orgId,
-          membershipId,
-          permissionId,
-          true,
-          ownerId,
-        ),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws NotFoundException when permission does not exist', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce({
-          id: membershipId,
-          user_id: 'target-user',
-          role: { slug: 'agent' as string | null },
-        });
-      mockPrismaService.permission.findFirst.mockResolvedValueOnce(null);
-
-      await expect(
-        service.assignPermissionOverride(
-          orgId,
-          membershipId,
-          permissionId,
-          true,
-          ownerId,
-        ),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('upserts override and emits cache clear event', async () => {
-      mockPrismaService.organizationMembership.findFirst
-        .mockResolvedValueOnce(ownerCaller)
-        .mockResolvedValueOnce({
-          id: membershipId,
-          user_id: 'target-user',
-          role: { slug: 'agent' as string | null },
-        });
-      mockPrismaService.permission.findFirst.mockResolvedValueOnce({
-        id: permissionId,
-      });
-      mockPrismaService.membershipPermissionOverride.upsert.mockResolvedValueOnce(
-        {
-          id: 'override-1',
-          permission_id: permissionId,
-          is_granted: true,
-        },
-      );
-
-      const result = await service.assignPermissionOverride(
-        orgId,
-        membershipId,
-        permissionId,
-        true,
-        ownerId,
-      );
-
-      expect(result.is_granted).toBe(true);
-      expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
-        'permissions.cache.clear-user',
-        {
-          userId: 'target-user',
-          organizationId: orgId,
-        },
-      );
-    });
-  });
-
   describe('updateRole', () => {
     const orgId = 'org-4';
     const roleId = 'role-4';
     const ownerId = 'owner-3';
 
     it('throws ForbiddenException when caller is not owner', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
-        id: 'm-agent',
-        role: { slug: 'agent' as string | null },
-      });
+      mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
+        new ForbiddenException('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+      );
 
       await expect(
         service.updateRole(orgId, roleId, ownerId, {
@@ -402,9 +177,6 @@ describe('AccessControlService', () => {
     });
 
     it('throws ForbiddenException when role is system role', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
-        ownerCaller,
-      );
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: true,
@@ -419,9 +191,6 @@ describe('AccessControlService', () => {
     });
 
     it('throws BadRequestException when permission IDs are invalid', async () => {
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
-        ownerCaller,
-      );
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: false,
@@ -442,9 +211,6 @@ describe('AccessControlService', () => {
       const pRemove = 'permission-remove';
       const pAdd = 'permission-add';
 
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
-        ownerCaller,
-      );
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: false,
@@ -523,9 +289,6 @@ describe('AccessControlService', () => {
       const pRemove = 'permission-remove-2';
       const pAdd = 'permission-add-2';
 
-      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
-        ownerCaller,
-      );
       mockPrismaService.role.findFirst.mockResolvedValueOnce({
         id: roleId,
         is_system: false,
@@ -600,6 +363,114 @@ describe('AccessControlService', () => {
           organizationId: orgId,
         },
       );
+    });
+
+    it('does not emit cache clear when permissions are unchanged', async () => {
+      mockPrismaService.role.findFirst.mockResolvedValueOnce({
+        id: roleId,
+        is_system: false,
+      });
+
+      const txRoleUpdate = jest.fn().mockResolvedValue({
+        id: roleId,
+        name: 'Name-only',
+        is_system: false,
+        rolePermissions: [],
+      });
+
+      mockPrismaService.$transaction.mockImplementationOnce(
+        async (
+          cb: (tx: {
+            rolePermission: {
+              deleteMany: jest.Mock;
+              createMany: jest.Mock;
+            };
+            role: {
+              update: typeof txRoleUpdate;
+            };
+          }) => Promise<unknown>,
+        ) =>
+          cb({
+            rolePermission: {
+              deleteMany: jest.fn(),
+              createMany: jest.fn(),
+            },
+            role: {
+              update: txRoleUpdate,
+            },
+          }),
+      );
+
+      await service.updateRole(orgId, roleId, ownerId, {
+        name: 'Name-only',
+      });
+
+      expect(
+        mockPrismaService.organizationMembership.findMany,
+      ).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emitAsync).not.toHaveBeenCalled();
+    });
+
+    it('queries active memberships when invalidating cache', async () => {
+      mockPrismaService.role.findFirst.mockResolvedValueOnce({
+        id: roleId,
+        is_system: false,
+      });
+      mockPrismaService.permission.findMany.mockResolvedValueOnce([
+        { id: 'pA' },
+      ]);
+      mockPrismaService.rolePermission.findMany.mockResolvedValueOnce([]);
+
+      const txRoleUpdate = jest.fn().mockResolvedValue({
+        id: roleId,
+        name: 'Updated',
+        is_system: false,
+        rolePermissions: [],
+      });
+
+      mockPrismaService.$transaction.mockImplementationOnce(
+        async (
+          cb: (tx: {
+            rolePermission: {
+              deleteMany: jest.Mock;
+              createMany: jest.Mock;
+            };
+            role: {
+              update: typeof txRoleUpdate;
+            };
+          }) => Promise<unknown>,
+        ) =>
+          cb({
+            rolePermission: {
+              deleteMany: jest.fn(),
+              createMany: jest.fn(),
+            },
+            role: {
+              update: txRoleUpdate,
+            },
+          }),
+      );
+
+      mockPrismaService.organizationMembership.findMany.mockResolvedValueOnce(
+        [],
+      );
+
+      await service.updateRole(orgId, roleId, ownerId, {
+        permissionIds: ['pA'],
+      });
+
+      expect(
+        mockPrismaService.organizationMembership.findMany,
+      ).toHaveBeenCalledWith({
+        where: {
+          organization_id: orgId,
+          role_id: roleId,
+          status: MembershipStatus.ACTIVE,
+        },
+        select: {
+          user_id: true,
+        },
+      });
     });
   });
 });

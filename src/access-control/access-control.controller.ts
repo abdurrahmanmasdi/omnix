@@ -20,10 +20,9 @@ import {
 } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import {
-  AccessControlService,
-  RoleWithPermissions,
-} from './access-control.service';
+import { RoleWithPermissions, RolesService } from './roles.service';
+import { PermissionOverridesService } from './permission-overrides.service';
+import { AccessVerificationService } from './access-verification.service';
 import { CreateRoleDto } from './dtos/create-role.dto';
 import { UpdateRoleDto } from './dtos/update-role.dto';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
@@ -37,7 +36,11 @@ interface AuthRequest extends ExpressRequest {
 @Controller('organizations/:orgId/roles')
 @ApiBearerAuth()
 export class AccessControlController {
-  constructor(private readonly accessControlService: AccessControlService) {}
+  constructor(
+    private readonly rolesService: RolesService,
+    private readonly permissionOverridesService: PermissionOverridesService,
+    private readonly accessVerificationService: AccessVerificationService,
+  ) {}
 
   /**
    * Get all roles for an organization with their associated permissions
@@ -93,7 +96,7 @@ export class AccessControlController {
     @Param('orgId') organizationId: string,
     @Request() req: AuthRequest,
   ): Promise<RoleWithPermissions[]> {
-    return this.accessControlService.getRoles(organizationId, req.user.id);
+    return this.rolesService.getRoles(organizationId, req.user.id);
   }
 
   /**
@@ -154,7 +157,7 @@ export class AccessControlController {
     @Request() req: AuthRequest,
     @Body() createRoleDto: CreateRoleDto,
   ): Promise<RoleWithPermissions> {
-    return this.accessControlService.createRole(
+    return this.rolesService.createRole(
       organizationId,
       req.user.id,
       createRoleDto,
@@ -226,7 +229,7 @@ export class AccessControlController {
     @Request() req: AuthRequest,
     @Body() updateRoleDto: UpdateRoleDto,
   ): Promise<RoleWithPermissions> {
-    return this.accessControlService.updateRole(
+    return this.rolesService.updateRole(
       organizationId,
       roleId,
       req.user.id,
@@ -283,11 +286,7 @@ export class AccessControlController {
     @Param('roleId') roleId: string,
     @Request() req: AuthRequest,
   ): Promise<{ message: string }> {
-    return this.accessControlService.deleteRole(
-      organizationId,
-      roleId,
-      req.user.id,
-    );
+    return this.rolesService.deleteRole(organizationId, roleId, req.user.id);
   }
 
   /**
@@ -341,7 +340,7 @@ export class AccessControlController {
     @Request() req: AuthRequest,
     @Body() updateMemberRoleDto: UpdateMemberRoleDto,
   ): Promise<{ id: string; role_id: string; message: string }> {
-    return this.accessControlService.changeMemberRole(
+    return this.accessVerificationService.changeMemberRole(
       organizationId,
       membershipId,
       updateMemberRoleDto.role_id,
@@ -409,7 +408,7 @@ export class AccessControlController {
     is_granted: boolean;
     message: string;
   }> {
-    return this.accessControlService.assignPermissionOverride(
+    return this.permissionOverridesService.assignPermissionOverride(
       organizationId,
       membershipId,
       createPermissionOverrideDto.permission_id,
@@ -472,7 +471,7 @@ export class AccessControlController {
     @Param('membershipId') membershipId: string,
     @Request() req: AuthRequest,
   ): Promise<{ rolePermissionIds: string[]; grantedOverrideIds: string[] }> {
-    return this.accessControlService.getMemberPermissionBreakdown(
+    return this.permissionOverridesService.getMemberPermissionBreakdown(
       organizationId,
       membershipId,
       req.user.id,
