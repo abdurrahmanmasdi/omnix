@@ -216,4 +216,22 @@ describe('LeadsService', () => {
       expect(mockI18nService.t).toHaveBeenCalledWith('errors.LEADS.NOT_FOUND');
     });
   });
+
+  describe('source active-state validation', () => {
+    it('throws BadRequestException when assigning an inactive source', async () => {
+      mockPrismaService.leadSource.findFirst.mockResolvedValueOnce({
+        id: 'source-1',
+        is_active: false,
+      });
+
+      await expect(
+        service.update('org-1', 'lead-1', { source_id: 'source-1' }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockI18nService.t).toHaveBeenCalledWith(
+        'errors.LEADS.SOURCE_INACTIVE',
+      );
+      expect(mockPrismaService.lead.updateMany).not.toHaveBeenCalled();
+    });
+  });
 });

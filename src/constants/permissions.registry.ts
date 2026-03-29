@@ -351,6 +351,82 @@ export const PERMISSIONS_LIST: readonly IPermissionDefinition[] = [
     description: 'Restore deleted leads',
   },
 
+  // Leads Sources
+  {
+    action: AppPermission.LEAD_SOURCES_MANAGE,
+    description: 'Manage all lead sources in the organization',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_READ,
+    description: 'Read assigned lead sources',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_READ_ALL,
+    description: 'Read all lead sources in the organization',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_CREATE,
+    description: 'Create new lead sources',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_EDIT,
+    description: 'Edit assigned lead sources',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_EDIT_ALL,
+    description: 'Edit all lead sources in the organization',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_DELETE,
+    description: 'Delete assigned lead sources',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_DELETE_ALL,
+    description: 'Delete all lead sources in the organization',
+  },
+  {
+    action: AppPermission.LEAD_SOURCES_RESTORE,
+    description: 'Restore deleted lead sources',
+  },
+
+  // Pipeline Stages
+  {
+    action: AppPermission.PIPELINE_STAGES_MANAGE,
+    description: 'Manage all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_READ,
+    description: 'Read assigned pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_READ_ALL,
+    description: 'Read all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_CREATE,
+    description: 'Create new pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_EDIT,
+    description: 'Edit assigned pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_EDIT_ALL,
+    description: 'Edit all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_DELETE,
+    description: 'Delete assigned pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_DELETE_ALL,
+    description: 'Delete all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_RESTORE,
+    description: 'Restore deleted pipeline stages',
+  },
+
   // // Contacts
   // {
   //   action: AppPermission.CONTACTS_READ,

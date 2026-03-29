@@ -25,10 +25,14 @@ export class LeadSourcesService {
     });
   }
 
-  async findAll(organizationId: string): Promise<LeadSource[]> {
+  async findAll(
+    organizationId: string,
+    activeOnly?: boolean,
+  ): Promise<LeadSource[]> {
     return this.prisma.leadSource.findMany({
       where: {
         organization_id: organizationId,
+        ...(activeOnly ? { is_active: true } : {}),
       },
       orderBy: {
         created_at: 'desc',

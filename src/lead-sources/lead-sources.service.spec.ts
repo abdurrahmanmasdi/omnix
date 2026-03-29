@@ -59,6 +59,18 @@ describe('LeadSourcesService', () => {
       });
       expect(result).toEqual(sources);
     });
+
+    it('filters only active sources when activeOnly=true', async () => {
+      const orgId = 'org-1';
+      mockPrismaService.leadSource.findMany.mockResolvedValueOnce([]);
+
+      await service.findAll(orgId, true);
+
+      expect(mockPrismaService.leadSource.findMany).toHaveBeenCalledWith({
+        where: { organization_id: orgId, is_active: true },
+        orderBy: { created_at: 'desc' },
+      });
+    });
   });
 
   describe('update', () => {

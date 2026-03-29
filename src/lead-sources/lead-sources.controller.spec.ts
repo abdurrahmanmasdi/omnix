@@ -81,6 +81,7 @@ describe('LeadSourcesController', () => {
       const userId = 'user-1';
       const req = { user: { id: userId } };
       const sources = [{ id: 'source-1', organization_id: organizationId }];
+      const activeOnly = true;
 
       verifyUserInOrganizationMock.mockResolvedValueOnce(undefined);
       findAllMock.mockResolvedValueOnce(sources);
@@ -88,13 +89,14 @@ describe('LeadSourcesController', () => {
       const result = await controller.findAll(
         organizationId,
         req as Parameters<LeadSourcesController['findAll']>[1],
+        activeOnly,
       );
 
       expect(verifyUserInOrganizationMock).toHaveBeenCalledWith(
         organizationId,
         userId,
       );
-      expect(findAllMock).toHaveBeenCalledWith(organizationId);
+      expect(findAllMock).toHaveBeenCalledWith(organizationId, activeOnly);
       expect(result).toEqual(sources);
     });
   });

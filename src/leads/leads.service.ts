@@ -370,12 +370,18 @@ export class LeadsService {
         id: sourceId,
         organization_id: organizationId,
       },
-      select: { id: true },
+      select: { id: true, is_active: true },
     });
 
     if (!source) {
       throw new BadRequestException(
         this.i18n.t('errors.LEADS.SOURCE_OUTSIDE_SCOPE'),
+      );
+    }
+
+    if (!source.is_active) {
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.SOURCE_INACTIVE'),
       );
     }
   }

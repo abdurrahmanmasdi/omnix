@@ -6,9 +6,11 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseBoolPipe,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -50,13 +52,15 @@ export class LeadSourcesController {
   async findAll(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Request() req: AuthRequest,
+    @Query('activeOnly', new ParseBoolPipe({ optional: true }))
+    activeOnly?: boolean,
   ): Promise<LeadSource[]> {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
     );
 
-    return this.leadSourcesService.findAll(organizationId);
+    return this.leadSourcesService.findAll(organizationId, activeOnly);
   }
 
   @Post()
