@@ -14,6 +14,10 @@ import {
 import { AppPermission } from '../constants/permissions.registry';
 import { PermissionsService } from '../auth/services/permissions.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  BulkUpdateLeadDataDto,
+  BulkUpdateLeadsDto,
+} from './dtos/bulk-update-leads.dto';
 import { CreateLeadDto } from './dtos/create-lead.dto';
 import { UpdateLeadDto } from './dtos/update-lead.dto';
 import { I18nService } from 'nestjs-i18n';
@@ -24,6 +28,8 @@ export interface FindLeadsFilters {
   status?: LeadStatus;
   priority?: Priority;
   filters?: string;
+  sort_by?: string;
+  sort_dir?: string;
 }
 
 interface DynamicFilterRule {
@@ -51,6 +57,16 @@ const UUID_FILTER_FIELDS = [
 
 type UuidFilterField = (typeof UUID_FILTER_FIELDS)[number];
 
+const ALLOWED_SORT_FIELDS = [
+  'created_at',
+  'first_name',
+  'estimated_value',
+  'status',
+  'priority',
+] as const;
+
+type AllowedSortField = (typeof ALLOWED_SORT_FIELDS)[number];
+
 export interface FindLeadsResult {
   data: Lead[];
   meta: {
@@ -59,6 +75,10 @@ export interface FindLeadsResult {
     total: number;
     totalPages: number;
   };
+}
+
+export interface BulkUpdateLeadsResult {
+  updated_count: number;
 }
 
 @Injectable()
@@ -117,6 +137,7 @@ export class LeadsService {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
+    const orderBy = this.buildOrderBy(filters.sort_by, filters.sort_dir);
 
     const dynamicConditions: Prisma.LeadWhereInput[] = [
       { organization_id: organizationId },
@@ -152,7 +173,7 @@ export class LeadsService {
       this.prisma.lead.count({ where }),
       this.prisma.lead.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -257,6 +278,40 @@ export class LeadsService {
     return updatedLead;
   }
 
+  async bulkUpdate(
+    organizationId: string,
+    userId: string,
+    dto: BulkUpdateLeadsDto,
+  ): Promise<BulkUpdateLeadsResult> {
+    await this.validateScopedReferences(organizationId, {
+      pipeline_stage_id: dto.update_data.pipeline_stage_id,
+      assigned_agent_id: dto.update_data.assigned_agent_id,
+    });
+
+    const data = this.buildBulkUpdateData(dto.update_data);
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException(this.i18n.t('errors.BAD_REQUEST'));
+    }
+
+    const canEditAllLeads = await this.canEditAllLeads(organizationId, userId);
+
+    const where: Prisma.LeadWhereInput = {
+      id: { in: dto.lead_ids },
+      organization_id: organizationId,
+      ...(canEditAllLeads ? {} : { assigned_agent_id: userId }),
+    };
+
+    const result = await this.prisma.lead.updateMany({
+      where,
+      data,
+    });
+
+    return {
+      updated_count: result.count,
+    };
+  }
+
   async remove(organizationId: string, leadId: string): Promise<void> {
     const result = await this.prisma.lead.deleteMany({
       where: {
@@ -299,6 +354,17 @@ export class LeadsService {
         next_follow_up_at: this.toNullableDate(dto.next_follow_up_at),
       }),
     };
+  }
+
+  private buildBulkUpdateData(
+    dto: BulkUpdateLeadDataDto,
+  ): Prisma.LeadUncheckedUpdateManyInput {
+    return this.pickDefined<Prisma.LeadUncheckedUpdateManyInput>({
+      status: dto.status,
+      priority: dto.priority,
+      assigned_agent_id: dto.assigned_agent_id,
+      pipeline_stage_id: dto.pipeline_stage_id,
+    });
   }
 
   private pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -423,6 +489,23 @@ export class LeadsService {
     ]);
   }
 
+  private async canEditAllLeads(
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const permissions = await this.permissionsService.getEffectivePermissions(
+      userId,
+      organizationId,
+    );
+
+    return this.hasAnyPermission(permissions, [
+      AppPermission.LEADS_EDIT_ALL,
+      AppPermission.LEADS_MANAGE,
+      AppPermission.TEAM_MEMBERS_MANAGE,
+      AppPermission.ORGANIZATION_MANAGE,
+    ]);
+  }
+
   private hasAnyPermission(
     effectivePermissions: string[],
     requiredPermissions: string[],
@@ -448,6 +531,36 @@ export class LeadsService {
     return Boolean(
       namespace && effectivePermissions.includes(`${namespace}:*`),
     );
+  }
+
+  private buildOrderBy(
+    sortByRaw?: string,
+    sortDirRaw?: string,
+  ): Prisma.LeadOrderByWithRelationInput {
+    const sortBy = this.resolveSortField(sortByRaw);
+    const sortDir = this.resolveSortDirection(sortDirRaw);
+
+    return {
+      [sortBy]: sortDir,
+    } as Prisma.LeadOrderByWithRelationInput;
+  }
+
+  private resolveSortField(sortByRaw?: string): AllowedSortField {
+    if (!sortByRaw) {
+      return 'created_at';
+    }
+
+    const normalized = sortByRaw.trim().toLowerCase();
+
+    return this.isAllowedSortField(normalized) ? normalized : 'created_at';
+  }
+
+  private resolveSortDirection(sortDirRaw?: string): Prisma.SortOrder {
+    return sortDirRaw?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
+  }
+
+  private isAllowedSortField(field: string): field is AllowedSortField {
+    return (ALLOWED_SORT_FIELDS as readonly string[]).includes(field);
   }
 
   private parseDynamicFilterRules(filtersRaw?: string): DynamicFilterRule[] {

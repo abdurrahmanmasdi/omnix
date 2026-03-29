@@ -29,9 +29,14 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { AppPermission } from '../constants/permissions.registry';
+import { BulkUpdateLeadsDto } from './dtos/bulk-update-leads.dto';
 import { CreateLeadDto } from './dtos/create-lead.dto';
 import { UpdateLeadDto } from './dtos/update-lead.dto';
-import { FindLeadsResult, LeadsService } from './leads.service';
+import {
+  BulkUpdateLeadsResult,
+  FindLeadsResult,
+  LeadsService,
+} from './leads.service';
 
 interface AuthRequest extends ExpressRequest {
   user: {
@@ -73,6 +78,8 @@ export class LeadsController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('filters') filters?: string,
+    @Query('sort_by') sort_by?: string,
+    @Query('sort_dir') sort_dir?: string,
     @Query('status', new ParseEnumPipe(LeadStatus, { optional: true }))
     status?: LeadStatus,
     @Query('priority', new ParseEnumPipe(Priority, { optional: true }))
@@ -87,6 +94,8 @@ export class LeadsController {
       page,
       limit,
       filters,
+      sort_by,
+      sort_dir,
       status,
       priority,
     });
@@ -107,6 +116,24 @@ export class LeadsController {
     );
 
     return this.leadsService.findOne(organizationId, req.user.id, leadId);
+  }
+
+  @Patch('bulk')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.LEADS_EDIT)
+  @ApiOperation({ summary: 'Bulk update leads in an organization' })
+  @ApiResponse({ status: 200, description: 'Leads bulk updated successfully' })
+  async bulkUpdate(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Request() req: AuthRequest,
+    @Body() dto: BulkUpdateLeadsDto,
+  ): Promise<BulkUpdateLeadsResult> {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+
+    return this.leadsService.bulkUpdate(organizationId, req.user.id, dto);
   }
 
   @Patch(':leadId')
