@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { I18nService } from 'nestjs-i18n';
 import { PermissionsService } from '../services/permissions.service';
+import { AppAction } from '../../constants/permissions.registry';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -30,7 +31,7 @@ interface AuthenticatedRequest extends Request {
  *
  * 2. Or apply to specific routes:
  *    @UseGuards(PermissionsGuard)
- *    @RequirePermissions(AppPermission.LEADS_READ, AppPermission.LEADS_WRITE)
+ *    @RequirePermissions(AppPermission.LEADS_READ, AppPermission.LEADS_EDIT)
  *    async myMethod() { ... }
  *
  * orgId Extraction Priority:
@@ -154,9 +155,13 @@ export class PermissionsGuard implements CanActivate {
    * Check if user has all required permissions
    *
    * Handles:
-   * - Exact matches: 'READ' in ['READ', 'WRITE']
+   * - Exact matches
    * - Wildcards: '*' grants all permissions
-   * - Namespaced wildcards: 'leads:*' grants 'leads:READ', 'leads:WRITE', etc.
+   * - Hierarchy implication rules:
+   *   - resource:manage implies all actions for that resource
+   *   - resource:read_all implies resource:read
+   *   - resource:edit_all implies resource:edit
+   *   - resource:delete_all implies resource:delete
    *
    * @param effectivePermissions - User's actual permissions
    * @param requiredPermissions - Permissions required for the route
@@ -166,31 +171,50 @@ export class PermissionsGuard implements CanActivate {
     effectivePermissions: string[],
     requiredPermissions: string[],
   ): boolean {
-    // Check for superadmin wildcard (*) - grants all permissions
-    if (effectivePermissions.includes('*')) {
-      this.logger.debug(
-        `[PermissionsGuard] User has wildcard permission (*), granting access`,
-      );
-      return true;
-    }
+    const granted = new Set(effectivePermissions);
 
-    // Check if user has all required permissions
+    // Check if user has all required permissions after hierarchy expansion.
     return requiredPermissions.every((required) => {
-      // Exact match
-      if (effectivePermissions.includes(required)) {
-        return true;
-      }
+      const candidates = this.getHierarchyCandidates(required);
+      const matched = candidates.find((candidate) => granted.has(candidate));
 
-      // Namespaced wildcard match: e.g., 'leads:*' covers 'leads:READ', 'leads:WRITE'
-      const namespace = required.split(':')[0];
-      if (namespace && effectivePermissions.includes(`${namespace}:*`)) {
+      if (matched) {
         this.logger.debug(
-          `[PermissionsGuard] User has namespaced wildcard (${namespace}:*), covering ${required}`,
+          `[PermissionsGuard] Required ${required} granted via ${matched}`,
         );
         return true;
       }
 
       return false;
     });
+  }
+
+  private getHierarchyCandidates(requiredPermission: string): string[] {
+    const [resource, action] = requiredPermission.split(':');
+
+    if (!resource || !action) {
+      return [requiredPermission, '*'];
+    }
+
+    const hierarchy = new Set<string>([
+      requiredPermission,
+      '*',
+      `${resource}:*`,
+      `${resource}:${AppAction.MANAGE}`,
+    ]);
+
+    if (action === AppAction.READ) {
+      hierarchy.add(`${resource}:${AppAction.READ_ALL}`);
+    }
+
+    if (action === AppAction.EDIT) {
+      hierarchy.add(`${resource}:${AppAction.EDIT_ALL}`);
+    }
+
+    if (action === AppAction.DELETE) {
+      hierarchy.add(`${resource}:${AppAction.DELETE_ALL}`);
+    }
+
+    return [...hierarchy];
   }
 }

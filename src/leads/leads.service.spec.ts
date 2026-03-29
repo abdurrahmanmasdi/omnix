@@ -14,6 +14,12 @@ import { LeadsService } from './leads.service';
 describe('LeadsService', () => {
   let service: LeadsService;
 
+  type FindManyWhereArg = {
+    where: {
+      AND: Array<Record<string, unknown>>;
+    };
+  };
+
   const mockPrismaService = {
     lead: {
       create: jest.fn(),
@@ -79,6 +85,22 @@ describe('LeadsService', () => {
     const organizationId = 'org-1';
     const userId = 'user-1';
 
+    const getFirstFindManyWhereArg = (): FindManyWhereArg => {
+      const findManyMock = mockPrismaService.lead.findMany as jest.Mock<
+        unknown,
+        [FindManyWhereArg]
+      >;
+      const firstCall = findManyMock.mock.calls[0];
+
+      expect(firstCall).toBeDefined();
+
+      if (!firstCall) {
+        throw new Error('Expected lead.findMany to be called at least once.');
+      }
+
+      return firstCall[0];
+    };
+
     it('queries all organization leads when user has read_all-equivalent permission', async () => {
       mockPermissionsService.getEffectivePermissions.mockResolvedValueOnce([
         AppPermission.LEADS_READ_ALL,
@@ -90,22 +112,15 @@ describe('LeadsService', () => {
         status: LeadStatus.OPEN,
       });
 
-      const findManyArgs = mockPrismaService.lead.findMany.mock.calls[0][0] as {
-        where: Record<string, unknown>;
-      };
+      const findManyArgs = getFirstFindManyWhereArg();
+      const conditions = findManyArgs.where.AND;
 
-      expect(findManyArgs.where).toEqual(
-        expect.objectContaining({
-          AND: expect.arrayContaining([
-            { organization_id: organizationId },
-            { status: LeadStatus.OPEN },
-          ]),
-        }),
+      expect(conditions).toEqual(
+        expect.arrayContaining([
+          { organization_id: organizationId },
+          { status: LeadStatus.OPEN },
+        ]),
       );
-
-      const conditions = findManyArgs.where.AND as Array<
-        Record<string, unknown>
-      >;
       expect(
         conditions.some((condition) => condition.assigned_agent_id === userId),
       ).toBe(false);
@@ -120,17 +135,13 @@ describe('LeadsService', () => {
 
       await service.findAll(organizationId, userId);
 
-      const findManyArgs = mockPrismaService.lead.findMany.mock.calls[0][0] as {
-        where: Record<string, unknown>;
-      };
+      const findManyArgs = getFirstFindManyWhereArg();
 
-      expect(findManyArgs.where).toEqual(
-        expect.objectContaining({
-          AND: expect.arrayContaining([
-            { organization_id: organizationId },
-            { assigned_agent_id: userId },
-          ]),
-        }),
+      expect(findManyArgs.where.AND).toEqual(
+        expect.arrayContaining([
+          { organization_id: organizationId },
+          { assigned_agent_id: userId },
+        ]),
       );
     });
 

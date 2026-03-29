@@ -22,6 +22,8 @@ export const AppResource = {
   ROLES: 'roles',
   ORGANIZATION: 'organization',
   LEADS: 'leads',
+  PIPELINE_STAGES: 'pipeline_stages',
+  LEAD_SOURCES: 'lead_sources',
   // CONTACTS: 'contacts',
   // DEALS: 'deals',
   // TASKS: 'tasks',
@@ -113,6 +115,44 @@ export const AppPermission = {
   LEADS_DELETE: `${AppResource.LEADS}:${AppAction.DELETE}` as const,
   LEADS_DELETE_ALL: `${AppResource.LEADS}:${AppAction.DELETE_ALL}` as const,
   LEADS_RESTORE: `${AppResource.LEADS}:${AppAction.RESTORE}` as const,
+
+  // Lead Sources
+  LEAD_SOURCES_MANAGE:
+    `${AppResource.LEAD_SOURCES}:${AppAction.MANAGE}` as const,
+  LEAD_SOURCES_READ: `${AppResource.LEAD_SOURCES}:${AppAction.READ}` as const,
+  LEAD_SOURCES_READ_ALL:
+    `${AppResource.LEAD_SOURCES}:${AppAction.READ_ALL}` as const,
+  LEAD_SOURCES_CREATE:
+    `${AppResource.LEAD_SOURCES}:${AppAction.CREATE}` as const,
+  LEAD_SOURCES_EDIT: `${AppResource.LEAD_SOURCES}:${AppAction.EDIT}` as const,
+  LEAD_SOURCES_EDIT_ALL:
+    `${AppResource.LEAD_SOURCES}:${AppAction.EDIT_ALL}` as const,
+  LEAD_SOURCES_DELETE:
+    `${AppResource.LEAD_SOURCES}:${AppAction.DELETE}` as const,
+  LEAD_SOURCES_DELETE_ALL:
+    `${AppResource.LEAD_SOURCES}:${AppAction.DELETE_ALL}` as const,
+  LEAD_SOURCES_RESTORE:
+    `${AppResource.LEAD_SOURCES}:${AppAction.RESTORE}` as const,
+
+  // Pipeline Stages
+  PIPELINE_STAGES_MANAGE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.MANAGE}` as const,
+  PIPELINE_STAGES_READ:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.READ}` as const,
+  PIPELINE_STAGES_READ_ALL:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.READ_ALL}` as const,
+  PIPELINE_STAGES_CREATE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.CREATE}` as const,
+  PIPELINE_STAGES_EDIT:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.EDIT}` as const,
+  PIPELINE_STAGES_EDIT_ALL:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.EDIT_ALL}` as const,
+  PIPELINE_STAGES_DELETE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.DELETE}` as const,
+  PIPELINE_STAGES_DELETE_ALL:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.DELETE_ALL}` as const,
+  PIPELINE_STAGES_RESTORE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.RESTORE}` as const,
 
   // // Contacts
   // CONTACTS_READ: `${AppResource.CONTACTS}:${AppAction.READ}` as const,

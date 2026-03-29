@@ -193,12 +193,15 @@ describe('AuthService', () => {
       created_at: createdAt,
     });
 
-    const result = await service.register(
-      'user@example.com',
-      'secret',
-      'A',
-      'B',
-    );
+    await expect(
+      service.register('user@example.com', 'secret', 'A', 'B'),
+    ).resolves.toEqual({
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    });
 
     expect(bcrypt.hash).toHaveBeenCalledWith('secret', 10);
     expect(mockPrisma.user.create).toHaveBeenCalledWith({
@@ -208,13 +211,6 @@ describe('AuthService', () => {
         first_name: 'A',
         last_name: 'B',
       },
-    });
-    expect(result).toEqual({
-      id: 'u1',
-      email: 'user@example.com',
-      first_name: 'A',
-      last_name: 'B',
-      created_at: createdAt,
     });
   });
 
@@ -240,13 +236,15 @@ describe('AuthService', () => {
     });
     mockPrisma.organizationMembership.create.mockResolvedValue({ id: 'm1' });
 
-    const result = await service.register(
-      'user@example.com',
-      'secret',
-      'A',
-      'B',
-      'token-123',
-    );
+    await expect(
+      service.register('user@example.com', 'secret', 'A', 'B', 'token-123'),
+    ).resolves.toEqual({
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: createdAt,
+    });
 
     expect(mockPrisma.$transaction).toHaveBeenCalled();
     expect(mockPrisma.invitation.findFirst).toHaveBeenCalledWith({
@@ -266,7 +264,7 @@ describe('AuthService', () => {
       },
       data: {
         status: 'accepted',
-        accepted_at: expect.any(Date),
+        accepted_at: expect.any(Date) as Date,
       },
     });
     expect(mockPrisma.organizationMembership.create).toHaveBeenCalledWith({
@@ -276,13 +274,6 @@ describe('AuthService', () => {
         role_id: 'role-1',
         status: 'ACTIVE',
       },
-    });
-    expect(result).toEqual({
-      id: 'u1',
-      email: 'user@example.com',
-      first_name: 'A',
-      last_name: 'B',
-      created_at: createdAt,
     });
   });
 
