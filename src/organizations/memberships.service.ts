@@ -385,12 +385,14 @@ export class MembershipsService {
               first_name: true,
               last_name: true,
               email: true,
+              created_at: true,
             },
           },
           role: {
             select: {
               id: true,
               name: true,
+              slug: true,
             },
           },
         },
@@ -410,10 +412,12 @@ export class MembershipsService {
           firstName: membership.user.first_name,
           lastName: membership.user.last_name,
           email: membership.user.email,
+          createdAt: membership.user.created_at,
         },
         role: {
           id: membership.role.id,
           name: membership.role.name,
+          slug: membership.role.slug,
         },
         status: membership.status,
       }));

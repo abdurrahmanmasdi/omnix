@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LeadStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
@@ -92,11 +96,19 @@ describe('LeadsService', () => {
 
       expect(findManyArgs.where).toEqual(
         expect.objectContaining({
-          organization_id: organizationId,
-          status: LeadStatus.OPEN,
+          AND: expect.arrayContaining([
+            { organization_id: organizationId },
+            { status: LeadStatus.OPEN },
+          ]),
         }),
       );
-      expect(findManyArgs.where).not.toHaveProperty('assigned_agent_id');
+
+      const conditions = findManyArgs.where.AND as Array<
+        Record<string, unknown>
+      >;
+      expect(
+        conditions.some((condition) => condition.assigned_agent_id === userId),
+      ).toBe(false);
     });
 
     it('queries only assigned leads when user lacks read_all permission', async () => {
@@ -114,10 +126,36 @@ describe('LeadsService', () => {
 
       expect(findManyArgs.where).toEqual(
         expect.objectContaining({
-          organization_id: organizationId,
-          assigned_agent_id: userId,
+          AND: expect.arrayContaining([
+            { organization_id: organizationId },
+            { assigned_agent_id: userId },
+          ]),
         }),
       );
+    });
+
+    it('throws BadRequestException when a UUID filter field receives invalid value', async () => {
+      mockPermissionsService.getEffectivePermissions.mockResolvedValueOnce([
+        AppPermission.LEADS_READ_ALL,
+      ]);
+
+      await expect(
+        service.findAll(organizationId, userId, {
+          filters: JSON.stringify([
+            {
+              field: 'pipeline_stage_id',
+              operator: 'equals',
+              value: '2',
+            },
+          ]),
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockI18nService.t).toHaveBeenCalledWith(
+        'errors.LEADS.INVALID_FILTERS',
+      );
+      expect(mockPrismaService.lead.findMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.lead.count).not.toHaveBeenCalled();
     });
   });
 

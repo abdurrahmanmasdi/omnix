@@ -72,6 +72,7 @@ export class LeadsController {
     @Request() req: AuthRequest,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('filters') filters?: string,
     @Query('status', new ParseEnumPipe(LeadStatus, { optional: true }))
     status?: LeadStatus,
     @Query('priority', new ParseEnumPipe(Priority, { optional: true }))
@@ -85,6 +86,7 @@ export class LeadsController {
     return this.leadsService.findAll(organizationId, req.user.id, {
       page,
       limit,
+      filters,
       status,
       priority,
     });

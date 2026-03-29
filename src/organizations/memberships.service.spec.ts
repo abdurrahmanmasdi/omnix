@@ -295,6 +295,7 @@ describe('MembershipsService', () => {
             first_name: 'A',
             last_name: 'B',
             email: 'u1@test.com',
+            created_at: new Date('2026-03-29T00:00:00.000Z'),
           },
           role: {
             id: 'r1',
@@ -314,6 +315,7 @@ describe('MembershipsService', () => {
             firstName: 'A',
             lastName: 'B',
             email: 'u1@test.com',
+            createdAt: new Date('2026-03-29T00:00:00.000Z'),
           },
           role: {
             id: 'r1',

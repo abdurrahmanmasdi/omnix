@@ -23,10 +23,36 @@ export interface FindLeadsFilters {
   limit?: number;
   status?: LeadStatus;
   priority?: Priority;
+  filters?: string;
 }
 
+interface DynamicFilterRule {
+  field: string;
+  operator: string;
+  value: unknown;
+}
+
+const ALLOWED_FILTER_FIELDS = [
+  'status',
+  'priority',
+  'source_id',
+  'assigned_agent_id',
+  'country',
+  'pipeline_stage_id',
+] as const;
+
+type AllowedFilterField = (typeof ALLOWED_FILTER_FIELDS)[number];
+
+const UUID_FILTER_FIELDS = [
+  'source_id',
+  'assigned_agent_id',
+  'pipeline_stage_id',
+] as const;
+
+type UuidFilterField = (typeof UUID_FILTER_FIELDS)[number];
+
 export interface FindLeadsResult {
-  items: Lead[];
+  data: Lead[];
   meta: {
     page: number;
     limit: number;
@@ -92,25 +118,48 @@ export class LeadsService {
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
 
+    const dynamicConditions: Prisma.LeadWhereInput[] = [
+      { organization_id: organizationId },
+    ];
+
+    if (!canReadAllLeads) {
+      dynamicConditions.push({ assigned_agent_id: userId });
+    }
+
+    if (filters.status) {
+      dynamicConditions.push({ status: filters.status });
+    }
+
+    if (filters.priority) {
+      dynamicConditions.push({ priority: filters.priority });
+    }
+
+    const parsedRules = this.parseDynamicFilterRules(filters.filters);
+
+    for (const rule of parsedRules) {
+      const condition = this.buildDynamicFilterCondition(rule);
+
+      if (condition) {
+        dynamicConditions.push(condition);
+      }
+    }
+
     const where: Prisma.LeadWhereInput = {
-      organization_id: organizationId,
-      ...(canReadAllLeads ? {} : { assigned_agent_id: userId }),
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.priority ? { priority: filters.priority } : {}),
+      AND: dynamicConditions,
     };
 
-    const [items, total] = await this.prisma.$transaction([
+    const [total, data] = await Promise.all([
+      this.prisma.lead.count({ where }),
       this.prisma.lead.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.lead.count({ where }),
     ]);
 
     return {
-      items,
+      data,
       meta: {
         page,
         limit,
@@ -392,6 +441,150 @@ export class LeadsService {
     const namespace = permission.split(':')[0];
     return Boolean(
       namespace && effectivePermissions.includes(`${namespace}:*`),
+    );
+  }
+
+  private parseDynamicFilterRules(filtersRaw?: string): DynamicFilterRule[] {
+    if (!filtersRaw) {
+      return [];
+    }
+
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(filtersRaw);
+    } catch {
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    return parsed
+      .filter(
+        (rule): rule is DynamicFilterRule =>
+          Boolean(rule) &&
+          typeof rule === 'object' &&
+          typeof (rule as DynamicFilterRule).field === 'string' &&
+          typeof (rule as DynamicFilterRule).operator === 'string' &&
+          'value' in (rule as Record<string, unknown>),
+      )
+      .map((rule) => ({
+        field: rule.field,
+        operator: rule.operator,
+        value: rule.value,
+      }));
+  }
+
+  private isAllowedFilterField(field: string): field is AllowedFilterField {
+    return (ALLOWED_FILTER_FIELDS as readonly string[]).includes(field);
+  }
+
+  private buildDynamicFilterCondition(
+    rule: DynamicFilterRule,
+  ): Prisma.LeadWhereInput | null {
+    if (!this.isAllowedFilterField(rule.field)) {
+      return null;
+    }
+
+    const field: AllowedFilterField = rule.field;
+
+    if (rule.operator === 'equals') {
+      const normalizedValue = this.normalizeFilterValue(field, rule.value);
+
+      return {
+        [field]: normalizedValue,
+      } as Prisma.LeadWhereInput;
+    }
+
+    if (rule.operator === 'in') {
+      if (!Array.isArray(rule.value)) {
+        throw new BadRequestException(
+          this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+        );
+      }
+
+      const normalizedValues = rule.value.map((value) =>
+        this.normalizeFilterValue(field, value),
+      );
+
+      return {
+        [field]: { in: normalizedValues },
+      } as Prisma.LeadWhereInput;
+    }
+
+    return null;
+  }
+
+  private normalizeFilterValue(
+    field: AllowedFilterField,
+    value: unknown,
+  ): string {
+    if (field === 'status') {
+      if (typeof value === 'string' && this.isLeadStatus(value)) {
+        return value;
+      }
+
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    if (field === 'priority') {
+      if (typeof value === 'string' && this.isLeadPriority(value)) {
+        return value;
+      }
+
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    if (typeof value !== 'string') {
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    if (this.isUuidFilterField(field) && !this.isUuid(trimmedValue)) {
+      throw new BadRequestException(
+        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
+      );
+    }
+
+    return trimmedValue;
+  }
+
+  private isUuidFilterField(
+    field: AllowedFilterField,
+  ): field is UuidFilterField {
+    return (UUID_FILTER_FIELDS as readonly string[]).includes(field);
+  }
+
+  private isLeadStatus(value: string): value is LeadStatus {
+    return (Object.values(LeadStatus) as string[]).includes(value);
+  }
+
+  private isLeadPriority(value: string): value is Priority {
+    return (Object.values(Priority) as string[]).includes(value);
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
     );
   }
 }
