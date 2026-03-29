@@ -67,6 +67,12 @@
     "SOURCE_INACTIVE": "Pasif bir kaynağa lead atanamaz.",
     "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Atanan temsilci bu organizasyonda aktif üye olmalıdır."
   },
+  "LEAD_NOTES": {
+    "NOT_FOUND": "Bu lead için not bulunamadı."
+  },
+  "LEAD_ATTACHMENTS": {
+    "NOT_FOUND": "Bu lead için ek bulunamadı."
+  },
   "UNAUTHORIZED_ACCESS": "Bu kaynağa erişim yetkiniz yok.",
   "INSUFFICIENT_PERMISSIONS": "Bu işlemi gerçekleştirmek için yetersiz izinler.",
   "UNAUTHORIZED": "Yetkisiz erişim.",

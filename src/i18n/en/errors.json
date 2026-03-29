@@ -67,6 +67,12 @@
     "SOURCE_INACTIVE": "Cannot assign a lead to an inactive source.",
     "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Assigned agent must be an active member in this organization."
   },
+  "LEAD_NOTES": {
+    "NOT_FOUND": "Lead note not found for this lead."
+  },
+  "LEAD_ATTACHMENTS": {
+    "NOT_FOUND": "Lead attachment not found for this lead."
+  },
   "UNAUTHORIZED_ACCESS": "You are not authorized to access this resource.",
   "INSUFFICIENT_PERMISSIONS": "Insufficient permissions to perform this action.",
   "UNAUTHORIZED": "Unauthorized access.",

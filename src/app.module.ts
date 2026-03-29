@@ -24,6 +24,8 @@ import { ChatModule } from './chat/chat.module';
 import { LeadsModule } from './leads/leads.module';
 import { PipelineStagesModule } from './pipeline-stages/pipeline-stages.module';
 import { LeadSourcesModule } from './lead-sources/lead-sources.module';
+import { LeadNotesModule } from './lead-notes/lead-notes.module';
+import { LeadAttachmentsModule } from './lead-attachments/lead-attachments.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -97,6 +99,8 @@ mkdirSync(logsDir, { recursive: true });
     LeadsModule,
     PipelineStagesModule,
     LeadSourcesModule,
+    LeadNotesModule,
+    LeadAttachmentsModule,
   ],
   controllers: [AppController],
   providers: [
