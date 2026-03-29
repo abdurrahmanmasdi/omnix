@@ -145,7 +145,7 @@ describe('OrganizationsController', () => {
 
   it('should throw ForbiddenException for non-admin invite attempts', async () => {
     mockInvitationsService.invite.mockRejectedValueOnce(
-      new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+      new ForbiddenException('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
     );
     const req = { user: { id: 'member1' } } as any;
 
@@ -198,7 +198,7 @@ describe('OrganizationsController', () => {
 
   it('should throw ForbiddenException for non-admin reject attempts', async () => {
     mockMembershipsService.rejectJoinRequest.mockRejectedValueOnce(
-      new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+      new ForbiddenException('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
     );
     const req = { user: { id: 'member1' } } as any;
 

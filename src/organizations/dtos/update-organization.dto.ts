@@ -16,12 +16,12 @@ export class UpdateOrganizationDto {
     required: false,
   })
   @IsOptional()
-  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  @IsString({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_STRING') })
   @MinLength(3, {
-    message: i18nValidationMessage('errors.VALIDATION.MIN_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_LENGTH'),
   })
   @MaxLength(255, {
-    message: i18nValidationMessage('errors.VALIDATION.MAX_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MAX_LENGTH'),
   })
   name?: string;
 
@@ -31,15 +31,15 @@ export class UpdateOrganizationDto {
     required: false,
   })
   @IsOptional()
-  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  @IsString({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_STRING') })
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-    message: i18nValidationMessage('errors.VALIDATION.SLUG_FORMAT'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.SLUG_FORMAT'),
   })
   @MinLength(3, {
-    message: i18nValidationMessage('errors.VALIDATION.MIN_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_LENGTH'),
   })
   @MaxLength(255, {
-    message: i18nValidationMessage('errors.VALIDATION.MAX_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MAX_LENGTH'),
   })
   slug?: string;
 
@@ -49,6 +49,6 @@ export class UpdateOrganizationDto {
     required: false,
   })
   @IsOptional()
-  @IsBoolean({ message: i18nValidationMessage('errors.VALIDATION.IS_BOOLEAN') })
+  @IsBoolean({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_BOOLEAN') })
   is_public?: boolean;
 }

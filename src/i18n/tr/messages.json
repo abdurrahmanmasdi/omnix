@@ -1,7 +1,0 @@
-{
-  "ROLE_CREATED_SUCCESSFULLY": "Rol başarıyla oluşturuldu.",
-  "ROLE_UPDATED_SUCCESSFULLY": "Rol başarıyla güncellendi.",
-  "ROLE_DELETED_SUCCESSFULLY": "Rol başarıyla silindi.",
-  "ROLE_ASSIGNED_SUCCESSFULLY": "Rol kuruluş üyesine başarıyla atandı.",
-  "PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY": "İzin geçersiz kılması başarıyla oluşturuldu."
-}

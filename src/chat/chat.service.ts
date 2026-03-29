@@ -5,14 +5,54 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { MembershipStatus } from '@prisma/client';
+import { MembershipStatus, Prisma } from '@prisma/client';
+import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+
+const USER_PUBLIC_SELECT = {
+  id: true,
+  first_name: true,
+  last_name: true,
+  email: true,
+} as const;
+
+const MESSAGE_WITH_SENDER_INCLUDE = {
+  sender: {
+    select: USER_PUBLIC_SELECT,
+  },
+} as const;
+
+const CONVERSATION_WITH_DETAILS_INCLUDE = {
+  participants: {
+    include: {
+      user: {
+        select: USER_PUBLIC_SELECT,
+      },
+    },
+  },
+  messages: {
+    orderBy: { created_at: 'desc' as const },
+    take: 1,
+    include: MESSAGE_WITH_SENDER_INCLUDE,
+  },
+} as const;
+
+export type MessageWithSender = Prisma.MessageGetPayload<{
+  include: typeof MESSAGE_WITH_SENDER_INCLUDE;
+}>;
+
+export type ConversationWithDetails = Prisma.ConversationGetPayload<{
+  include: typeof CONVERSATION_WITH_DETAILS_INCLUDE;
+}>;
 
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly i18n: I18nService,
+  ) {}
 
   private async assertActiveOrganizationMembers(
     orgId: string,
@@ -40,9 +80,37 @@ export class ChatService {
 
     if (invalidUserIds.length > 0) {
       throw new ForbiddenException(
-        'One or more participants are outside tenant scope',
+        this.i18n.t('chat.ERRORS.PARTICIPANTS_OUTSIDE_SCOPE'),
       );
     }
+  }
+
+  private async findExistingDirectMessage(
+    orgId: string,
+    userId1: string,
+    userId2: string,
+  ): Promise<ConversationWithDetails | null> {
+    return this.prisma.conversation.findFirst({
+      where: {
+        organization_id: orgId,
+        is_group: false,
+        participants: {
+          every: {
+            user_id: {
+              in: [userId1, userId2],
+            },
+          },
+        },
+        AND: {
+          participants: {
+            every: {
+              OR: [{ user_id: userId1 }, { user_id: userId2 }],
+            },
+          },
+        },
+      },
+      include: CONVERSATION_WITH_DETAILS_INCLUDE,
+    });
   }
 
   /**
@@ -53,7 +121,11 @@ export class ChatService {
    * @returns The created message with sender information
    * @throws ForbiddenException if the sender is not a participant
    */
-  async sendMessage(conversationId: string, senderId: string, content: string) {
+  async sendMessage(
+    conversationId: string,
+    senderId: string,
+    content: string,
+  ): Promise<MessageWithSender> {
     // Validate that the sender is a participant in the conversation
     const participant = await this.prisma.conversationParticipant.findUnique({
       where: {
@@ -65,7 +137,7 @@ export class ChatService {
     });
 
     if (!participant) {
-      throw new ForbiddenException('You are not a member of this conversation');
+      throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
     }
 
     // Create the message
@@ -75,16 +147,7 @@ export class ChatService {
         sender_id: senderId,
         content,
       },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            email: true,
-          },
-        },
-      },
+      include: MESSAGE_WITH_SENDER_INCLUDE,
     });
 
     // Update the conversation's updated_at timestamp
@@ -106,7 +169,10 @@ export class ChatService {
    * @param orgId - The organization ID
    * @returns Array of conversations with latest message and participants
    */
-  async getUserConversations(userId: string, orgId: string) {
+  async getUserConversations(
+    userId: string,
+    orgId: string,
+  ): Promise<ConversationWithDetails[]> {
     const conversations = await this.prisma.conversation.findMany({
       where: {
         organization_id: orgId,
@@ -116,34 +182,7 @@ export class ChatService {
           },
         },
       },
-      include: {
-        messages: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-          include: {
-            sender: {
-              select: {
-                id: true,
-                first_name: true,
-                last_name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                first_name: true,
-                last_name: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
+      include: CONVERSATION_WITH_DETAILS_INCLUDE,
       orderBy: { updated_at: 'desc' },
     });
 
@@ -151,13 +190,20 @@ export class ChatService {
   }
 
   /**
-   * Get messages for a conversation (last 50)
+   * Get messages for a conversation (cursor paginated)
    * @param conversationId - The conversation ID
    * @param userId - The user ID requesting the messages (for validation)
-   * @returns Array of messages ordered by creation time
+   * @param cursor - Optional message ID cursor for pagination
+   * @param limit - Max number of messages to fetch (default 50)
+   * @returns Array of messages ordered by newest first
    * @throws ForbiddenException if user is not a participant
    */
-  async getConversationMessages(conversationId: string, userId: string) {
+  async getConversationMessages(
+    conversationId: string,
+    userId: string,
+    cursor?: string,
+    limit: number = 50,
+  ): Promise<MessageWithSender[]> {
     // Verify the user is a participant
     const participant = await this.prisma.conversationParticipant.findUnique({
       where: {
@@ -169,25 +215,24 @@ export class ChatService {
     });
 
     if (!participant) {
-      throw new ForbiddenException('You are not a member of this conversation');
+      throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
     }
 
-    // Fetch the last 50 messages
-    const messages = await this.prisma.message.findMany({
+    const query = {
       where: { conversation_id: conversationId },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            email: true,
-          },
-        },
-      },
-      orderBy: { created_at: 'asc' },
-      take: 50,
-    });
+      include: MESSAGE_WITH_SENDER_INCLUDE,
+      orderBy: { created_at: 'desc' as const },
+      take: limit,
+      ...(cursor
+        ? {
+            skip: 1,
+            cursor: { id: cursor },
+          }
+        : {}),
+    } satisfies Prisma.MessageFindManyArgs;
+
+    // Fetch message history with cursor pagination (newest first)
+    const messages = await this.prisma.message.findMany(query);
 
     return messages;
   }
@@ -207,12 +252,7 @@ export class ChatService {
         participants: {
           include: {
             user: {
-              select: {
-                id: true,
-                first_name: true,
-                last_name: true,
-                email: true,
-              },
+              select: USER_PUBLIC_SELECT,
             },
           },
         },
@@ -220,7 +260,7 @@ export class ChatService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversation not found');
+      throw new NotFoundException(this.i18n.t('chat.ERRORS.NOT_FOUND'));
     }
 
     // Verify user is a participant
@@ -229,7 +269,7 @@ export class ChatService {
     );
 
     if (!isParticipant) {
-      throw new ForbiddenException('You are not a member of this conversation');
+      throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
     }
 
     return conversation;
@@ -248,14 +288,16 @@ export class ChatService {
     orgId: string,
     currentUserId: string,
     targetUserId: string,
-  ) {
+  ): Promise<ConversationWithDetails> {
     // Validate that target user exists (and is in the same org if needed)
     const targetUser = await this.prisma.user.findUnique({
       where: { id: targetUserId },
     });
 
     if (!targetUser) {
-      throw new NotFoundException('Target user not found');
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
+      );
     }
 
     await this.assertActiveOrganizationMembers(orgId, [
@@ -264,54 +306,11 @@ export class ChatService {
     ]);
 
     // Check if a 1-on-1 conversation already exists between these two users in this organization
-    const existingConversation = await this.prisma.conversation.findFirst({
-      where: {
-        organization_id: orgId,
-        is_group: false,
-        participants: {
-          every: {
-            user_id: {
-              in: [currentUserId, targetUserId],
-            },
-          },
-        },
-        AND: {
-          participants: {
-            every: {
-              OR: [{ user_id: currentUserId }, { user_id: targetUserId }],
-            },
-          },
-        },
-      },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                first_name: true,
-                last_name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        messages: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-          include: {
-            sender: {
-              select: {
-                id: true,
-                first_name: true,
-                last_name: true,
-                email: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    const existingConversation = await this.findExistingDirectMessage(
+      orgId,
+      currentUserId,
+      targetUserId,
+    );
 
     // If conversation exists, return it
     if (existingConversation) {
@@ -348,36 +347,13 @@ export class ChatService {
       // Return the conversation with all necessary relations
       return tx.conversation.findUnique({
         where: { id: conversation.id },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  first_name: true,
-                  last_name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-          messages: {
-            orderBy: { created_at: 'desc' },
-            take: 1,
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  first_name: true,
-                  last_name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
+        include: CONVERSATION_WITH_DETAILS_INCLUDE,
       });
     });
+
+    if (!newConversation) {
+      throw new NotFoundException(this.i18n.t('chat.ERRORS.NOT_FOUND'));
+    }
 
     this.logger.log(
       `[ChatService] New conversation created: ${newConversation?.id}`,
@@ -393,7 +369,7 @@ export class ChatService {
    * @param name - The name of the group
    * @param participantIds - Array of user IDs to add to the group (should not include creator)
    * @returns The created conversation with all participants
-   * @throws BadRequestException if participantIds is empty
+   * @throws BadRequestException if participantIds has fewer than 2 users
    * @throws NotFoundException if any participant user doesn't exist
    */
   async createGroupConversation(
@@ -401,11 +377,11 @@ export class ChatService {
     creatorId: string,
     name: string,
     participantIds: string[],
-  ) {
-    // Validate that at least one participant is provided
-    if (!participantIds || participantIds.length === 0) {
+  ): Promise<ConversationWithDetails> {
+    // Validate that a group has at least 3 total members (creator + 2 participants)
+    if (!participantIds || participantIds.length < 2) {
       throw new BadRequestException(
-        'At least one participant must be included in a group conversation',
+        this.i18n.t('chat.ERRORS.MIN_PARTICIPANTS'),
       );
     }
 
@@ -421,7 +397,9 @@ export class ChatService {
     });
 
     if (participants.length !== allParticipantIds.length) {
-      throw new NotFoundException('One or more participants do not exist');
+      throw new NotFoundException(
+        this.i18n.t('chat.ERRORS.PARTICIPANTS_NOT_FOUND'),
+      );
     }
 
     await this.assertActiveOrganizationMembers(orgId, allParticipantIds);
@@ -448,36 +426,13 @@ export class ChatService {
       // Return the conversation with all necessary relations
       return tx.conversation.findUnique({
         where: { id: conversation.id },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  first_name: true,
-                  last_name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-          messages: {
-            orderBy: { created_at: 'desc' },
-            take: 1,
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  first_name: true,
-                  last_name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
+        include: CONVERSATION_WITH_DETAILS_INCLUDE,
       });
     });
+
+    if (!groupConversation) {
+      throw new NotFoundException(this.i18n.t('chat.ERRORS.NOT_FOUND'));
+    }
 
     this.logger.log(
       `[ChatService] New group conversation created: ${groupConversation?.id}`,

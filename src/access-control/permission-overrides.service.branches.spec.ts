@@ -122,7 +122,7 @@ describe('PermissionOverridesService (Branches)', () => {
   describe('removePermissionOverride', () => {
     it('passes through ForbiddenException when caller is unauthorized', async () => {
       mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
-        new ForbiddenException('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        new ForbiddenException('organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
       );
 
       await expect(
@@ -200,7 +200,7 @@ describe('PermissionOverridesService (Branches)', () => {
       );
 
       expect(result.message).toBe(
-        'messages.PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY',
+        'organizations.MESSAGES.PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY',
       );
       expect(
         mockPrismaService.membershipPermissionOverride.deleteMany,
@@ -223,7 +223,7 @@ describe('PermissionOverridesService (Branches)', () => {
   describe('getMemberPermissionBreakdown', () => {
     it('passes through ForbiddenException when caller is not owner', async () => {
       mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
-        new ForbiddenException('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        new ForbiddenException('organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
       );
 
       await expect(

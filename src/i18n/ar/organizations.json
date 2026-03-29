@@ -1,0 +1,62 @@
+{
+  "ERRORS": {
+    "USER_NOT_FOUND": "لم يتم العثور على المستخدم.",
+    "INVALID_PERMISSIONS": "واحد أو أكثر من الأذونات غير موجود.",
+    "ROLE_NOT_FOUND": "لم يتم العثور على الدور لهذه المنظمة.",
+    "MEMBERSHIP_NOT_FOUND": "لم يتم العثور على العضوية.",
+    "PERMISSION_NOT_FOUND": "لم يتم العثور على الإذن.",
+    "ONLY_OWNER_CAN_PERFORM_THIS_ACTION": "يمكن فقط لمالك المنظمة تنفيذ هذا الإجراء.",
+    "CANNOT_MODIFY_OWNER_ROLE": "لا يمكن تعديل دور المالك.",
+    "CANNOT_OVERRIDE_OWNER_PERMISSIONS": "لا يمكن تجاوز أذونات المالك.",
+    "CANNOT_DELETE_ROLE_WITH_MEMBERS": "لا يمكن حذف الدور أثناء وجود أعضاء معيّنين عليه.",
+    "CANNOT_ASSIGN_OWNER_ROLE_FROM_APPROVAL": "لا يمكن تعيين دور المالك من خلال موافقة العضوية.",
+    "ORG": {
+      "SLUG_ALREADY_EXISTS": "منظمة بـ slug موجودة بالفعل.",
+      "NOT_FOUND": "لم يتم العثور على المنظمة.",
+      "USER_ALREADY_MEMBER": "المستخدم عضو بالفعل في هذه المنظمة.",
+      "CREATE_FAILED": "فشل إنشاء المنظمة. الرجاء محاولة مرة أخرى لاحقاً.",
+      "FETCH_FAILED": "فشل جلب المنظمة. الرجاء محاولة مرة أخرى لاحقاً.",
+      "FETCH_PUBLIC_FAILED": "فشل جلب المنظمات العامة. الرجاء محاولة مرة أخرى لاحقاً.",
+      "FETCH_USER_ORGS_FAILED": "فشل جلب منظماتك. الرجاء محاولة مرة أخرى لاحقاً.",
+      "UPDATE_FAILED": "فشل تحديث المنظمة. الرجاء محاولة مرة أخرى لاحقاً.",
+      "DELETE_FAILED": "فشل حذف المنظمة. الرجاء محاولة مرة أخرى لاحقاً.",
+      "JOIN_FAILED": "فشل الانضمام إلى المنظمة. الرجاء محاولة مرة أخرى لاحقاً.",
+      "INVITE_FAILED": "فشل دعوة المستخدم. الرجاء محاولة مرة أخرى لاحقاً.",
+      "ROLE_NOT_FOUND": "لم يتم العثور على الدور لهذه المنظمة.",
+      "JOIN_REQUEST_CREATED": "تم إنشاء طلب الانضمام بنجاح. بانتظار الموافقة.",
+      "MEMBERSHIP_REQUEST_NOT_FOUND": "لم يتم العثور على طلب العضوية.",
+      "MEMBERSHIP_CANCEL_FORBIDDEN": "لا تملك صلاحية إلغاء هذا الطلب.",
+      "MEMBERSHIP_CANCEL_ONLY_PENDING": "يمكنك إلغاء الطلبات قيد الانتظار فقط.",
+      "MEMBERSHIP_CANCELLED_SUCCESS": "تم إلغاء الطلب بنجاح."
+    },
+    "INVITATION": {
+      "SAVED": "تم حفظ الدعوة بنجاح.",
+      "NOT_FOUND": "لم يتم العثور على الدعوة.",
+      "NOT_OWNER": "هذه الدعوة لا تخصك.",
+      "INVALID_STATUS": "لا يمكن قبول الدعوة بحالة \"{status}\".",
+      "ACCEPT_SUCCESS": "تم الانضمام إلى المنظمة \"{organizationName}\" بنجاح."
+    },
+    "TENANT": {
+      "USER_INFO_MISSING": "لم يتم العثور على معلومات المستخدم.",
+      "NO_ORG_ACCESS": "ليس لديك صلاحية الوصول إلى هذه المنظمة.",
+      "VERIFY_FAILED": "فشل التحقق من صلاحية الوصول إلى المنظمة."
+    },
+    "ACCESS": {
+      "ROLE_EXISTS": "الدور \"{roleName}\" موجود بالفعل في هذه المنظمة.",
+      "PERMISSIONS_NOT_FOUND": "واحد أو أكثر من الأذونات غير موجود.",
+      "ROLE_FORBIDDEN": "ليس لديك صلاحية الوصول إلى هذا الدور.",
+      "MEMBERSHIP_FORBIDDEN": "ليس لديك صلاحية الوصول إلى هذه العضوية.",
+      "MEMBERSHIP_NOT_FOUND": "لم يتم العثور على العضوية.",
+      "PERMISSION_NOT_FOUND": "لم يتم العثور على الإذن."
+    }
+  },
+  "MESSAGES": {
+    "ROLE_CREATED_SUCCESSFULLY": "تم إنشاء الدور بنجاح.",
+    "ROLE_UPDATED_SUCCESSFULLY": "تم تحديث الدور بنجاح.",
+    "ROLE_DELETED_SUCCESSFULLY": "تم حذف الدور بنجاح.",
+    "ROLE_ASSIGNED_SUCCESSFULLY": "تم تعيين الدور لعضو المنظمة بنجاح.",
+    "MEMBER_ROLE_CHANGED_SUCCESSFULLY": "تم تغيير دور العضو بنجاح.",
+    "PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY": "تم إنشاء تجاوز الإذن بنجاح.",
+    "PERMISSION_OVERRIDE_ASSIGNED_SUCCESSFULLY": "تم تعيين تجاوز الإذن بنجاح."
+  }
+}

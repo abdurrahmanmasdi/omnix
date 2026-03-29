@@ -9,17 +9,20 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MembershipStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
 
 @Injectable()
 export class AccessVerificationService {
   private readonly logger = new Logger(AccessVerificationService.name);
   private readonly privilegedRoleSlugs = new Set(['owner', 'admin', 'manager']);
+  private readonly membershipCacheTtlSeconds = 900;
 
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
     private eventEmitter: EventEmitter2,
+    private redis: RedisService,
   ) {}
 
   private async emitPermissionCacheClearEvent(
@@ -36,6 +39,13 @@ export class AccessVerificationService {
     organizationId: string,
     currentUserId: string,
   ): Promise<void> {
+    const cacheKey = `org_membership:${organizationId}:${currentUserId}`;
+
+    const cachedMembershipStatus = await this.redis.get(cacheKey);
+    if (cachedMembershipStatus === MembershipStatus.ACTIVE) {
+      return;
+    }
+
     const membership = await this.prisma.organizationMembership.findFirst({
       where: {
         organization_id: organizationId,
@@ -46,8 +56,14 @@ export class AccessVerificationService {
     });
 
     if (!membership) {
-      throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+      throw new ForbiddenException(this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'));
     }
+
+    await this.redis.set(
+      cacheKey,
+      MembershipStatus.ACTIVE,
+      this.membershipCacheTtlSeconds,
+    );
   }
 
   async verifyIsOwner(organizationId: string, userId: string): Promise<void> {
@@ -70,7 +86,7 @@ export class AccessVerificationService {
 
     if (!membership || roleSlug !== 'owner') {
       throw new ForbiddenException(
-        this.i18n.t('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        this.i18n.t('organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
       );
     }
   }
@@ -98,7 +114,7 @@ export class AccessVerificationService {
 
     if (!membership || !roleSlug || !this.privilegedRoleSlugs.has(roleSlug)) {
       throw new ForbiddenException(
-        this.i18n.t('errors.INSUFFICIENT_PERMISSIONS'),
+        this.i18n.t('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
       );
     }
   }
@@ -121,7 +137,7 @@ export class AccessVerificationService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'));
       }
 
       const role = await this.prisma.role.findFirst({
@@ -133,7 +149,7 @@ export class AccessVerificationService {
       });
 
       if (!role) {
-        throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
       }
 
       await this.prisma.organizationMembership.update({
@@ -148,7 +164,7 @@ export class AccessVerificationService {
       return {
         id: membershipId,
         role_id: dto.role_id,
-        message: this.i18n.t('messages.ROLE_ASSIGNED_SUCCESSFULLY'),
+        message: this.i18n.t('organizations.MESSAGES.ROLE_ASSIGNED_SUCCESSFULLY'),
       };
     } catch (error) {
       if (
@@ -187,7 +203,7 @@ export class AccessVerificationService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'));
       }
 
       const targetRoleSlug = (
@@ -198,7 +214,7 @@ export class AccessVerificationService {
 
       if (targetRoleSlug === 'owner') {
         throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_MODIFY_OWNER_ROLE'),
+          this.i18n.t('organizations.ERRORS.CANNOT_MODIFY_OWNER_ROLE'),
         );
       }
 
@@ -211,7 +227,7 @@ export class AccessVerificationService {
       });
 
       if (!newRole) {
-        throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
       }
 
       await this.prisma.organizationMembership.update({
@@ -231,7 +247,7 @@ export class AccessVerificationService {
       return {
         id: membershipId,
         role_id: newRoleId,
-        message: this.i18n.t('messages.MEMBER_ROLE_CHANGED_SUCCESSFULLY'),
+        message: this.i18n.t('organizations.MESSAGES.MEMBER_ROLE_CHANGED_SUCCESSFULLY'),
       };
     } catch (error) {
       if (

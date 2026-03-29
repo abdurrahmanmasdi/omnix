@@ -25,6 +25,7 @@ model User {
   first_name    String
   last_name     String
   created_at    DateTime @default(now())
+  deleted_at    DateTime?
 
   memberships              OrganizationMembership[]
   conversationParticipants ConversationParticipant[]
@@ -42,6 +43,7 @@ model Organization {
   slug       String   @unique
   is_public  Boolean  @default(false)
   created_at DateTime @default(now())
+  deleted_at DateTime?
 
   roles          Role[]
   invitations    Invitation[]
@@ -221,6 +223,7 @@ model Message {
   content         String   @db.Text
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
+  deleted_at      DateTime?
 
   conversation Conversation @relation(fields: [conversation_id], references: [id])
   sender       User         @relation("SentMessages", fields: [sender_id], references: [id])
@@ -268,6 +271,7 @@ model LeadNote {
   content    String   @db.Text
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+  deleted_at DateTime?
 
   lead   Lead @relation(fields: [lead_id], references: [id])
   author User @relation(fields: [author_id], references: [id])
@@ -285,6 +289,7 @@ model LeadAttachment {
   file_name      String
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
+  deleted_at     DateTime?
 
   lead        Lead @relation(fields: [lead_id], references: [id])
   uploaded_by User @relation(fields: [uploaded_by_id], references: [id])
@@ -319,6 +324,7 @@ model Lead {
   next_follow_up_at     DateTime?
   created_at            DateTime   @default(now())
   updated_at            DateTime   @updatedAt
+  deleted_at            DateTime?
 
   organization   Organization     @relation(fields: [organization_id], references: [id])
   pipeline_stage PipelineStage?   @relation(fields: [pipeline_stage_id], references: [id])

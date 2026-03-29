@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MembershipStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { AccessVerificationService } from './access-verification.service';
 
 describe('AccessVerificationService', () => {
@@ -31,6 +32,11 @@ describe('AccessVerificationService', () => {
     emitAsync: jest.fn().mockResolvedValue([]),
   };
 
+  const mockRedisService = {
+    get: jest.fn(),
+    set: jest.fn(),
+  };
+
   const ownerCaller = {
     id: 'membership-owner',
     role: { slug: 'owner' as string | null },
@@ -38,6 +44,8 @@ describe('AccessVerificationService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockRedisService.get.mockResolvedValue(null);
+    mockRedisService.set.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -54,6 +62,10 @@ describe('AccessVerificationService', () => {
           provide: EventEmitter2,
           useValue: mockEventEmitter,
         },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
       ],
     }).compile();
 
@@ -65,7 +77,40 @@ describe('AccessVerificationService', () => {
   });
 
   describe('verifyUserInOrganization', () => {
+    it('returns immediately when active membership is found in Redis cache', async () => {
+      mockRedisService.get.mockResolvedValueOnce(MembershipStatus.ACTIVE);
+
+      await expect(
+        service.verifyUserInOrganization('org-1', 'user-1'),
+      ).resolves.toBeUndefined();
+
+      expect(mockRedisService.get).toHaveBeenCalledWith(
+        'org_membership:org-1:user-1',
+      );
+      expect(
+        mockPrismaService.organizationMembership.findFirst,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('writes active membership to Redis on cache miss and DB success', async () => {
+      mockRedisService.get.mockResolvedValueOnce(null);
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'membership-1',
+      });
+
+      await expect(
+        service.verifyUserInOrganization('org-1', 'user-1'),
+      ).resolves.toBeUndefined();
+
+      expect(mockRedisService.set).toHaveBeenCalledWith(
+        'org_membership:org-1:user-1',
+        MembershipStatus.ACTIVE,
+        900,
+      );
+    });
+
     it('throws ForbiddenException when membership is missing', async () => {
+      mockRedisService.get.mockResolvedValueOnce(null);
       mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce(
         null,
       );
@@ -84,6 +129,7 @@ describe('AccessVerificationService', () => {
         },
         select: { id: true },
       });
+      expect(mockRedisService.set).not.toHaveBeenCalled();
     });
   });
 
@@ -164,7 +210,7 @@ describe('AccessVerificationService', () => {
       expect(result).toEqual({
         id: membershipId,
         role_id: 'role-2',
-        message: 'messages.ROLE_ASSIGNED_SUCCESSFULLY',
+        message: 'organizations.MESSAGES.ROLE_ASSIGNED_SUCCESSFULLY',
       });
     });
 
@@ -229,7 +275,7 @@ describe('AccessVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(mockI18nService.t).toHaveBeenCalledWith(
-        'errors.CANNOT_MODIFY_OWNER_ROLE',
+        'organizations.ERRORS.CANNOT_MODIFY_OWNER_ROLE',
       );
     });
 

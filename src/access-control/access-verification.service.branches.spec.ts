@@ -4,6 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MembershipStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { AccessVerificationService } from './access-verification.service';
 
 describe('AccessVerificationService (Branches)', () => {
@@ -27,8 +28,15 @@ describe('AccessVerificationService (Branches)', () => {
     emitAsync: jest.fn().mockResolvedValue([]),
   };
 
+  const mockRedisService = {
+    get: jest.fn(),
+    set: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockRedisService.get.mockResolvedValue(null);
+    mockRedisService.set.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +52,10 @@ describe('AccessVerificationService (Branches)', () => {
         {
           provide: EventEmitter2,
           useValue: mockEventEmitter,
+        },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
         },
       ],
     }).compile();

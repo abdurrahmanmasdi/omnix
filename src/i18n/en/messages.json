@@ -1,7 +1,0 @@
-{
-  "ROLE_CREATED_SUCCESSFULLY": "Role created successfully.",
-  "ROLE_UPDATED_SUCCESSFULLY": "Role updated successfully.",
-  "ROLE_DELETED_SUCCESSFULLY": "Role deleted successfully.",
-  "ROLE_ASSIGNED_SUCCESSFULLY": "Role assigned to member successfully.",
-  "PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY": "Permission override created successfully."
-}

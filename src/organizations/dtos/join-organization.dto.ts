@@ -7,12 +7,12 @@ export class JoinOrganizationDto {
     example: 'acme-corporation',
     description: 'The URL-friendly slug of the organization to join',
   })
-  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  @IsString({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_STRING') })
   @MinLength(3, {
-    message: i18nValidationMessage('errors.VALIDATION.MIN_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_LENGTH'),
   })
   @MaxLength(255, {
-    message: i18nValidationMessage('errors.VALIDATION.MAX_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MAX_LENGTH'),
   })
   slug: string;
 }

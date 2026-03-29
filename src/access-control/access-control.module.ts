@@ -7,9 +7,10 @@ import { PermissionsController } from './permissions.controller';
 import { RolesService } from './roles.service';
 import { PermissionOverridesService } from './permission-overrides.service';
 import { AccessVerificationService } from './access-verification.service';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, RedisModule],
   providers: [
     RolesService,
     PermissionOverridesService,

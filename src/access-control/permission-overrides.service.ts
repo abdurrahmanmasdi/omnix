@@ -58,7 +58,9 @@ export class PermissionOverridesService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+        );
       }
 
       const permission = await this.prisma.permission.findFirst({
@@ -67,7 +69,9 @@ export class PermissionOverridesService {
       });
 
       if (!permission) {
-        throw new NotFoundException(this.i18n.t('errors.PERMISSION_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.PERMISSION_NOT_FOUND'),
+        );
       }
 
       const override = await this.prisma.membershipPermissionOverride.upsert({
@@ -106,7 +110,7 @@ export class PermissionOverridesService {
         permission_id: override.permission_id,
         is_granted: override.is_granted,
         message: this.i18n.t(
-          'messages.PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY',
+          'organizations.MESSAGES.PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY',
         ),
       };
     } catch (error) {
@@ -150,12 +154,26 @@ export class PermissionOverridesService {
         select: {
           id: true,
           user_id: true,
-          role: { select: { slug: true } },
+          role: {
+            select: {
+              slug: true,
+              rolePermissions: {
+                where: {
+                  permission_id: permissionId,
+                },
+                select: {
+                  permission_id: true,
+                },
+              },
+            },
+          },
         },
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+        );
       }
 
       const targetRoleSlug = (
@@ -166,7 +184,21 @@ export class PermissionOverridesService {
 
       if (targetRoleSlug === 'owner') {
         throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
+          this.i18n.t('organizations.ERRORS.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
+        );
+      }
+
+      const roleAlreadyHasPermission = (
+        membership as {
+          role?: { rolePermissions?: Array<{ permission_id: string }> };
+        }
+      ).role?.rolePermissions?.length;
+
+      if (isGranted && roleAlreadyHasPermission) {
+        throw new BadRequestException(
+          this.i18n.t(
+            'organizations.ERRORS.PERMISSION_ALREADY_GRANTED_BY_ROLE',
+          ),
         );
       }
 
@@ -176,7 +208,9 @@ export class PermissionOverridesService {
       });
 
       if (!permission) {
-        throw new NotFoundException(this.i18n.t('errors.PERMISSION_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.PERMISSION_NOT_FOUND'),
+        );
       }
 
       const override = await this.prisma.membershipPermissionOverride.upsert({
@@ -215,7 +249,7 @@ export class PermissionOverridesService {
         permission_id: override.permission_id,
         is_granted: override.is_granted,
         message: this.i18n.t(
-          'messages.PERMISSION_OVERRIDE_ASSIGNED_SUCCESSFULLY',
+          'organizations.MESSAGES.PERMISSION_OVERRIDE_ASSIGNED_SUCCESSFULLY',
         ),
       };
     } catch (error) {
@@ -259,7 +293,9 @@ export class PermissionOverridesService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+        );
       }
 
       const targetRoleSlug = (
@@ -270,7 +306,7 @@ export class PermissionOverridesService {
 
       if (targetRoleSlug === 'owner') {
         throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
+          this.i18n.t('organizations.ERRORS.CANNOT_OVERRIDE_OWNER_PERMISSIONS'),
         );
       }
 
@@ -280,7 +316,9 @@ export class PermissionOverridesService {
       });
 
       if (!permission) {
-        throw new NotFoundException(this.i18n.t('errors.PERMISSION_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.PERMISSION_NOT_FOUND'),
+        );
       }
 
       await this.prisma.membershipPermissionOverride.deleteMany({
@@ -297,7 +335,7 @@ export class PermissionOverridesService {
 
       return {
         message: this.i18n.t(
-          'messages.PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY',
+          'organizations.MESSAGES.PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY',
         ),
       };
     } catch (error) {
@@ -374,7 +412,9 @@ export class PermissionOverridesService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('errors.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+        );
       }
 
       const overrides = await this.prisma.membershipPermissionOverride.findMany(

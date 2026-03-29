@@ -1,7 +1,0 @@
-{
-  "ROLE_CREATED_SUCCESSFULLY": "تم إنشاء الدور بنجاح.",
-  "ROLE_UPDATED_SUCCESSFULLY": "تم تحديث الدور بنجاح.",
-  "ROLE_DELETED_SUCCESSFULLY": "تم حذف الدور بنجاح.",
-  "ROLE_ASSIGNED_SUCCESSFULLY": "تم تعيين الدور لعضو المنظمة بنجاح.",
-  "PERMISSION_OVERRIDE_CREATED_SUCCESSFULLY": "تم إنشاء تجاوز الإذن بنجاح."
-}

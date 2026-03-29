@@ -66,7 +66,7 @@ export class AuthController {
     );
     if (!user) {
       throw new UnauthorizedException(
-        this.i18n.t('errors.AUTH.INVALID_CREDENTIALS'),
+        this.i18n.t('auth.ERRORS.INVALID_CREDENTIALS'),
       );
     }
     return this.authService.login(user);

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   InternalServerErrorException,
   NotFoundException,
@@ -9,6 +10,7 @@ import { MembershipStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { MembershipsService } from './memberships.service';
 
 describe('MembershipsService', () => {
@@ -42,8 +44,13 @@ describe('MembershipsService', () => {
     verifyIsOwnerOrAdmin: jest.fn(),
   };
 
+  const mockRedisService = {
+    del: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockRedisService.del.mockResolvedValue(1);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -59,6 +66,10 @@ describe('MembershipsService', () => {
         {
           provide: AccessVerificationService,
           useValue: mockAccessVerificationService,
+        },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
         },
       ],
     }).compile();
@@ -149,6 +160,7 @@ describe('MembershipsService', () => {
       });
       mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
         id: 'm1',
+        user_id: 'user-1',
         status: MembershipStatus.REJECTED,
       });
 
@@ -160,6 +172,10 @@ describe('MembershipsService', () => {
         where: { id: 'm1' },
         data: { status: MembershipStatus.PENDING },
       });
+      expect(mockRedisService.del).toHaveBeenCalledWith(
+        'org_membership:org-1:user-1',
+      );
+      expect(mockRedisService.del).toHaveBeenCalledTimes(1);
       expect(result.organizationId).toBe('org-1');
     });
 
@@ -245,12 +261,71 @@ describe('MembershipsService', () => {
         service.approveJoinRequest('org-1', 'membership-1', 'caller', dto),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('throws ConflictException when membership is already active', async () => {
+      mockPrismaService.organization.findUnique.mockResolvedValueOnce({
+        id: 'org-1',
+      });
+      mockPrismaService.role.findUnique.mockResolvedValueOnce({
+        id: 'role-1',
+        organization_id: 'org-1',
+        slug: 'agent',
+      });
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'membership-1',
+        organization_id: 'org-1',
+        user_id: 'user-target',
+        status: MembershipStatus.ACTIVE,
+      });
+
+      await expect(
+        service.approveJoinRequest('org-1', 'membership-1', 'caller', dto),
+      ).rejects.toThrow(ConflictException);
+
+      expect(
+        mockPrismaService.organizationMembership.update,
+      ).not.toHaveBeenCalled();
+      expect(mockRedisService.del).not.toHaveBeenCalled();
+    });
+
+    it('approves pending request and invalidates membership cache', async () => {
+      mockPrismaService.organization.findUnique.mockResolvedValueOnce({
+        id: 'org-1',
+      });
+      mockPrismaService.role.findUnique.mockResolvedValueOnce({
+        id: 'role-1',
+        organization_id: 'org-1',
+        slug: 'agent',
+      });
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'membership-1',
+        organization_id: 'org-1',
+        user_id: 'user-target',
+        status: MembershipStatus.PENDING,
+      });
+      mockPrismaService.organizationMembership.update.mockResolvedValueOnce({
+        id: 'membership-1',
+      });
+
+      const result = await service.approveJoinRequest(
+        'org-1',
+        'membership-1',
+        'caller',
+        dto,
+      );
+
+      expect(mockRedisService.del).toHaveBeenCalledWith(
+        'org_membership:org-1:user-target',
+      );
+      expect(mockRedisService.del).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe(MembershipStatus.ACTIVE);
+    });
   });
 
   describe('rejectJoinRequest', () => {
     it('passes through ForbiddenException from access verification', async () => {
       mockAccessVerificationService.verifyIsOwnerOrAdmin.mockRejectedValueOnce(
-        new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+        new ForbiddenException('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
       );
 
       await expect(
@@ -267,6 +342,69 @@ describe('MembershipsService', () => {
       await expect(
         service.rejectJoinRequest('org-1', 'membership-1', 'caller-1'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('rejects pending request and invalidates membership cache', async () => {
+      mockAccessVerificationService.verifyIsOwnerOrAdmin.mockResolvedValueOnce(
+        undefined,
+      );
+      mockPrismaService.organization.findUnique.mockResolvedValueOnce({
+        id: 'org-1',
+      });
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'membership-1',
+        organization_id: 'org-1',
+        user_id: 'user-target',
+        status: MembershipStatus.PENDING,
+        role: {
+          slug: 'agent',
+        },
+      });
+      mockPrismaService.organizationMembership.update.mockResolvedValueOnce({
+        id: 'membership-1',
+      });
+
+      const result = await service.rejectJoinRequest(
+        'org-1',
+        'membership-1',
+        'caller-1',
+      );
+
+      expect(mockRedisService.del).toHaveBeenCalledWith(
+        'org_membership:org-1:user-target',
+      );
+      expect(mockRedisService.del).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe(MembershipStatus.REJECTED);
+    });
+
+    it('throws ConflictException when attempting to remove the last active owner', async () => {
+      mockAccessVerificationService.verifyIsOwnerOrAdmin.mockResolvedValueOnce(
+        undefined,
+      );
+      mockPrismaService.organization.findUnique.mockResolvedValueOnce({
+        id: 'org-1',
+      });
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'membership-owner',
+        organization_id: 'org-1',
+        user_id: 'owner-user',
+        status: MembershipStatus.ACTIVE,
+        role: {
+          slug: 'owner',
+        },
+      });
+      mockPrismaService.organizationMembership.findMany.mockResolvedValueOnce([
+        { id: 'membership-owner' },
+      ]);
+
+      await expect(
+        service.rejectJoinRequest('org-1', 'membership-owner', 'caller-1'),
+      ).rejects.toThrow(ConflictException);
+
+      expect(
+        mockPrismaService.organizationMembership.update,
+      ).not.toHaveBeenCalled();
+      expect(mockRedisService.del).not.toHaveBeenCalled();
     });
   });
 

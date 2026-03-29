@@ -89,7 +89,9 @@ describe('PermissionOverridesService', () => {
 
     it('throws ForbiddenException when caller is not owner', async () => {
       mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
-        new ForbiddenException('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        new ForbiddenException(
+          'organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION',
+        ),
       );
 
       await expect(
@@ -140,6 +142,33 @@ describe('PermissionOverridesService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('throws BadRequestException when role already grants the target permission', async () => {
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: membershipId,
+        user_id: 'target-user',
+        role: {
+          slug: 'agent' as string | null,
+          rolePermissions: [{ permission_id: permissionId }],
+        },
+      });
+
+      await expect(
+        service.assignPermissionOverride(
+          orgId,
+          membershipId,
+          permissionId,
+          true,
+          ownerId,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockPrismaService.permission.findFirst).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.membershipPermissionOverride.upsert,
+      ).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emitAsync).not.toHaveBeenCalled();
+    });
+
     it('upserts override and emits cache clear event', async () => {
       mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
         id: membershipId,
@@ -179,7 +208,7 @@ describe('PermissionOverridesService', () => {
   describe('createPermissionOverride', () => {
     it('throws ForbiddenException when caller is not owner/admin', async () => {
       mockAccessVerificationService.verifyIsOwnerOrAdmin.mockRejectedValueOnce(
-        new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+        new ForbiddenException('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
       );
 
       await expect(

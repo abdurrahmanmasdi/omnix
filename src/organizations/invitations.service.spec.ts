@@ -89,7 +89,7 @@ describe('InvitationsService', () => {
 
     it('passes through ForbiddenException for unauthorized caller', async () => {
       mockAccessVerificationService.verifyIsOwnerOrAdmin.mockRejectedValueOnce(
-        new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+        new ForbiddenException('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
       );
 
       await expect(
@@ -367,7 +367,7 @@ describe('InvitationsService', () => {
         },
       });
       expect(result).toEqual({
-        message: 'errors.INVITATION.ACCEPT_SUCCESS',
+        message: 'organizations.ERRORS.INVITATION.ACCEPT_SUCCESS',
         organizationId: 'org-1',
         membershipId: 'membership-1',
       });
@@ -383,6 +383,11 @@ describe('InvitationsService', () => {
           'invitee@example.com',
         ),
       ).rejects.toThrow(NotFoundException);
+
+      expect(mockPrismaService.invitation.updateMany).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.organizationMembership.create,
+      ).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when invitation status is not pending', async () => {
@@ -437,6 +442,32 @@ describe('InvitationsService', () => {
       await expect(
         service.acceptInvitation('token-123', 'user-1', 'invitee@example.com'),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('throws ConflictException when user already has an active owner membership', async () => {
+      mockPrismaService.invitation.findFirst.mockResolvedValueOnce({
+        id: 'invite-1',
+        email: 'invitee@example.com',
+        status: 'pending',
+        organization_id: 'org-1',
+        role_id: 'role-1',
+        organization: {
+          name: 'Acme Inc',
+        },
+      });
+      mockPrismaService.organizationMembership.findFirst.mockResolvedValueOnce({
+        id: 'membership-owner',
+        role: { slug: 'owner' },
+      });
+
+      await expect(
+        service.acceptInvitation('token-123', 'user-1', 'invitee@example.com'),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockPrismaService.invitation.updateMany).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.organizationMembership.create,
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -505,7 +536,7 @@ describe('InvitationsService', () => {
 
     it('passes through ForbiddenException when user is not owner/admin/manager', async () => {
       mockAccessVerificationService.verifyIsOwnerOrAdmin.mockRejectedValueOnce(
-        new ForbiddenException('errors.INSUFFICIENT_PERMISSIONS'),
+        new ForbiddenException('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
       );
 
       await expect(

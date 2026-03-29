@@ -84,7 +84,7 @@ describe('RolesService', () => {
 
     it('throws ForbiddenException when caller is not in organization', async () => {
       mockAccessVerificationService.verifyUserInOrganization.mockRejectedValueOnce(
-        new ForbiddenException('errors.UNAUTHORIZED_ACCESS'),
+        new ForbiddenException('auth.ERRORS.UNAUTHORIZED_ACCESS'),
       );
 
       await expect(
@@ -119,6 +119,9 @@ describe('RolesService', () => {
         service.deleteRole(organizationId, roleId, userId),
       ).rejects.toThrow(ForbiddenException);
 
+      expect(
+        mockPrismaService.organizationMembership.count,
+      ).not.toHaveBeenCalled();
       expect(mockPrismaService.role.delete).not.toHaveBeenCalled();
     });
 
@@ -135,7 +138,7 @@ describe('RolesService', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(mockI18nService.t).toHaveBeenCalledWith(
-        'errors.CANNOT_DELETE_ROLE_WITH_MEMBERS',
+        'organizations.ERRORS.CANNOT_DELETE_ROLE_WITH_MEMBERS',
       );
     });
 
@@ -151,7 +154,7 @@ describe('RolesService', () => {
       const result = await service.deleteRole(organizationId, roleId, userId);
 
       expect(result).toEqual({
-        message: 'messages.ROLE_DELETED_SUCCESSFULLY',
+        message: 'organizations.MESSAGES.ROLE_DELETED_SUCCESSFULLY',
       });
       expect(mockPrismaService.role.delete).toHaveBeenCalledWith({
         where: { id: roleId },
@@ -166,7 +169,9 @@ describe('RolesService', () => {
 
     it('throws ForbiddenException when caller is not owner', async () => {
       mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
-        new ForbiddenException('errors.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        new ForbiddenException(
+          'organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION',
+        ),
       );
 
       await expect(

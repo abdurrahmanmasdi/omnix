@@ -97,7 +97,7 @@ export class LeadAttachmentsService {
 
     if (result.count === 0) {
       throw new NotFoundException(
-        this.i18n.t('errors.LEAD_ATTACHMENTS.NOT_FOUND'),
+        this.i18n.t('leads.ERRORS.LEAD_ATTACHMENT_NOT_FOUND'),
       );
     }
   }
@@ -115,7 +115,7 @@ export class LeadAttachmentsService {
     });
 
     if (!lead) {
-      throw new NotFoundException(this.i18n.t('errors.LEADS.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('leads.ERRORS.NOT_FOUND'));
     }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "ERRORS": {
+    "NOT_FOUND": "Bu organizasyonda lead bulunamadı.",
+    "RESOURCE_NOT_FOUND": "Kaynak bulunamadı.",
+    "ACCESS_FORBIDDEN": "Bu lead'e erişim yetkiniz yok.",
+    "INVALID_FILTERS": "Lead filtreleri yükü geçersiz.",
+    "PIPELINE_STAGE_OUTSIDE_SCOPE": "Pipeline aşaması tenant kapsamı dışında.",
+    "SOURCE_OUTSIDE_SCOPE": "Lead kaynağı tenant kapsamı dışında.",
+    "SOURCE_INACTIVE": "Pasif bir kaynağa lead atanamaz.",
+    "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Atanan temsilci bu organizasyonda aktif üye olmalıdır.",
+    "LEAD_NOTE_NOT_FOUND": "Bu lead için not bulunamadı.",
+    "LEAD_ATTACHMENT_NOT_FOUND": "Bu lead için ek bulunamadı.",
+    "BAD_REQUEST": "Geçersiz istek."
+  },
+  "MESSAGES": {}
+}

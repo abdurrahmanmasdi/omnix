@@ -50,7 +50,7 @@ export class TenantInterceptor implements NestInterceptor {
     if (!userId) {
       this.logger.warn('TenantInterceptor: User ID not found in request');
       throw new UnauthorizedException(
-        this.i18n.t('errors.TENANT.USER_INFO_MISSING'),
+        this.i18n.t('organizations.ERRORS.TENANT.USER_INFO_MISSING'),
       );
     }
 
@@ -69,7 +69,7 @@ export class TenantInterceptor implements NestInterceptor {
           `TenantInterceptor: User ${userId} does not have active membership to organization ${organizationId}`,
         );
         throw new UnauthorizedException(
-          this.i18n.t('errors.TENANT.NO_ORG_ACCESS'),
+          this.i18n.t('organizations.ERRORS.TENANT.NO_ORG_ACCESS'),
         );
       }
 
@@ -88,7 +88,7 @@ export class TenantInterceptor implements NestInterceptor {
         `TenantInterceptor: Error verifying organization membership: ${error}`,
       );
       throw new UnauthorizedException(
-        this.i18n.t('errors.TENANT.VERIFY_FAILED'),
+        this.i18n.t('organizations.ERRORS.TENANT.VERIFY_FAILED'),
       );
     }
 

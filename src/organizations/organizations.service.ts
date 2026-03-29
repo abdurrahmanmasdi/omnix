@@ -11,9 +11,9 @@ import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
-import { DEFAULT_ROLE_MATRIX } from './constants/default-role-matrix';
 import { Prisma } from '@prisma/client';
 import { MembershipStatus } from '@prisma/client';
+import { OrganizationProvisioningService } from './services/organization-provisioning.service';
 
 interface IOrganization {
   id: string;
@@ -31,6 +31,7 @@ export class OrganizationsService {
     private prisma: PrismaService,
     private i18n: I18nService,
     private eventEmitter: EventEmitter2,
+    private provisioningService: OrganizationProvisioningService,
   ) {}
 
   private async emitPermissionCacheClearEvent(
@@ -72,7 +73,7 @@ export class OrganizationsService {
 
         if (!user) {
           this.logger.warn(`User with id ${userId} not found`);
-          throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
+          throw new NotFoundException(this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'));
         }
 
         // ========== STEP 2: Validate Slug Availability ==========
@@ -85,7 +86,7 @@ export class OrganizationsService {
             `Organization with slug '${createOrgDto.slug}' already exists`,
           );
           throw new ConflictException(
-            this.i18n.t('errors.ORG.SLUG_ALREADY_EXISTS'),
+            this.i18n.t('organizations.ERRORS.ORG.SLUG_ALREADY_EXISTS'),
           );
         }
 
@@ -98,91 +99,11 @@ export class OrganizationsService {
           },
         });
 
-        // ========== STEP 5: FETCH ALL PERMISSIONS WITH SAFETY CHECK ==========
-        const allPermissions = await tx.permission.findMany();
-
-        const permissionMap = new Map(
-          allPermissions.map((p) => [p.action, p.id]),
+        await this.provisioningService.provisionDefaultTenantRBAC(
+          tx,
+          createdOrg.id,
+          userId,
         );
-        // ========== STEP 6: CREATE OWNER ROLE WITH ALL PERMISSIONS ==========
-        // Owner role gets ALL system permissions in a single atomic create operation
-        const ownerTranslations = { en: 'Owner', ar: 'المالك' };
-        const ownerRole = await tx.role.create({
-          data: {
-            name: 'Kurucu',
-            ...(ownerTranslations && {
-              name_translations: ownerTranslations as Prisma.InputJsonValue,
-            }),
-            is_system: true,
-            slug: 'owner',
-            organization_id: createdOrg.id,
-            rolePermissions: {
-              create: allPermissions.map((perm) => ({
-                permission_id: perm.id,
-              })),
-            },
-          },
-          include: { rolePermissions: true },
-        });
-
-        // ========== STEP 7: CREATE OTHER ROLES (MANAGER, AGENT) WITH MATRIX PERMISSIONS ==========
-        // Create remaining roles from the matrix (excluding Owner which we just created)
-        // Map Turkish role names to their English and Arabic translations
-        const roleTranslations: Record<string, { en: string; ar: string }> = {
-          Yönetici: { en: 'Manager', ar: 'مدير' },
-          Temsilci: { en: 'Agent', ar: 'وكيل' },
-        };
-
-        const systemRoleSlugs: Record<string, string> = {
-          Yönetici: 'manager',
-          Temsilci: 'agent',
-        };
-
-        for (const roleTemplate of DEFAULT_ROLE_MATRIX.filter(
-          (role) => role.name !== 'Kurucu',
-        )) {
-          // Get translations for this role
-          const translations = roleTranslations[roleTemplate.name];
-
-          // Create the role
-          const role = await tx.role.create({
-            data: {
-              name: roleTemplate.name,
-              ...(translations && {
-                name_translations: translations,
-              }),
-              is_system: true,
-              slug: systemRoleSlugs[roleTemplate.name],
-              organization_id: createdOrg.id,
-            },
-          });
-
-          // Map permission actions to permission IDs from the matrix
-          const rolePermissions = roleTemplate.permissionActions
-            .map((action) => permissionMap.get(action))
-            .filter((id) => id !== undefined);
-
-          // Batch create RolePermission join records
-          if (rolePermissions.length > 0) {
-            await tx.rolePermission.createMany({
-              data: rolePermissions.map((permissionId) => ({
-                role_id: role.id,
-                permission_id: permissionId,
-              })),
-              skipDuplicates: true,
-            });
-          }
-        }
-
-        // ========== STEP 8: Assign Creator as Owner with ACTIVE Status ==========
-        await tx.organizationMembership.create({
-          data: {
-            user_id: userId,
-            organization_id: createdOrg.id,
-            role_id: ownerRole.id,
-            status: MembershipStatus.ACTIVE,
-          },
-        });
 
         return createdOrg;
       });
@@ -214,7 +135,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error creating organization: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.CREATE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.CREATE_FAILED'),
       );
     }
   }
@@ -231,7 +152,7 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with id ${id} not found`);
-        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'));
       }
 
       return organization as IOrganization;
@@ -242,7 +163,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error fetching organization: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.FETCH_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.FETCH_FAILED'),
       );
     }
   }
@@ -259,7 +180,7 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with slug '${slug}' not found`);
-        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'));
       }
 
       return organization as IOrganization;
@@ -270,7 +191,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error fetching organization by slug: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.FETCH_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.FETCH_FAILED'),
       );
     }
   }
@@ -286,7 +207,7 @@ export class OrganizationsService {
     try {
       if (skip < 0 || take < 1 || take > 100) {
         throw new BadRequestException(
-          this.i18n.t('errors.VALIDATION.INVALID_PAGINATION'),
+          this.i18n.t('auth.ERRORS.VALIDATION.INVALID_PAGINATION'),
         );
       }
 
@@ -311,7 +232,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error fetching public organizations: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.FETCH_PUBLIC_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.FETCH_PUBLIC_FAILED'),
       );
     }
   }
@@ -328,7 +249,7 @@ export class OrganizationsService {
     try {
       if (skip < 0 || take < 1 || take > 100) {
         throw new BadRequestException(
-          this.i18n.t('errors.VALIDATION.INVALID_PAGINATION'),
+          this.i18n.t('auth.ERRORS.VALIDATION.INVALID_PAGINATION'),
         );
       }
 
@@ -365,7 +286,7 @@ export class OrganizationsService {
         `Error fetching user organizations for ${userId}: ${error}`,
       );
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.FETCH_USER_ORGS_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.FETCH_USER_ORGS_FAILED'),
       );
     }
   }
@@ -394,7 +315,7 @@ export class OrganizationsService {
             `Organization with slug '${updateOrgDto.slug}' already exists`,
           );
           throw new ConflictException(
-            this.i18n.t('errors.ORG.SLUG_ALREADY_EXISTS'),
+            this.i18n.t('organizations.ERRORS.ORG.SLUG_ALREADY_EXISTS'),
           );
         }
       }
@@ -423,7 +344,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error updating organization: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.UPDATE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.UPDATE_FAILED'),
       );
     }
   }
@@ -489,7 +410,7 @@ export class OrganizationsService {
 
       this.logger.error(`Error deleting organization: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.DELETE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.DELETE_FAILED'),
       );
     }
   }

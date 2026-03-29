@@ -72,7 +72,7 @@ export class PermissionsGuard implements CanActivate {
       this.logger.warn(
         `[PermissionsGuard] No authenticated user found on request requiring permissions: [${requiredPermissions.join(', ')}]`,
       );
-      throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+      throw new ForbiddenException(this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'));
     }
 
     // Step 3: Extract organization ID from request
@@ -83,7 +83,7 @@ export class PermissionsGuard implements CanActivate {
         `[PermissionsGuard] No organization ID found in request for user ${user.id} requiring permissions: [${requiredPermissions.join(', ')}]`,
       );
       throw new BadRequestException(
-        this.i18n.t('errors.ORGANIZATION_ID_REQUIRED'),
+        this.i18n.t('auth.ERRORS.ORGANIZATION_ID_REQUIRED'),
       );
     }
 
@@ -106,7 +106,7 @@ export class PermissionsGuard implements CanActivate {
         `[PermissionsGuard] User ${user.id} lacks required permissions [${requiredPermissions.join(', ')}] in org ${orgId}`,
       );
       throw new ForbiddenException(
-        this.i18n.t('errors.INSUFFICIENT_PERMISSIONS'),
+        this.i18n.t('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
       );
     }
 

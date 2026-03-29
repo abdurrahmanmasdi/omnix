@@ -1,0 +1,9 @@
+{
+  "ERRORS": {
+    "UNIQUE_CONSTRAINT_FAILED": "A record with this {field} already exists.",
+    "RECORD_NOT_FOUND": "The requested record was not found.",
+    "FOREIGN_KEY_FAILED": "The referenced record does not exist or cannot be linked.",
+    "INTERNAL_SERVER_ERROR": "An internal server error occurred."
+  },
+  "MESSAGES": {}
+}

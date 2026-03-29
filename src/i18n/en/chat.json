@@ -1,0 +1,10 @@
+{
+  "ERRORS": {
+    "PARTICIPANTS_OUTSIDE_SCOPE": "One or more participants are outside tenant scope.",
+    "NOT_MEMBER": "You are not a member of this conversation.",
+    "NOT_FOUND": "Conversation not found.",
+    "MIN_PARTICIPANTS": "At least one participant must be included in a group conversation.",
+    "PARTICIPANTS_NOT_FOUND": "One or more participants do not exist."
+  },
+  "MESSAGES": {}
+}

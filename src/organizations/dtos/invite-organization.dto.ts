@@ -7,7 +7,7 @@ export class InviteToOrganizationDto {
     example: 'user@example.com',
     description: 'The email address of the user to invite',
   })
-  @IsEmail({}, { message: i18nValidationMessage('errors.VALIDATION.IS_EMAIL') })
+  @IsEmail({}, { message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_EMAIL') })
   email: string;
 
   @ApiProperty({
@@ -15,7 +15,7 @@ export class InviteToOrganizationDto {
     description: 'The role ID to assign when the invite is accepted',
   })
   @IsUUID('4', {
-    message: i18nValidationMessage('errors.VALIDATION.IS_UUID'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_UUID'),
   })
   roleId: string;
 }

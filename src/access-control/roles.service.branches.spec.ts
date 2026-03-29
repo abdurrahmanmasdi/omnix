@@ -84,7 +84,7 @@ describe('RolesService (Branches)', () => {
   describe('getRoles', () => {
     it('passes through ForbiddenException when caller is outside organization', async () => {
       mockAccessVerificationService.verifyUserInOrganization.mockRejectedValueOnce(
-        new ForbiddenException('errors.UNAUTHORIZED_ACCESS'),
+        new ForbiddenException('auth.ERRORS.UNAUTHORIZED_ACCESS'),
       );
 
       await expect(service.getRoles('org-1', 'user-1')).rejects.toThrow(

@@ -13,6 +13,7 @@ import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 import { MembershipStatus } from '@prisma/client';
 import { AccessVerificationService } from '../access-control/access-verification.service';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class MembershipsService {
@@ -22,6 +23,7 @@ export class MembershipsService {
     private prisma: PrismaService,
     private i18n: I18nService,
     private accessVerificationService: AccessVerificationService,
+    private redisService: RedisService,
   ) {}
 
   /**
@@ -44,7 +46,9 @@ export class MembershipsService {
         });
 
       if (!activeMembership) {
-        throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+        throw new ForbiddenException(
+          this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'),
+        );
       }
 
       const pendingRequests = await this.prisma.organizationMembership.findMany(
@@ -92,7 +96,7 @@ export class MembershipsService {
         `Error fetching pending join requests for organization ${organizationId}: ${error}`,
       );
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.FETCH_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.FETCH_FAILED'),
       );
     }
   }
@@ -115,7 +119,9 @@ export class MembershipsService {
 
       if (!user) {
         this.logger.warn(`User with id ${userId} not found`);
-        throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
+        );
       }
 
       // Find organization by slug
@@ -127,7 +133,9 @@ export class MembershipsService {
         this.logger.warn(
           `Organization with slug '${joinOrgDto.slug}' not found`,
         );
-        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+        );
       }
 
       // Check if user is already a member
@@ -158,12 +166,18 @@ export class MembershipsService {
             },
           });
 
+          await this.redisService.del(
+            `org_membership:${organization.id}:${userId}`,
+          );
+
           this.logger.log(
             `User ${userId} re-applied to organization ${organization.id} from REJECTED to PENDING`,
           );
 
           return {
-            message: this.i18n.t('errors.ORG.JOIN_REQUEST_CREATED'),
+            message: this.i18n.t(
+              'organizations.ERRORS.ORG.JOIN_REQUEST_CREATED',
+            ),
             organizationId: organization.id,
           };
         }
@@ -198,7 +212,7 @@ export class MembershipsService {
       );
 
       return {
-        message: this.i18n.t('errors.ORG.JOIN_REQUEST_CREATED'),
+        message: this.i18n.t('organizations.ERRORS.ORG.JOIN_REQUEST_CREATED'),
         organizationId: organization.id,
       };
     } catch (error) {
@@ -212,7 +226,7 @@ export class MembershipsService {
 
       this.logger.error(`Error joining organization: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.JOIN_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.JOIN_FAILED'),
       );
     }
   }
@@ -229,7 +243,9 @@ export class MembershipsService {
       });
 
       if (!organization) {
-        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+        );
       }
 
       const role = await this.prisma.role.findUnique({
@@ -237,13 +253,17 @@ export class MembershipsService {
       });
 
       if (!role || role.organization_id !== organizationId) {
-        throw new NotFoundException(this.i18n.t('errors.ORG.ROLE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.ROLE_NOT_FOUND'),
+        );
       }
 
       // Prevent assigning system Owner role directly from approval.
       if (role.slug === 'owner') {
         throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_ASSIGN_OWNER_ROLE_FROM_APPROVAL'),
+          this.i18n.t(
+            'organizations.ERRORS.CANNOT_ASSIGN_OWNER_ROLE_FROM_APPROVAL',
+          ),
         );
       }
 
@@ -251,12 +271,23 @@ export class MembershipsService {
         where: {
           id: membershipId,
           organization_id: organizationId,
-          status: MembershipStatus.PENDING,
         },
       });
 
       if (!membership) {
         throw new NotFoundException('Pending membership request not found.');
+      }
+
+      if (String(membership.status).toUpperCase() === MembershipStatus.ACTIVE) {
+        throw new ConflictException(
+          this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
+        );
+      }
+
+      if (
+        String(membership.status).toUpperCase() !== MembershipStatus.PENDING
+      ) {
+        throw new BadRequestException('Pending membership request not found.');
       }
 
       await this.prisma.organizationMembership.update({
@@ -267,6 +298,10 @@ export class MembershipsService {
         },
       });
 
+      await this.redisService.del(
+        `org_membership:${organizationId}:${membership.user_id}`,
+      );
+
       return {
         message: 'Join request approved successfully.',
         membershipId,
@@ -275,14 +310,15 @@ export class MembershipsService {
     } catch (error) {
       if (
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
       ) {
         throw error;
       }
 
       this.logger.error(`Error approving join request: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.UPDATE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.UPDATE_FAILED'),
       );
     }
   }
@@ -303,14 +339,22 @@ export class MembershipsService {
       });
 
       if (!organization) {
-        throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+        );
       }
 
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {
           id: membershipId,
           organization_id: organizationId,
-          status: MembershipStatus.PENDING,
+        },
+        include: {
+          role: {
+            select: {
+              slug: true,
+            },
+          },
         },
       });
 
@@ -318,10 +362,48 @@ export class MembershipsService {
         throw new NotFoundException('Pending membership request not found.');
       }
 
+      const normalizedMembershipStatus = String(
+        membership.status,
+      ).toUpperCase();
+      const roleSlug = (membership as { role?: { slug?: string | null } }).role
+        ?.slug;
+
+      if (
+        normalizedMembershipStatus === MembershipStatus.ACTIVE &&
+        roleSlug === 'owner'
+      ) {
+        const activeOwners = await this.prisma.organizationMembership.findMany({
+          where: {
+            organization_id: organizationId,
+            status: MembershipStatus.ACTIVE,
+            role: {
+              slug: 'owner',
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (activeOwners.length <= 1) {
+          throw new ConflictException(
+            this.i18n.t('organizations.ERRORS.CANNOT_MODIFY_OWNER_ROLE'),
+          );
+        }
+      }
+
+      if (normalizedMembershipStatus !== MembershipStatus.PENDING) {
+        throw new ConflictException('Pending membership request not found.');
+      }
+
       await this.prisma.organizationMembership.update({
         where: { id: membershipId },
         data: { status: MembershipStatus.REJECTED },
       });
+
+      await this.redisService.del(
+        `org_membership:${organizationId}:${membership.user_id}`,
+      );
 
       return {
         message: 'Join request rejected successfully.',
@@ -332,14 +414,15 @@ export class MembershipsService {
       if (
         error instanceof ForbiddenException ||
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
       ) {
         throw error;
       }
 
       this.logger.error(`Error rejecting join request: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.UPDATE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.UPDATE_FAILED'),
       );
     }
   }
@@ -369,7 +452,9 @@ export class MembershipsService {
         });
 
       if (!activeMembership) {
-        throw new ForbiddenException(this.i18n.t('errors.UNAUTHORIZED_ACCESS'));
+        throw new ForbiddenException(
+          this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'),
+        );
       }
 
       // ========== DATA FETCH: Query active members with their roles ==========
@@ -430,7 +515,7 @@ export class MembershipsService {
         `Error fetching organization members for organization ${organizationId}: ${error}`,
       );
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.FETCH_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.FETCH_FAILED'),
       );
     }
   }

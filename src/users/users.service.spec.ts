@@ -265,7 +265,7 @@ describe('UsersService', () => {
       where: { id: 'm1' },
     });
     expect(result).toEqual({
-      message: 'errors.ORG.MEMBERSHIP_CANCELLED_SUCCESS',
+      message: 'organizations.ERRORS.ORG.MEMBERSHIP_CANCELLED_SUCCESS',
     });
   });
 });

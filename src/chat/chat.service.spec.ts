@@ -1,12 +1,17 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { ChatService } from './chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('ChatService', () => {
   let service: ChatService;
   let mockPrismaService: any;
+
+  const mockI18nService = {
+    t: jest.fn((key: string) => key),
+  };
 
   beforeEach(async () => {
     // Recreate mocks fresh for each test
@@ -55,6 +60,10 @@ describe('ChatService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: I18nService,
+          useValue: mockI18nService,
         },
       ],
     }).compile();
@@ -210,7 +219,7 @@ describe('ChatService', () => {
 
         await expect(
           service.sendMessage(conversationId, senderId, content),
-        ).rejects.toThrow('You are not a member of this conversation');
+        ).rejects.toThrow('chat.ERRORS.NOT_MEMBER');
 
         // Verify message.create was NOT called
         expect(mockPrismaService.message.create).not.toHaveBeenCalled();
@@ -316,7 +325,7 @@ describe('ChatService', () => {
             },
           },
         },
-        orderBy: { created_at: 'asc' },
+        orderBy: { created_at: 'desc' },
         take: 50,
       });
 
@@ -336,6 +345,40 @@ describe('ChatService', () => {
       ).rejects.toThrow(ForbiddenException);
 
       expect(mockPrismaService.message.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should apply cursor pagination when cursor and limit are provided', async () => {
+      mockPrismaService.conversationParticipant.findUnique.mockResolvedValue({
+        id: 'participant-123',
+        conversation_id: conversationId,
+        user_id: userId,
+      });
+      mockPrismaService.message.findMany.mockResolvedValue([]);
+
+      await service.getConversationMessages(
+        conversationId,
+        userId,
+        'msg-cursor-1',
+        20,
+      );
+
+      expect(mockPrismaService.message.findMany).toHaveBeenCalledWith({
+        where: { conversation_id: conversationId },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+        skip: 1,
+        cursor: { id: 'msg-cursor-1' },
+      });
     });
   });
 
@@ -826,13 +869,17 @@ describe('ChatService', () => {
       expect(result!.participants).toHaveLength(4);
     });
 
-    it('should throw BadRequestException when no participants are provided', async () => {
+    it('should throw BadRequestException when fewer than 2 participants are provided', async () => {
       // Arrange & Act & Assert
       await expect(
         service.createGroupConversation(orgId, creatorId, groupName, []),
-      ).rejects.toThrow(
-        'At least one participant must be included in a group conversation',
-      );
+      ).rejects.toThrow('chat.ERRORS.MIN_PARTICIPANTS');
+
+      await expect(
+        service.createGroupConversation(orgId, creatorId, groupName, [
+          'participant1',
+        ]),
+      ).rejects.toThrow('chat.ERRORS.MIN_PARTICIPANTS');
     });
 
     it('should throw NotFoundException when one or more participants do not exist', async () => {
@@ -851,21 +898,24 @@ describe('ChatService', () => {
           groupName,
           participantIds,
         ),
-      ).rejects.toThrow('One or more participants do not exist');
+      ).rejects.toThrow('chat.ERRORS.PARTICIPANTS_NOT_FOUND');
     });
 
     it('should throw ForbiddenException when a participant is outside tenant scope', async () => {
       mockPrismaService.user.findMany.mockResolvedValue([
         { id: creatorId },
         { id: 'participant1' },
+        { id: 'participant2' },
       ]);
       mockPrismaService.organizationMembership.findMany.mockResolvedValueOnce([
         { user_id: creatorId },
+        { user_id: 'participant1' },
       ]);
 
       await expect(
         service.createGroupConversation(orgId, creatorId, groupName, [
           'participant1',
+          'participant2',
         ]),
       ).rejects.toThrow(ForbiddenException);
     });
@@ -875,6 +925,7 @@ describe('ChatService', () => {
       mockPrismaService.user.findMany.mockResolvedValue([
         { id: creatorId },
         { id: 'participant1' },
+        { id: 'participant2' },
       ]);
 
       mockPrismaService.conversation.create.mockResolvedValue({
@@ -885,7 +936,7 @@ describe('ChatService', () => {
       });
 
       mockPrismaService.conversationParticipant.createMany.mockResolvedValue({
-        count: 2,
+        count: 3,
       });
 
       mockPrismaService.conversation.findUnique.mockResolvedValue({
@@ -914,6 +965,16 @@ describe('ChatService', () => {
               email: 'p1@example.com',
             },
           },
+          {
+            conversation_id: 'group-conv-456',
+            user_id: 'participant2',
+            user: {
+              id: 'participant2',
+              first_name: 'P',
+              last_name: '2',
+              email: 'p2@example.com',
+            },
+          },
         ],
         messages: [],
       });
@@ -923,7 +984,7 @@ describe('ChatService', () => {
         orgId,
         creatorId,
         groupName,
-        ['participant1'],
+        ['participant1', 'participant2'],
       );
 
       // Assert

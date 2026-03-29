@@ -9,6 +9,7 @@ import { MembershipStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationsService } from './organizations.service';
+import { OrganizationProvisioningService } from './services/organization-provisioning.service';
 
 describe('OrganizationsService (Branches)', () => {
   let service: OrganizationsService;
@@ -49,6 +50,10 @@ describe('OrganizationsService (Branches)', () => {
     emitAsync: jest.fn().mockResolvedValue([]),
   };
 
+  const mockProvisioningService = {
+    provisionDefaultTenantRBAC: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -66,6 +71,10 @@ describe('OrganizationsService (Branches)', () => {
         {
           provide: EventEmitter2,
           useValue: mockEventEmitter,
+        },
+        {
+          provide: OrganizationProvisioningService,
+          useValue: mockProvisioningService,
         },
       ],
     }).compile();

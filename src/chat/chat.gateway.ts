@@ -16,10 +16,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { MembershipStatus } from '@prisma/client';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ChatService } from './chat.service';
-import { UsersService } from '../users/users.service';
 
 interface JwtSocketPayload {
   sub: string;
@@ -82,7 +80,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly jwtService: JwtService,
-    private readonly usersService: UsersService,
     private readonly chatService: ChatService,
   ) {}
 
@@ -174,19 +171,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return null;
   }
 
-  private async isActiveMember(
-    userId: string,
-    orgId: string,
-  ): Promise<boolean> {
-    const memberships = await this.usersService.getUserOrganizations(userId);
-
-    return memberships.some(
-      (membership) =>
-        membership.organization_id === orgId &&
-        String(membership.status) === String(MembershipStatus.ACTIVE),
-    );
-  }
-
   private getSocketIdentity(client: AuthenticatedSocket): {
     userId: string;
     orgId: string;
@@ -218,7 +202,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      const payload = this.jwtService.verify<JwtSocketPayload>(token);
+      const payload =
+        await this.jwtService.verifyAsync<JwtSocketPayload>(token);
 
       if (!payload?.sub) {
         this.logger.warn(
@@ -240,15 +225,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       client.data.userId = payload.sub;
       client.data.orgId = orgId;
-
-      const member = await this.isActiveMember(client.data.userId, orgId);
-      if (!member) {
-        this.logger.warn(
-          `[ChatGateway] Unauthorized org access | socket=${client.id} user=${client.data.userId} org=${orgId}`,
-        );
-        client.disconnect(true);
-        return;
-      }
 
       await client.join(`org:${orgId}`);
 

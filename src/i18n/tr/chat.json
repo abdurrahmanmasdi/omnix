@@ -1,0 +1,10 @@
+{
+  "ERRORS": {
+    "PARTICIPANTS_OUTSIDE_SCOPE": "Bir veya daha fazla katılımcı tenant kapsamı dışında.",
+    "NOT_MEMBER": "Bu konuşmanın bir üyesi değilsiniz.",
+    "NOT_FOUND": "Konuşma bulunamadı.",
+    "MIN_PARTICIPANTS": "Bir grup konuşmasına en az bir katılımcı eklenmelidir.",
+    "PARTICIPANTS_NOT_FOUND": "Bir veya daha fazla katılımcı bulunamadı."
+  },
+  "MESSAGES": {}
+}

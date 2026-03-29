@@ -4,13 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Lead,
-  LeadStatus,
-  MembershipStatus,
-  Prisma,
-  Priority,
-} from '@prisma/client';
+import { LeadStatus, MembershipStatus, Prisma, Priority } from '@prisma/client';
 import { AppPermission } from '../constants/permissions.registry';
 import { PermissionsService } from '../auth/services/permissions.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,6 +15,7 @@ import {
 import { CreateLeadDto } from './dtos/create-lead.dto';
 import { UpdateLeadDto } from './dtos/update-lead.dto';
 import { I18nService } from 'nestjs-i18n';
+import { LeadsQueryBuilder } from './utils/leads.query-builder';
 
 export interface FindLeadsFilters {
   page?: number;
@@ -32,54 +27,33 @@ export interface FindLeadsFilters {
   sort_dir?: string;
 }
 
-interface DynamicFilterRule {
-  field: string;
-  operator: string;
-  value: unknown;
-}
-
-const ALLOWED_FILTER_FIELDS = [
-  'status',
-  'priority',
-  'source_id',
-  'assigned_agent_id',
-  'country',
-  'pipeline_stage_id',
-] as const;
-
-type AllowedFilterField = (typeof ALLOWED_FILTER_FIELDS)[number];
-
-const UUID_FILTER_FIELDS = [
-  'source_id',
-  'assigned_agent_id',
-  'pipeline_stage_id',
-] as const;
-
-type UuidFilterField = (typeof UUID_FILTER_FIELDS)[number];
-
-const ALLOWED_SORT_FIELDS = [
-  'created_at',
-  'first_name',
-  'estimated_value',
-  'status',
-  'priority',
-] as const;
-
-type AllowedSortField = (typeof ALLOWED_SORT_FIELDS)[number];
-
 export interface FindLeadsResult {
-  data: Lead[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  data: LeadWithRelations[];
+  meta: any;
 }
 
 export interface BulkUpdateLeadsResult {
   updated_count: number;
 }
+
+const LEAD_ASSIGNED_AGENT_SELECT = {
+  id: true,
+  first_name: true,
+  last_name: true,
+  email: true,
+} as const;
+
+const LEAD_RELATIONS_INCLUDE = {
+  assigned_agent: {
+    select: LEAD_ASSIGNED_AGENT_SELECT,
+  },
+  pipeline_stage: true,
+  source: true,
+} as const;
+
+export type LeadWithRelations = Prisma.LeadGetPayload<{
+  include: typeof LEAD_RELATIONS_INCLUDE;
+}>;
 
 @Injectable()
 export class LeadsService {
@@ -87,13 +61,14 @@ export class LeadsService {
     private readonly prisma: PrismaService,
     private readonly permissionsService: PermissionsService,
     private readonly i18n: I18nService,
+    private readonly queryBuilder: LeadsQueryBuilder,
   ) {}
 
   async create(
     organizationId: string,
     _userId: string,
     dto: CreateLeadDto,
-  ): Promise<Lead> {
+  ): Promise<LeadWithRelations> {
     await this.validateScopedReferences(organizationId, dto);
 
     return this.prisma.lead.create({
@@ -124,6 +99,7 @@ export class LeadsService {
           ? new Date(dto.next_follow_up_at)
           : dto.next_follow_up_at,
       },
+      include: LEAD_RELATIONS_INCLUDE,
     });
   }
 
@@ -131,13 +107,16 @@ export class LeadsService {
     organizationId: string,
     userId: string,
     filters: FindLeadsFilters = {},
-  ): Promise<FindLeadsResult> {
+  ): Promise<{ data: LeadWithRelations[]; meta: any }> {
     const canReadAllLeads = await this.canReadAllLeads(organizationId, userId);
 
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
-    const orderBy = this.buildOrderBy(filters.sort_by, filters.sort_dir);
+    const orderBy = this.queryBuilder.buildOrderBy(
+      filters.sort_by,
+      filters.sort_dir,
+    );
 
     const dynamicConditions: Prisma.LeadWhereInput[] = [
       { organization_id: organizationId },
@@ -155,10 +134,12 @@ export class LeadsService {
       dynamicConditions.push({ priority: filters.priority });
     }
 
-    const parsedRules = this.parseDynamicFilterRules(filters.filters);
+    const parsedRules = this.queryBuilder.parseDynamicFilterRules(
+      filters.filters,
+    );
 
     for (const rule of parsedRules) {
-      const condition = this.buildDynamicFilterCondition(rule);
+      const condition = this.queryBuilder.buildDynamicFilterCondition(rule);
 
       if (condition) {
         dynamicConditions.push(condition);
@@ -173,6 +154,7 @@ export class LeadsService {
       this.prisma.lead.count({ where }),
       this.prisma.lead.findMany({
         where,
+        include: LEAD_RELATIONS_INCLUDE,
         orderBy,
         skip: (page - 1) * limit,
         take: limit,
@@ -194,7 +176,7 @@ export class LeadsService {
     organizationId: string,
     userId: string,
     leadId: string,
-  ): Promise<Lead> {
+  ): Promise<LeadWithRelations> {
     const canReadAllLeads = await this.canReadAllLeads(organizationId, userId);
 
     const lead = await this.prisma.lead.findFirst({
@@ -203,6 +185,7 @@ export class LeadsService {
         organization_id: organizationId,
         ...(canReadAllLeads ? {} : { assigned_agent_id: userId }),
       },
+      include: LEAD_RELATIONS_INCLUDE,
     });
 
     if (!lead) {
@@ -217,12 +200,12 @@ export class LeadsService {
 
         if (existsInOrganization) {
           throw new ForbiddenException(
-            this.i18n.t('errors.LEADS.ACCESS_FORBIDDEN'),
+            this.i18n.t('leads.ERRORS.ACCESS_FORBIDDEN'),
           );
         }
       }
 
-      throw new NotFoundException(this.i18n.t('errors.LEADS.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('leads.ERRORS.NOT_FOUND'));
     }
 
     return lead;
@@ -232,7 +215,7 @@ export class LeadsService {
     organizationId: string,
     leadId: string,
     dto: UpdateLeadDto,
-  ): Promise<Lead> {
+  ): Promise<LeadWithRelations> {
     await this.validateScopedReferences(organizationId, dto);
 
     const data = this.buildUpdateData(dto);
@@ -243,10 +226,11 @@ export class LeadsService {
           id: leadId,
           organization_id: organizationId,
         },
+        include: LEAD_RELATIONS_INCLUDE,
       });
 
       if (!lead) {
-        throw new NotFoundException(this.i18n.t('errors.LEADS.NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('leads.ERRORS.NOT_FOUND'));
       }
 
       return lead;
@@ -261,7 +245,7 @@ export class LeadsService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('errors.LEADS.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('leads.ERRORS.NOT_FOUND'));
     }
 
     const updatedLead = await this.prisma.lead.findFirst({
@@ -269,10 +253,11 @@ export class LeadsService {
         id: leadId,
         organization_id: organizationId,
       },
+      include: LEAD_RELATIONS_INCLUDE,
     });
 
     if (!updatedLead) {
-      throw new NotFoundException(this.i18n.t('errors.LEADS.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('leads.ERRORS.NOT_FOUND'));
     }
 
     return updatedLead;
@@ -291,7 +276,7 @@ export class LeadsService {
     const data = this.buildBulkUpdateData(dto.update_data);
 
     if (Object.keys(data).length === 0) {
-      throw new BadRequestException(this.i18n.t('errors.BAD_REQUEST'));
+      throw new BadRequestException(this.i18n.t('leads.ERRORS.BAD_REQUEST'));
     }
 
     const canEditAllLeads = await this.canEditAllLeads(organizationId, userId);
@@ -321,7 +306,7 @@ export class LeadsService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('errors.LEADS.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('leads.ERRORS.NOT_FOUND'));
     }
   }
 
@@ -422,7 +407,7 @@ export class LeadsService {
 
     if (!stage) {
       throw new BadRequestException(
-        this.i18n.t('errors.LEADS.PIPELINE_STAGE_OUTSIDE_SCOPE'),
+        this.i18n.t('leads.ERRORS.PIPELINE_STAGE_OUTSIDE_SCOPE'),
       );
     }
   }
@@ -441,13 +426,13 @@ export class LeadsService {
 
     if (!source) {
       throw new BadRequestException(
-        this.i18n.t('errors.LEADS.SOURCE_OUTSIDE_SCOPE'),
+        this.i18n.t('leads.ERRORS.SOURCE_OUTSIDE_SCOPE'),
       );
     }
 
     if (!source.is_active) {
       throw new BadRequestException(
-        this.i18n.t('errors.LEADS.SOURCE_INACTIVE'),
+        this.i18n.t('leads.ERRORS.SOURCE_INACTIVE'),
       );
     }
   }
@@ -467,7 +452,7 @@ export class LeadsService {
 
     if (!membership) {
       throw new BadRequestException(
-        this.i18n.t('errors.LEADS.ASSIGNED_AGENT_OUTSIDE_SCOPE'),
+        this.i18n.t('leads.ERRORS.ASSIGNED_AGENT_OUTSIDE_SCOPE'),
       );
     }
   }
@@ -530,180 +515,6 @@ export class LeadsService {
     const namespace = permission.split(':')[0];
     return Boolean(
       namespace && effectivePermissions.includes(`${namespace}:*`),
-    );
-  }
-
-  private buildOrderBy(
-    sortByRaw?: string,
-    sortDirRaw?: string,
-  ): Prisma.LeadOrderByWithRelationInput {
-    const sortBy = this.resolveSortField(sortByRaw);
-    const sortDir = this.resolveSortDirection(sortDirRaw);
-
-    return {
-      [sortBy]: sortDir,
-    } as Prisma.LeadOrderByWithRelationInput;
-  }
-
-  private resolveSortField(sortByRaw?: string): AllowedSortField {
-    if (!sortByRaw) {
-      return 'created_at';
-    }
-
-    const normalized = sortByRaw.trim().toLowerCase();
-
-    return this.isAllowedSortField(normalized) ? normalized : 'created_at';
-  }
-
-  private resolveSortDirection(sortDirRaw?: string): Prisma.SortOrder {
-    return sortDirRaw?.trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
-  }
-
-  private isAllowedSortField(field: string): field is AllowedSortField {
-    return (ALLOWED_SORT_FIELDS as readonly string[]).includes(field);
-  }
-
-  private parseDynamicFilterRules(filtersRaw?: string): DynamicFilterRule[] {
-    if (!filtersRaw) {
-      return [];
-    }
-
-    let parsed: unknown;
-
-    try {
-      parsed = JSON.parse(filtersRaw);
-    } catch {
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    if (!Array.isArray(parsed)) {
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    return parsed
-      .filter(
-        (rule): rule is DynamicFilterRule =>
-          Boolean(rule) &&
-          typeof rule === 'object' &&
-          typeof (rule as DynamicFilterRule).field === 'string' &&
-          typeof (rule as DynamicFilterRule).operator === 'string' &&
-          'value' in (rule as Record<string, unknown>),
-      )
-      .map((rule) => ({
-        field: rule.field,
-        operator: rule.operator,
-        value: rule.value,
-      }));
-  }
-
-  private isAllowedFilterField(field: string): field is AllowedFilterField {
-    return (ALLOWED_FILTER_FIELDS as readonly string[]).includes(field);
-  }
-
-  private buildDynamicFilterCondition(
-    rule: DynamicFilterRule,
-  ): Prisma.LeadWhereInput | null {
-    if (!this.isAllowedFilterField(rule.field)) {
-      return null;
-    }
-
-    const field: AllowedFilterField = rule.field;
-
-    if (rule.operator === 'equals') {
-      const normalizedValue = this.normalizeFilterValue(field, rule.value);
-
-      return {
-        [field]: normalizedValue,
-      } as Prisma.LeadWhereInput;
-    }
-
-    if (rule.operator === 'in') {
-      if (!Array.isArray(rule.value)) {
-        throw new BadRequestException(
-          this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-        );
-      }
-
-      const normalizedValues = rule.value.map((value) =>
-        this.normalizeFilterValue(field, value),
-      );
-
-      return {
-        [field]: { in: normalizedValues },
-      } as Prisma.LeadWhereInput;
-    }
-
-    return null;
-  }
-
-  private normalizeFilterValue(
-    field: AllowedFilterField,
-    value: unknown,
-  ): string {
-    if (field === 'status') {
-      if (typeof value === 'string' && this.isLeadStatus(value)) {
-        return value;
-      }
-
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    if (field === 'priority') {
-      if (typeof value === 'string' && this.isLeadPriority(value)) {
-        return value;
-      }
-
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    if (typeof value !== 'string') {
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    const trimmedValue = value.trim();
-
-    if (!trimmedValue) {
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    if (this.isUuidFilterField(field) && !this.isUuid(trimmedValue)) {
-      throw new BadRequestException(
-        this.i18n.t('errors.LEADS.INVALID_FILTERS'),
-      );
-    }
-
-    return trimmedValue;
-  }
-
-  private isUuidFilterField(
-    field: AllowedFilterField,
-  ): field is UuidFilterField {
-    return (UUID_FILTER_FIELDS as readonly string[]).includes(field);
-  }
-
-  private isLeadStatus(value: string): value is LeadStatus {
-    return (Object.values(LeadStatus) as string[]).includes(value);
-  }
-
-  private isLeadPriority(value: string): value is Priority {
-    return (Object.values(Priority) as string[]).includes(value);
-  }
-
-  private isUuid(value: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
     );
   }
 }

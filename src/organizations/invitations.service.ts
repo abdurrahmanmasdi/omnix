@@ -107,7 +107,7 @@ export class InvitationsService {
     }
 
     throw new InternalServerErrorException(
-      this.i18n.t('errors.ORG.INVITE_FAILED'),
+      this.i18n.t('organizations.ERRORS.ORG.INVITE_FAILED'),
     );
   }
 
@@ -116,19 +116,19 @@ export class InvitationsService {
     email: string,
   ): InvitationAcceptanceRecord {
     if (!invitation) {
-      throw new NotFoundException(this.i18n.t('errors.INVITATION.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
     }
 
     if (invitation.status !== INVITATION_STATUS.PENDING) {
       throw new BadRequestException(
-        this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+        this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
           args: { status: invitation.status },
         }),
       );
     }
 
     if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-      throw new BadRequestException(this.i18n.t('errors.INVITATION.NOT_OWNER'));
+      throw new BadRequestException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'));
     }
 
     return invitation;
@@ -160,7 +160,7 @@ export class InvitationsService {
 
     if (!organization) {
       this.logger.warn(`Organization with id ${organizationId} not found`);
-      throw new NotFoundException(this.i18n.t('errors.ORG.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'));
     }
 
     // Verify role exists and belongs to the same organization
@@ -194,7 +194,7 @@ export class InvitationsService {
         `User ${user?.id ?? 'unknown'} is already a member of organization ${organizationId}`,
       );
       throw new ConflictException(
-        this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
+        this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
       );
     }
 
@@ -269,7 +269,7 @@ export class InvitationsService {
       })) as InvitationPreviewRecord | null;
 
       if (!invitation) {
-        throw new NotFoundException(this.i18n.t('errors.INVITATION.NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
       }
 
       return {
@@ -285,7 +285,7 @@ export class InvitationsService {
 
       this.logger.error(`Error fetching invitation by token: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.INVITE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.INVITE_FAILED'),
       );
     }
   }
@@ -333,7 +333,7 @@ export class InvitationsService {
 
         if (existingActiveMembership) {
           throw new ConflictException(
-            this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
+            this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
           );
         }
 
@@ -350,7 +350,7 @@ export class InvitationsService {
 
         if (invitationUpdate.count !== 1) {
           throw new BadRequestException(
-            this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+            this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
               args: { status: validInvitation.status },
             }),
           );
@@ -369,7 +369,7 @@ export class InvitationsService {
         });
 
         return {
-          message: this.i18n.t('errors.INVITATION.ACCEPT_SUCCESS', {
+          message: this.i18n.t('organizations.ERRORS.INVITATION.ACCEPT_SUCCESS', {
             args: {
               organizationName: validInvitation.organization.name,
             },
@@ -389,7 +389,7 @@ export class InvitationsService {
 
       this.logger.error(`Error accepting invitation: ${error}`);
       throw new InternalServerErrorException(
-        this.i18n.t('errors.ORG.INVITE_FAILED'),
+        this.i18n.t('organizations.ERRORS.ORG.INVITE_FAILED'),
       );
     }
   }

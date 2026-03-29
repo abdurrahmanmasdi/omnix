@@ -18,12 +18,12 @@ export class CreateRoleDto {
     minLength: 3,
     maxLength: 255,
   })
-  @IsString({ message: i18nValidationMessage('errors.VALIDATION.IS_STRING') })
+  @IsString({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_STRING') })
   @MinLength(3, {
-    message: i18nValidationMessage('errors.VALIDATION.MIN_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_LENGTH'),
   })
   @MaxLength(255, {
-    message: i18nValidationMessage('errors.VALIDATION.MAX_LENGTH'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MAX_LENGTH'),
   })
   name: string;
 
@@ -32,7 +32,7 @@ export class CreateRoleDto {
     description: 'Translations of the role name (optional)',
   })
   @IsOptional()
-  @IsObject({ message: i18nValidationMessage('errors.VALIDATION.IS_OBJECT') })
+  @IsObject({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_OBJECT') })
   name_translations?: Record<string, string>;
 
   @ApiProperty({
@@ -44,13 +44,13 @@ export class CreateRoleDto {
     type: [String],
     minItems: 1,
   })
-  @IsArray({ message: i18nValidationMessage('errors.VALIDATION.IS_ARRAY') })
+  @IsArray({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY') })
   @ArrayMinSize(1, {
-    message: i18nValidationMessage('errors.VALIDATION.MIN_ARRAY_SIZE'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_ARRAY_SIZE'),
   })
   @IsUUID('4', {
     each: true,
-    message: i18nValidationMessage('errors.VALIDATION.INVALID_UUID'),
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.INVALID_UUID'),
   })
   permissionIds: string[];
 }

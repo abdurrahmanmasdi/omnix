@@ -199,7 +199,7 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new BadRequestException(
-        this.i18n.t('errors.AUTH.USER_ALREADY_EXISTS'),
+        this.i18n.t('auth.ERRORS.USER_ALREADY_EXISTS'),
       );
     }
 
@@ -242,7 +242,7 @@ export class AuthService {
 
       if (invitationUpdate.count !== 1) {
         throw new BadRequestException(
-          this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+          this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
             args: { status: validInvitation.status },
           }),
         );
@@ -272,19 +272,19 @@ export class AuthService {
     email: string,
   ): InvitationTokenRecord {
     if (!invitation) {
-      throw new NotFoundException(this.i18n.t('errors.INVITATION.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
     }
 
     if (invitation.status !== INVITATION_STATUS.PENDING) {
       throw new BadRequestException(
-        this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+        this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
           args: { status: invitation.status },
         }),
       );
     }
 
     if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-      throw new BadRequestException(this.i18n.t('errors.INVITATION.NOT_OWNER'));
+      throw new BadRequestException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'));
     }
 
     return invitation;

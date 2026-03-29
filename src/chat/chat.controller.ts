@@ -10,6 +10,8 @@ import {
   BadRequestException,
   HttpCode,
   HttpStatus,
+  Query,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,10 +20,19 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
-import { ChatService } from './chat.service';
+import {
+  ChatService,
+  type ConversationWithDetails,
+  type MessageWithSender,
+} from './chat.service';
 import { CreateConversationDto } from './dtos/create-conversation.dto';
 import { CreateGroupConversationDto } from './dtos/create-group-conversation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+interface SuccessResponse<T> {
+  status: 'success';
+  data: T;
+}
 
 interface AuthRequest extends ExpressRequest {
   user: { id: string };
@@ -51,7 +62,7 @@ export class ChatController {
   async getConversations(
     @Request() req: AuthRequest,
     @Headers('x-organization-id') orgId?: string,
-  ) {
+  ): Promise<SuccessResponse<ConversationWithDetails[]>> {
     if (!orgId) {
       throw new BadRequestException(
         'Organization ID header (x-organization-id) is required',
@@ -91,7 +102,7 @@ export class ChatController {
     @Request() req: AuthRequest,
     @Headers('x-organization-id') orgId?: string,
     @Body() createConversationDto?: CreateConversationDto,
-  ) {
+  ): Promise<SuccessResponse<ConversationWithDetails>> {
     if (!orgId) {
       throw new BadRequestException(
         'Organization ID header (x-organization-id) is required',
@@ -137,7 +148,7 @@ export class ChatController {
     @Request() req: AuthRequest,
     @Headers('x-organization-id') orgId?: string,
     @Body() createGroupConversationDto?: CreateGroupConversationDto,
-  ) {
+  ): Promise<SuccessResponse<ConversationWithDetails>> {
     if (!orgId) {
       throw new BadRequestException(
         'Organization ID header (x-organization-id) is required',
@@ -182,10 +193,14 @@ export class ChatController {
   async getConversationMessages(
     @Request() req: AuthRequest,
     @Param('conversationId') conversationId: string,
-  ) {
+    @Query('cursor') cursor?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ): Promise<SuccessResponse<MessageWithSender[]>> {
     const messages = await this.chatService.getConversationMessages(
       conversationId,
       req.user.id,
+      cursor,
+      limit,
     );
 
     return {

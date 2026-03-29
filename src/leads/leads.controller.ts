@@ -22,7 +22,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Lead, LeadStatus, Priority } from '@prisma/client';
+import { LeadStatus, Priority } from '@prisma/client';
 import { Request as ExpressRequest } from 'express';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -35,6 +35,7 @@ import { UpdateLeadDto } from './dtos/update-lead.dto';
 import {
   BulkUpdateLeadsResult,
   FindLeadsResult,
+  LeadWithRelations,
   LeadsService,
 } from './leads.service';
 
@@ -60,7 +61,7 @@ export class LeadsController {
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Request() req: AuthRequest,
     @Body() dto: CreateLeadDto,
-  ): Promise<Lead> {
+  ): Promise<LeadWithRelations> {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
@@ -109,7 +110,7 @@ export class LeadsController {
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Request() req: AuthRequest,
-  ): Promise<Lead> {
+  ): Promise<LeadWithRelations> {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
@@ -145,7 +146,7 @@ export class LeadsController {
     @Param('leadId', new ParseUUIDPipe()) leadId: string,
     @Request() req: AuthRequest,
     @Body() dto: UpdateLeadDto,
-  ): Promise<Lead> {
+  ): Promise<LeadWithRelations> {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,

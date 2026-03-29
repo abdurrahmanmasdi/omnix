@@ -38,7 +38,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'));
     }
 
     return user;
@@ -105,7 +105,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(this.i18n.t('errors.USER_NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'));
     }
 
     // Step 1: Verify invitation exists
@@ -118,7 +118,7 @@ export class UsersService {
     });
 
     if (!invitation) {
-      throw new NotFoundException(this.i18n.t('errors.INVITATION.NOT_FOUND'));
+      throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
     }
 
     // Step 2: Verify invitation belongs to the current user's email
@@ -126,13 +126,13 @@ export class UsersService {
       this.logger.warn(
         `[UsersService] Unauthorized invite acceptance attempt: User ${userId} tried to accept invite ${inviteId} for email ${invitation.email}`,
       );
-      throw new BadRequestException(this.i18n.t('errors.INVITATION.NOT_OWNER'));
+      throw new BadRequestException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'));
     }
 
     // Step 3: Verify invitation status is pending
     if (invitation.status !== INVITATION_STATUS.PENDING) {
       throw new BadRequestException(
-        this.i18n.t('errors.INVITATION.INVALID_STATUS', {
+        this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
           args: { status: invitation.status },
         }),
       );
@@ -149,7 +149,7 @@ export class UsersService {
 
     if (existingMembership) {
       throw new ConflictException(
-        this.i18n.t('errors.ORG.USER_ALREADY_MEMBER'),
+        this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
       );
     }
 
@@ -184,7 +184,7 @@ export class UsersService {
     );
 
     return {
-      message: this.i18n.t('errors.INVITATION.ACCEPT_SUCCESS', {
+      message: this.i18n.t('organizations.ERRORS.INVITATION.ACCEPT_SUCCESS', {
         args: { organizationName: createdMembership.organization?.name ?? '' },
       }),
       membership_id: createdMembership.id,
@@ -215,13 +215,13 @@ export class UsersService {
     });
     if (!membership) {
       throw new NotFoundException(
-        this.i18n.t('errors.ORG.MEMBERSHIP_REQUEST_NOT_FOUND'),
+        this.i18n.t('organizations.ERRORS.ORG.MEMBERSHIP_REQUEST_NOT_FOUND'),
       );
     }
 
     if (membership.user_id !== userId) {
       throw new ForbiddenException(
-        this.i18n.t('errors.ORG.MEMBERSHIP_CANCEL_FORBIDDEN'),
+        this.i18n.t('organizations.ERRORS.ORG.MEMBERSHIP_CANCEL_FORBIDDEN'),
       );
     }
 
@@ -229,7 +229,7 @@ export class UsersService {
 
     if (membershipStatus !== String(MembershipStatus.PENDING)) {
       throw new BadRequestException(
-        this.i18n.t('errors.ORG.MEMBERSHIP_CANCEL_ONLY_PENDING'),
+        this.i18n.t('organizations.ERRORS.ORG.MEMBERSHIP_CANCEL_ONLY_PENDING'),
       );
     }
 
@@ -238,7 +238,7 @@ export class UsersService {
     });
 
     return {
-      message: this.i18n.t('errors.ORG.MEMBERSHIP_CANCELLED_SUCCESS'),
+      message: this.i18n.t('organizations.ERRORS.ORG.MEMBERSHIP_CANCELLED_SUCCESS'),
     };
   }
 

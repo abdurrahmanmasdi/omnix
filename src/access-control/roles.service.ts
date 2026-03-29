@@ -122,7 +122,7 @@ export class RolesService {
 
       if (permissions.length !== dto.permissionIds.length) {
         throw new BadRequestException(
-          this.i18n.t('errors.INVALID_PERMISSIONS'),
+          this.i18n.t('organizations.ERRORS.INVALID_PERMISSIONS'),
         );
       }
 
@@ -208,7 +208,7 @@ export class RolesService {
       });
 
       if (!existingRole) {
-        throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
       }
 
       if (existingRole.is_system) {
@@ -242,7 +242,7 @@ export class RolesService {
 
         if (permissions.length !== requestedPermissionIds.length) {
           throw new BadRequestException(
-            this.i18n.t('errors.INVALID_PERMISSIONS'),
+            this.i18n.t('organizations.ERRORS.INVALID_PERMISSIONS'),
           );
         }
 
@@ -280,7 +280,7 @@ export class RolesService {
 
           if (permissions.length !== permissionIdsToValidate.length) {
             throw new BadRequestException(
-              this.i18n.t('errors.INVALID_PERMISSIONS'),
+              this.i18n.t('organizations.ERRORS.INVALID_PERMISSIONS'),
             );
           }
         }
@@ -414,7 +414,7 @@ export class RolesService {
       });
 
       if (!role) {
-        throw new NotFoundException(this.i18n.t('errors.ROLE_NOT_FOUND'));
+        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
       }
 
       if (role.is_system) {
@@ -432,7 +432,7 @@ export class RolesService {
 
       if (activeMemberships > 0) {
         throw new BadRequestException(
-          this.i18n.t('errors.CANNOT_DELETE_ROLE_WITH_MEMBERS'),
+          this.i18n.t('organizations.ERRORS.CANNOT_DELETE_ROLE_WITH_MEMBERS'),
         );
       }
 
@@ -445,7 +445,7 @@ export class RolesService {
       );
 
       return {
-        message: this.i18n.t('messages.ROLE_DELETED_SUCCESSFULLY'),
+        message: this.i18n.t('organizations.MESSAGES.ROLE_DELETED_SUCCESSFULLY'),
       };
     } catch (error) {
       if (

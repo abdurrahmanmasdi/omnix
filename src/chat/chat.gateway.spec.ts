@@ -10,7 +10,6 @@ import {
 } from '@nestjs/throttler/dist/throttler.constants';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
-import { UsersService } from '../users/users.service';
 
 type MockSocket = {
   id: string;
@@ -39,11 +38,7 @@ describe('ChatGateway', () => {
   };
 
   const mockJwtService = {
-    verify: jest.fn(),
-  };
-
-  const mockUsersService = {
-    getUserOrganizations: jest.fn(),
+    verifyAsync: jest.fn(),
   };
 
   const mockChatService = {
@@ -87,10 +82,6 @@ describe('ChatGateway', () => {
           useValue: mockJwtService,
         },
         {
-          provide: UsersService,
-          useValue: mockUsersService,
-        },
-        {
           provide: ChatService,
           useValue: mockChatService,
         },
@@ -121,17 +112,11 @@ describe('ChatGateway', () => {
 
     it('authenticates from handshake auth token, stores identity, and joins org room', async () => {
       mockSocket.handshake.auth.token = 'Bearer jwt-token';
-      mockJwtService.verify.mockReturnValue({ sub: userId, orgId });
-      mockUsersService.getUserOrganizations.mockResolvedValue([
-        { organization_id: orgId, status: 'ACTIVE' },
-      ]);
+      mockJwtService.verifyAsync.mockResolvedValue({ sub: userId, orgId });
 
       await gateway.handleConnection(mockSocket as any);
 
-      expect(mockJwtService.verify).toHaveBeenCalledWith('jwt-token');
-      expect(mockUsersService.getUserOrganizations).toHaveBeenCalledWith(
-        userId,
-      );
+      expect(mockJwtService.verifyAsync).toHaveBeenCalledWith('jwt-token');
       expect(mockSocket.data.userId).toBe(userId);
       expect(mockSocket.data.orgId).toBe(orgId);
       expect(mockSocket.join).toHaveBeenCalledWith(`org:${orgId}`);
@@ -141,14 +126,11 @@ describe('ChatGateway', () => {
     it('authenticates from authorization header and org id header fallback', async () => {
       mockSocket.handshake.headers.authorization = 'Bearer header-token';
       mockSocket.handshake.headers['x-organization-id'] = orgId;
-      mockJwtService.verify.mockReturnValue({ sub: userId });
-      mockUsersService.getUserOrganizations.mockResolvedValue([
-        { organization_id: orgId, status: 'ACTIVE' },
-      ]);
+      mockJwtService.verifyAsync.mockResolvedValue({ sub: userId });
 
       await gateway.handleConnection(mockSocket as any);
 
-      expect(mockJwtService.verify).toHaveBeenCalledWith('header-token');
+      expect(mockJwtService.verifyAsync).toHaveBeenCalledWith('header-token');
       expect(mockSocket.join).toHaveBeenCalledWith(`org:${orgId}`);
       expect(mockSocket.disconnect).not.toHaveBeenCalled();
     });
@@ -156,67 +138,48 @@ describe('ChatGateway', () => {
     it('disconnects when token is missing', async () => {
       await gateway.handleConnection(mockSocket as any);
 
-      expect(mockJwtService.verify).not.toHaveBeenCalled();
-      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
+      expect(mockJwtService.verifyAsync).not.toHaveBeenCalled();
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('disconnects when JWT verification fails', async () => {
-      mockSocket.handshake.auth.token = 'bad-token';
-      mockJwtService.verify.mockImplementation(() => {
-        throw new Error('invalid jwt');
-      });
+    it('disconnects when token is expired', async () => {
+      mockSocket.handshake.auth.token = 'expired-token';
+      mockJwtService.verifyAsync.mockRejectedValue(new Error('jwt expired'));
 
       await gateway.handleConnection(mockSocket as any);
 
+      expect(mockJwtService.verifyAsync).toHaveBeenCalledWith('expired-token');
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
-      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
     });
 
     it('disconnects when payload has no sub', async () => {
       mockSocket.handshake.auth.token = 'jwt-token';
-      mockJwtService.verify.mockReturnValue({ orgId });
+      mockJwtService.verifyAsync.mockResolvedValue({ orgId });
 
       await gateway.handleConnection(mockSocket as any);
 
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
-      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
     });
 
     it('disconnects when org id is absent in payload, auth, and headers', async () => {
       mockSocket.handshake.auth.token = 'jwt-token';
-      mockJwtService.verify.mockReturnValue({ sub: userId });
+      mockJwtService.verifyAsync.mockResolvedValue({ sub: userId });
 
       await gateway.handleConnection(mockSocket as any);
 
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
-      expect(mockUsersService.getUserOrganizations).not.toHaveBeenCalled();
     });
 
-    it('disconnects when membership is not active', async () => {
-      mockSocket.handshake.auth.token = 'jwt-token';
-      mockJwtService.verify.mockReturnValue({ sub: userId, orgId });
-      mockUsersService.getUserOrganizations.mockResolvedValue([
-        { organization_id: orgId, status: 'PENDING' },
-      ]);
+    it('does not make membership database checks during connection', async () => {
+      mockSocket.handshake.auth.token = 'Bearer jwt-token';
+      mockJwtService.verifyAsync.mockResolvedValue({ sub: userId, orgId });
 
       await gateway.handleConnection(mockSocket as any);
 
-      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
-      expect(mockSocket.join).not.toHaveBeenCalled();
-    });
-
-    it('disconnects when active membership belongs to another org', async () => {
-      mockSocket.handshake.auth.token = 'jwt-token';
-      mockJwtService.verify.mockReturnValue({ sub: userId, orgId });
-      mockUsersService.getUserOrganizations.mockResolvedValue([
-        { organization_id: 'org-other', status: 'ACTIVE' },
-      ]);
-
-      await gateway.handleConnection(mockSocket as any);
-
-      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
-      expect(mockSocket.join).not.toHaveBeenCalled();
+      expect(mockChatService.getConversation).not.toHaveBeenCalled();
+      expect(mockChatService.getConversationMessages).not.toHaveBeenCalled();
+      expect(mockSocket.join).toHaveBeenCalledWith(`org:${orgId}`);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
     });
   });
 
