@@ -6,6 +6,7 @@ import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -35,6 +36,8 @@ async function bootstrap() {
     origin: process.env.FRONTEND_URL || 'http://localhost:3001',
     credentials: true,
   });
+
+  app.use(cookieParser());
 
   // 3. Global API Prefix
   // Prefixes all routes with /api

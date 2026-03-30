@@ -24,6 +24,7 @@ model User {
   password_hash String
   first_name    String
   last_name     String
+  is_email_verified Boolean @default(false)
   created_at    DateTime @default(now())
   deleted_at    DateTime?
 
@@ -33,6 +34,7 @@ model User {
   assignedLeads            Lead[]
   authoredLeadNotes        LeadNote[]
   uploadedLeadAttachments  LeadAttachment[]
+  authTokens               AuthToken[]
 
   @@map("users")
 }
@@ -186,6 +188,28 @@ enum Currency {
   TRY
   EUR
   GBP
+}
+
+enum AuthTokenType {
+  REFRESH
+  VERIFICATION
+  RESET
+}
+
+model AuthToken {
+  id         String        @id @default(uuid()) @db.Uuid
+  user_id    String        @db.Uuid
+  token_hash String        @unique
+  type       AuthTokenType
+  expires_at DateTime
+  created_at DateTime      @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([user_id, type])
+  @@index([expires_at])
+  @@map("auth_tokens")
 }
 
 model Conversation {

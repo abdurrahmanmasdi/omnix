@@ -3,15 +3,24 @@ import {
   BadRequestException,
   Logger,
   NotFoundException,
+  ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { MembershipStatus } from '@prisma/client';
+import { AuthTokenType, MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { I18nService } from 'nestjs-i18n';
 import * as bcrypt from 'bcryptjs';
 import { INVITATION_STATUS } from '../constants/invitation-status';
+import { TokenManagementService } from './services/token-management.service';
+import { MailingService } from './services/mailing.service';
 
-interface IUser {
+const ACCESS_TOKEN_EXPIRES_IN = '15m';
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+interface IUserPublic {
   id: string;
   email: string;
   first_name: string;
@@ -19,9 +28,27 @@ interface IUser {
   created_at: Date;
 }
 
+interface IValidatedUser extends IUserPublic {
+  is_email_verified: boolean;
+}
+
 interface ILoginResponse {
   access_token: string;
-  user: IUser & { permissions: string[] };
+  refresh_token: string;
+  user: IUserPublic & { permissions: string[] };
+}
+
+interface IRefreshSessionResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
+interface IJwtAccessPayload {
+  sub: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  created_at: string;
 }
 
 interface InvitationTokenRecord {
@@ -32,10 +59,20 @@ interface InvitationTokenRecord {
   role_id: string;
 }
 
-function excludePassword(user: any): IUser {
+function excludePassword(user: any): IValidatedUser {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unused-vars
   const { password_hash, ...rest } = user;
-  return rest as IUser;
+  return rest as IValidatedUser;
+}
+
+function toPublicUser(user: IValidatedUser): IUserPublic {
+  return {
+    id: user.id,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    created_at: user.created_at,
+  };
 }
 
 @Injectable()
@@ -46,9 +83,14 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private i18n: I18nService,
+    private tokenManagementService: TokenManagementService,
+    private mailingService: MailingService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<IUser | null> {
+  async validateUser(
+    email: string,
+    password: string,
+  ): Promise<IValidatedUser | null> {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) return null;
     const match = await bcrypt.compare(password, user.password_hash);
@@ -56,8 +98,14 @@ export class AuthService {
     return excludePassword(user);
   }
 
-  async login(user: IUser): Promise<ILoginResponse> {
+  async login(user: IValidatedUser): Promise<ILoginResponse> {
     this.logger.debug(`[AuthService] Login for user ${user.id}`);
+
+    if (!user.is_email_verified) {
+      throw new ForbiddenException(this.i18n.t('auth.ERRORS.EMAIL_NOT_VERIFIED'));
+    }
+
+    const publicUser = toPublicUser(user);
 
     // Get user's first (oldest by creation date) active organization membership
     const membership = await this.prisma.organizationMembership.findFirst({
@@ -75,10 +123,15 @@ export class AuthService {
       this.logger.debug(
         `[AuthService] No active membership found for user ${user.id}`,
       );
-      const payload = { sub: user.id, email: user.email };
+      const refreshToken = await this.tokenManagementService.issueToken(
+        user.id,
+        AuthTokenType.REFRESH,
+        REFRESH_TOKEN_TTL_MS,
+      );
       return {
-        access_token: this.jwtService.sign(payload),
-        user: { ...user, permissions: [] },
+        access_token: this.signAccessToken(publicUser),
+        refresh_token: refreshToken,
+        user: { ...publicUser, permissions: [] },
       };
     }
 
@@ -88,10 +141,16 @@ export class AuthService {
       membership.organization_id,
     );
 
-    const payload = { sub: user.id, email: user.email };
+    const refreshToken = await this.tokenManagementService.issueToken(
+      user.id,
+      AuthTokenType.REFRESH,
+      REFRESH_TOKEN_TTL_MS,
+    );
+
     return {
-      access_token: this.jwtService.sign(payload),
-      user: { ...user, permissions: effectivePermissions },
+      access_token: this.signAccessToken(publicUser),
+      refresh_token: refreshToken,
+      user: { ...publicUser, permissions: effectivePermissions },
     };
   }
 
@@ -195,7 +254,7 @@ export class AuthService {
     first_name: string,
     last_name: string,
     inviteToken?: string,
-  ): Promise<IUser> {
+  ): Promise<IUserPublic> {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new BadRequestException(
@@ -207,9 +266,16 @@ export class AuthService {
 
     if (!inviteToken) {
       const user = await this.prisma.user.create({
-        data: { email, password_hash: hashed, first_name, last_name },
+        data: {
+          email,
+          password_hash: hashed,
+          first_name,
+          last_name,
+          is_email_verified: false,
+        },
       });
-      return excludePassword(user);
+      await this.sendVerificationToken(user.id, user.email);
+      return toPublicUser(excludePassword(user));
     }
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -249,7 +315,13 @@ export class AuthService {
       }
 
       const createdUser = await tx.user.create({
-        data: { email, password_hash: hashed, first_name, last_name },
+        data: {
+          email,
+          password_hash: hashed,
+          first_name,
+          last_name,
+          is_email_verified: false,
+        },
       });
 
       await tx.organizationMembership.create({
@@ -264,7 +336,139 @@ export class AuthService {
       return createdUser;
     });
 
-    return excludePassword(user);
+    await this.sendVerificationToken(user.id, user.email);
+
+    return toPublicUser(excludePassword(user));
+  }
+
+  async verifyEmail(rawToken: string): Promise<void> {
+    const userId = await this.tokenManagementService.consumeToken(
+      rawToken,
+      AuthTokenType.VERIFICATION,
+    );
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { is_email_verified: true },
+    });
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    // Deliberately silent to avoid account enumeration.
+    if (!user) {
+      return;
+    }
+
+    const resetToken = await this.tokenManagementService.issueToken(
+      user.id,
+      AuthTokenType.RESET,
+      PASSWORD_RESET_TOKEN_TTL_MS,
+    );
+
+    await this.mailingService.sendPasswordResetEmail(user.email, resetToken);
+  }
+
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    const userId = await this.tokenManagementService.consumeToken(
+      rawToken,
+      AuthTokenType.RESET,
+    );
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password_hash: newPasswordHash,
+      },
+    });
+
+    await this.tokenManagementService.revokeAllUserTokens(
+      userId,
+      AuthTokenType.REFRESH,
+    );
+  }
+
+  async refreshAccessToken(rawRefreshToken: string): Promise<IRefreshSessionResponse> {
+    const userId = await this.tokenManagementService.consumeToken(
+      rawRefreshToken,
+      AuthTokenType.REFRESH,
+    );
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        created_at: true,
+        is_email_verified: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException(this.i18n.t('auth.ERRORS.INVALID_CREDENTIALS'));
+    }
+
+    if (!user.is_email_verified) {
+      throw new ForbiddenException(this.i18n.t('auth.ERRORS.EMAIL_NOT_VERIFIED'));
+    }
+
+    const nextRefreshToken = await this.tokenManagementService.issueToken(
+      user.id,
+      AuthTokenType.REFRESH,
+      REFRESH_TOKEN_TTL_MS,
+    );
+
+    return {
+      access_token: this.signAccessToken(toPublicUser(user)),
+      refresh_token: nextRefreshToken,
+    };
+  }
+
+  async logout(rawRefreshToken?: string): Promise<void> {
+    if (!rawRefreshToken) {
+      return;
+    }
+
+    await this.tokenManagementService.revokeTokenIfExists(
+      rawRefreshToken,
+      AuthTokenType.REFRESH,
+    );
+  }
+
+  private signAccessToken(user: IUserPublic): string {
+    return this.jwtService.sign(this.toJwtPayload(user), {
+      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+    });
+  }
+
+  private toJwtPayload(user: IUserPublic): IJwtAccessPayload {
+    return {
+      sub: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      created_at: user.created_at.toISOString(),
+    };
+  }
+
+  private async sendVerificationToken(userId: string, email: string): Promise<void> {
+    const verificationToken = await this.tokenManagementService.issueToken(
+      userId,
+      AuthTokenType.VERIFICATION,
+      VERIFICATION_TOKEN_TTL_MS,
+    );
+
+    await this.mailingService.sendVerificationEmail(email, verificationToken);
   }
 
   private validateInvitationForRegistration(

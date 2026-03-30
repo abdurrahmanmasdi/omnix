@@ -3,7 +3,8 @@ import {
   Post,
   Body,
   Get,
-  Request,
+  Req,
+  Res,
   Headers,
   Logger,
 } from '@nestjs/common';
@@ -15,10 +16,17 @@ import {
 } from '@nestjs/swagger';
 import { UnauthorizedException } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { RegisterDto } from './dtos/register.dto';
+import { VerifyEmailDto } from './dtos/verify-email.dto';
+import { RequestPasswordResetDto } from './dtos/request-password-reset.dto';
+import { ResetPasswordDto } from './dtos/reset-password.dto';
 import { Public } from './decorators/public/public.decorator';
+
+const REFRESH_TOKEN_COOKIE_NAME = 'refresh_token';
+const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface IUser {
   id: string;
@@ -59,7 +67,10 @@ export class AuthController {
       'Login successful, returns access token and user with permissions',
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() loginDto: LoginDto): Promise<ILoginResponse> {
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) res?: ExpressResponse,
+  ): Promise<ILoginResponse> {
     const user = await this.authService.validateUser(
       loginDto.email,
       loginDto.password,
@@ -69,7 +80,85 @@ export class AuthController {
         this.i18n.t('auth.ERRORS.INVALID_CREDENTIALS'),
       );
     }
-    return this.authService.login(user);
+
+    return this.loginWithCookie(user, res);
+  }
+
+  @Public()
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email using one-time token' })
+  @ApiResponse({ status: 201, description: 'Email verified successfully' })
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<{ message: string }> {
+    await this.authService.verifyEmail(verifyEmailDto.token);
+    return { message: 'Email verified' };
+  }
+
+  @Public()
+  @Post('request-password-reset')
+  @ApiOperation({ summary: 'Request password reset token' })
+  @ApiResponse({ status: 201, description: 'Password reset email dispatched' })
+  async requestPasswordReset(
+    @Body() requestPasswordResetDto: RequestPasswordResetDto,
+  ): Promise<{ message: string }> {
+    await this.authService.requestPasswordReset(requestPasswordResetDto.email);
+    return { message: 'If this email exists, a reset link has been sent' };
+  }
+
+  @Public()
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using one-time token' })
+  @ApiResponse({ status: 201, description: 'Password reset successful' })
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.newPassword,
+    );
+
+    return { message: 'Password reset successful' };
+  }
+
+  @Public()
+  @Post('refresh')
+  @ApiOperation({ summary: 'Rotate refresh token and issue new access token' })
+  @ApiResponse({ status: 201, description: 'Access token refreshed' })
+  async refresh(
+    @Req() req: ExpressRequest,
+    @Res({ passthrough: true }) res?: ExpressResponse,
+  ): Promise<{ access_token: string }> {
+    const refreshToken = this.readRefreshToken(req);
+
+    if (!refreshToken) {
+      throw new UnauthorizedException(
+        this.i18n.t('auth.ERRORS.INVALID_CREDENTIALS'),
+      );
+    }
+
+    const rotatedTokens = await this.authService.refreshAccessToken(refreshToken);
+    this.setRefreshTokenCookie(res, rotatedTokens.refresh_token);
+
+    return {
+      access_token: rotatedTokens.access_token,
+    };
+  }
+
+  @Public()
+  @Post('logout')
+  @ApiOperation({ summary: 'Logout by revoking refresh token and clearing cookie' })
+  @ApiResponse({ status: 201, description: 'Logout successful' })
+  async logout(
+    @Req() req: ExpressRequest,
+    @Res({ passthrough: true }) res?: ExpressResponse,
+  ): Promise<{ message: string }> {
+    const refreshToken = this.readRefreshToken(req);
+
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+
+    this.clearRefreshTokenCookie(res);
+    return { message: 'Logged out' };
   }
 
   @Public()
@@ -101,7 +190,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(
-    @Request() req: any,
+    @Req() req: any,
     @Headers('x-organization-id') organizationId?: string,
   ): Promise<IUser & { permissions: string[] }> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -128,5 +217,55 @@ export class AuthController {
       ...user,
       permissions: userPermissions,
     };
+  }
+
+  private async loginWithCookie(
+    user: IUser & { is_email_verified: boolean },
+    res?: ExpressResponse,
+  ): Promise<ILoginResponse> {
+    const loginResult = await this.authService.login(user);
+    this.setRefreshTokenCookie(res, loginResult.refresh_token);
+
+    return {
+      access_token: loginResult.access_token,
+      user: loginResult.user,
+    };
+  }
+
+  private setRefreshTokenCookie(
+    res: ExpressResponse | undefined,
+    refreshToken: string,
+  ): void {
+    if (!res || typeof res.cookie !== 'function') {
+      return;
+    }
+
+    res.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: REFRESH_TOKEN_MAX_AGE_MS,
+      path: '/',
+    });
+  }
+
+  private clearRefreshTokenCookie(res?: ExpressResponse): void {
+    if (!res || typeof res.clearCookie !== 'function') {
+      return;
+    }
+
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+    });
+  }
+
+  private readRefreshToken(req: ExpressRequest): string | undefined {
+    const cookies = req.cookies as Record<string, unknown> | undefined;
+    const refreshToken = cookies?.[REFRESH_TOKEN_COOKIE_NAME];
+
+    return typeof refreshToken === 'string' ? refreshToken : undefined;
   }
 }
