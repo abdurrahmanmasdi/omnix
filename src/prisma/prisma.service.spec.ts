@@ -447,9 +447,7 @@ describe('PrismaService', () => {
     const findFirstCalls = baseClient.user.findFirst.mock.calls as Array<
       [
         {
-          where: {
-            AND: Array<Record<string, unknown>>;
-          };
+          where: Record<string, unknown>;
         },
       ]
     >;
@@ -462,12 +460,14 @@ describe('PrismaService', () => {
 
     const typedFindFirstArgs = findFirstArgs as {
       where: {
-        AND: Array<Record<string, unknown>>;
+        id: string;
+        deleted_at: null;
       };
     };
 
     expect(typedFindFirstArgs.where).toEqual({
-      AND: [{ id: 'user-1' }, { deleted_at: null }],
+      id: 'user-1',
+      deleted_at: null,
     });
   });
 
@@ -507,6 +507,177 @@ describe('PrismaService', () => {
     };
 
     expect(typedFindFirstArgs.where).toEqual(explicitWhere);
+  });
+
+  it('does not inject deleted_at null when count explicitly requests deleted records', async () => {
+    const trashWhere = {
+      deleted_at: { not: null },
+    };
+
+    const result = await (
+      service as unknown as {
+        user: {
+          count: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).user.count({
+      where: trashWhere,
+    });
+
+    expect(result).toEqual({
+      op: 'count',
+      model: 'User',
+      args: {
+        where: trashWhere,
+      },
+      passthrough: true,
+    });
+  });
+
+  it('does not inject deleted_at null when aggregate explicitly filters by deleted_at date', async () => {
+    const deletedAtDate = new Date('2026-03-01T00:00:00.000Z');
+    const trashWhere = {
+      deleted_at: deletedAtDate,
+    };
+
+    const result = await (
+      service as unknown as {
+        user: {
+          aggregate: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).user.aggregate({
+      _count: { _all: true },
+      where: trashWhere,
+    });
+
+    expect(result).toEqual({
+      op: 'aggregate',
+      model: 'User',
+      args: {
+        _count: { _all: true },
+        where: trashWhere,
+      },
+      passthrough: true,
+    });
+  });
+
+  it('does not inject deleted_at null when deleted_at is explicitly nested in OR and NOT arrays', async () => {
+    const deletedAtDate = new Date('2026-03-02T00:00:00.000Z');
+    const trashWhere = {
+      OR: [
+        { deleted_at: { not: null } },
+        {
+          NOT: [{ deleted_at: deletedAtDate }],
+        },
+      ],
+    };
+
+    const result = await (
+      service as unknown as {
+        user: {
+          groupBy: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).user.groupBy({
+      by: ['email'],
+      where: trashWhere,
+    });
+
+    expect(result).toEqual({
+      op: 'groupBy',
+      model: 'User',
+      args: {
+        by: ['email'],
+        where: trashWhere,
+      },
+      passthrough: true,
+    });
+  });
+
+  it('injects deleted_at filter into count for soft-delete models', async () => {
+    const result = await (
+      service as unknown as {
+        user: {
+          count: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).user.count({
+      where: { email: { contains: '@example.com' } },
+    });
+
+    expect(result).toEqual({
+      op: 'count',
+      model: 'User',
+      args: {
+        where: {
+          email: { contains: '@example.com' },
+          deleted_at: null,
+        },
+      },
+      passthrough: true,
+    });
+  });
+
+  it('injects deleted_at filter into aggregate for soft-delete models', async () => {
+    const result = await (
+      service as unknown as {
+        user: {
+          aggregate: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).user.aggregate({
+      _count: { _all: true },
+      where: { first_name: { contains: 'A' } },
+    });
+
+    expect(result).toEqual({
+      op: 'aggregate',
+      model: 'User',
+      args: {
+        _count: { _all: true },
+        where: {
+          first_name: { contains: 'A' },
+          deleted_at: null,
+        },
+      },
+      passthrough: true,
+    });
+  });
+
+  it('deeply merges deleted_at filter into groupBy where clauses', async () => {
+    const result = await (
+      service as unknown as {
+        user: {
+          groupBy: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).user.groupBy({
+      by: ['email'],
+      where: {
+        AND: [{ first_name: { contains: 'A' } }],
+        OR: [
+          { email: { contains: '@example.com' } },
+          { email: { contains: '@test.com' } },
+        ],
+      },
+    });
+
+    expect(result).toEqual({
+      op: 'groupBy',
+      model: 'User',
+      args: {
+        by: ['email'],
+        where: {
+          AND: [{ first_name: { contains: 'A' } }, { deleted_at: null }],
+          OR: [
+            { email: { contains: '@example.com' } },
+            { email: { contains: '@test.com' } },
+          ],
+        },
+      },
+      passthrough: true,
+    });
   });
 
   it('passes non-soft-delete model delete through original query without mutation', async () => {

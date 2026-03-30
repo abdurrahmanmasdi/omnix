@@ -5,15 +5,6 @@ import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { RequestContextService } from '../request-context/request-context.service';
 
-const SOFT_DELETE_MODEL_NAMES = [
-  'User',
-  'Organization',
-  'Lead',
-  'Message',
-  'LeadNote',
-  'LeadAttachment',
-] as const;
-
 export const TENANT_BOUND_MODELS = [
   'Role',
   'Invitation',
@@ -24,12 +15,9 @@ export const TENANT_BOUND_MODELS = [
   'Lead',
 ] as const;
 
-type SoftDeleteModelName = (typeof SOFT_DELETE_MODEL_NAMES)[number];
-
-const SOFT_DELETE_MODELS = new Set<string>(SOFT_DELETE_MODEL_NAMES);
 const TENANT_BOUND_MODEL_SET = new Set<string>(TENANT_BOUND_MODELS);
 
-const GENERATED_MODELS_WITH_DELETED_AT = new Set<string>(
+const SOFT_DELETE_MODEL_SET = new Set<string>(
   (Prisma.dmmf?.datamodel?.models ?? [])
     .filter((model) =>
       model.fields.some((field) => field.name === 'deleted_at'),
@@ -37,9 +25,7 @@ const GENERATED_MODELS_WITH_DELETED_AT = new Set<string>(
     .map((model) => model.name),
 );
 
-type SoftDeleteDelegate = {
-  update(args: Record<string, unknown>): Promise<unknown>;
-  updateMany(args: Record<string, unknown>): Promise<unknown>;
+type SoftDeleteFindFirstDelegate = {
   findFirst(args: Record<string, unknown>): Promise<unknown>;
 };
 
@@ -51,39 +37,27 @@ const PASSTHROUGH_PROPERTIES = new Set<string>([
 ]);
 
 function isSoftDeleteModel(model: string | undefined): model is string {
-  return Boolean(
-    model &&
-    SOFT_DELETE_MODELS.has(model) &&
-    GENERATED_MODELS_WITH_DELETED_AT.has(model),
-  );
-}
-
-function toSoftDeleteModelName(model: string): SoftDeleteModelName {
-  if (SOFT_DELETE_MODEL_NAMES.includes(model as SoftDeleteModelName)) {
-    return model as SoftDeleteModelName;
-  }
-
-  throw new Error(`Unsupported soft-delete model: ${model}`);
+  return Boolean(model && SOFT_DELETE_MODEL_SET.has(model));
 }
 
 function getSoftDeleteDelegate(
   client: PrismaClient,
-  model: SoftDeleteModelName,
-): SoftDeleteDelegate {
-  switch (model) {
-    case 'User':
-      return client.user as unknown as SoftDeleteDelegate;
-    case 'Organization':
-      return client.organization as unknown as SoftDeleteDelegate;
-    case 'Lead':
-      return client.lead as unknown as SoftDeleteDelegate;
-    case 'Message':
-      return client.message as unknown as SoftDeleteDelegate;
-    case 'LeadNote':
-      return client.leadNote as unknown as SoftDeleteDelegate;
-    case 'LeadAttachment':
-      return client.leadAttachment as unknown as SoftDeleteDelegate;
+  model: string,
+): SoftDeleteFindFirstDelegate | null {
+  const delegateProperty = toDelegateProperty(model);
+  const delegate = (client as unknown as Record<string, unknown>)[
+    delegateProperty
+  ] as Record<string, unknown> | undefined;
+
+  if (!delegate || typeof delegate.findFirst !== 'function') {
+    return null;
   }
+
+  return {
+    findFirst: delegate.findFirst as (
+      args: Record<string, unknown>,
+    ) => Promise<unknown>,
+  };
 }
 
 function hasExplicitDeletedAtFilter(where: unknown): boolean {
@@ -117,6 +91,36 @@ function hasExplicitDeletedAtFilter(where: unknown): boolean {
   return false;
 }
 
+function deepCloneLogicalWhere(
+  where: Record<string, unknown>,
+): Record<string, unknown> {
+  const clonedWhere: Record<string, unknown> = { ...where };
+  const logicalKeys = ['AND', 'OR', 'NOT'] as const;
+
+  for (const key of logicalKeys) {
+    const value = clonedWhere[key];
+
+    if (Array.isArray(value)) {
+      clonedWhere[key] = value.map((item) => {
+        if (!item || typeof item !== 'object') {
+          return item;
+        }
+
+        return deepCloneLogicalWhere(item as Record<string, unknown>);
+      });
+      continue;
+    }
+
+    if (value && typeof value === 'object') {
+      clonedWhere[key] = deepCloneLogicalWhere(
+        value as Record<string, unknown>,
+      );
+    }
+  }
+
+  return clonedWhere;
+}
+
 function withNotDeletedWhere<T extends Record<string, unknown> | undefined>(
   where: T,
 ): Record<string, unknown> {
@@ -128,8 +132,26 @@ function withNotDeletedWhere<T extends Record<string, unknown> | undefined>(
     return { deleted_at: null };
   }
 
+  const mergedWhere = deepCloneLogicalWhere(where);
+  const andValue = mergedWhere.AND;
+
+  if (Array.isArray(andValue)) {
+    return {
+      ...mergedWhere,
+      AND: [...andValue, { deleted_at: null }],
+    };
+  }
+
+  if (andValue && typeof andValue === 'object') {
+    return {
+      ...mergedWhere,
+      AND: [andValue, { deleted_at: null }],
+    };
+  }
+
   return {
-    AND: [where, { deleted_at: null }],
+    ...mergedWhere,
+    deleted_at: null,
   };
 }
 
@@ -229,12 +251,20 @@ export class PrismaService
               return query(args);
             }
 
-            const delegate = getSoftDeleteDelegate(
-              baseClient,
-              toSoftDeleteModelName(model),
-            );
+            const delegateProperty = toDelegateProperty(model);
+            const delegate = (baseClient as unknown as Record<string, unknown>)[
+              delegateProperty
+            ] as Record<string, unknown> | undefined;
 
-            return delegate.update({
+            if (!delegate || typeof delegate.update !== 'function') {
+              return query(args);
+            }
+
+            const update = delegate.update as (
+              updateArgs: Record<string, unknown>,
+            ) => Promise<unknown>;
+
+            return update({
               ...(args as Record<string, unknown>),
               data: {
                 ...(((args as Record<string, unknown>)?.data as
@@ -249,12 +279,20 @@ export class PrismaService
               return query(args);
             }
 
-            const delegate = getSoftDeleteDelegate(
-              baseClient,
-              toSoftDeleteModelName(model),
-            );
+            const delegateProperty = toDelegateProperty(model);
+            const delegate = (baseClient as unknown as Record<string, unknown>)[
+              delegateProperty
+            ] as Record<string, unknown> | undefined;
 
-            return delegate.updateMany({
+            if (!delegate || typeof delegate.updateMany !== 'function') {
+              return query(args);
+            }
+
+            const updateMany = delegate.updateMany as (
+              updateManyArgs: Record<string, unknown>,
+            ) => Promise<unknown>;
+
+            return updateMany({
               ...(args as Record<string, unknown>),
               data: {
                 ...(((args as Record<string, unknown>)?.data as
@@ -269,10 +307,10 @@ export class PrismaService
               return query(args);
             }
 
-            const delegate = getSoftDeleteDelegate(
-              baseClient,
-              toSoftDeleteModelName(model),
-            );
+            const delegate = getSoftDeleteDelegate(baseClient, model);
+            if (!delegate) {
+              return query(args);
+            }
             const typedArgs = (args as Record<string, unknown>) ?? {};
             const where =
               (typedArgs.where as Record<string, unknown> | undefined) ??
@@ -309,6 +347,51 @@ export class PrismaService
               undefined;
 
             return query({
+              ...typedArgs,
+              where: withNotDeletedWhere(where),
+            });
+          },
+          async count({ model, args, query }) {
+            if (!isSoftDeleteModel(model)) {
+              return query(args);
+            }
+
+            const typedArgs = (args as Record<string, unknown>) ?? {};
+            const where =
+              (typedArgs.where as Record<string, unknown> | undefined) ??
+              undefined;
+
+            return query({
+              ...typedArgs,
+              where: withNotDeletedWhere(where),
+            });
+          },
+          async aggregate({ model, args, query }) {
+            if (!isSoftDeleteModel(model)) {
+              return query(args);
+            }
+
+            const typedArgs = (args as Record<string, unknown>) ?? {};
+            const where =
+              (typedArgs.where as Record<string, unknown> | undefined) ??
+              undefined;
+
+            return query({
+              ...typedArgs,
+              where: withNotDeletedWhere(where),
+            });
+          },
+          async groupBy({ model, args, query }) {
+            if (!isSoftDeleteModel(model)) {
+              return query(args);
+            }
+
+            const typedArgs = (args as Record<string, unknown>) ?? {};
+            const where =
+              (typedArgs.where as Record<string, unknown> | undefined) ??
+              undefined;
+
+            return callExtensionQuery(query, {
               ...typedArgs,
               where: withNotDeletedWhere(where),
             });

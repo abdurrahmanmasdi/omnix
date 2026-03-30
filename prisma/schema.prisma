@@ -63,6 +63,7 @@ model OrganizationMembership {
   role_id         String           @db.Uuid
   status          MembershipStatus @default(PENDING)
   created_at      DateTime         @default(now())
+  deleted_at      DateTime?
 
   user                User                           @relation(fields: [user_id], references: [id])
   organization        Organization                   @relation(fields: [organization_id], references: [id])
@@ -95,6 +96,7 @@ model Role {
   is_system         Boolean  @default(false)
   slug              String?
   created_at        DateTime @default(now())
+  deleted_at        DateTime?
 
   organization    Organization?            @relation(fields: [organization_id], references: [id])
   rolePermissions RolePermission[]
@@ -114,6 +116,7 @@ model Invitation {
   status          String    @default("pending")
   created_at      DateTime  @default(now())
   accepted_at     DateTime?
+  deleted_at      DateTime?
 
   organization Organization @relation(fields: [organization_id], references: [id])
   role         Role         @relation(fields: [role_id], references: [id])
@@ -192,6 +195,7 @@ model Conversation {
   name            String?
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
+  deleted_at      DateTime?
 
   organization Organization              @relation(fields: [organization_id], references: [id])
   participants ConversationParticipant[]
@@ -241,6 +245,7 @@ model PipelineStage {
   order_index     Int
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
+  deleted_at      DateTime?
 
   organization Organization @relation(fields: [organization_id], references: [id])
   leads        Lead[]
@@ -256,6 +261,7 @@ model LeadSource {
   is_active       Boolean  @default(true)
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
+  deleted_at      DateTime?
 
   organization Organization @relation(fields: [organization_id], references: [id])
   leads        Lead[]
