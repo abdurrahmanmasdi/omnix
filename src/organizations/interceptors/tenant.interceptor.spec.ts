@@ -8,6 +8,7 @@ import {
 import { I18nService } from 'nestjs-i18n';
 import { TenantInterceptor } from './tenant.interceptor';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../request-context/request-context.service';
 
 describe('TenantInterceptor', () => {
   let interceptor: TenantInterceptor;
@@ -20,6 +21,11 @@ describe('TenantInterceptor', () => {
 
   const mockI18nService = {
     t: jest.fn((key: string) => key),
+  };
+
+  const mockRequestContextService = {
+    run: jest.fn((callback: () => unknown) => callback()),
+    setTenantId: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -41,6 +47,10 @@ describe('TenantInterceptor', () => {
           useValue: mockI18nService,
         },
         {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
+        },
+        {
           provide: Logger,
           useValue: {
             error: jest.fn(),
@@ -56,6 +66,7 @@ describe('TenantInterceptor', () => {
   });
 
   afterEach(() => {
+    jest.clearAllMocks();
     jest.restoreAllMocks();
   });
 
@@ -209,6 +220,10 @@ describe('TenantInterceptor', () => {
       // Assert
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(mockRequest.tenantId).toBe('org-123');
+      expect(mockRequestContextService.run).toHaveBeenCalledTimes(1);
+      expect(mockRequestContextService.setTenantId).toHaveBeenCalledWith(
+        'org-123',
+      );
       expect(mockNext.handle).toHaveBeenCalled();
       expect(result).toEqual('next-result');
       expect(

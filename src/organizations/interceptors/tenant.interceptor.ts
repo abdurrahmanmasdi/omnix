@@ -11,6 +11,7 @@ import { I18nService } from 'nestjs-i18n';
 import { Observable } from 'rxjs';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../request-context/request-context.service';
 
 // Extend Express Request to include our custom properties
 interface TenantRequest extends Request {
@@ -25,6 +26,7 @@ export class TenantInterceptor implements NestInterceptor {
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly requestContextService: RequestContextService,
   ) {}
 
   async intercept(
@@ -92,6 +94,9 @@ export class TenantInterceptor implements NestInterceptor {
       );
     }
 
-    return next.handle();
+    return this.requestContextService.run(() => {
+      this.requestContextService.setTenantId(organizationId);
+      return next.handle();
+    });
   }
 }

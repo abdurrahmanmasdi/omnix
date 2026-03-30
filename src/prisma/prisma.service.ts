@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
+import { RequestContextService } from '../request-context/request-context.service';
 
 const SOFT_DELETE_MODEL_NAMES = [
   'User',
@@ -13,9 +14,20 @@ const SOFT_DELETE_MODEL_NAMES = [
   'LeadAttachment',
 ] as const;
 
+export const TENANT_BOUND_MODELS = [
+  'Role',
+  'Invitation',
+  'OrganizationMembership',
+  'Conversation',
+  'PipelineStage',
+  'LeadSource',
+  'Lead',
+] as const;
+
 type SoftDeleteModelName = (typeof SOFT_DELETE_MODEL_NAMES)[number];
 
 const SOFT_DELETE_MODELS = new Set<string>(SOFT_DELETE_MODEL_NAMES);
+const TENANT_BOUND_MODEL_SET = new Set<string>(TENANT_BOUND_MODELS);
 
 const GENERATED_MODELS_WITH_DELETED_AT = new Set<string>(
   (Prisma.dmmf?.datamodel?.models ?? [])
@@ -121,6 +133,64 @@ function withNotDeletedWhere<T extends Record<string, unknown> | undefined>(
   };
 }
 
+function isTenantBoundModel(model: string | undefined): model is string {
+  return Boolean(model && TENANT_BOUND_MODEL_SET.has(model));
+}
+
+function toDelegateProperty(model: string): string {
+  return `${model.charAt(0).toLowerCase()}${model.slice(1)}`;
+}
+
+function getFindFirstDelegate(
+  client: PrismaClient,
+  model: string,
+): { findFirst: (args: Record<string, unknown>) => Promise<unknown> } | null {
+  const delegateProperty = toDelegateProperty(model);
+  const delegate = (client as unknown as Record<string, unknown>)[
+    delegateProperty
+  ] as Record<string, unknown> | undefined;
+
+  if (!delegate || typeof delegate.findFirst !== 'function') {
+    return null;
+  }
+
+  return {
+    findFirst: delegate.findFirst as (
+      args: Record<string, unknown>,
+    ) => Promise<unknown>,
+  };
+}
+
+function withTenantWhere(
+  args: Record<string, unknown> | undefined,
+  tenantId: string,
+): Record<string, unknown> {
+  const typedArgs = args ?? {};
+  const where = typedArgs.where as Record<string, unknown> | undefined;
+
+  return {
+    ...typedArgs,
+    where: where
+      ? {
+          AND: [where, { organization_id: tenantId }],
+        }
+      : {
+          organization_id: tenantId,
+        },
+  };
+}
+
+function callExtensionQuery(
+  query: unknown,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const typedQuery = query as (
+    queryArgs: Record<string, unknown>,
+  ) => Promise<unknown>;
+
+  return typedQuery(args);
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -128,7 +198,10 @@ export class PrismaService
 {
   private readonly extendedClient: PrismaClient;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private requestContextService: RequestContextService,
+  ) {
     // 1. Create a connection pool using the native 'pg' driver
     // 1. Safely get the URL from the ConfigService
     const connectionString = configService.get<string>('DATABASE_URL');
@@ -146,8 +219,9 @@ export class PrismaService
     super({ adapter });
 
     const baseClient = this as unknown as PrismaClient;
+    const requestContext = this.requestContextService;
 
-    this.extendedClient = this.$extends({
+    const softDeleteExtendedClient = this.$extends({
       query: {
         $allModels: {
           async delete({ model, args, query }) {
@@ -238,6 +312,249 @@ export class PrismaService
               ...typedArgs,
               where: withNotDeletedWhere(where),
             });
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
+
+    this.extendedClient = softDeleteExtendedClient.$extends({
+      query: {
+        $allModels: {
+          async findUnique({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            const tenantArgs = withTenantWhere(
+              args as Record<string, unknown> | undefined,
+              tenantId,
+            );
+
+            const delegate = getFindFirstDelegate(
+              softDeleteExtendedClient,
+              model,
+            );
+            if (delegate) {
+              return delegate.findFirst(tenantArgs);
+            }
+
+            return callExtensionQuery(query, tenantArgs);
+          },
+
+          async findFirst({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async findMany({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async update({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async updateMany({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async delete({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async deleteMany({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async aggregate({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async count({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
+          },
+
+          async groupBy({ model, args, query }) {
+            if (!isTenantBoundModel(model)) {
+              return query(args);
+            }
+
+            if (requestContext.isSystemBypass()) {
+              return query(args);
+            }
+
+            const tenantId = requestContext.getTenantId();
+            if (!tenantId) {
+              return query(args);
+            }
+
+            return callExtensionQuery(
+              query,
+              withTenantWhere(
+                args as Record<string, unknown> | undefined,
+                tenantId,
+              ),
+            );
           },
         },
       },

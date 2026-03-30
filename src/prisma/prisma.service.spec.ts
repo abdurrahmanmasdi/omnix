@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { RequestContextService } from '../request-context/request-context.service';
 
 type ExtensionQueryArgs = {
   model: string;
@@ -7,13 +8,10 @@ type ExtensionQueryArgs = {
   query: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
-type AllModelsQueryHandlers = {
-  delete: (args: ExtensionQueryArgs) => Promise<unknown>;
-  deleteMany: (args: ExtensionQueryArgs) => Promise<unknown>;
-  findUnique: (args: ExtensionQueryArgs) => Promise<unknown>;
-  findFirst: (args: ExtensionQueryArgs) => Promise<unknown>;
-  findMany: (args: ExtensionQueryArgs) => Promise<unknown>;
-};
+type AllModelsQueryHandlers = Record<
+  string,
+  (args: ExtensionQueryArgs) => Promise<unknown>
+>;
 
 type DelegateMock = {
   update: jest.Mock;
@@ -25,6 +23,11 @@ type MockedPrismaBaseClient = {
   user: DelegateMock;
   organization: DelegateMock;
   lead: DelegateMock;
+  role: Record<string, jest.Mock>;
+  invitation: Record<string, jest.Mock>;
+  organizationMembership: Record<string, jest.Mock>;
+  pipelineStage: Record<string, jest.Mock>;
+  leadSource: Record<string, jest.Mock>;
   message: DelegateMock;
   leadNote: DelegateMock;
   leadAttachment: DelegateMock;
@@ -83,16 +86,50 @@ jest.mock('@prisma/adapter-pg', () => ({
 }));
 
 jest.mock('@prisma/client', () => {
+  const createGenericDelegate = () => ({
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+    delete: jest.fn(),
+    deleteMany: jest.fn(),
+    aggregate: jest.fn(),
+    count: jest.fn(),
+    groupBy: jest.fn(),
+  });
+
   class PrismaClientMock {
     user = createSoftDeleteDelegate('User');
     organization = createSoftDeleteDelegate('Organization');
     lead = createSoftDeleteDelegate('Lead');
+    role = createGenericDelegate();
+    invitation = createGenericDelegate();
+    organizationMembership = createGenericDelegate();
+    pipelineStage = createGenericDelegate();
+    leadSource = createGenericDelegate();
     message = createSoftDeleteDelegate('Message');
     leadNote = createSoftDeleteDelegate('LeadNote');
     leadAttachment = createSoftDeleteDelegate('LeadAttachment');
     conversation = {
-      delete: jest.fn(),
-      deleteMany: jest.fn(),
+      delete: jest.fn().mockImplementation((args: Record<string, unknown>) =>
+        Promise.resolve({
+          op: 'delete',
+          model: 'Conversation',
+          args,
+          passthrough: true,
+        }),
+      ),
+      deleteMany: jest
+        .fn()
+        .mockImplementation((args: Record<string, unknown>) =>
+          Promise.resolve({
+            op: 'deleteMany',
+            model: 'Conversation',
+            args,
+            passthrough: true,
+          }),
+        ),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -109,35 +146,120 @@ jest.mock('@prisma/client', () => {
         $allModels: AllModelsQueryHandlers;
       };
     }) {
-      const allModels = extension.query.$allModels;
+      const applyExtension = (
+        previousClient: Record<string, unknown>,
+        inputExtension: {
+          query: {
+            $allModels: AllModelsQueryHandlers;
+          };
+        },
+      ) => {
+        const allModels = inputExtension.query.$allModels;
 
-      const bind = (model: string, method: keyof AllModelsQueryHandlers) => {
-        return async (args: Record<string, unknown> = {}) =>
-          allModels[method]({
-            model,
-            args,
-            query: createPassthroughQuery(model, String(method)),
-          });
+        const bindModel = (
+          model: string,
+          previousModel: Record<string, unknown>,
+        ) => {
+          const wrappedModel: Record<string, unknown> = {
+            ...previousModel,
+          };
+
+          for (const method of Object.keys(allModels)) {
+            const handler = allModels[method];
+
+            if (typeof handler !== 'function') {
+              continue;
+            }
+
+            wrappedModel[method] = (args: Record<string, unknown> = {}) => {
+              const previousMethod = previousModel[method] as
+                | ((methodArgs: Record<string, unknown>) => Promise<unknown>)
+                | undefined;
+
+              return handler({
+                model,
+                args,
+                query: previousMethod
+                  ? (queryArgs: Record<string, unknown>) =>
+                      Promise.resolve(previousMethod(queryArgs))
+                  : createPassthroughQuery(model, method),
+              });
+            };
+          }
+
+          return wrappedModel;
+        };
+
+        const extendedClient: Record<string, unknown> = {
+          ...previousClient,
+          user: bindModel(
+            'User',
+            (previousClient.user as Record<string, unknown>) ?? {},
+          ),
+          organization: bindModel(
+            'Organization',
+            (previousClient.organization as Record<string, unknown>) ?? {},
+          ),
+          lead: bindModel(
+            'Lead',
+            (previousClient.lead as Record<string, unknown>) ?? {},
+          ),
+          role: bindModel(
+            'Role',
+            (previousClient.role as Record<string, unknown>) ?? {},
+          ),
+          invitation: bindModel(
+            'Invitation',
+            (previousClient.invitation as Record<string, unknown>) ?? {},
+          ),
+          organizationMembership: bindModel(
+            'OrganizationMembership',
+            (previousClient.organizationMembership as Record<
+              string,
+              unknown
+            >) ?? {},
+          ),
+          conversation: bindModel(
+            'Conversation',
+            (previousClient.conversation as Record<string, unknown>) ?? {},
+          ),
+          pipelineStage: bindModel(
+            'PipelineStage',
+            (previousClient.pipelineStage as Record<string, unknown>) ?? {},
+          ),
+          leadSource: bindModel(
+            'LeadSource',
+            (previousClient.leadSource as Record<string, unknown>) ?? {},
+          ),
+          message: bindModel(
+            'Message',
+            (previousClient.message as Record<string, unknown>) ?? {},
+          ),
+          leadNote: bindModel(
+            'LeadNote',
+            (previousClient.leadNote as Record<string, unknown>) ?? {},
+          ),
+          leadAttachment: bindModel(
+            'LeadAttachment',
+            (previousClient.leadAttachment as Record<string, unknown>) ?? {},
+          ),
+          $connect: previousClient.$connect,
+          $disconnect: previousClient.$disconnect,
+        };
+
+        extendedClient.$extends = (nextExtension: {
+          query: {
+            $allModels: AllModelsQueryHandlers;
+          };
+        }) => applyExtension(extendedClient, nextExtension);
+
+        return extendedClient;
       };
 
-      return {
-        user: {
-          delete: bind('User', 'delete'),
-          deleteMany: bind('User', 'deleteMany'),
-          findUnique: bind('User', 'findUnique'),
-          findFirst: bind('User', 'findFirst'),
-          findMany: bind('User', 'findMany'),
-        },
-        conversation: {
-          delete: bind('Conversation', 'delete'),
-          deleteMany: bind('Conversation', 'deleteMany'),
-          findUnique: bind('Conversation', 'findUnique'),
-          findFirst: bind('Conversation', 'findFirst'),
-          findMany: bind('Conversation', 'findMany'),
-        },
-        $connect: this.$connect,
-        $disconnect: this.$disconnect,
-      };
+      return applyExtension(
+        this as unknown as Record<string, unknown>,
+        extension,
+      );
     }
   }
 
@@ -187,6 +309,12 @@ import { PrismaService } from './prisma.service';
 describe('PrismaService', () => {
   let service: PrismaService;
   let baseClient: MockedPrismaBaseClient;
+  const mockRequestContextService = {
+    getTenantId: jest.fn(),
+    isSystemBypass: jest.fn(),
+  } as jest.Mocked<
+    Pick<RequestContextService, 'getTenantId' | 'isSystemBypass'>
+  >;
 
   const mockConfigService = {
     get: jest.fn((key: string) => {
@@ -199,6 +327,10 @@ describe('PrismaService', () => {
 
   beforeEach(async () => {
     prismaBaseClients.length = 0;
+    mockRequestContextService.getTenantId.mockReset();
+    mockRequestContextService.getTenantId.mockReturnValue(undefined);
+    mockRequestContextService.isSystemBypass.mockReset();
+    mockRequestContextService.isSystemBypass.mockReturnValue(false);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -206,6 +338,10 @@ describe('PrismaService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
         },
       ],
     }).compile();
@@ -389,6 +525,44 @@ describe('PrismaService', () => {
       args: { where: { id: 'conv-1' } },
       passthrough: true,
     });
+  });
+
+  it('applies tenant filter for tenant-bound queries when tenant context exists', async () => {
+    mockRequestContextService.getTenantId.mockReturnValue('org-1');
+
+    await (
+      service as unknown as {
+        conversation: {
+          findMany: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).conversation.findMany({ where: { id: 'conv-1' } });
+
+    expect(baseClient.conversation.findMany).toHaveBeenCalledTimes(1);
+    expect(baseClient.conversation.findMany).toHaveBeenCalledWith({
+      where: {
+        AND: [{ id: 'conv-1' }, { organization_id: 'org-1' }],
+      },
+    });
+  });
+
+  it('skips tenant filter when system bypass is active', async () => {
+    mockRequestContextService.isSystemBypass.mockReturnValue(true);
+    mockRequestContextService.getTenantId.mockReturnValue('org-1');
+
+    await (
+      service as unknown as {
+        conversation: {
+          findMany: (args: Record<string, unknown>) => Promise<unknown>;
+        };
+      }
+    ).conversation.findMany({ where: { id: 'conv-1' } });
+
+    expect(baseClient.conversation.findMany).toHaveBeenCalledTimes(1);
+    expect(baseClient.conversation.findMany).toHaveBeenCalledWith({
+      where: { id: 'conv-1' },
+    });
+    expect(mockRequestContextService.getTenantId).not.toHaveBeenCalled();
   });
 
   it('delegates module lifecycle connect and disconnect to extended client', async () => {
