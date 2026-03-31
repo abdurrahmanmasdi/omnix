@@ -64,10 +64,7 @@ export class AnalyticsService {
   }
 
   async getDashboardMetrics(orgId: string): Promise<DashboardMetrics> {
-    const leadWhere = {
-      organization_id: orgId,
-      deleted_at: null,
-    } as unknown as Prisma.LeadWhereInput;
+    const leadWhere: Prisma.LeadWhereInput = {};
 
     const [
       pipelineOverview,
@@ -101,9 +98,7 @@ export class AnalyticsService {
         },
       }),
       this.prisma.pipelineStage.findMany({
-        where: {
-          organization_id: orgId,
-        },
+        where: {},
         select: {
           id: true,
           name: true,
@@ -114,9 +109,7 @@ export class AnalyticsService {
         },
       }),
       this.prisma.leadSource.findMany({
-        where: {
-          organization_id: orgId,
-        },
+        where: {},
         select: {
           id: true,
           name: true,

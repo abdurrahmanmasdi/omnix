@@ -39,6 +39,7 @@
     "TENANT": {
       "USER_INFO_MISSING": "Kullanıcı bilgisi bulunamadı.",
       "NO_ORG_ACCESS": "Bu organizasyona erişim yetkiniz yok.",
+      "MISSING_CONTEXT": "Kiracı bağlamı olmadan kiracıya bağlı \"{model}\" modeline erişilmeye çalışıldı.",
       "VERIFY_FAILED": "Organizasyon erişimi doğrulanamadı."
     },
     "ACCESS": {

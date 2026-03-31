@@ -18,6 +18,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ChatService } from './chat.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 interface JwtSocketPayload {
   sub: string;
@@ -43,6 +44,7 @@ interface AuthenticatedSocket extends Socket {
   data: {
     userId?: string;
     orgId?: string;
+    organizationId?: string;
   };
 }
 
@@ -81,7 +83,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly jwtService: JwtService,
     private readonly chatService: ChatService,
+    private readonly cls: RequestContextService,
   ) {}
+
+  private async runWithTenantContext<T>(
+    orgId: string,
+    callback: () => Promise<T>,
+  ): Promise<T> {
+    return this.cls.runWith({ tenantId: orgId }, callback);
+  }
 
   private extractBearerToken(raw: string | undefined): string | null {
     if (!raw) {
@@ -176,7 +186,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     orgId: string;
   } {
     const userId = client.data.userId;
-    const orgId = client.data.orgId;
+    const orgId = client.data.orgId ?? client.data.organizationId;
 
     if (!userId || !orgId) {
       throw new ForbiddenException('Unauthenticated socket context');
@@ -225,6 +235,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       client.data.userId = payload.sub;
       client.data.orgId = orgId;
+      client.data.organizationId = orgId;
 
       await client.join(`org:${orgId}`);
 
@@ -258,28 +269,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const { conversationId } = payload;
       const { userId, orgId } = this.getSocketIdentity(client);
 
-      // Verify user is a participant in the conversation
-      const conversation = await this.chatService.getConversation(
-        conversationId,
-        userId,
-      );
+      await this.runWithTenantContext(orgId, async () => {
+        const conversation = await this.chatService.getConversation(
+          conversationId,
+          userId,
+        );
 
-      if (conversation.organization_id !== orgId) {
-        throw new ForbiddenException('Conversation is outside tenant scope');
-      }
+        if (conversation.organization_id !== orgId) {
+          throw new ForbiddenException('Conversation is outside tenant scope');
+        }
 
-      // Join the socket.io room
-      await client.join(conversationId);
+        await client.join(conversationId);
 
-      this.logger.log(
-        `[ChatGateway] User ${userId} joined conversation ${conversationId}`,
-      );
+        this.logger.log(
+          `[ChatGateway] User ${userId} joined conversation ${conversationId}`,
+        );
 
-      // Notify others in the room that user joined
-      this.server.to(conversationId).emit('user_joined', {
-        userId,
-        conversationId,
-        timestamp: new Date(),
+        this.server.to(conversationId).emit('user_joined', {
+          userId,
+          conversationId,
+          timestamp: new Date(),
+        });
       });
     } catch (error) {
       this.logger.error(`[ChatGateway] Failed to join conversation: ${error}`);
@@ -309,27 +319,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const { conversationId, content } = payload;
       const { userId, orgId } = this.getSocketIdentity(client);
 
-      const conversation = await this.chatService.getConversation(
-        conversationId,
-        userId,
-      );
-      if (conversation.organization_id !== orgId) {
-        throw new ForbiddenException('Conversation is outside tenant scope');
-      }
+      await this.runWithTenantContext(orgId, async () => {
+        const conversation = await this.chatService.getConversation(
+          conversationId,
+          userId,
+        );
+        if (conversation.organization_id !== orgId) {
+          throw new ForbiddenException('Conversation is outside tenant scope');
+        }
 
-      // Save message to database and validate user is participant
-      const savedMessage = await this.chatService.sendMessage(
-        conversationId,
-        userId,
-        content,
-      );
+        const savedMessage = await this.chatService.sendMessage(
+          conversationId,
+          userId,
+          content,
+        );
 
-      this.logger.log(
-        `[ChatGateway] Message sent by ${userId} in conversation ${conversationId}`,
-      );
+        this.logger.log(
+          `[ChatGateway] Message sent by ${userId} in conversation ${conversationId}`,
+        );
 
-      // Broadcast message to everyone in the room
-      this.server.to(conversationId).emit('new_message', savedMessage);
+        this.server.to(conversationId).emit('new_message', savedMessage);
+      });
     } catch (error) {
       if (error instanceof ForbiddenException) {
         client.emit('error', {
@@ -387,30 +397,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const { conversationId } = payload;
       const { userId, orgId } = this.getSocketIdentity(client);
 
-      const conversation = await this.chatService.getConversation(
-        conversationId,
-        userId,
-      );
-      if (conversation.organization_id !== orgId) {
-        throw new ForbiddenException('Conversation is outside tenant scope');
-      }
+      await this.runWithTenantContext(orgId, async () => {
+        const conversation = await this.chatService.getConversation(
+          conversationId,
+          userId,
+        );
+        if (conversation.organization_id !== orgId) {
+          throw new ForbiddenException('Conversation is outside tenant scope');
+        }
 
-      // Fetch messages from database
-      const messages = await this.chatService.getConversationMessages(
-        conversationId,
-        userId,
-      );
+        const messages = await this.chatService.getConversationMessages(
+          conversationId,
+          userId,
+        );
 
-      // Send messages back to the requesting client
-      client.emit('conversation_messages', {
-        conversationId,
-        messages,
-        timestamp: new Date(),
+        client.emit('conversation_messages', {
+          conversationId,
+          messages,
+          timestamp: new Date(),
+        });
+
+        this.logger.log(
+          `[ChatGateway] Sent ${messages.length} messages to ${userId} for conversation ${conversationId}`,
+        );
       });
-
-      this.logger.log(
-        `[ChatGateway] Sent ${messages.length} messages to ${userId} for conversation ${conversationId}`,
-      );
     } catch (error) {
       if (error instanceof ForbiddenException) {
         client.emit('error', {

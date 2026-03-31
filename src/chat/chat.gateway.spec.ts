@@ -10,6 +10,7 @@ import {
 } from '@nestjs/throttler/dist/throttler.constants';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 type MockSocket = {
   id: string;
@@ -50,6 +51,12 @@ describe('ChatGateway', () => {
     createGroupConversation: jest.fn(),
   };
 
+  const mockRequestContextService = {
+    runWith: jest.fn(
+      <T>(_store: { tenantId?: string }, callback: () => T): T => callback(),
+    ),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -84,6 +91,10 @@ describe('ChatGateway', () => {
         {
           provide: ChatService,
           useValue: mockChatService,
+        },
+        {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
         },
       ],
     }).compile();

@@ -39,6 +39,7 @@
     "TENANT": {
       "USER_INFO_MISSING": "User information not found.",
       "NO_ORG_ACCESS": "You do not have access to this organization.",
+      "MISSING_CONTEXT": "Attempted to access tenant-bound model \"{model}\" without a tenant context.",
       "VERIFY_FAILED": "Failed to verify organization access."
     },
     "ACCESS": {

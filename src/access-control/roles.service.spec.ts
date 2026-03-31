@@ -102,7 +102,6 @@ describe('RolesService', () => {
       expect(mockPrismaService.role.findFirst).toHaveBeenCalledWith({
         where: {
           id: roleId,
-          organization_id: organizationId,
         },
         select: { id: true, is_system: true },
       });
@@ -468,7 +467,6 @@ describe('RolesService', () => {
         mockPrismaService.organizationMembership.findMany,
       ).toHaveBeenCalledWith({
         where: {
-          organization_id: orgId,
           role_id: roleId,
           status: MembershipStatus.ACTIVE,
         },

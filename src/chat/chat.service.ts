@@ -63,7 +63,6 @@ export class ChatService {
     const activeMemberships = await this.prisma.organizationMembership.findMany(
       {
         where: {
-          organization_id: orgId,
           status: MembershipStatus.ACTIVE,
           user_id: {
             in: uniqueUserIds,
@@ -86,13 +85,14 @@ export class ChatService {
   }
 
   private async findExistingDirectMessage(
-    orgId: string,
+    _orgId: string,
     userId1: string,
     userId2: string,
   ): Promise<ConversationWithDetails | null> {
+    void _orgId;
+
     return this.prisma.conversation.findFirst({
       where: {
-        organization_id: orgId,
         is_group: false,
         participants: {
           every: {
@@ -171,11 +171,12 @@ export class ChatService {
    */
   async getUserConversations(
     userId: string,
-    orgId: string,
+    _orgId: string,
   ): Promise<ConversationWithDetails[]> {
+    void _orgId;
+
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        organization_id: orgId,
         participants: {
           some: {
             user_id: userId,

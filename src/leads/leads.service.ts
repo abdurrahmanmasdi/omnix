@@ -118,9 +118,7 @@ export class LeadsService {
       filters.sort_dir,
     );
 
-    const dynamicConditions: Prisma.LeadWhereInput[] = [
-      { organization_id: organizationId },
-    ];
+    const dynamicConditions: Prisma.LeadWhereInput[] = [];
 
     if (!canReadAllLeads) {
       dynamicConditions.push({ assigned_agent_id: userId });
@@ -182,7 +180,6 @@ export class LeadsService {
     const lead = await this.prisma.lead.findFirst({
       where: {
         id: leadId,
-        organization_id: organizationId,
         ...(canReadAllLeads ? {} : { assigned_agent_id: userId }),
       },
       include: LEAD_RELATIONS_INCLUDE,
@@ -193,7 +190,6 @@ export class LeadsService {
         const existsInOrganization = await this.prisma.lead.findFirst({
           where: {
             id: leadId,
-            organization_id: organizationId,
           },
           select: { id: true },
         });
@@ -224,7 +220,6 @@ export class LeadsService {
       const lead = await this.prisma.lead.findFirst({
         where: {
           id: leadId,
-          organization_id: organizationId,
         },
         include: LEAD_RELATIONS_INCLUDE,
       });
@@ -239,7 +234,6 @@ export class LeadsService {
     const result = await this.prisma.lead.updateMany({
       where: {
         id: leadId,
-        organization_id: organizationId,
       },
       data,
     });
@@ -251,7 +245,6 @@ export class LeadsService {
     const updatedLead = await this.prisma.lead.findFirst({
       where: {
         id: leadId,
-        organization_id: organizationId,
       },
       include: LEAD_RELATIONS_INCLUDE,
     });
@@ -283,7 +276,6 @@ export class LeadsService {
 
     const where: Prisma.LeadWhereInput = {
       id: { in: dto.lead_ids },
-      organization_id: organizationId,
       ...(canEditAllLeads ? {} : { assigned_agent_id: userId }),
     };
 
@@ -301,7 +293,6 @@ export class LeadsService {
     const result = await this.prisma.lead.deleteMany({
       where: {
         id: leadId,
-        organization_id: organizationId,
       },
     });
 
@@ -400,7 +391,6 @@ export class LeadsService {
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: pipelineStageId,
-        organization_id: organizationId,
       },
       select: { id: true },
     });
@@ -419,7 +409,6 @@ export class LeadsService {
     const source = await this.prisma.leadSource.findFirst({
       where: {
         id: sourceId,
-        organization_id: organizationId,
       },
       select: { id: true, is_active: true },
     });
@@ -443,7 +432,6 @@ export class LeadsService {
   ): Promise<void> {
     const membership = await this.prisma.organizationMembership.findFirst({
       where: {
-        organization_id: organizationId,
         user_id: userId,
         status: MembershipStatus.ACTIVE,
       },

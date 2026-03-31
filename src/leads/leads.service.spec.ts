@@ -292,7 +292,7 @@ describe('LeadsService', () => {
 
       expect(mockPrismaService.lead.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { AND: [{ organization_id: 'org-1' }] },
+          where: { AND: [] },
           skip: 0,
           take: 20,
         }),
@@ -324,7 +324,7 @@ describe('LeadsService', () => {
           skip: 100,
           take: 100,
           orderBy: { first_name: 'asc' },
-          where: { AND: [{ organization_id: 'org-1' }] },
+          where: { AND: [] },
         }),
       );
     });
@@ -349,7 +349,6 @@ describe('LeadsService', () => {
         expect.objectContaining({
           where: {
             AND: [
-              { organization_id: 'org-1' },
               { assigned_agent_id: 'user-1' },
               { status: LeadStatus.OPEN },
               { priority: Priority.HOT },
@@ -495,7 +494,6 @@ describe('LeadsService', () => {
           {
             where: {
               id: string;
-              organization_id: string;
             };
             data: {
               first_name?: string;
@@ -514,7 +512,6 @@ describe('LeadsService', () => {
 
       expect(updatePayload.where).toEqual({
         id: 'lead-1',
-        organization_id: 'org-1',
       });
       expect(updatePayload.data.first_name).toBe('Updated');
       expect(updatePayload.data.expected_service_date).toEqual(
@@ -570,7 +567,6 @@ describe('LeadsService', () => {
       expect(mockPrismaService.lead.updateMany).toHaveBeenCalledWith({
         where: {
           id: { in: [] },
-          organization_id: 'org-1',
         },
         data: { status: LeadStatus.WON },
       });
@@ -601,7 +597,6 @@ describe('LeadsService', () => {
               '22222222-2222-4222-8222-222222222222',
             ],
           },
-          organization_id: 'org-1',
           assigned_agent_id: 'user-1',
         },
         data: { priority: Priority.HOT },
@@ -638,7 +633,6 @@ describe('LeadsService', () => {
       expect(mockPrismaService.lead.deleteMany).toHaveBeenCalledWith({
         where: {
           id: 'lead-1',
-          organization_id: 'org-1',
         },
       });
     });

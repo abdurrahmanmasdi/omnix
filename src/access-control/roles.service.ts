@@ -62,9 +62,6 @@ export class RolesService {
       );
 
       const roles = await this.prisma.role.findMany({
-        where: {
-          organization_id: organizationId,
-        },
         include: {
           rolePermissions: {
             include: {
@@ -202,7 +199,6 @@ export class RolesService {
       const existingRole = await this.prisma.role.findFirst({
         where: {
           id: roleId,
-          organization_id: organizationId,
         },
         select: { id: true, is_system: true },
       });
@@ -348,7 +344,6 @@ export class RolesService {
         const affectedMemberships =
           await this.prisma.organizationMembership.findMany({
             where: {
-              organization_id: organizationId,
               role_id: roleId,
               status: MembershipStatus.ACTIVE,
             },
@@ -408,7 +403,6 @@ export class RolesService {
       const role = await this.prisma.role.findFirst({
         where: {
           id: roleId,
-          organization_id: organizationId,
         },
         select: { id: true, is_system: true },
       });

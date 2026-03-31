@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface RequestContextStore {
   tenantId?: string;
+  bypassSystem?: boolean;
   isSystemBypass?: boolean;
 }
 
@@ -10,20 +11,16 @@ export interface RequestContextStore {
 export class RequestContextService {
   private readonly als = new AsyncLocalStorage<RequestContextStore>();
 
+  runWith<T>(initialStore: RequestContextStore, callback: () => T): T {
+    return this.als.run(initialStore, callback);
+  }
+
   run<T>(callback: () => T, initialStore: RequestContextStore = {}): T {
     return this.als.run(initialStore, callback);
   }
 
-  runAsSystem<T>(callback: () => T): T {
-    const currentStore = this.als.getStore();
-
-    return this.als.run(
-      {
-        ...(currentStore ?? {}),
-        isSystemBypass: true,
-      },
-      callback,
-    );
+  runAsSystem<T>(callback: () => Promise<T>): Promise<T> {
+    return this.runWith({ bypassSystem: true }, callback);
   }
 
   setTenantId(tenantId: string): void {
@@ -42,7 +39,8 @@ export class RequestContextService {
   }
 
   isSystemBypass(): boolean {
-    return this.als.getStore()?.isSystemBypass === true;
+    const store = this.als.getStore();
+    return store?.bypassSystem === true || store?.isSystemBypass === true;
   }
 
   getStore(): Readonly<RequestContextStore> | undefined {

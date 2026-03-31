@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
+import { I18nService } from 'nestjs-i18n';
 import { RequestContextService } from '../request-context/request-context.service';
 
 export const TENANT_BOUND_MODELS = [
@@ -101,7 +102,8 @@ function deepCloneLogicalWhere(
     const value = clonedWhere[key];
 
     if (Array.isArray(value)) {
-      clonedWhere[key] = value.map((item) => {
+      const logicalItems = value as unknown[];
+      clonedWhere[key] = logicalItems.map((item): unknown => {
         if (!item || typeof item !== 'object') {
           return item;
         }
@@ -136,9 +138,10 @@ function withNotDeletedWhere<T extends Record<string, unknown> | undefined>(
   const andValue = mergedWhere.AND;
 
   if (Array.isArray(andValue)) {
+    const andConditions = andValue as unknown[];
     return {
       ...mergedWhere,
-      AND: [...andValue, { deleted_at: null }],
+      AND: [...andConditions, { deleted_at: null }],
     };
   }
 
@@ -223,6 +226,7 @@ export class PrismaService
   constructor(
     private configService: ConfigService,
     private requestContextService: RequestContextService,
+    private i18n: I18nService,
   ) {
     // 1. Create a connection pool using the native 'pg' driver
     // 1. Safely get the URL from the ConfigService
@@ -242,6 +246,9 @@ export class PrismaService
 
     const baseClient = this as unknown as PrismaClient;
     const requestContext = this.requestContextService;
+    const i18nService = this.i18n;
+    const isBypassSystem = (): boolean =>
+      requestContext.getStore()?.bypassSystem === true;
 
     const softDeleteExtendedClient = this.$extends({
       query: {
@@ -408,13 +415,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             const tenantArgs = withTenantWhere(
@@ -438,13 +449,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -461,13 +476,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -484,13 +503,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -507,13 +530,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -530,13 +557,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -553,13 +584,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -576,13 +611,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -599,13 +638,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(
@@ -622,13 +665,17 @@ export class PrismaService
               return query(args);
             }
 
-            if (requestContext.isSystemBypass()) {
+            if (isBypassSystem()) {
               return query(args);
             }
 
             const tenantId = requestContext.getTenantId();
             if (!tenantId) {
-              return query(args);
+              throw new Error(
+                i18nService.t('organizations.ERRORS.TENANT.MISSING_CONTEXT', {
+                  args: { model },
+                }),
+              );
             }
 
             return callExtensionQuery(

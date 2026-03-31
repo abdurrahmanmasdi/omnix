@@ -581,8 +581,8 @@ describe('ChatService', () => {
         where: { id: targetUserId },
       });
       expect(result).toBeDefined();
-      expect(result!.is_group).toBe(false);
-      expect(result!.participants).toHaveLength(2);
+      expect(result.is_group).toBe(false);
+      expect(result.participants).toHaveLength(2);
     });
 
     it('should return existing conversation if found', async () => {
@@ -635,8 +635,8 @@ describe('ChatService', () => {
 
       // Assert
       expect(result).toBeDefined();
-      expect(result!.is_group).toBe(false);
-      expect(result!.participants).toHaveLength(2);
+      expect(result.is_group).toBe(false);
+      expect(result.participants).toHaveLength(2);
     });
 
     it('should throw ForbiddenException when target user is outside tenant scope', async () => {
@@ -707,7 +707,6 @@ describe('ChatService', () => {
       // Assert
       expect(mockPrismaService.conversation.findMany).toHaveBeenCalledWith({
         where: {
-          organization_id: orgId,
           participants: {
             some: {
               user_id: userId,
@@ -864,9 +863,9 @@ describe('ChatService', () => {
         mockPrismaService.conversationParticipant.createMany,
       ).toHaveBeenCalled();
       expect(result).toBeDefined();
-      expect(result!.is_group).toBe(true);
-      expect(result!.name).toBe(groupName);
-      expect(result!.participants).toHaveLength(4);
+      expect(result.is_group).toBe(true);
+      expect(result.name).toBe(groupName);
+      expect(result.participants).toHaveLength(4);
     });
 
     it('should throw BadRequestException when fewer than 2 participants are provided', async () => {
@@ -989,7 +988,7 @@ describe('ChatService', () => {
 
       // Assert
       // Verify the participants array includes the creator
-      expect(result!.participants.map((p) => p.user_id)).toContain(creatorId);
+      expect(result.participants.map((p) => p.user_id)).toContain(creatorId);
       expect(
         mockPrismaService.conversationParticipant.createMany,
       ).toHaveBeenCalledWith({

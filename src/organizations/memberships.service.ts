@@ -35,7 +35,6 @@ export class MembershipsService {
       const activeMembership =
         await this.prisma.organizationMembership.findFirst({
           where: {
-            organization_id: organizationId,
             user_id: currentUserId,
             status: {
               // Keep backward compatibility while transitioning from legacy lowercase statuses.
@@ -54,7 +53,6 @@ export class MembershipsService {
       const pendingRequests = await this.prisma.organizationMembership.findMany(
         {
           where: {
-            organization_id: organizationId,
             status: MembershipStatus.PENDING,
           },
           include: {
@@ -143,7 +141,6 @@ export class MembershipsService {
         await this.prisma.organizationMembership.findFirst({
           where: {
             user_id: userId,
-            organization_id: organization.id,
           },
         });
 
@@ -185,7 +182,7 @@ export class MembershipsService {
 
       // Get or create the 'member' role
       let memberRole = await this.prisma.role.findFirst({
-        where: { name: 'member', organization_id: null },
+        where: { name: 'member' },
       });
 
       if (!memberRole) {
@@ -270,7 +267,6 @@ export class MembershipsService {
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {
           id: membershipId,
-          organization_id: organizationId,
         },
       });
 
@@ -347,7 +343,6 @@ export class MembershipsService {
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {
           id: membershipId,
-          organization_id: organizationId,
         },
         include: {
           role: {
@@ -374,7 +369,6 @@ export class MembershipsService {
       ) {
         const activeOwners = await this.prisma.organizationMembership.findMany({
           where: {
-            organization_id: organizationId,
             status: MembershipStatus.ACTIVE,
             role: {
               slug: 'owner',
@@ -444,7 +438,6 @@ export class MembershipsService {
       const activeMembership =
         await this.prisma.organizationMembership.findFirst({
           where: {
-            organization_id: organizationId,
             user_id: currentUserId,
             status: MembershipStatus.ACTIVE,
           },
@@ -460,7 +453,6 @@ export class MembershipsService {
       // ========== DATA FETCH: Query active members with their roles ==========
       const members = await this.prisma.organizationMembership.findMany({
         where: {
-          organization_id: organizationId,
           status: MembershipStatus.ACTIVE,
         },
         include: {
