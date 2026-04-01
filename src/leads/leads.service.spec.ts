@@ -359,6 +359,41 @@ describe('LeadsService', () => {
       );
     });
 
+    it('applies case-insensitive search across name, email, and phone fields', async () => {
+      mockPermissionsService.getEffectivePermissions.mockResolvedValueOnce([
+        AppPermission.LEADS_READ_ALL,
+      ]);
+      mockPrismaService.lead.count.mockResolvedValueOnce(1);
+      mockPrismaService.lead.findMany.mockResolvedValueOnce([{ id: 'lead-1' }]);
+
+      await service.findAll('org-1', 'user-1', {
+        search: 'john',
+      });
+
+      expect(mockPrismaService.lead.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                OR: [
+                  {
+                    first_name: { contains: 'john', mode: 'insensitive' },
+                  },
+                  {
+                    last_name: { contains: 'john', mode: 'insensitive' },
+                  },
+                  { email: { contains: 'john', mode: 'insensitive' } },
+                  {
+                    phone_number: { contains: 'john', mode: 'insensitive' },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+    });
+
     it('throws BadRequestException for invalid JSON filter strings', async () => {
       mockPermissionsService.getEffectivePermissions.mockResolvedValueOnce([
         AppPermission.LEADS_READ_ALL,

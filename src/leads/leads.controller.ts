@@ -1,14 +1,11 @@
 import {
   Body,
   Controller,
-  DefaultValuePipe,
   Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
-  ParseEnumPipe,
-  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -22,7 +19,6 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LeadStatus, Priority } from '@prisma/client';
 import { Request as ExpressRequest } from 'express';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -31,6 +27,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { AppPermission } from '../constants/permissions.registry';
 import { BulkUpdateLeadsDto } from './dtos/bulk-update-leads.dto';
 import { CreateLeadDto } from './dtos/create-lead.dto';
+import { FindLeadsQueryDto } from './dtos/find-leads-query.dto';
 import { UpdateLeadDto } from './dtos/update-lead.dto';
 import {
   BulkUpdateLeadsResult,
@@ -76,30 +73,14 @@ export class LeadsController {
   async findAll(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Request() req: AuthRequest,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('filters') filters?: string,
-    @Query('sort_by') sort_by?: string,
-    @Query('sort_dir') sort_dir?: string,
-    @Query('status', new ParseEnumPipe(LeadStatus, { optional: true }))
-    status?: LeadStatus,
-    @Query('priority', new ParseEnumPipe(Priority, { optional: true }))
-    priority?: Priority,
+    @Query() query: FindLeadsQueryDto,
   ): Promise<FindLeadsResult> {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
     );
 
-    return this.leadsService.findAll(organizationId, req.user.id, {
-      page,
-      limit,
-      filters,
-      sort_by,
-      sort_dir,
-      status,
-      priority,
-    });
+    return this.leadsService.findAll(organizationId, req.user.id, query);
   }
 
   @Get(':leadId')

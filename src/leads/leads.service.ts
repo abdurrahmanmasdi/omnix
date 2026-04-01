@@ -25,6 +25,7 @@ export interface FindLeadsFilters {
   filters?: string;
   sort_by?: string;
   sort_dir?: string;
+  search?: string;
 }
 
 export interface FindLeadsResult {
@@ -130,6 +131,19 @@ export class LeadsService {
 
     if (filters.priority) {
       dynamicConditions.push({ priority: filters.priority });
+    }
+
+    const search = filters.search?.trim();
+
+    if (search) {
+      dynamicConditions.push({
+        OR: [
+          { first_name: { contains: search, mode: 'insensitive' } },
+          { last_name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { phone_number: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
 
     const parsedRules = this.queryBuilder.parseDynamicFilterRules(

@@ -4,12 +4,7 @@ import {
   PATH_METADATA,
   ROUTE_ARGS_METADATA,
 } from '@nestjs/common/constants';
-import {
-  RequestMethod,
-  ParseIntPipe,
-  ParseEnumPipe,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { RequestMethod, ParseUUIDPipe } from '@nestjs/common';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 import { AccessVerificationService } from '../access-control/access-verification.service';
@@ -169,27 +164,14 @@ describe('LeadsController', () => {
   });
 
   describe('pipe wiring metadata', () => {
-    it('wires ParseInt and enum pipes on findAll query params', () => {
+    it('wires ParseUUIDPipe on organizationId param', () => {
       const routeArgs = getRouteArgsMetadata('findAll');
       const metadataValues = Object.values(routeArgs);
 
-      const pageArg = metadataValues.find((arg) => arg.data === 'page');
-      const limitArg = metadataValues.find((arg) => arg.data === 'limit');
-      const statusArg = metadataValues.find((arg) => arg.data === 'status');
-      const priorityArg = metadataValues.find((arg) => arg.data === 'priority');
       const orgArg = metadataValues.find(
         (arg) => arg.data === 'organizationId',
       );
 
-      expect(pageArg?.pipes?.some((pipe) => pipe === ParseIntPipe)).toBe(true);
-      expect(limitArg?.pipes?.some((pipe) => pipe === ParseIntPipe)).toBe(true);
-
-      expect(
-        statusArg?.pipes?.some((pipe) => pipe instanceof ParseEnumPipe),
-      ).toBe(true);
-      expect(
-        priorityArg?.pipes?.some((pipe) => pipe instanceof ParseEnumPipe),
-      ).toBe(true);
       expect(orgArg?.pipes?.some((pipe) => pipe instanceof ParseUUIDPipe)).toBe(
         true,
       );
@@ -229,13 +211,14 @@ describe('LeadsController', () => {
       const result = await controller.findAll(
         'org-1',
         req as Parameters<LeadsController['findAll']>[1],
-        2,
-        10,
-        '[{"field":"country","operator":"equals","value":"TR"}]',
-        'created_at',
-        'asc',
-        undefined,
-        undefined,
+        {
+          page: 2,
+          limit: 10,
+          filters: '[{"field":"country","operator":"equals","value":"TR"}]',
+          sort_by: 'created_at',
+          sort_dir: 'asc',
+          search: 'john',
+        } as Parameters<LeadsController['findAll']>[2],
       );
 
       expect(verifyUserInOrganizationMock).toHaveBeenCalledWith(
@@ -248,8 +231,7 @@ describe('LeadsController', () => {
         filters: '[{"field":"country","operator":"equals","value":"TR"}]',
         sort_by: 'created_at',
         sort_dir: 'asc',
-        status: undefined,
-        priority: undefined,
+        search: 'john',
       });
       expect(result).toEqual(expected);
     });

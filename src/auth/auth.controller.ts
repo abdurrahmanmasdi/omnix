@@ -16,7 +16,10 @@ import {
 } from '@nestjs/swagger';
 import { UnauthorizedException } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
+import {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { RegisterDto } from './dtos/register.dto';
@@ -88,7 +91,9 @@ export class AuthController {
   @Post('verify-email')
   @ApiOperation({ summary: 'Verify email using one-time token' })
   @ApiResponse({ status: 201, description: 'Email verified successfully' })
-  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto): Promise<{ message: string }> {
+  async verifyEmail(
+    @Body() verifyEmailDto: VerifyEmailDto,
+  ): Promise<{ message: string }> {
     await this.authService.verifyEmail(verifyEmailDto.token);
     return { message: 'Email verified' };
   }
@@ -135,7 +140,8 @@ export class AuthController {
       );
     }
 
-    const rotatedTokens = await this.authService.refreshAccessToken(refreshToken);
+    const rotatedTokens =
+      await this.authService.refreshAccessToken(refreshToken);
     this.setRefreshTokenCookie(res, rotatedTokens.refresh_token);
 
     return {
@@ -145,7 +151,9 @@ export class AuthController {
 
   @Public()
   @Post('logout')
-  @ApiOperation({ summary: 'Logout by revoking refresh token and clearing cookie' })
+  @ApiOperation({
+    summary: 'Logout by revoking refresh token and clearing cookie',
+  })
   @ApiResponse({ status: 201, description: 'Logout successful' })
   async logout(
     @Req() req: ExpressRequest,
