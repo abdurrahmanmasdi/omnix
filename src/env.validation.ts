@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -49,6 +50,10 @@ class EnvironmentVariables {
     { message: 'FRONTEND_URL must be a valid URL' },
   )
   FRONTEND_URL: string = 'http://localhost:3001';
+
+  @IsOptional()
+  @IsBoolean({ message: 'SMTP_ENABLED must be a boolean value' })
+  SMTP_ENABLED: boolean = false;
 }
 
 // 3. Create the validation function that NestJS will run on startup
