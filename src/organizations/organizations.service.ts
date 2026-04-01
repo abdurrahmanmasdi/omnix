@@ -9,6 +9,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { RequestContextService } from '../request-context/request-context.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { Prisma } from '@prisma/client';
@@ -32,6 +33,7 @@ export class OrganizationsService {
     private i18n: I18nService,
     private eventEmitter: EventEmitter2,
     private provisioningService: OrganizationProvisioningService,
+    private requestContextService: RequestContextService,
   ) {}
 
   private async emitPermissionCacheClearEvent(
@@ -65,48 +67,52 @@ export class OrganizationsService {
     createOrgDto: CreateOrganizationDto,
   ): Promise<IOrganization> {
     try {
-      const organization = await this.prisma.$transaction(async (tx) => {
-        // ========== STEP 1: Validate User ==========
-        const user = await tx.user.findUnique({
-          where: { id: userId },
-        });
+      const organization = await this.requestContextService.runWithBypass(() =>
+        this.prisma.$transaction(async (tx) => {
+          // ========== STEP 1: Validate User ==========
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+          });
 
-        if (!user) {
-          this.logger.warn(`User with id ${userId} not found`);
-          throw new NotFoundException(this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'));
-        }
+          if (!user) {
+            this.logger.warn(`User with id ${userId} not found`);
+            throw new NotFoundException(
+              this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
+            );
+          }
 
-        // ========== STEP 2: Validate Slug Availability ==========
-        const existingOrg = await tx.organization.findUnique({
-          where: { slug: createOrgDto.slug },
-        });
+          // ========== STEP 2: Validate Slug Availability ==========
+          const existingOrg = await tx.organization.findUnique({
+            where: { slug: createOrgDto.slug },
+          });
 
-        if (existingOrg) {
-          this.logger.warn(
-            `Organization with slug '${createOrgDto.slug}' already exists`,
+          if (existingOrg) {
+            this.logger.warn(
+              `Organization with slug '${createOrgDto.slug}' already exists`,
+            );
+            throw new ConflictException(
+              this.i18n.t('organizations.ERRORS.ORG.SLUG_ALREADY_EXISTS'),
+            );
+          }
+
+          // ========== STEP 3: Create Organization ==========
+          const createdOrg = await tx.organization.create({
+            data: {
+              name: createOrgDto.name,
+              slug: createOrgDto.slug,
+              is_public: createOrgDto.is_public ?? false,
+            },
+          });
+
+          await this.provisioningService.provisionDefaultTenantRBAC(
+            tx,
+            createdOrg.id,
+            userId,
           );
-          throw new ConflictException(
-            this.i18n.t('organizations.ERRORS.ORG.SLUG_ALREADY_EXISTS'),
-          );
-        }
 
-        // ========== STEP 3: Create Organization ==========
-        const createdOrg = await tx.organization.create({
-          data: {
-            name: createOrgDto.name,
-            slug: createOrgDto.slug,
-            is_public: createOrgDto.is_public ?? false,
-          },
-        });
-
-        await this.provisioningService.provisionDefaultTenantRBAC(
-          tx,
-          createdOrg.id,
-          userId,
-        );
-
-        return createdOrg;
-      });
+          return createdOrg;
+        }),
+      );
 
       this.logger.log(
         `Organization '${organization.slug}' created by user ${userId} ` +
@@ -152,7 +158,9 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with id ${id} not found`);
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+        );
       }
 
       return organization as IOrganization;
@@ -180,7 +188,9 @@ export class OrganizationsService {
 
       if (!organization) {
         this.logger.warn(`Organization with slug '${slug}' not found`);
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+        );
       }
 
       return organization as IOrganization;

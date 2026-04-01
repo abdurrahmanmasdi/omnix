@@ -10,6 +10,7 @@ import { I18nService } from 'nestjs-i18n';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvitationsService } from './invitations.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 describe('InvitationsService', () => {
   let service: InvitationsService;
@@ -47,6 +48,12 @@ describe('InvitationsService', () => {
     verifyIsOwnerOrAdmin: jest.fn(),
   };
 
+  const mockRequestContextService = {
+    runWithBypass: jest.fn(async (callback: () => Promise<unknown>) =>
+      callback(),
+    ),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     process.env.FRONTEND_URL = 'https://frontend.example.com';
@@ -69,6 +76,10 @@ describe('InvitationsService', () => {
         {
           provide: AccessVerificationService,
           useValue: mockAccessVerificationService,
+        },
+        {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
         },
       ],
     }).compile();

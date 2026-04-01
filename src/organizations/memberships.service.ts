@@ -14,6 +14,7 @@ import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.d
 import { MembershipStatus } from '@prisma/client';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { RedisService } from '../redis/redis.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 @Injectable()
 export class MembershipsService {
@@ -24,6 +25,7 @@ export class MembershipsService {
     private i18n: I18nService,
     private accessVerificationService: AccessVerificationService,
     private redisService: RedisService,
+    private requestContextService: RequestContextService,
   ) {}
 
   /**
@@ -137,12 +139,14 @@ export class MembershipsService {
       }
 
       // Check if user is already a member
-      const existingMembership =
-        await this.prisma.organizationMembership.findFirst({
-          where: {
-            user_id: userId,
-          },
-        });
+      const existingMembership = await this.requestContextService.runWithBypass(
+        () =>
+          this.prisma.organizationMembership.findFirst({
+            where: {
+              user_id: userId,
+            },
+          }),
+      );
 
       if (existingMembership) {
         const currentStatus = String(existingMembership.status).toUpperCase();
@@ -156,12 +160,14 @@ export class MembershipsService {
         }
 
         if (currentStatus === MembershipStatus.REJECTED) {
-          await this.prisma.organizationMembership.update({
-            where: { id: existingMembership.id },
-            data: {
-              status: MembershipStatus.PENDING,
-            },
-          });
+          await this.requestContextService.runWithBypass(() =>
+            this.prisma.organizationMembership.update({
+              where: { id: existingMembership.id },
+              data: {
+                status: MembershipStatus.PENDING,
+              },
+            }),
+          );
 
           await this.redisService.del(
             `org_membership:${organization.id}:${userId}`,
@@ -181,28 +187,34 @@ export class MembershipsService {
       }
 
       // Get or create the 'member' role
-      let memberRole = await this.prisma.role.findFirst({
-        where: { name: 'member' },
-      });
+      let memberRole = await this.requestContextService.runWithBypass(() =>
+        this.prisma.role.findFirst({
+          where: { name: 'member' },
+        }),
+      );
 
       if (!memberRole) {
-        memberRole = await this.prisma.role.create({
-          data: {
-            name: 'member',
-            organization_id: null, // Global role
-          },
-        });
+        memberRole = await this.requestContextService.runWithBypass(() =>
+          this.prisma.role.create({
+            data: {
+              name: 'member',
+              organization_id: null, // Global role
+            },
+          }),
+        );
       }
 
       // Create membership with PENDING status
-      await this.prisma.organizationMembership.create({
-        data: {
-          user_id: userId,
-          organization_id: organization.id,
-          role_id: memberRole.id,
-          status: MembershipStatus.PENDING,
-        },
-      });
+      await this.requestContextService.runWithBypass(() =>
+        this.prisma.organizationMembership.create({
+          data: {
+            user_id: userId,
+            organization_id: organization.id,
+            role_id: memberRole.id,
+            status: MembershipStatus.PENDING,
+          },
+        }),
+      );
 
       this.logger.log(
         `User ${userId} requested to join organization ${organization.id}`,

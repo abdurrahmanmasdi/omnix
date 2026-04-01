@@ -19,19 +19,20 @@ export class RequestContextService {
     return this.als.run(initialStore, callback);
   }
 
-  runWithBypass<T>(callback: () => Promise<T>): Promise<T> {
+  runWithBypass<T>(callback: () => T | Promise<T>): Promise<T> {
     const currentStore = this.als.getStore() ?? {};
 
     return this.als.run(
       {
         ...currentStore,
+        bypassSystem: true,
         isSystemBypass: true,
       },
-      callback,
+      async () => await callback(),
     );
   }
 
-  runAsSystem<T>(callback: () => Promise<T>): Promise<T> {
+  runAsSystem<T>(callback: () => T | Promise<T>): Promise<T> {
     return this.runWithBypass(callback);
   }
 
@@ -52,6 +53,7 @@ export class RequestContextService {
 
   isSystemBypass(): boolean {
     const store = this.als.getStore();
+
     return store?.isSystemBypass === true || store?.bypassSystem === true;
   }
 

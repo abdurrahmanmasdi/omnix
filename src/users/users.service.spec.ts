@@ -9,6 +9,7 @@ import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { MembershipStatus } from '@prisma/client';
 import { UsersService } from './users.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -31,6 +32,12 @@ describe('UsersService', () => {
     t: jest.fn((key: string) => key),
   };
 
+  const mockRequestContextService = {
+    runWithBypass: jest.fn(async (callback: () => Promise<unknown>) =>
+      callback(),
+    ),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -39,6 +46,10 @@ describe('UsersService', () => {
         UsersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: I18nService, useValue: mockI18n },
+        {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
+        },
       ],
     }).compile();
 

@@ -39,7 +39,6 @@ export class TenantInterceptor implements NestInterceptor {
     const organizationId = request.headers['x-organization-id'] as
       | string
       | undefined;
-
     // If no organization header is provided, allow the request to pass through
     // (useful for endpoints that don't require tenant context)
     if (!organizationId) {
@@ -58,7 +57,7 @@ export class TenantInterceptor implements NestInterceptor {
 
     try {
       // Query database to verify user has ACTIVE membership to this organization
-      const membership = await this.requestContextService.runAsSystem(() =>
+      const membership = await this.requestContextService.runWithBypass(() =>
         this.prisma.organizationMembership.findFirst({
           where: {
             user_id: userId,

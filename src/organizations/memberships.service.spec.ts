@@ -12,6 +12,7 @@ import { AccessVerificationService } from '../access-control/access-verification
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { MembershipsService } from './memberships.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 describe('MembershipsService', () => {
   let service: MembershipsService;
@@ -48,6 +49,12 @@ describe('MembershipsService', () => {
     del: jest.fn(),
   };
 
+  const mockRequestContextService = {
+    runWithBypass: jest.fn(async (callback: () => Promise<unknown>) =>
+      callback(),
+    ),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     mockRedisService.del.mockResolvedValue(1);
@@ -70,6 +77,10 @@ describe('MembershipsService', () => {
         {
           provide: RedisService,
           useValue: mockRedisService,
+        },
+        {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
         },
       ],
     }).compile();

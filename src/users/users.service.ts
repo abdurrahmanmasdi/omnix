@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { RequestContextService } from '../request-context/request-context.service';
 import { MembershipStatus } from '@prisma/client';
 import { INVITATION_STATUS } from '../constants/invitation-status';
 
@@ -18,6 +19,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly requestContextService: RequestContextService,
   ) {}
 
   /**
@@ -38,7 +40,9 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
+      );
     }
 
     return user;
@@ -53,31 +57,33 @@ export class UsersService {
       `[UsersService] Fetching organizations for user ${userId}`,
     );
 
-    const memberships = await this.prisma.organizationMembership.findMany({
-      where: {
-        user_id: userId,
-      },
-      include: {
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            is_public: true,
-            created_at: true,
+    const memberships = await this.requestContextService.runWithBypass(() =>
+      this.prisma.organizationMembership.findMany({
+        where: {
+          user_id: userId,
+        },
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              is_public: true,
+              created_at: true,
+            },
+          },
+          role: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        role: {
-          select: {
-            id: true,
-            name: true,
-          },
+        orderBy: {
+          created_at: 'desc',
         },
-      },
-      orderBy: {
-        created_at: 'desc',
-      },
-    });
+      }),
+    );
 
     return memberships.map((membership) => ({
       membership_id: membership.id,
@@ -105,20 +111,26 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
+      );
     }
 
     // Step 1: Verify invitation exists
-    const invitation = await this.prisma.invitation.findUnique({
-      where: { id: inviteId },
-      include: {
-        organization: { select: { id: true, name: true, slug: true } },
-        role: { select: { id: true, name: true } },
-      },
-    });
+    const invitation = await this.requestContextService.runWithBypass(() =>
+      this.prisma.invitation.findUnique({
+        where: { id: inviteId },
+        include: {
+          organization: { select: { id: true, name: true, slug: true } },
+          role: { select: { id: true, name: true } },
+        },
+      }),
+    );
 
     if (!invitation) {
-      throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'),
+      );
     }
 
     // Step 2: Verify invitation belongs to the current user's email
@@ -126,7 +138,9 @@ export class UsersService {
       this.logger.warn(
         `[UsersService] Unauthorized invite acceptance attempt: User ${userId} tried to accept invite ${inviteId} for email ${invitation.email}`,
       );
-      throw new BadRequestException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'));
+      throw new BadRequestException(
+        this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'),
+      );
     }
 
     // Step 3: Verify invitation status is pending
@@ -139,13 +153,15 @@ export class UsersService {
     }
 
     // Step 4: Ensure user is not already a member of this organization
-    const existingMembership =
-      await this.prisma.organizationMembership.findFirst({
-        where: {
-          user_id: user.id,
-          organization_id: invitation.organization_id,
-        },
-      });
+    const existingMembership = await this.requestContextService.runWithBypass(
+      () =>
+        this.prisma.organizationMembership.findFirst({
+          where: {
+            user_id: user.id,
+            organization_id: invitation.organization_id,
+          },
+        }),
+    );
 
     if (existingMembership) {
       throw new ConflictException(
@@ -154,30 +170,33 @@ export class UsersService {
     }
 
     // Step 5: Create membership from invitation role and mark invitation accepted
-    const createdMembership = await this.prisma.$transaction(async (tx) => {
-      const membership = await tx.organizationMembership.create({
-        data: {
-          user_id: user.id,
-          organization_id: invitation.organization_id,
-          role_id: invitation.role_id,
-          status: MembershipStatus.ACTIVE,
-        },
-        include: {
-          organization: { select: { name: true, slug: true } },
-          role: { select: { name: true } },
-        },
-      });
+    const createdMembership = await this.requestContextService.runWithBypass(
+      () =>
+        this.prisma.$transaction(async (tx) => {
+          const membership = await tx.organizationMembership.create({
+            data: {
+              user_id: user.id,
+              organization_id: invitation.organization_id,
+              role_id: invitation.role_id,
+              status: MembershipStatus.ACTIVE,
+            },
+            include: {
+              organization: { select: { name: true, slug: true } },
+              role: { select: { name: true } },
+            },
+          });
 
-      await tx.invitation.update({
-        where: { id: inviteId },
-        data: {
-          status: INVITATION_STATUS.ACCEPTED,
-          accepted_at: new Date(),
-        },
-      });
+          await tx.invitation.update({
+            where: { id: inviteId },
+            data: {
+              status: INVITATION_STATUS.ACCEPTED,
+              accepted_at: new Date(),
+            },
+          });
 
-      return membership;
-    });
+          return membership;
+        }),
+    );
 
     this.logger.log(
       `[UsersService] User ${userId} accepted invite ${inviteId} to organization "${createdMembership.organization?.name}"`,
@@ -205,14 +224,16 @@ export class UsersService {
       `[UsersService] Cancelling join request ${membershipId} for user ${userId}`,
     );
 
-    const membership = await this.prisma.organizationMembership.findUnique({
-      where: { id: membershipId },
-      select: {
-        id: true,
-        user_id: true,
-        status: true,
-      },
-    });
+    const membership = await this.requestContextService.runWithBypass(() =>
+      this.prisma.organizationMembership.findUnique({
+        where: { id: membershipId },
+        select: {
+          id: true,
+          user_id: true,
+          status: true,
+        },
+      }),
+    );
     if (!membership) {
       throw new NotFoundException(
         this.i18n.t('organizations.ERRORS.ORG.MEMBERSHIP_REQUEST_NOT_FOUND'),
@@ -233,12 +254,16 @@ export class UsersService {
       );
     }
 
-    await this.prisma.organizationMembership.delete({
-      where: { id: membershipId },
-    });
+    await this.requestContextService.runWithBypass(() =>
+      this.prisma.organizationMembership.delete({
+        where: { id: membershipId },
+      }),
+    );
 
     return {
-      message: this.i18n.t('organizations.ERRORS.ORG.MEMBERSHIP_CANCELLED_SUCCESS'),
+      message: this.i18n.t(
+        'organizations.ERRORS.ORG.MEMBERSHIP_CANCELLED_SUCCESS',
+      ),
     };
   }
 

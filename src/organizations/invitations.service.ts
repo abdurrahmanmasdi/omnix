@@ -10,6 +10,7 @@ import { MembershipStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
+import { RequestContextService } from '../request-context/request-context.service';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { INVITATION_STATUS } from '../constants/invitation-status';
@@ -75,6 +76,7 @@ export class InvitationsService {
     private prisma: PrismaService,
     private i18n: I18nService,
     private accessVerificationService: AccessVerificationService,
+    private requestContextService: RequestContextService,
   ) {}
 
   private generateToken(): string {
@@ -116,7 +118,9 @@ export class InvitationsService {
     email: string,
   ): InvitationAcceptanceRecord {
     if (!invitation) {
-      throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'),
+      );
     }
 
     if (invitation.status !== INVITATION_STATUS.PENDING) {
@@ -128,7 +132,9 @@ export class InvitationsService {
     }
 
     if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-      throw new BadRequestException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'));
+      throw new BadRequestException(
+        this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'),
+      );
     }
 
     return invitation;
@@ -160,7 +166,9 @@ export class InvitationsService {
 
     if (!organization) {
       this.logger.warn(`Organization with id ${organizationId} not found`);
-      throw new NotFoundException(this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+      );
     }
 
     // Verify role exists and belongs to the same organization
@@ -250,26 +258,30 @@ export class InvitationsService {
     status: string;
   }> {
     try {
-      const invitation = (await this.prisma.invitation.findUnique({
-        where: { token } as unknown as never,
-        select: {
-          email: true,
-          status: true,
-          organization: {
-            select: {
-              name: true,
+      const invitation = (await this.requestContextService.runWithBypass(() =>
+        this.prisma.invitation.findUnique({
+          where: { token } as unknown as never,
+          select: {
+            email: true,
+            status: true,
+            organization: {
+              select: {
+                name: true,
+              },
+            },
+            role: {
+              select: {
+                name: true,
+              },
             },
           },
-          role: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      })) as InvitationPreviewRecord | null;
+        }),
+      )) as InvitationPreviewRecord | null;
 
       if (!invitation) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'),
+        );
       }
 
       return {
@@ -300,84 +312,89 @@ export class InvitationsService {
     membershipId: string;
   }> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const invitation = (await tx.invitation.findFirst({
-          where: { token } as unknown as never,
-          select: {
-            id: true,
-            email: true,
-            status: true,
-            organization_id: true,
-            role_id: true,
-            organization: {
-              select: {
-                name: true,
+      return await this.requestContextService.runWithBypass(() =>
+        this.prisma.$transaction(async (tx) => {
+          const invitation = (await tx.invitation.findFirst({
+            where: { token } as unknown as never,
+            select: {
+              id: true,
+              email: true,
+              status: true,
+              organization_id: true,
+              role_id: true,
+              organization: {
+                select: {
+                  name: true,
+                },
               },
             },
-          },
-        })) as InvitationAcceptanceRecord | null;
+          })) as InvitationAcceptanceRecord | null;
 
-        const validInvitation = this.validateInvitationForEmail(
-          invitation,
-          userEmail,
-        );
+          const validInvitation = this.validateInvitationForEmail(
+            invitation,
+            userEmail,
+          );
 
-        const existingActiveMembership =
-          await tx.organizationMembership.findFirst({
+          const existingActiveMembership =
+            await tx.organizationMembership.findFirst({
+              where: {
+                user_id: userId,
+                status: MembershipStatus.ACTIVE,
+              },
+              select: { id: true },
+            });
+
+          if (existingActiveMembership) {
+            throw new ConflictException(
+              this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
+            );
+          }
+
+          const invitationUpdate = await tx.invitation.updateMany({
             where: {
-              user_id: userId,
-              status: MembershipStatus.ACTIVE,
+              id: validInvitation.id,
+              status: INVITATION_STATUS.PENDING,
             },
-            select: { id: true },
+            data: {
+              status: INVITATION_STATUS.ACCEPTED,
+              accepted_at: new Date(),
+            },
           });
 
-        if (existingActiveMembership) {
-          throw new ConflictException(
-            this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
-          );
-        }
+          if (invitationUpdate.count !== 1) {
+            throw new BadRequestException(
+              this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
+                args: { status: validInvitation.status },
+              }),
+            );
+          }
 
-        const invitationUpdate = await tx.invitation.updateMany({
-          where: {
-            id: validInvitation.id,
-            status: INVITATION_STATUS.PENDING,
-          },
-          data: {
-            status: INVITATION_STATUS.ACCEPTED,
-            accepted_at: new Date(),
-          },
-        });
-
-        if (invitationUpdate.count !== 1) {
-          throw new BadRequestException(
-            this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
-              args: { status: validInvitation.status },
-            }),
-          );
-        }
-
-        const membership = await tx.organizationMembership.create({
-          data: {
-            user_id: userId,
-            organization_id: validInvitation.organization_id,
-            role_id: validInvitation.role_id,
-            status: MembershipStatus.ACTIVE,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        return {
-          message: this.i18n.t('organizations.ERRORS.INVITATION.ACCEPT_SUCCESS', {
-            args: {
-              organizationName: validInvitation.organization.name,
+          const membership = await tx.organizationMembership.create({
+            data: {
+              user_id: userId,
+              organization_id: validInvitation.organization_id,
+              role_id: validInvitation.role_id,
+              status: MembershipStatus.ACTIVE,
             },
-          }),
-          organizationId: validInvitation.organization_id,
-          membershipId: membership.id,
-        };
-      });
+            select: {
+              id: true,
+            },
+          });
+
+          return {
+            message: this.i18n.t(
+              'organizations.ERRORS.INVITATION.ACCEPT_SUCCESS',
+              {
+                args: {
+                  organizationName: validInvitation.organization.name,
+                },
+              },
+            ),
+            organizationId: validInvitation.organization_id,
+            membershipId: membership.id,
+          };
+        }),
+      );
     } catch (error) {
       if (
         error instanceof NotFoundException ||
