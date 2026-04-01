@@ -34,11 +34,18 @@ export interface RecentLeadActivityMetric {
   updated_at: Date;
 }
 
+export interface DashboardStats {
+  won_deals: number;
+  total_revenue: number;
+  lead_conversion_rate: number;
+}
+
 export interface DashboardMetrics {
   pipeline_overview: PipelineOverviewMetrics;
   leads_by_stage: LeadsByStageMetric[];
   leads_by_source: LeadsBySourceMetric[];
   recent_activity: RecentLeadActivityMetric[];
+  dashboard_stats: DashboardStats;
 }
 
 @Injectable()
@@ -63,8 +70,52 @@ export class AnalyticsService {
     return Number(value);
   }
 
-  async getDashboardMetrics(orgId: string): Promise<DashboardMetrics> {
-    const leadWhere: Prisma.LeadWhereInput = {};
+  async getDashboardStats(
+    orgId: string,
+    agent_id?: string,
+  ): Promise<DashboardStats> {
+    const assignmentWhere: Prisma.LeadWhereInput = agent_id
+      ? { assigned_agent_id: agent_id }
+      : {};
+
+    const [totalLeads, wonDeals, wonDealsRevenue] = await Promise.all([
+      this.prisma.lead.count({
+        where: assignmentWhere,
+      }),
+      this.prisma.lead.count({
+        where: {
+          ...assignmentWhere,
+          status: LeadStatus.WON,
+        },
+      }),
+      this.prisma.lead.aggregate({
+        where: {
+          ...assignmentWhere,
+          status: LeadStatus.WON,
+        },
+        _sum: {
+          estimated_value: true,
+        },
+      }),
+    ]);
+
+    const lead_conversion_rate =
+      totalLeads === 0 ? 0 : (wonDeals / totalLeads) * 100;
+
+    return {
+      won_deals: wonDeals,
+      total_revenue: this.toNumber(wonDealsRevenue._sum.estimated_value),
+      lead_conversion_rate,
+    };
+  }
+
+  async getDashboardMetrics(
+    orgId: string,
+    agent_id?: string,
+  ): Promise<DashboardMetrics> {
+    const leadWhere: Prisma.LeadWhereInput = agent_id
+      ? { assigned_agent_id: agent_id }
+      : {};
 
     const [
       pipelineOverview,
@@ -73,6 +124,7 @@ export class AnalyticsService {
       stages,
       sources,
       recentLeads,
+      dashboardStats,
     ] = await Promise.all([
       this.prisma.lead.aggregate({
         where: leadWhere,
@@ -147,6 +199,7 @@ export class AnalyticsService {
           },
         },
       }),
+      this.getDashboardStats(orgId, agent_id),
     ]);
 
     const stageNameById = new Map(
@@ -201,6 +254,7 @@ export class AnalyticsService {
       leads_by_stage,
       leads_by_source,
       recent_activity,
+      dashboard_stats: dashboardStats,
     };
   }
 }

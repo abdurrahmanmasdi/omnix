@@ -3,12 +3,14 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -40,6 +42,13 @@ export class AnalyticsController {
   @UseGuards(JwtAuthGuard, GlobalAuthGuard, PermissionsGuard)
   @RequirePermissions(AppPermission.ORGANIZATION_READ)
   @ApiOperation({ summary: 'Get dashboard analytics metrics' })
+  @ApiQuery({
+    name: 'agent_id',
+    required: false,
+    description:
+      'Optionally scope dashboard metrics to a specific assigned agent',
+    type: String,
+  })
   @ApiResponse({
     status: 200,
     description: 'Dashboard analytics metrics fetched successfully',
@@ -47,12 +56,14 @@ export class AnalyticsController {
   async getDashboardMetrics(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Request() req: AuthRequest,
+    @Query('agent_id', new ParseUUIDPipe({ optional: true }))
+    agent_id?: string,
   ): Promise<DashboardMetrics> {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
     );
 
-    return this.analyticsService.getDashboardMetrics(organizationId);
+    return this.analyticsService.getDashboardMetrics(organizationId, agent_id);
   }
 }
