@@ -12,6 +12,7 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TokenManagementService } from './services/token-management.service';
 import { MailingService } from './services/mailing.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -46,6 +47,7 @@ describe('AuthService', () => {
 
   const mockTokenManagementService = {
     issueToken: jest.fn(),
+    validateAndRevokeToken: jest.fn(),
     consumeToken: jest.fn(),
     revokeAllUserTokens: jest.fn(),
     revokeTokenIfExists: jest.fn(),
@@ -54,6 +56,12 @@ describe('AuthService', () => {
   const mockMailingService = {
     sendVerificationEmail: jest.fn(),
     sendPasswordResetEmail: jest.fn(),
+  };
+
+  const mockRequestContextService = {
+    runWithBypass: jest.fn(async (callback: () => Promise<unknown>) =>
+      callback(),
+    ),
   };
 
   beforeEach(async () => {
@@ -76,6 +84,10 @@ describe('AuthService', () => {
         {
           provide: MailingService,
           useValue: mockMailingService,
+        },
+        {
+          provide: RequestContextService,
+          useValue: mockRequestContextService,
         },
       ],
     }).compile();
@@ -258,18 +270,86 @@ describe('AuthService', () => {
   });
 
   it('verifies email using one-time token', async () => {
-    mockTokenManagementService.consumeToken.mockResolvedValue('u1');
+    mockTokenManagementService.validateAndRevokeToken.mockResolvedValue('u1');
     mockPrisma.user.update.mockResolvedValue({ id: 'u1' });
 
-    await service.verifyEmail('verification-token');
+    const result = await service.verifyEmail('verification-token');
 
-    expect(mockTokenManagementService.consumeToken).toHaveBeenCalledWith(
+    expect(
+      mockTokenManagementService.validateAndRevokeToken,
+    ).toHaveBeenCalledWith(
+      null,
       'verification-token',
       AuthTokenType.VERIFICATION,
     );
     expect(mockPrisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
       data: { is_email_verified: true },
+    });
+    expect(result).toEqual({ message: 'Email verified' });
+  });
+
+  it('resends verification for existing unverified users', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      is_email_verified: false,
+    });
+    mockTokenManagementService.issueToken.mockResolvedValue(
+      'verification-token',
+    );
+
+    const result = await service.resendVerification('user@example.com');
+
+    expect(mockTokenManagementService.revokeAllUserTokens).toHaveBeenCalledWith(
+      'u1',
+      AuthTokenType.VERIFICATION,
+    );
+    expect(mockTokenManagementService.issueToken).toHaveBeenCalledWith(
+      'u1',
+      AuthTokenType.VERIFICATION,
+      24 * 60 * 60 * 1000,
+    );
+    expect(mockMailingService.sendVerificationEmail).toHaveBeenCalledWith(
+      'user@example.com',
+      'verification-token',
+    );
+    expect(result).toEqual({
+      message: 'If an account exists, a link has been sent',
+    });
+  });
+
+  it('returns generic message when resending verification for missing users', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+
+    const result = await service.resendVerification('missing@example.com');
+
+    expect(
+      mockTokenManagementService.revokeAllUserTokens,
+    ).not.toHaveBeenCalled();
+    expect(mockTokenManagementService.issueToken).not.toHaveBeenCalled();
+    expect(mockMailingService.sendVerificationEmail).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      message: 'If an account exists, a link has been sent',
+    });
+  });
+
+  it('returns generic message when resending verification for already verified users', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      is_email_verified: true,
+    });
+
+    const result = await service.resendVerification('user@example.com');
+
+    expect(
+      mockTokenManagementService.revokeAllUserTokens,
+    ).not.toHaveBeenCalled();
+    expect(mockTokenManagementService.issueToken).not.toHaveBeenCalled();
+    expect(mockMailingService.sendVerificationEmail).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      message: 'If an account exists, a link has been sent',
     });
   });
 

@@ -13,6 +13,7 @@ describe('AuthController', () => {
     validateUser: jest.fn(),
     getEffectivePermissions: jest.fn(),
     verifyEmail: jest.fn(),
+    resendVerification: jest.fn(),
     requestPasswordReset: jest.fn(),
     resetPassword: jest.fn(),
     refreshAccessToken: jest.fn(),
@@ -81,7 +82,7 @@ describe('AuthController', () => {
         email: 'user@example.com',
         password: 'secret',
       },
-      res as any,
+      res as unknown as Parameters<AuthController['login']>[1],
     );
 
     expect(res.cookie).toHaveBeenCalledWith(
@@ -129,7 +130,10 @@ describe('AuthController', () => {
       cookie: jest.fn(),
     };
 
-    const result = await controller.refresh(req as any, res as any);
+    const result = await controller.refresh(
+      req as unknown as Parameters<AuthController['refresh']>[0],
+      res as unknown as Parameters<AuthController['refresh']>[1],
+    );
 
     expect(mockAuthService.refreshAccessToken).toHaveBeenCalledWith(
       'old-refresh',
@@ -146,9 +150,11 @@ describe('AuthController', () => {
   });
 
   it('throws UnauthorizedException when refresh cookie is missing', async () => {
-    await expect(controller.refresh({ cookies: {} } as any)).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      controller.refresh({ cookies: {} } as unknown as Parameters<
+        AuthController['refresh']
+      >[0]),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   it('clears refresh cookie and revokes token on logout', async () => {
@@ -161,7 +167,10 @@ describe('AuthController', () => {
       clearCookie: jest.fn(),
     };
 
-    const result = await controller.logout(req as any, res as any);
+    const result = await controller.logout(
+      req as unknown as Parameters<AuthController['logout']>[0],
+      res as unknown as Parameters<AuthController['logout']>[1],
+    );
 
     expect(mockAuthService.logout).toHaveBeenCalledWith('refresh-token');
     expect(res.clearCookie).toHaveBeenCalledWith(
@@ -175,11 +184,35 @@ describe('AuthController', () => {
   });
 
   it('delegates email verification', async () => {
-    await controller.verifyEmail({ token: 'verification-token' });
+    mockAuthService.verifyEmail.mockResolvedValue({
+      message: 'Email verified',
+    });
+
+    const result = await controller.verifyEmail({
+      token: 'verification-token',
+    });
 
     expect(mockAuthService.verifyEmail).toHaveBeenCalledWith(
       'verification-token',
     );
+    expect(result).toEqual({ message: 'Email verified' });
+  });
+
+  it('delegates resend verification request', async () => {
+    mockAuthService.resendVerification.mockResolvedValue({
+      message: 'If an account exists, a link has been sent',
+    });
+
+    const result = await controller.resendVerification({
+      email: 'user@example.com',
+    });
+
+    expect(mockAuthService.resendVerification).toHaveBeenCalledWith(
+      'user@example.com',
+    );
+    expect(result).toEqual({
+      message: 'If an account exists, a link has been sent',
+    });
   });
 
   it('delegates password reset request', async () => {

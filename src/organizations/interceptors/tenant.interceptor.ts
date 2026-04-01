@@ -58,13 +58,15 @@ export class TenantInterceptor implements NestInterceptor {
 
     try {
       // Query database to verify user has ACTIVE membership to this organization
-      const membership = await this.prisma.organizationMembership.findFirst({
-        where: {
-          user_id: userId,
-          organization_id: organizationId,
-          status: MembershipStatus.ACTIVE,
-        },
-      });
+      const membership = await this.requestContextService.runAsSystem(() =>
+        this.prisma.organizationMembership.findFirst({
+          where: {
+            user_id: userId,
+            organization_id: organizationId,
+            status: MembershipStatus.ACTIVE,
+          },
+        }),
+      );
 
       if (!membership) {
         this.logger.warn(

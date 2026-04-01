@@ -32,31 +32,10 @@ export class TokenManagementService {
   }
 
   async validateAndRevokeToken(
-    userId: string,
+    userId: string | null,
     rawToken: string,
     type: AuthTokenType,
-  ): Promise<true> {
-    const tokenHash = this.hashToken(rawToken);
-    const storedToken = await this.prisma.authToken.findFirst({
-      where: {
-        user_id: userId,
-        token_hash: tokenHash,
-        type,
-      },
-    });
-
-    if (!storedToken || storedToken.expires_at <= new Date()) {
-      if (storedToken) {
-        await this.prisma.authToken.delete({ where: { id: storedToken.id } });
-      }
-      throw new UnauthorizedException('Invalid or expired token');
-    }
-
-    await this.prisma.authToken.delete({ where: { id: storedToken.id } });
-    return true;
-  }
-
-  async consumeToken(rawToken: string, type: AuthTokenType): Promise<string> {
+  ): Promise<string> {
     const tokenHash = this.hashToken(rawToken);
     const storedToken = await this.prisma.authToken.findUnique({
       where: { token_hash: tokenHash },
@@ -68,17 +47,26 @@ export class TokenManagementService {
       },
     });
 
-    if (!storedToken || storedToken.type !== type) {
+    if (
+      !storedToken ||
+      storedToken.type !== type ||
+      (userId !== null && storedToken.user_id !== userId)
+    ) {
       throw new UnauthorizedException('Invalid or expired token');
     }
 
     if (storedToken.expires_at <= new Date()) {
       await this.prisma.authToken.delete({ where: { id: storedToken.id } });
+
       throw new UnauthorizedException('Invalid or expired token');
     }
 
     await this.prisma.authToken.delete({ where: { id: storedToken.id } });
     return storedToken.user_id;
+  }
+
+  async consumeToken(rawToken: string, type: AuthTokenType): Promise<string> {
+    return this.validateAndRevokeToken(null, rawToken, type);
   }
 
   async revokeTokenIfExists(

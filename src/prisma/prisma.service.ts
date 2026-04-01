@@ -247,8 +247,7 @@ export class PrismaService
     const baseClient = this as unknown as PrismaClient;
     const requestContext = this.requestContextService;
     const i18nService = this.i18n;
-    const isBypassSystem = (): boolean =>
-      requestContext.getStore()?.bypassSystem === true;
+    const isBypassSystem = (): boolean => requestContext.isSystemBypass();
 
     const softDeleteExtendedClient = this.$extends({
       query: {

@@ -24,6 +24,9 @@ describe('TenantInterceptor', () => {
   };
 
   const mockRequestContextService = {
+    runAsSystem: jest.fn(async (callback: () => Promise<unknown>) =>
+      callback(),
+    ),
     run: jest.fn((callback: () => unknown) => callback()),
     setTenantId: jest.fn(),
   };

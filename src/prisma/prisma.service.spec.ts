@@ -313,7 +313,10 @@ describe('PrismaService', () => {
   const mockRequestContextService = {
     getTenantId: jest.fn(),
     getStore: jest.fn(),
-  } as jest.Mocked<Pick<RequestContextService, 'getTenantId' | 'getStore'>>;
+    isSystemBypass: jest.fn(),
+  } as jest.Mocked<
+    Pick<RequestContextService, 'getTenantId' | 'getStore' | 'isSystemBypass'>
+  >;
 
   const mockConfigService = {
     get: jest.fn((key: string) => {
@@ -334,6 +337,8 @@ describe('PrismaService', () => {
     mockRequestContextService.getTenantId.mockReturnValue(undefined);
     mockRequestContextService.getStore.mockReset();
     mockRequestContextService.getStore.mockReturnValue(undefined);
+    mockRequestContextService.isSystemBypass.mockReset();
+    mockRequestContextService.isSystemBypass.mockReturnValue(false);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -688,7 +693,7 @@ describe('PrismaService', () => {
   });
 
   it('passes tenant-bound non-soft-delete delete through original query when bypassSystem is active', async () => {
-    mockRequestContextService.getStore.mockReturnValue({ bypassSystem: true });
+    mockRequestContextService.isSystemBypass.mockReturnValue(true);
 
     const result = await (
       service as unknown as {
@@ -728,7 +733,7 @@ describe('PrismaService', () => {
   });
 
   it('skips tenant filter when system bypass is active', async () => {
-    mockRequestContextService.getStore.mockReturnValue({ bypassSystem: true });
+    mockRequestContextService.isSystemBypass.mockReturnValue(true);
     mockRequestContextService.getTenantId.mockReturnValue('org-1');
 
     await (

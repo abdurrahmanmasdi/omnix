@@ -19,8 +19,20 @@ export class RequestContextService {
     return this.als.run(initialStore, callback);
   }
 
+  runWithBypass<T>(callback: () => Promise<T>): Promise<T> {
+    const currentStore = this.als.getStore() ?? {};
+
+    return this.als.run(
+      {
+        ...currentStore,
+        isSystemBypass: true,
+      },
+      callback,
+    );
+  }
+
   runAsSystem<T>(callback: () => Promise<T>): Promise<T> {
-    return this.runWith({ bypassSystem: true }, callback);
+    return this.runWithBypass(callback);
   }
 
   setTenantId(tenantId: string): void {
@@ -40,7 +52,7 @@ export class RequestContextService {
 
   isSystemBypass(): boolean {
     const store = this.als.getStore();
-    return store?.bypassSystem === true || store?.isSystemBypass === true;
+    return store?.isSystemBypass === true || store?.bypassSystem === true;
   }
 
   getStore(): Readonly<RequestContextStore> | undefined {

@@ -23,6 +23,7 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { RegisterDto } from './dtos/register.dto';
+import { ResendVerificationDto } from './dtos/resend-verification.dto';
 import { VerifyEmailDto } from './dtos/verify-email.dto';
 import { RequestPasswordResetDto } from './dtos/request-password-reset.dto';
 import { ResetPasswordDto } from './dtos/reset-password.dto';
@@ -94,8 +95,20 @@ export class AuthController {
   async verifyEmail(
     @Body() verifyEmailDto: VerifyEmailDto,
   ): Promise<{ message: string }> {
-    await this.authService.verifyEmail(verifyEmailDto.token);
-    return { message: 'Email verified' };
+    return this.authService.verifyEmail(verifyEmailDto.token);
+  }
+
+  @Public()
+  @Post('resend-verification')
+  @ApiOperation({ summary: 'Resend email verification link' })
+  @ApiResponse({
+    status: 201,
+    description: 'Verification email dispatch attempted',
+  })
+  async resendVerification(
+    @Body() resendVerificationDto: ResendVerificationDto,
+  ): Promise<{ message: string }> {
+    return this.authService.resendVerification(resendVerificationDto.email);
   }
 
   @Public()
