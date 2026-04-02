@@ -1,13 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// Add this new block right here
 generator erd {
   provider = "prisma-erd-generator"
   output   = "../ERD.svg"
@@ -19,58 +13,69 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(uuid()) @db.Uuid
-  email         String   @unique
-  password_hash String
-  first_name    String
-  last_name     String
-  is_email_verified Boolean @default(false)
-  created_at    DateTime @default(now())
-  deleted_at    DateTime?
-
-  memberships              OrganizationMembership[]
-  conversationParticipants ConversationParticipant[]
-  sentMessages             Message[]                 @relation("SentMessages")
-  assignedLeads            Lead[]
-  authoredLeadNotes        LeadNote[]
-  uploadedLeadAttachments  LeadAttachment[]
+  id                       String                    @id @default(uuid()) @db.Uuid
+  email                    String                    @unique
+  password_hash            String
+  first_name               String
+  last_name                String
+  created_at               DateTime                  @default(now())
+  deleted_at               DateTime?
+  is_email_verified        Boolean                   @default(false)
   authTokens               AuthToken[]
+  conversationParticipants ConversationParticipant[]
+  uploadedLeadAttachments  LeadAttachment[]
+  authoredLeadNotes        LeadNote[]
+  assignedLeads            Lead[]
+  sentMessages             Message[]                 @relation("SentMessages")
+  memberships              OrganizationMembership[]
 
   @@map("users")
 }
 
 model Organization {
-  id         String   @id @default(uuid()) @db.Uuid
-  name       String
-  slug       String   @unique
-  is_public  Boolean  @default(false)
-  created_at DateTime @default(now())
-  deleted_at DateTime?
-
-  roles          Role[]
-  invitations    Invitation[]
-  memberships    OrganizationMembership[]
-  conversations  Conversation[]
-  pipelineStages PipelineStage[]
-  leadSources    LeadSource[]
-  leads          Lead[]
+  id                   String                   @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String                   @unique
+  is_public            Boolean                  @default(false)
+  created_at           DateTime                 @default(now())
+  deleted_at           DateTime?
+  address              String?
+  brand_colors         Json?
+  default_currency     String                   @default("USD")
+  industry_category    String?
+  logo_url             String?
+  public_email         String?
+  public_phone         String?
+  tax_number           String?
+  tax_office           String?
+  terms_and_conditions String?
+  website_url          String?
+  privacy_policy       String?
+  bank_accounts        BankAccount[]
+  social_links         OrganizationSocialLink[]
+  conversations        Conversation[]
+  invitations          Invitation[]
+  leadSources          LeadSource[]
+  leads                Lead[]
+  memberships          OrganizationMembership[]
+  pipelineStages       PipelineStage[]
+  roles                Role[]
 
   @@map("organizations")
 }
 
 model OrganizationMembership {
-  id              String           @id @default(uuid()) @db.Uuid
-  user_id         String           @db.Uuid
-  organization_id String           @db.Uuid
-  role_id         String           @db.Uuid
-  status          MembershipStatus @default(PENDING)
-  created_at      DateTime         @default(now())
-  deleted_at      DateTime?
-
-  user                User                           @relation(fields: [user_id], references: [id])
+  id                  String                         @id @default(uuid()) @db.Uuid
+  user_id             String                         @db.Uuid
+  organization_id     String                         @db.Uuid
+  role_id             String                         @db.Uuid
+  created_at          DateTime                       @default(now())
+  status              MembershipStatus               @default(PENDING)
+  deleted_at          DateTime?
+  permissionOverrides MembershipPermissionOverride[]
   organization        Organization                   @relation(fields: [organization_id], references: [id])
   role                Role                           @relation(fields: [role_id], references: [id])
-  permissionOverrides MembershipPermissionOverride[]
+  user                User                           @relation(fields: [user_id], references: [id])
 
   @@index([organization_id])
   @@index([organization_id, status])
@@ -80,48 +85,45 @@ model OrganizationMembership {
 }
 
 model Permission {
-  id          String  @id @default(uuid()) @db.Uuid
-  action      String  @unique
-  description String?
-
-  rolePermissions               RolePermission[]
+  id                            String                         @id @default(uuid()) @db.Uuid
+  action                        String                         @unique
+  description                   String?
   membershipPermissionOverrides MembershipPermissionOverride[]
+  rolePermissions               RolePermission[]
 
   @@map("permissions")
 }
 
 model Role {
-  id                String   @id @default(uuid()) @db.Uuid
-  organization_id   String?  @db.Uuid
+  id                String                   @id @default(uuid()) @db.Uuid
+  organization_id   String?                  @db.Uuid
   name              String
+  created_at        DateTime                 @default(now())
   name_translations Json?
-  is_system         Boolean  @default(false)
+  is_system         Boolean                  @default(false)
   slug              String?
-  created_at        DateTime @default(now())
   deleted_at        DateTime?
-
-  organization    Organization?            @relation(fields: [organization_id], references: [id])
-  rolePermissions RolePermission[]
-  memberships     OrganizationMembership[]
-  invitations     Invitation[]
+  invitations       Invitation[]
+  memberships       OrganizationMembership[]
+  rolePermissions   RolePermission[]
+  organization      Organization?            @relation(fields: [organization_id], references: [id])
 
   @@index([organization_id])
   @@map("roles")
 }
 
 model Invitation {
-  id              String    @id @default(uuid()) @db.Uuid
-  token           String    @unique
+  id              String       @id @default(uuid()) @db.Uuid
   email           String
-  organization_id String    @db.Uuid
-  role_id         String    @db.Uuid
-  status          String    @default("pending")
-  created_at      DateTime  @default(now())
+  organization_id String       @db.Uuid
+  role_id         String       @db.Uuid
+  status          String       @default("pending")
+  created_at      DateTime     @default(now())
   accepted_at     DateTime?
+  token           String       @unique
   deleted_at      DateTime?
-
-  organization Organization @relation(fields: [organization_id], references: [id])
-  role         Role         @relation(fields: [role_id], references: [id])
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  role            Role         @relation(fields: [role_id], references: [id])
 
   @@unique([email, organization_id])
   @@index([organization_id])
@@ -130,11 +132,10 @@ model Invitation {
 }
 
 model RolePermission {
-  role_id       String @db.Uuid
-  permission_id String @db.Uuid
-
-  role       Role       @relation(fields: [role_id], references: [id])
-  permission Permission @relation(fields: [permission_id], references: [id])
+  role_id       String     @db.Uuid
+  permission_id String     @db.Uuid
+  permission    Permission @relation(fields: [permission_id], references: [id])
+  role          Role       @relation(fields: [role_id], references: [id])
 
   @@id([role_id, permission_id])
   @@index([role_id])
@@ -143,18 +144,211 @@ model RolePermission {
 }
 
 model MembershipPermissionOverride {
-  id            String  @id @default(uuid()) @db.Uuid
-  membership_id String  @db.Uuid
-  permission_id String  @db.Uuid
+  id            String                 @id @default(uuid()) @db.Uuid
+  membership_id String                 @db.Uuid
+  permission_id String                 @db.Uuid
   is_granted    Boolean
-
-  membership OrganizationMembership @relation(fields: [membership_id], references: [id])
-  permission Permission             @relation(fields: [permission_id], references: [id])
+  membership    OrganizationMembership @relation(fields: [membership_id], references: [id])
+  permission    Permission             @relation(fields: [permission_id], references: [id])
 
   @@unique([membership_id, permission_id])
   @@index([membership_id])
   @@index([permission_id])
   @@map("membership_permission_overrides")
+}
+
+model AuthToken {
+  id         String        @id @default(uuid()) @db.Uuid
+  user_id    String        @db.Uuid
+  token_hash String        @unique
+  type       AuthTokenType
+  expires_at DateTime
+  created_at DateTime      @default(now())
+  user       User          @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([user_id, type])
+  @@index([expires_at])
+  @@map("auth_tokens")
+}
+
+model Conversation {
+  id              String                    @id @default(uuid()) @db.Uuid
+  organization_id String                    @db.Uuid
+  is_group        Boolean                   @default(false)
+  name            String?
+  created_at      DateTime                  @default(now())
+  updated_at      DateTime                  @updatedAt
+  deleted_at      DateTime?
+  participants    ConversationParticipant[]
+  organization    Organization              @relation(fields: [organization_id], references: [id])
+  messages        Message[]
+
+  @@index([organization_id])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id              String       @id @default(uuid()) @db.Uuid
+  conversation_id String       @db.Uuid
+  user_id         String       @db.Uuid
+  joined_at       DateTime     @default(now())
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  user            User         @relation(fields: [user_id], references: [id])
+
+  @@unique([conversation_id, user_id])
+  @@index([conversation_id])
+  @@index([user_id])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String       @id @default(uuid()) @db.Uuid
+  conversation_id String       @db.Uuid
+  sender_id       String       @db.Uuid
+  content         String
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  deleted_at      DateTime?
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  sender          User         @relation("SentMessages", fields: [sender_id], references: [id])
+
+  @@index([conversation_id])
+  @@index([conversation_id, created_at])
+  @@index([sender_id])
+  @@map("messages")
+}
+
+model PipelineStage {
+  id              String       @id @default(uuid()) @db.Uuid
+  organization_id String       @db.Uuid
+  name            String
+  order_index     Int
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  deleted_at      DateTime?
+  leads           Lead[]
+  organization    Organization @relation(fields: [organization_id], references: [id])
+
+  @@index([organization_id])
+  @@map("pipeline_stages")
+}
+
+model LeadSource {
+  id              String       @id @default(uuid()) @db.Uuid
+  organization_id String       @db.Uuid
+  name            String
+  is_active       Boolean      @default(true)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  deleted_at      DateTime?
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  leads           Lead[]
+
+  @@index([organization_id])
+  @@map("lead_sources")
+}
+
+model LeadNote {
+  id         String    @id @default(uuid()) @db.Uuid
+  lead_id    String    @db.Uuid
+  author_id  String    @db.Uuid
+  content    String
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+  author     User      @relation(fields: [author_id], references: [id])
+  lead       Lead      @relation(fields: [lead_id], references: [id])
+
+  @@index([lead_id])
+  @@index([author_id])
+  @@map("lead_notes")
+}
+
+model LeadAttachment {
+  id             String    @id @default(uuid()) @db.Uuid
+  lead_id        String    @db.Uuid
+  uploaded_by_id String    @db.Uuid
+  file_url       String
+  file_name      String
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  deleted_at     DateTime?
+  lead           Lead      @relation(fields: [lead_id], references: [id])
+  uploaded_by    User      @relation(fields: [uploaded_by_id], references: [id])
+
+  @@index([lead_id])
+  @@index([uploaded_by_id])
+  @@map("lead_attachments")
+}
+
+model Lead {
+  id                    String           @id @default(uuid()) @db.Uuid
+  organization_id       String           @db.Uuid
+  pipeline_stage_id     String?          @db.Uuid
+  assigned_agent_id     String?          @db.Uuid
+  source_id             String?          @db.Uuid
+  first_name            String
+  last_name             String
+  native_name           String?
+  gender                Gender           @default(UNKNOWN)
+  email                 String?
+  phone_number          String
+  country               String
+  timezone              String
+  primary_language      String
+  preferred_language    String?
+  social_links          Json?
+  status                LeadStatus       @default(OPEN)
+  priority              Priority         @default(WARM)
+  estimated_value       Decimal?
+  currency              Currency         @default(USD)
+  expected_service_date DateTime?
+  next_follow_up_at     DateTime?
+  created_at            DateTime         @default(now())
+  updated_at            DateTime         @updatedAt
+  deleted_at            DateTime?
+  attachments           LeadAttachment[]
+  notes                 LeadNote[]
+  assigned_agent        User?            @relation(fields: [assigned_agent_id], references: [id])
+  organization          Organization     @relation(fields: [organization_id], references: [id])
+  pipeline_stage        PipelineStage?   @relation(fields: [pipeline_stage_id], references: [id])
+  source                LeadSource?      @relation(fields: [source_id], references: [id])
+
+  @@index([organization_id])
+  @@index([pipeline_stage_id])
+  @@index([assigned_agent_id])
+  @@index([source_id])
+  @@index([status])
+  @@index([priority])
+  @@map("leads")
+}
+
+model OrganizationSocialLink {
+  id              String       @id @default(uuid())
+  platform        String
+  url             String
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  organization_id String       @db.Uuid
+  organization    Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+}
+
+model BankAccount {
+  id                  String       @id @default(uuid())
+  bank_name           String
+  iban                String
+  currency            String       @default("USD")
+  account_holder_name String
+  is_default          Boolean      @default(false)
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
+  organization_id     String       @db.Uuid
+  organization        Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
 }
 
 enum MembershipStatus {
@@ -194,180 +388,4 @@ enum AuthTokenType {
   REFRESH
   VERIFICATION
   RESET
-}
-
-model AuthToken {
-  id         String        @id @default(uuid()) @db.Uuid
-  user_id    String        @db.Uuid
-  token_hash String        @unique
-  type       AuthTokenType
-  expires_at DateTime
-  created_at DateTime      @default(now())
-
-  user User @relation(fields: [user_id], references: [id])
-
-  @@index([user_id])
-  @@index([user_id, type])
-  @@index([expires_at])
-  @@map("auth_tokens")
-}
-
-model Conversation {
-  id              String   @id @default(uuid()) @db.Uuid
-  organization_id String   @db.Uuid
-  is_group        Boolean  @default(false)
-  name            String?
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-  deleted_at      DateTime?
-
-  organization Organization              @relation(fields: [organization_id], references: [id])
-  participants ConversationParticipant[]
-  messages     Message[]
-
-  @@index([organization_id])
-  @@map("conversations")
-}
-
-model ConversationParticipant {
-  id              String   @id @default(uuid()) @db.Uuid
-  conversation_id String   @db.Uuid
-  user_id         String   @db.Uuid
-  joined_at       DateTime @default(now())
-
-  conversation Conversation @relation(fields: [conversation_id], references: [id])
-  user         User         @relation(fields: [user_id], references: [id])
-
-  @@unique([conversation_id, user_id])
-  @@index([conversation_id])
-  @@index([user_id])
-  @@map("conversation_participants")
-}
-
-model Message {
-  id              String   @id @default(uuid()) @db.Uuid
-  conversation_id String   @db.Uuid
-  sender_id       String   @db.Uuid
-  content         String   @db.Text
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-  deleted_at      DateTime?
-
-  conversation Conversation @relation(fields: [conversation_id], references: [id])
-  sender       User         @relation("SentMessages", fields: [sender_id], references: [id])
-
-  @@index([conversation_id])
-  @@index([conversation_id, created_at])
-  @@index([sender_id])
-  @@map("messages")
-}
-
-model PipelineStage {
-  id              String   @id @default(uuid()) @db.Uuid
-  organization_id String   @db.Uuid
-  name            String
-  order_index     Int
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-  deleted_at      DateTime?
-
-  organization Organization @relation(fields: [organization_id], references: [id])
-  leads        Lead[]
-
-  @@index([organization_id])
-  @@map("pipeline_stages")
-}
-
-model LeadSource {
-  id              String   @id @default(uuid()) @db.Uuid
-  organization_id String   @db.Uuid
-  name            String
-  is_active       Boolean  @default(true)
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-  deleted_at      DateTime?
-
-  organization Organization @relation(fields: [organization_id], references: [id])
-  leads        Lead[]
-
-  @@index([organization_id])
-  @@map("lead_sources")
-}
-
-model LeadNote {
-  id         String   @id @default(uuid()) @db.Uuid
-  lead_id    String   @db.Uuid
-  author_id  String   @db.Uuid
-  content    String   @db.Text
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  deleted_at DateTime?
-
-  lead   Lead @relation(fields: [lead_id], references: [id])
-  author User @relation(fields: [author_id], references: [id])
-
-  @@index([lead_id])
-  @@index([author_id])
-  @@map("lead_notes")
-}
-
-model LeadAttachment {
-  id             String   @id @default(uuid()) @db.Uuid
-  lead_id        String   @db.Uuid
-  uploaded_by_id String   @db.Uuid
-  file_url       String
-  file_name      String
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
-  deleted_at     DateTime?
-
-  lead        Lead @relation(fields: [lead_id], references: [id])
-  uploaded_by User @relation(fields: [uploaded_by_id], references: [id])
-
-  @@index([lead_id])
-  @@index([uploaded_by_id])
-  @@map("lead_attachments")
-}
-
-model Lead {
-  id                    String     @id @default(uuid()) @db.Uuid
-  organization_id       String     @db.Uuid
-  pipeline_stage_id     String?    @db.Uuid
-  assigned_agent_id     String?    @db.Uuid
-  source_id             String?    @db.Uuid
-  first_name            String
-  last_name             String
-  native_name           String?
-  gender                Gender     @default(UNKNOWN)
-  email                 String?
-  phone_number          String
-  country               String
-  timezone              String
-  primary_language      String
-  preferred_language    String?
-  social_links          Json?
-  status                LeadStatus @default(OPEN)
-  priority              Priority   @default(WARM)
-  estimated_value       Decimal?
-  currency              Currency   @default(USD)
-  expected_service_date DateTime?
-  next_follow_up_at     DateTime?
-  created_at            DateTime   @default(now())
-  updated_at            DateTime   @updatedAt
-  deleted_at            DateTime?
-
-  organization   Organization     @relation(fields: [organization_id], references: [id])
-  pipeline_stage PipelineStage?   @relation(fields: [pipeline_stage_id], references: [id])
-  assigned_agent User?            @relation(fields: [assigned_agent_id], references: [id])
-  source         LeadSource?      @relation(fields: [source_id], references: [id])
-  notes          LeadNote[]
-  attachments    LeadAttachment[]
-
-  @@index([organization_id])
-  @@index([pipeline_stage_id])
-  @@index([assigned_agent_id])
-  @@index([source_id])
-  @@index([status])
-  @@index([priority])
-  @@map("leads")
 }

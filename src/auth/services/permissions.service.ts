@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
+import { RequestContextService } from '../../request-context/request-context.service';
 import { MembershipStatus } from '@prisma/client';
 
 interface ClearUserPermissionsCacheEvent {
@@ -28,6 +29,7 @@ export class PermissionsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly requestContextService: RequestContextService,
   ) {}
 
   onModuleInit(): void {
@@ -115,16 +117,32 @@ export class PermissionsService implements OnModuleInit {
     );
 
     // Step 2: Database Fallback
-    const membership = await this.prisma.organizationMembership.findFirst({
-      where: {
-        user_id: userId,
-        organization_id: orgId,
-        status: MembershipStatus.ACTIVE,
-      },
-      include: {
-        role: {
+    // Run inside a scoped tenant context so Prisma's tenant extension
+    // correctly filters by organization_id. Guards execute before
+    // TenantInterceptor, so we must establish the context here manually.
+    const membership = await this.requestContextService.run(
+      () =>
+        this.prisma.organizationMembership.findFirst({
+          where: {
+            user_id: userId,
+            organization_id: orgId,
+            status: MembershipStatus.ACTIVE,
+          },
           include: {
-            rolePermissions: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: {
+                    permission: {
+                      select: {
+                        action: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            permissionOverrides: {
               include: {
                 permission: {
                   select: {
@@ -134,18 +152,9 @@ export class PermissionsService implements OnModuleInit {
               },
             },
           },
-        },
-        permissionOverrides: {
-          include: {
-            permission: {
-              select: {
-                action: true,
-              },
-            },
-          },
-        },
-      },
-    });
+        }),
+      { tenantId: orgId },
+    );
 
     // If membership not found or not ACTIVE, return empty permissions
     if (!membership) {

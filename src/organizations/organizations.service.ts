@@ -22,6 +22,19 @@ interface IOrganization {
   slug: string;
   is_public: boolean;
   created_at: Date;
+  deleted_at?: Date | null;
+  tax_number?: string | null;
+  tax_office?: string | null;
+  logo_url?: string | null;
+  brand_colors?: Record<string, string> | null;
+  default_currency: string;
+  industry_category?: string | null;
+  address?: string | null;
+  website_url?: string | null;
+  public_email?: string | null;
+  public_phone?: string | null;
+  terms_and_conditions?: string | null;
+  privacy_policy?: string | null;
 }
 
 @Injectable()
@@ -35,6 +48,16 @@ export class OrganizationsService {
     private provisioningService: OrganizationProvisioningService,
     private requestContextService: RequestContextService,
   ) {}
+
+  private generateSlug(name: string): string {
+    const baseSlug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+    const randomHash = Math.random().toString(36).substring(2, 8);
+    return `${baseSlug}-${randomHash}`;
+  }
 
   private async emitPermissionCacheClearEvent(
     userId: string,
@@ -50,15 +73,16 @@ export class OrganizationsService {
    * Create a new organization with default roles and permissions
    *
    * This method performs the following in a single transaction:
-   * 1. Creates the organization
-   * 2. Fetches all global permissions from the database
-   * 3. Creates default roles (Owner, Manager, Agent) with their permissions
-   * 4. Assigns the creator as Owner with ACTIVE status
+   * 1. Validates user existence
+   * 2. Generates a unique slug from organization name
+   * 3. Creates the organization with white-label and privacy fields
+   * 4. Fetches all global permissions from the database
+   * 5. Creates default roles (Owner, Manager, Agent) with their permissions
+   * 6. Assigns the creator as Owner with ACTIVE status
    *
    * The transaction ensures that if anything fails, the organization is not created,
    * preventing orphaned data.
    *
-   * @throws ConflictException if slug already exists
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException on database errors
    */
@@ -81,15 +105,16 @@ export class OrganizationsService {
             );
           }
 
-          // ========== STEP 2: Validate Slug Availability ==========
+          // ========== STEP 2: Generate Slug ==========
+          const slug = this.generateSlug(createOrgDto.name);
+
+          // Check for slug uniqueness
           const existingOrg = await tx.organization.findUnique({
-            where: { slug: createOrgDto.slug },
+            where: { slug: slug },
           });
 
           if (existingOrg) {
-            this.logger.warn(
-              `Organization with slug '${createOrgDto.slug}' already exists`,
-            );
+            this.logger.warn(`Organization with slug '${slug}' already exists`);
             throw new ConflictException(
               this.i18n.t('organizations.ERRORS.ORG.SLUG_ALREADY_EXISTS'),
             );
@@ -99,8 +124,41 @@ export class OrganizationsService {
           const createdOrg = await tx.organization.create({
             data: {
               name: createOrgDto.name,
-              slug: createOrgDto.slug,
+              slug: slug,
               is_public: createOrgDto.is_public ?? false,
+              tax_number: createOrgDto.tax_number,
+              tax_office: createOrgDto.tax_office,
+              logo_url: createOrgDto.logo_url,
+              brand_colors: createOrgDto.brand_colors
+                ? createOrgDto.brand_colors
+                : undefined,
+              default_currency: createOrgDto.default_currency || 'USD',
+              industry_category: createOrgDto.industry_category,
+              address: createOrgDto.address,
+              website_url: createOrgDto.website_url,
+              public_email: createOrgDto.public_email,
+              public_phone: createOrgDto.public_phone,
+              terms_and_conditions: createOrgDto.terms_and_conditions,
+              privacy_policy: createOrgDto.privacy_policy,
+              social_links: createOrgDto.social_links?.length
+                ? {
+                    create: createOrgDto.social_links.map((link) => ({
+                      platform: link.platform,
+                      url: link.url,
+                    })),
+                  }
+                : undefined,
+              bank_accounts: createOrgDto.bank_accounts?.length
+                ? {
+                    create: createOrgDto.bank_accounts.map((bank) => ({
+                      bank_name: bank.bank_name,
+                      iban: bank.iban,
+                      account_holder_name: bank.account_holder_name,
+                      currency: bank.currency || 'USD',
+                      is_default: bank.is_default || false,
+                    })),
+                  }
+                : undefined,
             },
           });
 
@@ -155,7 +213,6 @@ export class OrganizationsService {
       const organization = await this.prisma.organization.findUnique({
         where: { id },
       });
-
       if (!organization) {
         this.logger.warn(`Organization with id ${id} not found`);
         throw new NotFoundException(
@@ -304,7 +361,6 @@ export class OrganizationsService {
   /**
    * Update organization
    * @throws NotFoundException if organization doesn't exist
-   * @throws ConflictException if new slug is already taken
    */
   async update(
     id: string,
@@ -312,32 +368,27 @@ export class OrganizationsService {
   ): Promise<IOrganization> {
     try {
       // Verify organization exists
-      const organization = await this.findById(id);
-
-      // If slug is being changed, check if it's available
-      if (updateOrgDto.slug && updateOrgDto.slug !== organization.slug) {
-        const existingOrg = await this.prisma.organization.findUnique({
-          where: { slug: updateOrgDto.slug },
-        });
-
-        if (existingOrg) {
-          this.logger.warn(
-            `Organization with slug '${updateOrgDto.slug}' already exists`,
-          );
-          throw new ConflictException(
-            this.i18n.t('organizations.ERRORS.ORG.SLUG_ALREADY_EXISTS'),
-          );
-        }
-      }
+      await this.findById(id);
 
       const updated = await this.prisma.organization.update({
         where: { id },
         data: {
           ...(updateOrgDto.name && { name: updateOrgDto.name }),
-          ...(updateOrgDto.slug && { slug: updateOrgDto.slug }),
           ...(updateOrgDto.is_public !== undefined && {
             is_public: updateOrgDto.is_public,
           }),
+          ...(updateOrgDto.tax_number !== undefined && { tax_number: updateOrgDto.tax_number }),
+          ...(updateOrgDto.tax_office !== undefined && { tax_office: updateOrgDto.tax_office }),
+          ...(updateOrgDto.logo_url !== undefined && { logo_url: updateOrgDto.logo_url }),
+          ...(updateOrgDto.brand_colors !== undefined && { brand_colors: updateOrgDto.brand_colors }),
+          ...(updateOrgDto.default_currency !== undefined && { default_currency: updateOrgDto.default_currency }),
+          ...(updateOrgDto.industry_category !== undefined && { industry_category: updateOrgDto.industry_category }),
+          ...(updateOrgDto.address !== undefined && { address: updateOrgDto.address }),
+          ...(updateOrgDto.website_url !== undefined && { website_url: updateOrgDto.website_url }),
+          ...(updateOrgDto.public_email !== undefined && { public_email: updateOrgDto.public_email }),
+          ...(updateOrgDto.public_phone !== undefined && { public_phone: updateOrgDto.public_phone }),
+          ...(updateOrgDto.terms_and_conditions !== undefined && { terms_and_conditions: updateOrgDto.terms_and_conditions }),
+          ...(updateOrgDto.privacy_policy !== undefined && { privacy_policy: updateOrgDto.privacy_policy }),
         },
       });
 

@@ -10,6 +10,7 @@ import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationProvisioningService } from './services/organization-provisioning.service';
+import { RequestContextService } from '../request-context/request-context.service';
 
 describe('OrganizationsService (Branches)', () => {
   let service: OrganizationsService;
@@ -75,6 +76,10 @@ describe('OrganizationsService (Branches)', () => {
         {
           provide: OrganizationProvisioningService,
           useValue: mockProvisioningService,
+        },
+        {
+          provide: RequestContextService,
+          useValue: { runWithBypass: jest.fn(async (cb) => cb()) },
         },
       ],
     }).compile();

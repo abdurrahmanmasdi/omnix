@@ -112,25 +112,6 @@ describe('OrganizationsService', () => {
     );
   });
 
-  it('should throw ConflictException when update slug is already used', async () => {
-    mockPrismaService.organization.findUnique
-      .mockResolvedValueOnce({
-        id: 'org1',
-        name: 'Org',
-        slug: 'old-slug',
-        is_public: true,
-        created_at: new Date(),
-      })
-      .mockResolvedValueOnce({
-        id: 'org2',
-        slug: 'new-slug',
-      });
-
-    await expect(service.update('org1', { slug: 'new-slug' })).rejects.toThrow(
-      ConflictException,
-    );
-  });
-
   it('should deactivate memberships and emit cache clear event on remove', async () => {
     mockPrismaService.organization.findUnique.mockResolvedValue({
       id: 'org1',

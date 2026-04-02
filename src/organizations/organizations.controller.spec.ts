@@ -94,13 +94,11 @@ describe('OrganizationsController', () => {
 
     const result = await controller.create(req, {
       name: 'Org',
-      slug: 'org',
       is_public: false,
     });
 
     expect(mockOrganizationsService.create).toHaveBeenCalledWith('u1', {
       name: 'Org',
-      slug: 'org',
       is_public: false,
     });
     expect(result).toEqual({ id: 'org1' });

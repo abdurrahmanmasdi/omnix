@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Request,
   UseGuards,
@@ -20,6 +21,7 @@ import { OrganizationsService } from './organizations.service';
 import { MembershipsService } from './memberships.service';
 import { InvitationsService } from './invitations.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
+import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { InviteToOrganizationDto } from './dtos/invite-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
@@ -136,6 +138,63 @@ export class OrganizationsController {
     @Body() createOrgDto: CreateOrganizationDto,
   ): Promise<IOrganization> {
     return this.organizationsService.create(req.user.id, createOrgDto);
+  }
+
+  /**
+   * Get an organization by ID
+   *
+   * Security:
+   * - Requires a valid JWT
+   * - Requires ORGANIZATION_READ permission for the requested organization
+   */
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.ORGANIZATION_READ)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get organization details' })
+  @ApiResponse({
+    status: 200,
+    description: 'Organization details retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Organization not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'User is not authorized for this organization',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getOrganization(
+    @Param('id') organizationId: string,
+  ): Promise<IOrganization> {
+    return this.organizationsService.findById(organizationId);
+  }
+
+  /**
+   * Update an organization
+   *
+   * Security:
+   * - Requires a valid JWT
+   * - Requires ORGANIZATION_EDIT permission for the requested organization
+   */
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.ORGANIZATION_EDIT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update organization settings' })
+  @ApiResponse({
+    status: 200,
+    description: 'Organization updated successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Organization not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'User is not authorized for this organization',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateOrganization(
+    @Param('id') organizationId: string,
+    @Body() updateOrgDto: UpdateOrganizationDto,
+  ): Promise<IOrganization> {
+    return this.organizationsService.update(organizationId, updateOrgDto);
   }
 
   /**
