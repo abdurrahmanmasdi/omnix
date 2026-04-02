@@ -35,6 +35,8 @@ interface IOrganization {
   public_phone?: string | null;
   terms_and_conditions?: string | null;
   privacy_policy?: string | null;
+  bank_accounts?: any[];
+  social_links?: any[];
 }
 
 @Injectable()
@@ -212,6 +214,7 @@ export class OrganizationsService {
     try {
       const organization = await this.prisma.organization.findUnique({
         where: { id },
+        include: { bank_accounts: true, social_links: true },
       });
       if (!organization) {
         this.logger.warn(`Organization with id ${id} not found`);
@@ -241,6 +244,7 @@ export class OrganizationsService {
     try {
       const organization = await this.prisma.organization.findUnique({
         where: { slug },
+        include: { bank_accounts: true, social_links: true },
       });
 
       if (!organization) {

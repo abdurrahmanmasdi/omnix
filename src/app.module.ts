@@ -27,6 +27,8 @@ import { LeadSourcesModule } from './lead-sources/lead-sources.module';
 import { LeadNotesModule } from './lead-notes/lead-notes.module';
 import { LeadAttachmentsModule } from './lead-attachments/lead-attachments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
+import { SocialLinksModule } from './social-links/social-links.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -103,6 +105,8 @@ mkdirSync(logsDir, { recursive: true });
     LeadNotesModule,
     LeadAttachmentsModule,
     AnalyticsModule,
+    BankAccountsModule,
+    SocialLinksModule,
   ],
   controllers: [AppController],
   providers: [
