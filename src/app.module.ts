@@ -29,6 +29,8 @@ import { LeadAttachmentsModule } from './lead-attachments/lead-attachments.modul
 import { AnalyticsModule } from './analytics/analytics.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { SocialLinksModule } from './social-links/social-links.module';
+import { ProductsModule } from './products/products.module';
+import { ProposalsModule } from './proposals/proposals.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -107,6 +109,8 @@ mkdirSync(logsDir, { recursive: true });
     AnalyticsModule,
     BankAccountsModule,
     SocialLinksModule,
+    ProductsModule,
+    ProposalsModule,
   ],
   controllers: [AppController],
   providers: [
