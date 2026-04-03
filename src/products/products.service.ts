@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, ProductType } from '@prisma/client';
-
+import { ProductsQueryBuilder } from './utils/products.query-builder';
+import { FindProductsQueryDto } from './dto/find-products-query.dto';
 export interface CreateProductDto {
   type: ProductType;
   title: string;
@@ -18,7 +19,10 @@ export interface UpdateProductDto extends Partial<CreateProductDto> {}
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queryBuilder: ProductsQueryBuilder,
+  ) {}
 
   async create(organizationId: string, dto: CreateProductDto) {
     const { media, instances, ...productData } = dto;
@@ -45,18 +49,76 @@ export class ProductsService {
     });
   }
 
-  async findAll() {
-    return this.prisma.product.findMany({
-      include: {
-        media: true,
-        instances: true,
+  async findAll(organizationId: string, filters: FindProductsQueryDto = {}) {
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit =
+      filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
+    const orderBy = this.queryBuilder.buildOrderBy(
+      filters.sort_by,
+      filters.sort_dir,
+    );
+
+    const dynamicConditions: Prisma.ProductWhereInput[] = [
+      { organization_id: organizationId },
+    ];
+
+    if (filters.type) {
+      dynamicConditions.push({ type: filters.type });
+    }
+
+    const search = filters.search?.trim();
+    if (search) {
+      dynamicConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    const parsedRules = this.queryBuilder.parseDynamicFilterRules(
+      filters.filters,
+    );
+
+    for (const rule of parsedRules) {
+      const condition = this.queryBuilder.buildDynamicFilterCondition(rule);
+      if (condition) {
+        dynamicConditions.push(condition);
       }
-    });
+    }
+
+    const where: Prisma.ProductWhereInput = {
+      AND: dynamicConditions,
+    };
+
+    const [total, data] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        include: {
+          media: true,
+          instances: true,
+        },
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
-  async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
+  async findOne(organizationId: string, id: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id, organization_id: organizationId },
       include: {
         media: true,
         instances: true,
@@ -70,17 +132,19 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: string, dto: UpdateProductDto) {
+  async update(organizationId: string, id: string, dto: UpdateProductDto) {
     const { media, instances, ...updateData } = dto;
+    const existing = await this.findOne(organizationId, id); // validates it belongs to org
     return this.prisma.product.update({
-      where: { id },
+      where: { id: existing.id },
       data: updateData,
     });
   }
 
-  async remove(id: string) {
+  async remove(organizationId: string, id: string) {
+    const existing = await this.findOne(organizationId, id);
     return this.prisma.product.delete({
-      where: { id },
+      where: { id: existing.id },
     });
   }
 }

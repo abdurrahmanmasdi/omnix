@@ -1,7 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Put, Req, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Request } from 'express';
 import { ProductsService, CreateProductDto, UpdateProductDto } from './products.service';
+import { FindProductsQueryDto } from './dto/find-products-query.dto';
 import { ProductMediaService } from './product-media/product-media.service';
+
+interface TenantRequest extends Request {
+  tenantId: string;
+}
 
 @ApiTags('products')
 @Controller('products')
@@ -13,38 +19,32 @@ export class ProductsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a product' })
-  create(@Body() createProductDto: CreateProductDto) {
-    // Note: Assuming RLS extension handles the tenant id extraction natively or 
-    // it's passed implicitly. If it needs to be explicit, it would come from a Request decorator.
-    // For now, passing a placeholder or resolving from cls if service expects it.
-    // The previous implementation of ProductsService.create required organizationId as first argument.
-    // In many RLS setups with cls, you don't need to pass it, but since I wrote it requiring it,
-    // I will mock it or fetch it from req. For now, assuming org_id is handled inside DTO or cls context.
-    return this.productsService.create('mock-org-id', createProductDto);
+  create(@Req() req: TenantRequest, @Body() createProductDto: CreateProductDto) {
+    return this.productsService.create(req.tenantId, createProductDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all products' })
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Req() req: TenantRequest, @Query() query: FindProductsQueryDto) {
+    return this.productsService.findAll(req.tenantId, query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a product by id' })
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+  findOne(@Req() req: TenantRequest, @Param('id') id: string) {
+    return this.productsService.findOne(req.tenantId, id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a product' })
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(id, updateProductDto);
+  update(@Req() req: TenantRequest, @Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
+    return this.productsService.update(req.tenantId, id, updateProductDto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a product' })
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(id);
+  remove(@Req() req: TenantRequest, @Param('id') id: string) {
+    return this.productsService.remove(req.tenantId, id);
   }
 
   @Post(':id/media')

@@ -3,9 +3,10 @@ import { ProductsService } from './products.service';
 import { ProductMediaService } from './product-media/product-media.service';
 import { AvailabilityService } from './availability/availability.service';
 import { ProductsController } from './products.controller';
+import { ProductsQueryBuilder } from './utils/products.query-builder';
 
 @Module({
-  providers: [ProductsService, ProductMediaService, AvailabilityService],
+  providers: [ProductsService, ProductMediaService, AvailabilityService, ProductsQueryBuilder],
   controllers: [ProductsController]
 })
 export class ProductsModule {}

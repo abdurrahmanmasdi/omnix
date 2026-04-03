@@ -1,7 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Request } from 'express';
 import { ProposalsService, CreateProposalDto, UpdateProposalDto } from './proposals.service';
 import { ProposalStatus } from '@prisma/client';
+
+interface TenantRequest extends Request {
+  tenantId: string;
+}
 
 @ApiTags('proposals')
 @Controller('proposals')
@@ -10,8 +15,8 @@ export class ProposalsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a proposal' })
-  create(@Body() createProposalDto: CreateProposalDto) {
-    return this.proposalsService.create('mock-org-id', createProposalDto);
+  create(@Req() req: TenantRequest, @Body() createProposalDto: CreateProposalDto) {
+    return this.proposalsService.create(req.tenantId, createProposalDto);
   }
 
   @Get()
