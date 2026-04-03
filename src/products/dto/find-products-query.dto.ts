@@ -10,4 +10,3 @@ export class FindProductsQueryDto extends BaseQueryDto {
   @IsEnum(ProductType)
   type?: ProductType;
 }
-

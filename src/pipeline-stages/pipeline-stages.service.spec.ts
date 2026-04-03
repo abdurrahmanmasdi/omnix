@@ -83,7 +83,9 @@ describe('PipelineStagesService', () => {
         service.update('org-1', 'stage-1', { name: 'Qualified' }),
       ).rejects.toThrow(NotFoundException);
 
-      expect(mockI18nService.t).toHaveBeenCalledWith('leads.ERRORS.RESOURCE_NOT_FOUND');
+      expect(mockI18nService.t).toHaveBeenCalledWith(
+        'leads.ERRORS.RESOURCE_NOT_FOUND',
+      );
     });
   });
 
@@ -112,7 +114,9 @@ describe('PipelineStagesService', () => {
         NotFoundException,
       );
 
-      expect(mockI18nService.t).toHaveBeenCalledWith('leads.ERRORS.RESOURCE_NOT_FOUND');
+      expect(mockI18nService.t).toHaveBeenCalledWith(
+        'leads.ERRORS.RESOURCE_NOT_FOUND',
+      );
     });
   });
 });

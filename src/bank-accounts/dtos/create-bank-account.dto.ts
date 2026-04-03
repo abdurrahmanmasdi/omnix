@@ -12,7 +12,10 @@ export class CreateBankAccountDto {
   @IsString()
   iban: string;
 
-  @ApiPropertyOptional({ description: 'The currency of the bank account', default: 'USD' })
+  @ApiPropertyOptional({
+    description: 'The currency of the bank account',
+    default: 'USD',
+  })
   @IsOptional()
   @IsString()
   currency?: string;
@@ -22,7 +25,10 @@ export class CreateBankAccountDto {
   @IsString()
   account_holder_name: string;
 
-  @ApiPropertyOptional({ description: 'Whether this is the default bank account', default: false })
+  @ApiPropertyOptional({
+    description: 'Whether this is the default bank account',
+    default: false,
+  })
   @IsOptional()
   @IsBoolean()
   is_default?: boolean;

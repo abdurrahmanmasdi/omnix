@@ -122,7 +122,9 @@ describe('PermissionOverridesService (Branches)', () => {
   describe('removePermissionOverride', () => {
     it('passes through ForbiddenException when caller is unauthorized', async () => {
       mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
-        new ForbiddenException('organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        new ForbiddenException(
+          'organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION',
+        ),
       );
 
       await expect(
@@ -223,7 +225,9 @@ describe('PermissionOverridesService (Branches)', () => {
   describe('getMemberPermissionBreakdown', () => {
     it('passes through ForbiddenException when caller is not owner', async () => {
       mockAccessVerificationService.verifyIsOwner.mockRejectedValueOnce(
-        new ForbiddenException('organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION'),
+        new ForbiddenException(
+          'organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION',
+        ),
       );
 
       await expect(

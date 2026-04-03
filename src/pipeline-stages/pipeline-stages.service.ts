@@ -52,7 +52,9 @@ export class PipelineStagesService {
       });
 
       if (!stage) {
-        throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+        );
       }
 
       return stage;
@@ -67,7 +69,9 @@ export class PipelineStagesService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+      );
     }
 
     const updated = await this.prisma.pipelineStage.findFirst({
@@ -78,7 +82,9 @@ export class PipelineStagesService {
     });
 
     if (!updated) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+      );
     }
 
     return updated;
@@ -93,7 +99,9 @@ export class PipelineStagesService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+      );
     }
   }
 

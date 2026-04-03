@@ -45,7 +45,6 @@ export class CreateOrganizationDto {
   })
   is_public?: boolean;
 
-
   @ApiProperty({
     example: '1234567890',
     description: 'Tax identification number',

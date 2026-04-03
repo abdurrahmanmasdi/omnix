@@ -20,7 +20,9 @@ export class UpdateRoleDto {
     required: false,
   })
   @IsOptional()
-  @IsString({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_STRING') })
+  @IsString({
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_STRING'),
+  })
   @MinLength(3, {
     message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_LENGTH'),
   })
@@ -34,7 +36,9 @@ export class UpdateRoleDto {
     description: 'Updated translations of the role name',
   })
   @IsOptional()
-  @IsObject({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_OBJECT') })
+  @IsObject({
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_OBJECT'),
+  })
   name_translations?: Record<string, string>;
 
   @ApiProperty({
@@ -48,7 +52,9 @@ export class UpdateRoleDto {
     required: false,
   })
   @IsOptional()
-  @IsArray({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY') })
+  @IsArray({
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY'),
+  })
   @ArrayMinSize(1, {
     message: i18nValidationMessage('auth.ERRORS.VALIDATION.MIN_ARRAY_SIZE'),
   })
@@ -65,7 +71,9 @@ export class UpdateRoleDto {
     required: false,
   })
   @IsOptional()
-  @IsArray({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY') })
+  @IsArray({
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY'),
+  })
   @IsUUID('4', {
     each: true,
     message: i18nValidationMessage('auth.ERRORS.VALIDATION.INVALID_UUID'),
@@ -79,7 +87,9 @@ export class UpdateRoleDto {
     required: false,
   })
   @IsOptional()
-  @IsArray({ message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY') })
+  @IsArray({
+    message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_ARRAY'),
+  })
   @IsUUID('4', {
     each: true,
     message: i18nValidationMessage('auth.ERRORS.VALIDATION.INVALID_UUID'),

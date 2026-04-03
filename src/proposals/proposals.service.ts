@@ -69,14 +69,9 @@ export class ProposalsService {
         'created_at',
         'subtotal',
         'total',
-        'client_id'
+        'client_id',
       ],
-      allowedSortFields: [
-        'status',
-        'created_at',
-        'subtotal',
-        'total'
-      ],
+      allowedSortFields: ['status', 'created_at', 'subtotal', 'total'],
       uuidFields: ['client_id'],
       numberFields: ['subtotal', 'total'],
     };
@@ -100,8 +95,8 @@ export class ProposalsService {
     if (search) {
       dynamicConditions.push({
         OR: [
-          { status: { in: search.toUpperCase() as any } } // This is basic for string matching if status matches roughly
-        ]
+          { status: { in: search.toUpperCase() as any } }, // This is basic for string matching if status matches roughly
+        ],
       });
     }
 

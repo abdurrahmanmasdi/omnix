@@ -15,4 +15,3 @@ export class FindLeadsQueryDto extends BaseQueryDto {
   @IsEnum(Priority)
   priority?: Priority;
 }
-

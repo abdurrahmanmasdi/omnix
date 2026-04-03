@@ -56,7 +56,9 @@ export class AccessVerificationService {
     });
 
     if (!membership) {
-      throw new ForbiddenException(this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'));
+      throw new ForbiddenException(
+        this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'),
+      );
     }
 
     await this.redis.set(
@@ -137,7 +139,9 @@ export class AccessVerificationService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+        );
       }
 
       const role = await this.prisma.role.findFirst({
@@ -149,7 +153,9 @@ export class AccessVerificationService {
       });
 
       if (!role) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'),
+        );
       }
 
       await this.prisma.organizationMembership.update({
@@ -164,7 +170,9 @@ export class AccessVerificationService {
       return {
         id: membershipId,
         role_id: dto.role_id,
-        message: this.i18n.t('organizations.MESSAGES.ROLE_ASSIGNED_SUCCESSFULLY'),
+        message: this.i18n.t(
+          'organizations.MESSAGES.ROLE_ASSIGNED_SUCCESSFULLY',
+        ),
       };
     } catch (error) {
       if (
@@ -203,7 +211,9 @@ export class AccessVerificationService {
       });
 
       if (!membership) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+        );
       }
 
       const targetRoleSlug = (
@@ -227,7 +237,9 @@ export class AccessVerificationService {
       });
 
       if (!newRole) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'),
+        );
       }
 
       await this.prisma.organizationMembership.update({
@@ -247,7 +259,9 @@ export class AccessVerificationService {
       return {
         id: membershipId,
         role_id: newRoleId,
-        message: this.i18n.t('organizations.MESSAGES.MEMBER_ROLE_CHANGED_SUCCESSFULLY'),
+        message: this.i18n.t(
+          'organizations.MESSAGES.MEMBER_ROLE_CHANGED_SUCCESSFULLY',
+        ),
       };
     } catch (error) {
       if (

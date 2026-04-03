@@ -11,7 +11,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { BankAccountsService } from './bank-accounts.service';
 import { CreateBankAccountDto } from './dtos/create-bank-account.dto';
@@ -35,7 +40,10 @@ export class BankAccountsController {
   @Post()
   @RequirePermissions(AppPermission.ORGANIZATION_EDIT_ALL)
   @ApiOperation({ summary: 'Create a bank account' })
-  @ApiResponse({ status: 201, description: 'Bank account created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Bank account created successfully',
+  })
   async create(
     @Request() req: TenantRequest,
     @Body() dto: CreateBankAccountDto,
@@ -46,7 +54,10 @@ export class BankAccountsController {
   @Get()
   @RequirePermissions(AppPermission.ORGANIZATION_READ)
   @ApiOperation({ summary: 'List bank accounts for the organization' })
-  @ApiResponse({ status: 200, description: 'Bank accounts retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank accounts retrieved successfully',
+  })
   async findAll(@Request() req: TenantRequest) {
     return this.bankAccountsService.findAll(req.tenantId);
   }
@@ -54,7 +65,10 @@ export class BankAccountsController {
   @Patch(':id')
   @RequirePermissions(AppPermission.ORGANIZATION_EDIT_ALL)
   @ApiOperation({ summary: 'Update a bank account' })
-  @ApiResponse({ status: 200, description: 'Bank account updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bank account updated successfully',
+  })
   async update(
     @Param('id') id: string,
     @Request() req: TenantRequest,
@@ -67,11 +81,11 @@ export class BankAccountsController {
   @RequirePermissions(AppPermission.ORGANIZATION_EDIT_ALL)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a bank account' })
-  @ApiResponse({ status: 204, description: 'Bank account deleted successfully' })
-  async remove(
-    @Param('id') id: string,
-    @Request() req: TenantRequest,
-  ) {
+  @ApiResponse({
+    status: 204,
+    description: 'Bank account deleted successfully',
+  })
+  async remove(@Param('id') id: string, @Request() req: TenantRequest) {
     return this.bankAccountsService.remove(req.tenantId, id);
   }
 }

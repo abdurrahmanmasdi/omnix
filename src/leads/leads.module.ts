@@ -12,4 +12,3 @@ import { LeadsService } from './leads.service';
   exports: [LeadsService],
 })
 export class LeadsModule {}
-

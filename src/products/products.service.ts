@@ -46,21 +46,16 @@ export class ProductsService {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
-    
+
     const config = {
       allowedFilterFields: [
         'type',
         'title',
         'base_price',
         'currency',
-        'created_at'
+        'created_at',
       ],
-      allowedSortFields: [
-        'type',
-        'title',
-        'base_price',
-        'created_at'
-      ],
+      allowedSortFields: ['type', 'title', 'base_price', 'created_at'],
       numberFields: ['base_price'],
     };
 
@@ -154,4 +149,3 @@ export class ProductsService {
     });
   }
 }
-

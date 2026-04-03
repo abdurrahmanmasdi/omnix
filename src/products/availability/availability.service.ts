@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProductType, ProposalStatus } from '@prisma/client';
 import { I18nService, I18nContext } from 'nestjs-i18n';
@@ -29,7 +33,7 @@ export class AvailabilityService {
 
     if (!product) {
       throw new BadRequestException(
-        this.i18n.t('products.errors.not_found', { lang })
+        this.i18n.t('products.errors.not_found', { lang }),
       );
     }
 
@@ -41,13 +45,13 @@ export class AvailabilityService {
 
       if (!instance) {
         throw new BadRequestException(
-          this.i18n.t('products.errors.instance_not_found', { lang })
+          this.i18n.t('products.errors.instance_not_found', { lang }),
         );
       }
 
       if (instance.booked_quantity + qty > instance.max_capacity) {
         throw new BadRequestException(
-          this.i18n.t('products.errors.capacity_exceeded', { lang })
+          this.i18n.t('products.errors.capacity_exceeded', { lang }),
         );
       }
 
@@ -69,7 +73,7 @@ export class AvailabilityService {
 
       if (conflictingRental) {
         throw new ConflictException(
-          this.i18n.t('products.errors.not_available_dates', { lang })
+          this.i18n.t('products.errors.not_available_dates', { lang }),
         );
       }
 
@@ -85,14 +89,16 @@ export class AvailabilityService {
             start_date: { lt: endDate },
             end_date: { gt: startDate },
             proposal: {
-              status: { in: [ProposalStatus.ACCEPTED, ProposalStatus.VERIFIED] },
+              status: {
+                in: [ProposalStatus.ACCEPTED, ProposalStatus.VERIFIED],
+              },
             },
           },
         });
 
         if (conflictingRental) {
           throw new ConflictException(
-            this.i18n.t('products.errors.not_available_dates', { lang })
+            this.i18n.t('products.errors.not_available_dates', { lang }),
           );
         }
       } else {
@@ -100,14 +106,16 @@ export class AvailabilityService {
           where: {
             product_id: productId,
             proposal: {
-              status: { in: [ProposalStatus.ACCEPTED, ProposalStatus.VERIFIED] },
+              status: {
+                in: [ProposalStatus.ACCEPTED, ProposalStatus.VERIFIED],
+              },
             },
           },
         });
 
         if (soldAsset) {
           throw new ConflictException(
-            this.i18n.t('products.errors.already_sold', { lang })
+            this.i18n.t('products.errors.already_sold', { lang }),
           );
         }
       }

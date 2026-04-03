@@ -56,7 +56,9 @@ export class LeadSourcesService {
       });
 
       if (!source) {
-        throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+        );
       }
 
       return source;
@@ -71,7 +73,9 @@ export class LeadSourcesService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+      );
     }
 
     const updated = await this.prisma.leadSource.findFirst({
@@ -82,7 +86,9 @@ export class LeadSourcesService {
     });
 
     if (!updated) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+      );
     }
 
     return updated;
@@ -97,7 +103,9 @@ export class LeadSourcesService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.RESOURCE_NOT_FOUND'),
+      );
     }
   }
 

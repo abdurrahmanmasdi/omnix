@@ -11,7 +11,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { SocialLinksService } from './social-links.service';
 import { CreateSocialLinkDto } from './dtos/create-social-link.dto';
@@ -46,7 +51,10 @@ export class SocialLinksController {
   @Get()
   @RequirePermissions(AppPermission.ORGANIZATION_READ)
   @ApiOperation({ summary: 'List social links for the organization' })
-  @ApiResponse({ status: 200, description: 'Social links retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Social links retrieved successfully',
+  })
   async findAll(@Request() req: TenantRequest) {
     return this.socialLinksService.findAll(req.tenantId);
   }
@@ -68,10 +76,7 @@ export class SocialLinksController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a social link' })
   @ApiResponse({ status: 204, description: 'Social link deleted successfully' })
-  async remove(
-    @Param('id') id: string,
-    @Request() req: TenantRequest,
-  ) {
+  async remove(@Param('id') id: string, @Request() req: TenantRequest) {
     return this.socialLinksService.remove(req.tenantId, id);
   }
 }

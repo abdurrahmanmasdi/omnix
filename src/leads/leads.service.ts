@@ -104,7 +104,7 @@ export class LeadsService {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
-    
+
     const config = {
       allowedFilterFields: [
         'status',
@@ -117,7 +117,7 @@ export class LeadsService {
         'last_name',
         'email',
         'estimated_value',
-        'created_at'
+        'created_at',
       ],
       allowedSortFields: [
         'created_at',
@@ -126,7 +126,7 @@ export class LeadsService {
         'status',
         'priority',
         'assigned_agent.first_name',
-        'pipeline_stage.order_index'
+        'pipeline_stage.order_index',
       ],
       uuidFields: ['source_id', 'assigned_agent_id', 'pipeline_stage_id'],
       numberFields: ['estimated_value'],
@@ -163,7 +163,7 @@ export class LeadsService {
     }
 
     if (Object.keys(dynamicWhere).length > 0) {
-       dynamicConditions.push(dynamicWhere);
+      dynamicConditions.push(dynamicWhere);
     }
 
     const where: Prisma.LeadWhereInput = {

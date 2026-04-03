@@ -95,7 +95,9 @@ export class LeadNotesService {
     });
 
     if (result.count === 0) {
-      throw new NotFoundException(this.i18n.t('leads.ERRORS.LEAD_NOTE_NOT_FOUND'));
+      throw new NotFoundException(
+        this.i18n.t('leads.ERRORS.LEAD_NOTE_NOT_FOUND'),
+      );
     }
   }
 

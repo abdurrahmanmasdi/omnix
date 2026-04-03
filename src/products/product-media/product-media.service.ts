@@ -16,7 +16,9 @@ export class ProductMediaService {
       });
 
       if (!media) {
-        throw new NotFoundException('Product media not found or does not belong to this product');
+        throw new NotFoundException(
+          'Product media not found or does not belong to this product',
+        );
       }
 
       // 1. Reset all media for this product
@@ -33,24 +35,28 @@ export class ProductMediaService {
     });
   }
 
-  async createMedia(productId: string, fileUrl: string, fileName?: string): Promise<any> {
+  async createMedia(
+    productId: string,
+    fileUrl: string,
+    fileName?: string,
+  ): Promise<any> {
     const existingCount = await this.prisma.productMedia.count({
-      where: { product_id: productId }
+      where: { product_id: productId },
     });
-    
+
     return this.prisma.productMedia.create({
       data: {
         product_id: productId,
         file_url: fileUrl,
         file_name: fileName,
-        is_primary: existingCount === 0 // Make primary if it's the first one
-      }
+        is_primary: existingCount === 0, // Make primary if it's the first one
+      },
     });
   }
 
   async deleteMedia(mediaId: string): Promise<void> {
     await this.prisma.productMedia.delete({
-      where: { id: mediaId }
+      where: { id: mediaId },
     });
   }
 }

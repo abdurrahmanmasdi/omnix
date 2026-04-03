@@ -64,7 +64,7 @@ export class QueryBuilderService {
 
       // Handle NOT specially since Prisma requires NOT to be an object or array of objects
       if (node.logicalOperator === 'NOT') {
-         return { NOT: conditions.length === 1 ? conditions[0] : conditions };
+        return { NOT: conditions.length === 1 ? conditions[0] : conditions };
       }
 
       return { [node.logicalOperator]: conditions };

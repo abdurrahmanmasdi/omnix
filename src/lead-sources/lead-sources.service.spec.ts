@@ -93,7 +93,9 @@ describe('LeadSourcesService', () => {
         service.update('org-1', 'source-1', { name: 'Referral' }),
       ).rejects.toThrow(NotFoundException);
 
-      expect(mockI18nService.t).toHaveBeenCalledWith('leads.ERRORS.RESOURCE_NOT_FOUND');
+      expect(mockI18nService.t).toHaveBeenCalledWith(
+        'leads.ERRORS.RESOURCE_NOT_FOUND',
+      );
     });
   });
 
@@ -122,7 +124,9 @@ describe('LeadSourcesService', () => {
         NotFoundException,
       );
 
-      expect(mockI18nService.t).toHaveBeenCalledWith('leads.ERRORS.RESOURCE_NOT_FOUND');
+      expect(mockI18nService.t).toHaveBeenCalledWith(
+        'leads.ERRORS.RESOURCE_NOT_FOUND',
+      );
     });
   });
 });

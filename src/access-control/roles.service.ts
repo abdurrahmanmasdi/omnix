@@ -204,7 +204,9 @@ export class RolesService {
       });
 
       if (!existingRole) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'),
+        );
       }
 
       if (existingRole.is_system) {
@@ -408,7 +410,9 @@ export class RolesService {
       });
 
       if (!role) {
-        throw new NotFoundException(this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'));
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ROLE_NOT_FOUND'),
+        );
       }
 
       if (role.is_system) {
@@ -439,7 +443,9 @@ export class RolesService {
       );
 
       return {
-        message: this.i18n.t('organizations.MESSAGES.ROLE_DELETED_SUCCESSFULLY'),
+        message: this.i18n.t(
+          'organizations.MESSAGES.ROLE_DELETED_SUCCESSFULLY',
+        ),
       };
     } catch (error) {
       if (

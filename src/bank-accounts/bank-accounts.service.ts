@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { I18nService } from 'nestjs-i18n';
 import { CreateBankAccountDto } from './dtos/create-bank-account.dto';
@@ -14,7 +19,10 @@ export class BankAccountsService {
     private i18n: I18nService,
   ) {}
 
-  async create(organizationId: string, createDto: CreateBankAccountDto): Promise<BankAccount> {
+  async create(
+    organizationId: string,
+    createDto: CreateBankAccountDto,
+  ): Promise<BankAccount> {
     try {
       if (createDto.is_default) {
         // If this one is default, unset default for others
@@ -66,14 +74,22 @@ export class BankAccountsService {
     }
   }
 
-  async update(organizationId: string, id: string, updateDto: UpdateBankAccountDto): Promise<BankAccount> {
+  async update(
+    organizationId: string,
+    id: string,
+    updateDto: UpdateBankAccountDto,
+  ): Promise<BankAccount> {
     try {
       await this.findOne(organizationId, id); // verify exists
 
       if (updateDto.is_default) {
         // If setting to default, unset default for others
         await this.prisma.bankAccount.updateMany({
-          where: { organization_id: organizationId, is_default: true, id: { not: id } },
+          where: {
+            organization_id: organizationId,
+            is_default: true,
+            id: { not: id },
+          },
           data: { is_default: false },
         });
       }

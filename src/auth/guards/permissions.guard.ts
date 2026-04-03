@@ -72,7 +72,9 @@ export class PermissionsGuard implements CanActivate {
       this.logger.warn(
         `[PermissionsGuard] No authenticated user found on request requiring permissions: [${requiredPermissions.join(', ')}]`,
       );
-      throw new ForbiddenException(this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'));
+      throw new ForbiddenException(
+        this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'),
+      );
     }
 
     // Step 3: Extract organization ID from request

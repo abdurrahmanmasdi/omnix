@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { I18nService } from 'nestjs-i18n';
 import { CreateSocialLinkDto } from './dtos/create-social-link.dto';
@@ -14,7 +19,10 @@ export class SocialLinksService {
     private i18n: I18nService,
   ) {}
 
-  async create(organizationId: string, createDto: CreateSocialLinkDto): Promise<OrganizationSocialLink> {
+  async create(
+    organizationId: string,
+    createDto: CreateSocialLinkDto,
+  ): Promise<OrganizationSocialLink> {
     try {
       return await this.prisma.organizationSocialLink.create({
         data: {
@@ -40,7 +48,10 @@ export class SocialLinksService {
     }
   }
 
-  async findOne(organizationId: string, id: string): Promise<OrganizationSocialLink> {
+  async findOne(
+    organizationId: string,
+    id: string,
+  ): Promise<OrganizationSocialLink> {
     try {
       const link = await this.prisma.organizationSocialLink.findFirst({
         where: { id, organization_id: organizationId },
@@ -58,7 +69,11 @@ export class SocialLinksService {
     }
   }
 
-  async update(organizationId: string, id: string, updateDto: UpdateSocialLinkDto): Promise<OrganizationSocialLink> {
+  async update(
+    organizationId: string,
+    id: string,
+    updateDto: UpdateSocialLinkDto,
+  ): Promise<OrganizationSocialLink> {
     try {
       await this.findOne(organizationId, id); // verify exists
 

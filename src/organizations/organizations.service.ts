@@ -381,18 +381,42 @@ export class OrganizationsService {
           ...(updateOrgDto.is_public !== undefined && {
             is_public: updateOrgDto.is_public,
           }),
-          ...(updateOrgDto.tax_number !== undefined && { tax_number: updateOrgDto.tax_number }),
-          ...(updateOrgDto.tax_office !== undefined && { tax_office: updateOrgDto.tax_office }),
-          ...(updateOrgDto.logo_url !== undefined && { logo_url: updateOrgDto.logo_url }),
-          ...(updateOrgDto.brand_colors !== undefined && { brand_colors: updateOrgDto.brand_colors }),
-          ...(updateOrgDto.default_currency !== undefined && { default_currency: updateOrgDto.default_currency }),
-          ...(updateOrgDto.industry_category !== undefined && { industry_category: updateOrgDto.industry_category }),
-          ...(updateOrgDto.address !== undefined && { address: updateOrgDto.address }),
-          ...(updateOrgDto.website_url !== undefined && { website_url: updateOrgDto.website_url }),
-          ...(updateOrgDto.public_email !== undefined && { public_email: updateOrgDto.public_email }),
-          ...(updateOrgDto.public_phone !== undefined && { public_phone: updateOrgDto.public_phone }),
-          ...(updateOrgDto.terms_and_conditions !== undefined && { terms_and_conditions: updateOrgDto.terms_and_conditions }),
-          ...(updateOrgDto.privacy_policy !== undefined && { privacy_policy: updateOrgDto.privacy_policy }),
+          ...(updateOrgDto.tax_number !== undefined && {
+            tax_number: updateOrgDto.tax_number,
+          }),
+          ...(updateOrgDto.tax_office !== undefined && {
+            tax_office: updateOrgDto.tax_office,
+          }),
+          ...(updateOrgDto.logo_url !== undefined && {
+            logo_url: updateOrgDto.logo_url,
+          }),
+          ...(updateOrgDto.brand_colors !== undefined && {
+            brand_colors: updateOrgDto.brand_colors,
+          }),
+          ...(updateOrgDto.default_currency !== undefined && {
+            default_currency: updateOrgDto.default_currency,
+          }),
+          ...(updateOrgDto.industry_category !== undefined && {
+            industry_category: updateOrgDto.industry_category,
+          }),
+          ...(updateOrgDto.address !== undefined && {
+            address: updateOrgDto.address,
+          }),
+          ...(updateOrgDto.website_url !== undefined && {
+            website_url: updateOrgDto.website_url,
+          }),
+          ...(updateOrgDto.public_email !== undefined && {
+            public_email: updateOrgDto.public_email,
+          }),
+          ...(updateOrgDto.public_phone !== undefined && {
+            public_phone: updateOrgDto.public_phone,
+          }),
+          ...(updateOrgDto.terms_and_conditions !== undefined && {
+            terms_and_conditions: updateOrgDto.terms_and_conditions,
+          }),
+          ...(updateOrgDto.privacy_policy !== undefined && {
+            privacy_policy: updateOrgDto.privacy_policy,
+          }),
         },
       });
 

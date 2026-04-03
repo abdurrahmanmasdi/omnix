@@ -28,7 +28,8 @@ export class BaseQueryDto {
   @ApiPropertyOptional({
     example:
       '{"logicalOperator":"AND","conditions":[{"field":"status","operator":"equals","value":"OPEN"}]}',
-    description: 'A JSON-stringified AST for filtering with AND/OR logic and dynamic operators.',
+    description:
+      'A JSON-stringified AST for filtering with AND/OR logic and dynamic operators.',
   })
   @IsOptional()
   @IsString()

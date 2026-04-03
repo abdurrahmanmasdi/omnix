@@ -7,7 +7,10 @@ export class InviteToOrganizationDto {
     example: 'user@example.com',
     description: 'The email address of the user to invite',
   })
-  @IsEmail({}, { message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_EMAIL') })
+  @IsEmail(
+    {},
+    { message: i18nValidationMessage('auth.ERRORS.VALIDATION.IS_EMAIL') },
+  )
   email: string;
 
   @ApiProperty({
