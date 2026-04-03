@@ -1,21 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, ProductType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { ProductsQueryBuilder } from './utils/products.query-builder';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
-export interface CreateProductDto {
-  type: ProductType;
-  title: string;
-  description?: string;
-  base_price: number;
-  currency?: string;
-  specifications?: Prisma.InputJsonValue;
-  available_addons?: Prisma.InputJsonValue;
-  media?: { file_url: string; file_name?: string }[];
-  instances?: { start_date?: Date; end_date?: Date; max_capacity?: number }[];
-}
-
-export interface UpdateProductDto extends Partial<CreateProductDto> {}
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
@@ -26,26 +15,30 @@ export class ProductsService {
 
   async create(organizationId: string, dto: CreateProductDto) {
     const { media, instances, ...productData } = dto;
-    
+
     // We trust the RLS extension, but organization_id is required for creation
     return this.prisma.product.create({
       data: {
         ...productData,
         organization_id: organizationId,
-        media: media ? {
-          create: media.map((m, index) => ({
-            ...m,
-            is_primary: index === 0, // First media defaults to primary
-          }))
-        } : undefined,
-        instances: instances ? {
-          create: instances
-        } : undefined,
+        media: media
+          ? {
+              create: media.map((m, index) => ({
+                ...m,
+                is_primary: index === 0, // First media defaults to primary
+              })),
+            }
+          : undefined,
+        instances: instances
+          ? {
+              create: instances,
+            }
+          : undefined,
       },
       include: {
         media: true,
         instances: true,
-      }
+      },
     });
   }
 
@@ -122,7 +115,7 @@ export class ProductsService {
       include: {
         media: true,
         instances: true,
-      }
+      },
     });
 
     if (!product) {
@@ -133,6 +126,10 @@ export class ProductsService {
   }
 
   async update(organizationId: string, id: string, dto: UpdateProductDto) {
+    // Intentionally exclude media and instances from update spread
+    // These are managed through dedicated endpoints (addMedia, setPrimaryMedia)
+    // to prevent accidental bulk updates to nested relationships
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { media, instances, ...updateData } = dto;
     const existing = await this.findOne(organizationId, id); // validates it belongs to org
     return this.prisma.product.update({

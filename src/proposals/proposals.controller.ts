@@ -24,12 +24,9 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { AppPermission } from '../constants/permissions.registry';
-import { ProposalStatus } from '@prisma/client';
-import {
-  CreateProposalDto,
-  ProposalsService,
-  UpdateProposalDto,
-} from './proposals.service';
+import { CreateProposalDto } from './dto/create-proposal.dto';
+import { UpdateProposalDto } from './dto/update-proposal.dto';
+import { ProposalsService } from './proposals.service';
 
 interface AuthRequest extends ExpressRequest {
   user: {

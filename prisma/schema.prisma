@@ -488,7 +488,7 @@ model Proposal {
   client_notes String? @db.Text // Public notes visible to client
 
   public_link_hash     String    // Secure short-link for WhatsApp
-  client_accepted_kvkk Boolean   @default(false)
+  client_accepted_privacy_policy Boolean   @default(false)
   deleted_at           DateTime?
 
   created_at DateTime @default(now())

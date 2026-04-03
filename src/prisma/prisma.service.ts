@@ -6,24 +6,13 @@ import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { RequestContextService } from '../request-context/request-context.service';
 
-export const TENANT_BOUND_MODELS = [
-  'Role',
-  'Invitation',
-  'OrganizationMembership',
-  'Conversation',
-  'PipelineStage',
-  'LeadSource',
-  'Lead',
-  'Product',
-  'ProductMedia',
-  'ProductInstance',
-  'Proposal',
-  'ProposalLineItem',
-  'OrganizationSocialLink',
-  'BankAccount',
-] as const;
-
-const TENANT_BOUND_MODEL_SET = new Set<string>(TENANT_BOUND_MODELS);
+export const TENANT_BOUND_MODEL_SET = new Set<string>(
+  (Prisma.dmmf?.datamodel?.models ?? [])
+    .filter((model) =>
+      model.fields.some((field) => field.name === 'organization_id'),
+    )
+    .map((model) => model.name),
+);
 
 const SOFT_DELETE_MODEL_SET = new Set<string>(
   (Prisma.dmmf?.datamodel?.models ?? [])

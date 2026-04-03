@@ -27,12 +27,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { AppPermission } from '../constants/permissions.registry';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductMediaService } from './product-media/product-media.service';
-import {
-  CreateProductDto,
-  ProductsService,
-  UpdateProductDto,
-} from './products.service';
+import { ProductsService } from './products.service';
 
 interface AuthRequest extends ExpressRequest {
   user: {

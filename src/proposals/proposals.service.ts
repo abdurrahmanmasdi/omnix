@@ -5,37 +5,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
-import { Prisma, ProposalStatus } from '@prisma/client';
+import { ProposalStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
-
-export interface CreateProposalDto {
-  lead_id: string;
-  created_by_id: string;
-  bank_account_id?: string;
-  total_amount: number;
-  currency?: string;
-  client_notes?: string;
-  line_items: CreateProposalLineItemDto[];
-}
-
-export interface CreateProposalLineItemDto {
-  product_id?: string;
-  instance_id?: string;
-  start_date?: Date;
-  end_date?: Date;
-  custom_name: string;
-  unit_price: number;
-  quantity?: number;
-  selected_addons?: Prisma.InputJsonValue;
-}
-
-export interface UpdateProposalDto {
-  status?: ProposalStatus;
-  bank_account_id?: string;
-  total_amount?: number;
-  client_notes?: string;
-  client_accepted_kvkk?: boolean;
-}
+import { CreateProposalDto } from './dto/create-proposal.dto';
+import { UpdateProposalDto } from './dto/update-proposal.dto';
 
 @Injectable()
 export class ProposalsService {

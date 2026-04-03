@@ -1,4 +1,4 @@
-import { VersioningType } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
@@ -6,7 +6,7 @@ import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 import helmet from 'helmet';
-import * as cookieParser from 'cookie-parser';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -56,6 +56,10 @@ async function bootstrap() {
       whitelist: true, // Automatically strip out any extra data sent by the client that isn't in the DTO
       forbidNonWhitelisted: true, // Throw an error if the client sends extra, unexpected data
       transform: true, // Automatically transform payloads to be objects typed according to their DTO classes
+    }),
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
     }),
   );
 
