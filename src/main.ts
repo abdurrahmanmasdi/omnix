@@ -6,7 +6,8 @@ import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import cookieParser = require('cookie-parser');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });

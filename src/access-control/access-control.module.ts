@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { AccessControlController } from './access-control.controller';
@@ -9,6 +9,7 @@ import { PermissionOverridesService } from './permission-overrides.service';
 import { AccessVerificationService } from './access-verification.service';
 import { RedisModule } from '../redis/redis.module';
 
+@Global()
 @Module({
   imports: [PrismaModule, AuthModule, RedisModule],
   providers: [

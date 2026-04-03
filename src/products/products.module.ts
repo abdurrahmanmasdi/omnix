@@ -5,11 +5,7 @@ import { AvailabilityService } from './availability/availability.service';
 import { ProductsController } from './products.controller';
 
 @Module({
-  providers: [
-    ProductsService,
-    ProductMediaService,
-    AvailabilityService,
-  ],
+  providers: [ProductsService, ProductMediaService, AvailabilityService],
   controllers: [ProductsController],
   exports: [ProductsService],
 })
