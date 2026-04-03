@@ -14,6 +14,13 @@ export const TENANT_BOUND_MODELS = [
   'PipelineStage',
   'LeadSource',
   'Lead',
+  'Product',
+  'ProductMedia',
+  'ProductInstance',
+  'Proposal',
+  'ProposalLineItem',
+  'OrganizationSocialLink',
+  'BankAccount',
 ] as const;
 
 const TENANT_BOUND_MODEL_SET = new Set<string>(TENANT_BOUND_MODELS);

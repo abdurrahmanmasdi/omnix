@@ -14,7 +14,7 @@ datasource db {
 
 model User {
   id                       String                    @id @default(uuid()) @db.Uuid
-  email                    String                    @unique
+  email                    String
   password_hash            String
   first_name               String
   last_name                String
@@ -36,7 +36,7 @@ model User {
 model Organization {
   id                   String                   @id @default(uuid()) @db.Uuid
   name                 String
-  slug                 String                   @unique
+  slug                 String
   is_public            Boolean                  @default(false)
   created_at           DateTime                 @default(now())
   deleted_at           DateTime?
@@ -487,7 +487,7 @@ model Proposal {
 
   client_notes String? @db.Text // Public notes visible to client
 
-  public_link_hash     String    @unique // Secure short-link for WhatsApp
+  public_link_hash     String    // Secure short-link for WhatsApp
   client_accepted_kvkk Boolean   @default(false)
   deleted_at           DateTime?
 

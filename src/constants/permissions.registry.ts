@@ -24,6 +24,8 @@ export const AppResource = {
   LEADS: 'leads',
   PIPELINE_STAGES: 'pipeline_stages',
   LEAD_SOURCES: 'lead_sources',
+  PRODUCTS: 'products',
+  PROPOSALS: 'proposals',
   // CONTACTS: 'contacts',
   // DEALS: 'deals',
   // TASKS: 'tasks',
@@ -153,6 +155,30 @@ export const AppPermission = {
     `${AppResource.PIPELINE_STAGES}:${AppAction.DELETE_ALL}` as const,
   PIPELINE_STAGES_RESTORE:
     `${AppResource.PIPELINE_STAGES}:${AppAction.RESTORE}` as const,
+
+  // Products
+  PRODUCTS_MANAGE: `${AppResource.PRODUCTS}:${AppAction.MANAGE}` as const,
+  PRODUCTS_READ: `${AppResource.PRODUCTS}:${AppAction.READ}` as const,
+  PRODUCTS_READ_ALL: `${AppResource.PRODUCTS}:${AppAction.READ_ALL}` as const,
+  PRODUCTS_CREATE: `${AppResource.PRODUCTS}:${AppAction.CREATE}` as const,
+  PRODUCTS_EDIT: `${AppResource.PRODUCTS}:${AppAction.EDIT}` as const,
+  PRODUCTS_EDIT_ALL: `${AppResource.PRODUCTS}:${AppAction.EDIT_ALL}` as const,
+  PRODUCTS_DELETE: `${AppResource.PRODUCTS}:${AppAction.DELETE}` as const,
+  PRODUCTS_DELETE_ALL:
+    `${AppResource.PRODUCTS}:${AppAction.DELETE_ALL}` as const,
+  PRODUCTS_RESTORE: `${AppResource.PRODUCTS}:${AppAction.RESTORE}` as const,
+
+  // Proposals
+  PROPOSALS_MANAGE: `${AppResource.PROPOSALS}:${AppAction.MANAGE}` as const,
+  PROPOSALS_READ: `${AppResource.PROPOSALS}:${AppAction.READ}` as const,
+  PROPOSALS_READ_ALL: `${AppResource.PROPOSALS}:${AppAction.READ_ALL}` as const,
+  PROPOSALS_CREATE: `${AppResource.PROPOSALS}:${AppAction.CREATE}` as const,
+  PROPOSALS_EDIT: `${AppResource.PROPOSALS}:${AppAction.EDIT}` as const,
+  PROPOSALS_EDIT_ALL: `${AppResource.PROPOSALS}:${AppAction.EDIT_ALL}` as const,
+  PROPOSALS_DELETE: `${AppResource.PROPOSALS}:${AppAction.DELETE}` as const,
+  PROPOSALS_DELETE_ALL:
+    `${AppResource.PROPOSALS}:${AppAction.DELETE_ALL}` as const,
+  PROPOSALS_RESTORE: `${AppResource.PROPOSALS}:${AppAction.RESTORE}` as const,
 
   // // Contacts
   // CONTACTS_READ: `${AppResource.CONTACTS}:${AppAction.READ}` as const,
@@ -425,6 +451,82 @@ export const PERMISSIONS_LIST: readonly IPermissionDefinition[] = [
   {
     action: AppPermission.PIPELINE_STAGES_RESTORE,
     description: 'Restore deleted pipeline stages',
+  },
+
+  // Products
+  {
+    action: AppPermission.PRODUCTS_MANAGE,
+    description: 'Manage all products in the organization',
+  },
+  {
+    action: AppPermission.PRODUCTS_READ,
+    description: 'Read assigned products',
+  },
+  {
+    action: AppPermission.PRODUCTS_READ_ALL,
+    description: 'Read all products in the organization',
+  },
+  {
+    action: AppPermission.PRODUCTS_CREATE,
+    description: 'Create new products',
+  },
+  {
+    action: AppPermission.PRODUCTS_EDIT,
+    description: 'Edit assigned products',
+  },
+  {
+    action: AppPermission.PRODUCTS_EDIT_ALL,
+    description: 'Edit all products in the organization',
+  },
+  {
+    action: AppPermission.PRODUCTS_DELETE,
+    description: 'Delete assigned products',
+  },
+  {
+    action: AppPermission.PRODUCTS_DELETE_ALL,
+    description: 'Delete all products in the organization',
+  },
+  {
+    action: AppPermission.PRODUCTS_RESTORE,
+    description: 'Restore deleted products',
+  },
+
+  // Proposals
+  {
+    action: AppPermission.PROPOSALS_MANAGE,
+    description: 'Manage all proposals in the organization',
+  },
+  {
+    action: AppPermission.PROPOSALS_READ,
+    description: 'Read assigned proposals',
+  },
+  {
+    action: AppPermission.PROPOSALS_READ_ALL,
+    description: 'Read all proposals in the organization',
+  },
+  {
+    action: AppPermission.PROPOSALS_CREATE,
+    description: 'Create new proposals',
+  },
+  {
+    action: AppPermission.PROPOSALS_EDIT,
+    description: 'Edit assigned proposals',
+  },
+  {
+    action: AppPermission.PROPOSALS_EDIT_ALL,
+    description: 'Edit all proposals in the organization',
+  },
+  {
+    action: AppPermission.PROPOSALS_DELETE,
+    description: 'Delete assigned proposals',
+  },
+  {
+    action: AppPermission.PROPOSALS_DELETE_ALL,
+    description: 'Delete all proposals in the organization',
+  },
+  {
+    action: AppPermission.PROPOSALS_RESTORE,
+    description: 'Restore deleted proposals',
   },
 
   // // Contacts

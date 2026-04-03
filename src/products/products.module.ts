@@ -6,7 +6,13 @@ import { ProductsController } from './products.controller';
 import { ProductsQueryBuilder } from './utils/products.query-builder';
 
 @Module({
-  providers: [ProductsService, ProductMediaService, AvailabilityService, ProductsQueryBuilder],
-  controllers: [ProductsController]
+  providers: [
+    ProductsService,
+    ProductMediaService,
+    AvailabilityService,
+    ProductsQueryBuilder,
+  ],
+  controllers: [ProductsController],
+  exports: [ProductsService],
 })
 export class ProductsModule {}

@@ -1,51 +1,154 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { Request } from 'express';
-import { ProposalsService, CreateProposalDto, UpdateProposalDto } from './proposals.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Request as ExpressRequest } from 'express';
+import { AccessVerificationService } from '../access-control/access-verification.service';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { AppPermission } from '../constants/permissions.registry';
 import { ProposalStatus } from '@prisma/client';
+import {
+  CreateProposalDto,
+  ProposalsService,
+  UpdateProposalDto,
+} from './proposals.service';
 
-interface TenantRequest extends Request {
-  tenantId: string;
+interface AuthRequest extends ExpressRequest {
+  user: {
+    id: string;
+  };
 }
 
 @ApiTags('proposals')
-@Controller('proposals')
+@ApiBearerAuth()
+@Controller('organizations/:organizationId/proposals')
 export class ProposalsController {
-  constructor(private readonly proposalsService: ProposalsService) {}
+  constructor(
+    private readonly proposalsService: ProposalsService,
+    private readonly accessVerificationService: AccessVerificationService,
+  ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a proposal' })
-  create(@Req() req: TenantRequest, @Body() createProposalDto: CreateProposalDto) {
-    return this.proposalsService.create(req.tenantId, createProposalDto);
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PROPOSALS_CREATE)
+  @ApiOperation({ summary: 'Create a proposal in an organization' })
+  @ApiResponse({ status: 201, description: 'Proposal created successfully' })
+  async create(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Request() req: AuthRequest,
+    @Body() createProposalDto: CreateProposalDto,
+  ) {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+    return this.proposalsService.create(organizationId, createProposalDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all proposals' })
-  findAll() {
-    return this.proposalsService.findAll();
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PROPOSALS_READ)
+  @ApiOperation({ summary: 'List proposals in organization' })
+  @ApiResponse({ status: 200, description: 'Proposals fetched successfully' })
+  async findAll(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Request() req: AuthRequest,
+  ) {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+    return this.proposalsService.findAll(organizationId);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a proposal by id' })
-  findOne(@Param('id') id: string) {
-    return this.proposalsService.findOne(id);
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PROPOSALS_READ)
+  @ApiOperation({ summary: 'Get a single proposal from an organization' })
+  @ApiResponse({ status: 200, description: 'Proposal fetched successfully' })
+  @ApiResponse({ status: 404, description: 'Proposal not found' })
+  async findOne(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: AuthRequest,
+  ) {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+    return this.proposalsService.findOne(organizationId, id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a proposal' })
-  update(@Param('id') id: string, @Body() updateProposalDto: UpdateProposalDto) {
-    return this.proposalsService.update(id, updateProposalDto);
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PROPOSALS_EDIT)
+  @ApiOperation({ summary: 'Update a proposal in an organization' })
+  @ApiResponse({ status: 200, description: 'Proposal updated successfully' })
+  @ApiResponse({ status: 404, description: 'Proposal not found' })
+  async update(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: AuthRequest,
+    @Body() updateProposalDto: UpdateProposalDto,
+  ) {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+    return this.proposalsService.update(organizationId, id, updateProposalDto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a proposal' })
-  remove(@Param('id') id: string) {
-    return this.proposalsService.remove(id);
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PROPOSALS_DELETE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a proposal from an organization' })
+  @ApiResponse({ status: 204, description: 'Proposal deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Proposal not found' })
+  async remove(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: AuthRequest,
+  ): Promise<void> {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+    await this.proposalsService.remove(organizationId, id);
   }
 
   @Post(':id/verify')
-  @ApiOperation({ summary: 'Verify a proposal' })
-  verify(@Param('id') id: string) {
-    return this.proposalsService.update(id, { status: ProposalStatus.VERIFIED });
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PROPOSALS_EDIT)
+  @ApiOperation({ summary: 'Verify a proposal in an organization' })
+  @ApiResponse({ status: 200, description: 'Proposal verified successfully' })
+  async verify(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Request() req: AuthRequest,
+  ) {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+    return this.proposalsService.verify(organizationId, id);
   }
 }
