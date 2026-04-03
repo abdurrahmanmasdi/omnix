@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -26,6 +27,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { AppPermission } from '../constants/permissions.registry';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
+import { FindProposalsQueryDto } from './dto/find-proposals-query.dto';
 import { ProposalsService } from './proposals.service';
 
 interface AuthRequest extends ExpressRequest {
@@ -68,12 +70,13 @@ export class ProposalsController {
   async findAll(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Request() req: AuthRequest,
+    @Query() query: FindProposalsQueryDto,
   ) {
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
     );
-    return this.proposalsService.findAll(organizationId);
+    return this.proposalsService.findAll(organizationId, query);
   }
 
   @Get(':id')

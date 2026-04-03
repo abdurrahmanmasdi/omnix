@@ -15,18 +15,8 @@ import {
 import { CreateLeadDto } from './dtos/create-lead.dto';
 import { UpdateLeadDto } from './dtos/update-lead.dto';
 import { I18nService } from 'nestjs-i18n';
-import { LeadsQueryBuilder } from './utils/leads.query-builder';
-
-export interface FindLeadsFilters {
-  page?: number;
-  limit?: number;
-  status?: LeadStatus;
-  priority?: Priority;
-  filters?: string;
-  sort_by?: string;
-  sort_dir?: string;
-  search?: string;
-}
+import { QueryBuilderService } from '../common/query/query-builder.service';
+import { FindLeadsQueryDto } from './dtos/find-leads-query.dto';
 
 export interface FindLeadsResult {
   data: LeadWithRelations[];
@@ -62,7 +52,7 @@ export class LeadsService {
     private readonly prisma: PrismaService,
     private readonly permissionsService: PermissionsService,
     private readonly i18n: I18nService,
-    private readonly queryBuilder: LeadsQueryBuilder,
+    private readonly queryBuilder: QueryBuilderService,
   ) {}
 
   async create(
@@ -107,17 +97,43 @@ export class LeadsService {
   async findAll(
     organizationId: string,
     userId: string,
-    filters: FindLeadsFilters = {},
+    filters: FindLeadsQueryDto = {},
   ): Promise<{ data: LeadWithRelations[]; meta: any }> {
     const canReadAllLeads = await this.canReadAllLeads(organizationId, userId);
 
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
-    const orderBy = this.queryBuilder.buildOrderBy(
-      filters.sort_by,
-      filters.sort_dir,
-    );
+    
+    const config = {
+      allowedFilterFields: [
+        'status',
+        'priority',
+        'source_id',
+        'assigned_agent_id',
+        'country',
+        'pipeline_stage_id',
+        'first_name',
+        'last_name',
+        'email',
+        'estimated_value',
+        'created_at'
+      ],
+      allowedSortFields: [
+        'created_at',
+        'first_name',
+        'estimated_value',
+        'status',
+        'priority',
+        'assigned_agent.first_name',
+        'pipeline_stage.order_index'
+      ],
+      uuidFields: ['source_id', 'assigned_agent_id', 'pipeline_stage_id'],
+      numberFields: ['estimated_value'],
+    };
+
+    const orderBy = this.queryBuilder.buildOrderBy(filters.sorts, config);
+    const dynamicWhere = this.queryBuilder.buildWhere(filters.filters, config);
 
     const dynamicConditions: Prisma.LeadWhereInput[] = [];
 
@@ -146,20 +162,12 @@ export class LeadsService {
       });
     }
 
-    const parsedRules = this.queryBuilder.parseDynamicFilterRules(
-      filters.filters,
-    );
-
-    for (const rule of parsedRules) {
-      const condition = this.queryBuilder.buildDynamicFilterCondition(rule);
-
-      if (condition) {
-        dynamicConditions.push(condition);
-      }
+    if (Object.keys(dynamicWhere).length > 0) {
+       dynamicConditions.push(dynamicWhere);
     }
 
     const where: Prisma.LeadWhereInput = {
-      AND: dynamicConditions,
+      ...(dynamicConditions.length > 0 ? { AND: dynamicConditions } : {}),
     };
 
     const [total, data] = await Promise.all([

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { ProductsQueryBuilder } from './utils/products.query-builder';
+import { QueryBuilderService } from '../common/query/query-builder.service';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -10,7 +10,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly queryBuilder: ProductsQueryBuilder,
+    private readonly queryBuilder: QueryBuilderService,
   ) {}
 
   async create(organizationId: string, dto: CreateProductDto) {
@@ -46,10 +46,26 @@ export class ProductsService {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
       filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
-    const orderBy = this.queryBuilder.buildOrderBy(
-      filters.sort_by,
-      filters.sort_dir,
-    );
+    
+    const config = {
+      allowedFilterFields: [
+        'type',
+        'title',
+        'base_price',
+        'currency',
+        'created_at'
+      ],
+      allowedSortFields: [
+        'type',
+        'title',
+        'base_price',
+        'created_at'
+      ],
+      numberFields: ['base_price'],
+    };
+
+    const orderBy = this.queryBuilder.buildOrderBy(filters.sorts, config);
+    const dynamicWhere = this.queryBuilder.buildWhere(filters.filters, config);
 
     const dynamicConditions: Prisma.ProductWhereInput[] = [
       { organization_id: organizationId },
@@ -69,19 +85,12 @@ export class ProductsService {
       });
     }
 
-    const parsedRules = this.queryBuilder.parseDynamicFilterRules(
-      filters.filters,
-    );
-
-    for (const rule of parsedRules) {
-      const condition = this.queryBuilder.buildDynamicFilterCondition(rule);
-      if (condition) {
-        dynamicConditions.push(condition);
-      }
+    if (Object.keys(dynamicWhere).length > 0) {
+      dynamicConditions.push(dynamicWhere);
     }
 
     const where: Prisma.ProductWhereInput = {
-      AND: dynamicConditions,
+      ...(dynamicConditions.length > 0 ? { AND: dynamicConditions } : {}),
     };
 
     const [total, data] = await Promise.all([
@@ -145,3 +154,4 @@ export class ProductsService {
     });
   }
 }
+

@@ -5,16 +5,19 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
-import { ProposalStatus } from '@prisma/client';
+import { Prisma, ProposalStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
+import { QueryBuilderService } from '../common/query/query-builder.service';
+import { FindProposalsQueryDto } from './dto/find-proposals-query.dto';
 
 @Injectable()
 export class ProposalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly productsService: ProductsService,
+    private readonly queryBuilder: QueryBuilderService,
   ) {}
 
   async create(organizationId: string, dto: CreateProposalDto) {
@@ -55,15 +58,79 @@ export class ProposalsService {
     });
   }
 
-  async findAll(organizationId: string) {
-    return this.prisma.proposal.findMany({
-      where: {
-        organization_id: organizationId,
+  async findAll(organizationId: string, filters: FindProposalsQueryDto = {}) {
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit =
+      filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
+
+    const config = {
+      allowedFilterFields: [
+        'status',
+        'created_at',
+        'subtotal',
+        'total',
+        'client_id'
+      ],
+      allowedSortFields: [
+        'status',
+        'created_at',
+        'subtotal',
+        'total'
+      ],
+      uuidFields: ['client_id'],
+      numberFields: ['subtotal', 'total'],
+    };
+
+    const orderBy = this.queryBuilder.buildOrderBy(filters.sorts, config);
+    const dynamicWhere = this.queryBuilder.buildWhere(filters.filters, config);
+
+    const dynamicConditions: Prisma.ProposalWhereInput[] = [
+      { organization_id: organizationId },
+    ];
+
+    if (filters.status) {
+      dynamicConditions.push({ status: filters.status });
+    }
+
+    if (Object.keys(dynamicWhere).length > 0) {
+      dynamicConditions.push(dynamicWhere);
+    }
+
+    const search = filters.search?.trim();
+    if (search) {
+      dynamicConditions.push({
+        OR: [
+          { status: { in: search.toUpperCase() as any } } // This is basic for string matching if status matches roughly
+        ]
+      });
+    }
+
+    const where: Prisma.ProposalWhereInput = {
+      ...(dynamicConditions.length > 0 ? { AND: dynamicConditions } : {}),
+    };
+
+    const [total, data] = await Promise.all([
+      this.prisma.proposal.count({ where }),
+      this.prisma.proposal.findMany({
+        where,
+        include: {
+          line_items: true,
+        },
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
-      include: {
-        line_items: true,
-      },
-    });
+    };
   }
 
   async findOne(organizationId: string, id: string) {

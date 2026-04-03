@@ -1,13 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ProductType } from '@prisma/client';
+import { ProposalStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsOptional } from 'class-validator';
 import { BaseQueryDto } from '../../common/query/dtos/query.dto';
 
-export class FindProductsQueryDto extends BaseQueryDto {
-  @ApiPropertyOptional({ enum: ProductType })
+export class FindProposalsQueryDto extends BaseQueryDto {
+  @ApiPropertyOptional({ enum: ProposalStatus })
   @IsOptional()
-  @IsEnum(ProductType)
-  type?: ProductType;
+  @IsEnum(ProposalStatus)
+  status?: ProposalStatus;
 }
-

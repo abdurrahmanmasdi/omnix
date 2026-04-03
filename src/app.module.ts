@@ -31,6 +31,7 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { SocialLinksModule } from './social-links/social-links.module';
 import { ProductsModule } from './products/products.module';
 import { ProposalsModule } from './proposals/proposals.module';
+import { QueryModule } from './common/query/query.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -95,6 +96,7 @@ mkdirSync(logsDir, { recursive: true });
         ]),
     PrismaModule,
     RedisModule,
+    QueryModule,
     AuthModule,
     OrganizationsModule,
     UsersModule,

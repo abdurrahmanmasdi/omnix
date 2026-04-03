@@ -16,7 +16,7 @@ import {
 import { CreateLeadDto } from './dtos/create-lead.dto';
 import { UpdateLeadDto } from './dtos/update-lead.dto';
 import { LeadsService } from './leads.service';
-import { LeadsQueryBuilder } from './utils/leads.query-builder';
+import { QueryBuilderService } from '../common/query/query-builder.service';
 
 type ServicePrivates = {
   toNullableDate(value?: string | null): Date | null | undefined;
@@ -61,7 +61,7 @@ describe('LeadsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LeadsService,
-        LeadsQueryBuilder,
+        QueryBuilderService,
         {
           provide: PrismaService,
           useValue: mockPrismaService,
