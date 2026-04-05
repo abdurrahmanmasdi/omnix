@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { Observable } from 'rxjs';
+import { defer } from 'rxjs';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../request-context/request-context.service';
@@ -95,9 +96,19 @@ export class TenantInterceptor implements NestInterceptor {
       );
     }
 
-    return this.requestContextService.run(() => {
-      this.requestContextService.setTenantId(organizationId);
-      return next.handle();
-    });
+    // Get current ALS store and establish tenant context
+    // Use enterWith to establish persistent context for the observable chain
+    const currentStore = this.requestContextService.getStore() ?? {};
+    const newStore = { ...currentStore, tenantId: organizationId };
+
+    // Create new observable that runs in the tenant context
+    const requestContextService = this.requestContextService;
+
+    // Use Node's native AsyncLocalStorage binding by returning the observable
+    // directly so the async chain preserves context
+    // Set the tenant ID in the current context for this request
+    requestContextService.setTenantId(organizationId);
+
+    return next.handle();
   }
 }

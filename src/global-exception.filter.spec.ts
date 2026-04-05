@@ -202,4 +202,44 @@ describe('GlobalExceptionFilter', () => {
     expect(payload?.message).toBe('raw-upstream-error');
     expect(payload?.path).toBe('/organizations/org-1/leads');
   });
+
+  it('falls back to HttpException error field when message is missing', () => {
+    const noMessageException = new BadRequestException({
+      statusCode: HttpStatus.BAD_REQUEST,
+      error: 'Bad Request from upstream',
+    });
+
+    filter.catch(noMessageException, mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+
+    const payload = mockJson.mock.calls[0]?.[0];
+    expect(payload?.statusCode).toBe(HttpStatus.BAD_REQUEST);
+    expect(payload?.message).toBe('Bad Request from upstream');
+    expect(payload?.path).toBe('/organizations/org-1/leads');
+  });
+
+  it('returns the original error message for unhandled non-http errors', () => {
+    const loggerErrorSpy = jest
+      .spyOn(
+        (
+          filter as unknown as {
+            logger: { error: (...args: unknown[]) => void };
+          }
+        ).logger,
+        'error',
+      )
+      .mockImplementation(() => undefined);
+
+    filter.catch(new Error('Database connection timeout'), mockHost);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+
+    const payload = mockJson.mock.calls[0]?.[0];
+    expect(payload?.statusCode).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(payload?.message).toBe('Database connection timeout');
+    expect(payload?.path).toBe('/organizations/org-1/leads');
+
+    expect(loggerErrorSpy).toHaveBeenCalledTimes(2);
+  });
 });

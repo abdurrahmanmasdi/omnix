@@ -10,6 +10,7 @@ import { MembershipStatus } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { RequestContextService } from '../request-context/request-context.service';
 import { UpdateMemberRoleDto } from './dtos/update-member-role.dto';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class AccessVerificationService {
     private i18n: I18nService,
     private eventEmitter: EventEmitter2,
     private redis: RedisService,
+    private requestContextService: RequestContextService,
   ) {}
 
   private async emitPermissionCacheClearEvent(
@@ -97,18 +99,22 @@ export class AccessVerificationService {
     organizationId: string,
     userId: string,
   ): Promise<void> {
-    const membership = await this.prisma.organizationMembership.findFirst({
-      where: {
-        organization_id: organizationId,
-        user_id: userId,
-        status: MembershipStatus.ACTIVE,
-      },
-      include: {
-        role: {
-          select: { slug: true },
-        },
-      },
-    });
+    // Use bypass to query the tenant-bound model without relying on interceptor context
+    const membership = await this.requestContextService.runWithBypass(
+      async () =>
+        this.prisma.organizationMembership.findFirst({
+          where: {
+            organization_id: organizationId,
+            user_id: userId,
+            status: MembershipStatus.ACTIVE,
+          },
+          include: {
+            role: {
+              select: { slug: true },
+            },
+          },
+        }),
+    );
 
     const roleSlug =
       (membership as { role?: { slug?: string | null } } | null)?.role?.slug ??

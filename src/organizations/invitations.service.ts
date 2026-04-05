@@ -154,101 +154,110 @@ export class InvitationsService {
     inviteUrl: string;
     token: string;
   }> {
+    this.logger.log(
+      `[InvitationsService] Creating invitation for ${inviteDto.email} in organization ${organizationId}`,
+    );
+
     await this.accessVerificationService.verifyIsOwnerOrAdmin(
       organizationId,
       currentUserId,
     );
 
-    // Verify organization exists
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
+    return this.requestContextService.runWithBypass(async () => {
+      // Verify organization exists
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+      });
 
-    if (!organization) {
-      this.logger.warn(`Organization with id ${organizationId} not found`);
-      throw new NotFoundException(
-        this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
-      );
-    }
+      if (!organization) {
+        this.logger.warn(`Organization with id ${organizationId} not found`);
+        throw new NotFoundException(
+          this.i18n.t('organizations.ERRORS.ORG.NOT_FOUND'),
+        );
+      }
 
-    // Verify role exists and belongs to the same organization
-    const role = await this.prisma.role.findUnique({
-      where: { id: inviteDto.roleId },
-    });
+      // Verify role exists and belongs to the same organization
+      const role = await this.prisma.role.findUnique({
+        where: { id: inviteDto.roleId },
+      });
 
-    if (!role || role.organization_id !== organizationId) {
-      throw new BadRequestException(
-        'Invalid role specified for this organization.',
-      );
-    }
+      if (!role || role.organization_id !== organizationId) {
+        throw new BadRequestException(
+          'Invalid role specified for this organization.',
+        );
+      }
 
-    // Check if user exists by email
-    const user = await this.prisma.user.findUnique({
-      where: { email: inviteDto.email },
-    });
+      // Check if user exists by email
+      const user = await this.prisma.user.findUnique({
+        where: { email: inviteDto.email },
+      });
 
-    // Check if user is already a member
-    const existingMembership = user
-      ? await this.prisma.organizationMembership.findFirst({
+      // Check if user is already a member
+      const existingMembership = user
+        ? await this.prisma.organizationMembership.findFirst({
+            where: {
+              user_id: user.id,
+              organization_id: organizationId,
+            },
+          })
+        : null;
+
+      if (existingMembership) {
+        this.logger.warn(
+          `User ${user?.id ?? 'unknown'} is already a member of organization ${organizationId}`,
+        );
+        throw new ConflictException(
+          this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
+        );
+      }
+
+      const token = await this.generateUniqueToken();
+
+      let invitation: InvitationIdOnly;
+
+      // Create or update invitation with selected role. Log raw Prisma errors and rethrow.
+      try {
+        invitation = (await this.prisma.invitation.upsert({
           where: {
-            user_id: user.id,
-            organization_id: organizationId,
+            email_organization_id: {
+              email: inviteDto.email,
+              organization_id: organizationId,
+            },
           },
-        })
-      : null;
-
-    if (existingMembership) {
-      this.logger.warn(
-        `User ${user?.id ?? 'unknown'} is already a member of organization ${organizationId}`,
-      );
-      throw new ConflictException(
-        this.i18n.t('organizations.ERRORS.ORG.USER_ALREADY_MEMBER'),
-      );
-    }
-
-    const token = await this.generateUniqueToken();
-
-    let invitation: InvitationIdOnly;
-
-    // Create or update invitation with selected role. Log raw Prisma errors and rethrow.
-    try {
-      invitation = (await this.prisma.invitation.upsert({
-        where: {
-          email_organization_id: {
+          update: {
+            role_id: inviteDto.roleId,
+            token,
+            status: INVITATION_STATUS.PENDING,
+            accepted_at: null,
+          } as unknown as never,
+          create: {
             email: inviteDto.email,
             organization_id: organizationId,
-          },
-        },
-        update: {
-          role_id: inviteDto.roleId,
-          token,
-          status: INVITATION_STATUS.PENDING,
-          accepted_at: null,
-        } as unknown as never,
-        create: {
-          email: inviteDto.email,
-          organization_id: organizationId,
-          role_id: inviteDto.roleId,
-          token,
-          status: INVITATION_STATUS.PENDING,
-        } as unknown as never,
-      })) as InvitationIdOnly;
-    } catch (error) {
-      this.logger.error(
-        '[InvitationsService] Invitation upsert failed',
-        error instanceof Error ? error.stack : String(error),
+            role_id: inviteDto.roleId,
+            token,
+            status: INVITATION_STATUS.PENDING,
+          } as unknown as never,
+        })) as InvitationIdOnly;
+      } catch (error) {
+        this.logger.log(
+          `[InvitationsService] Invitation upsert failed ${error instanceof Error ? error.stack : String(error)}`,
+        );
+        this.logger.error(
+          '[InvitationsService] Invitation upsert failed',
+          error instanceof Error ? error.stack : String(error),
+        );
+        throw error;
+      }
+
+      this.logger.log(
+        `Invitation ${invitation.id} created/updated for ${inviteDto.email} in organization ${organizationId} with role ${inviteDto.roleId}`,
       );
-      throw error;
-    }
 
-    this.logger.log(
-      `Invitation ${invitation.id} created/updated for ${inviteDto.email} in organization ${organizationId} with role ${inviteDto.roleId}`,
-    );
-
-    return {
-      token,
-      inviteUrl: this.buildInviteUrl(token),
-    };
+      return {
+        token,
+        inviteUrl: this.buildInviteUrl(token),
+      };
+    });
   }
 
   async getInvitationByToken(token: string): Promise<{

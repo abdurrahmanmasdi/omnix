@@ -121,8 +121,8 @@ export class PermissionsService implements OnModuleInit {
     // correctly filters by organization_id. Guards execute before
     // TenantInterceptor, so we must establish the context here manually.
     const membership = await this.requestContextService.run(
-      () =>
-        this.prisma.organizationMembership.findFirst({
+      async () =>
+        await this.prisma.organizationMembership.findFirst({
           where: {
             user_id: userId,
             organization_id: orgId,

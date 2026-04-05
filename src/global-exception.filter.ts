@@ -30,6 +30,32 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return undefined;
   }
 
+  private normalizeHttpExceptionMessage(
+    exceptionResponse: unknown,
+  ): string | string[] {
+    if (typeof exceptionResponse === 'string') {
+      return exceptionResponse;
+    }
+
+    if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      const resObj = exceptionResponse as Record<string, unknown>;
+
+      if (
+        typeof resObj.message === 'string' ||
+        (Array.isArray(resObj.message) &&
+          resObj.message.every((item) => typeof item === 'string'))
+      ) {
+        return resObj.message as unknown as string | string[];
+      }
+
+      if (typeof resObj.error === 'string') {
+        return resObj.error;
+      }
+    }
+
+    return 'Error occurred';
+  }
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -43,15 +69,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // 1. Handle standard NestJS HTTP Errors
     if (exception instanceof HttpException) {
       status = exception.getStatus();
-      const exceptionResponse = exception.getResponse();
-
-      // FIX 1: Safe type checking without using "any"
-      if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        const resObj = exceptionResponse as Record<string, unknown>;
-        message = (resObj.message as string | string[]) || 'Error occurred';
-      } else {
-        message = exceptionResponse;
-      }
+      message = this.normalizeHttpExceptionMessage(exception.getResponse());
     }
     // 2. Handle Prisma Database Errors
     else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
@@ -90,7 +108,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
     // 3. Log completely unhandled errors to your console
     else {
-      this.logger.error('CRITICAL UNHANDLED ERROR', exception);
+      this.logger.error('CRITICAL UNHANDLED ERROR');
+      this.logger.error(
+        exception instanceof Error
+          ? exception.stack
+          : JSON.stringify(exception),
+      );
+
+      if (exception instanceof Error && exception.message.trim().length > 0) {
+        message = exception.message;
+      }
     }
 
     // 4. Return the standardized JSON response
