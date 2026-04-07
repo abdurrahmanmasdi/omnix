@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { I18nModule, AcceptLanguageResolver } from 'nestjs-i18n';
@@ -36,6 +37,9 @@ import { QueryModule } from './common/query/query.module';
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
 
+const uploadsDir = path.join(process.cwd(), 'uploads');
+mkdirSync(uploadsDir, { recursive: true });
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -43,6 +47,10 @@ mkdirSync(logsDir, { recursive: true });
       validate, // Use our custom validation function to ensure the .env file is correct
     }),
     EventEmitterModule.forRoot(),
+    ServeStaticModule.forRoot({
+      rootPath: uploadsDir,
+      serveRoot: '/uploads',
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         transport: {

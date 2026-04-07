@@ -29,7 +29,11 @@ async function bootstrap() {
   }
 
   // 1. Security Headers
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // 2. CORS (Cross-Origin Resource Sharing)
   // Only allows your specific Next.js frontend to talk to this API

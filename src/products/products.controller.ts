@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,6 +14,8 @@ import {
   Query,
   Request,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -20,6 +23,10 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { v4 as uuid } from 'uuid';
+import * as fs from 'fs';
 import { Request as ExpressRequest } from 'express';
 import { AccessVerificationService } from '../access-control/access-verification.service';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -161,21 +168,131 @@ export class ProductsController {
     );
   }
 
-  @Put(':id/media/:mediaId/primary')
+  @Patch(':id/media/:mediaId/primary')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(AppPermission.PRODUCTS_EDIT)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set primary media for a product' })
   @ApiResponse({ status: 200, description: 'Primary media set successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Media not found or does not belong to product',
+  })
+  @ApiResponse({ status: 404, description: 'Product not found' })
   async setPrimaryMedia(
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('mediaId', new ParseUUIDPipe()) mediaId: string,
     @Request() req: AuthRequest,
-  ): Promise<void> {
+  ): Promise<any> {
+    // Verify user belongs to the organization
     await this.accessVerificationService.verifyUserInOrganization(
       organizationId,
       req.user.id,
     );
-    await this.productMediaService.setPrimaryMedia(id, mediaId);
+
+    // Set primary media and return the updated record
+    const updatedMedia = await this.productMediaService.setPrimaryMedia(
+      id,
+      mediaId,
+    );
+
+    return {
+      message: 'Primary media set successfully',
+      data: updatedMedia,
+    };
+  }
+
+  @Post(':id/media/upload')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(AppPermission.PRODUCTS_EDIT)
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadPath = './uploads/products';
+
+          // Check if directory exists, if not, create it recursively
+          if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+          }
+
+          cb(null, uploadPath);
+        },
+        filename: (req, file, cb) => {
+          const ext = file.originalname.split('.').pop();
+          const filename = `${uuid()}.${ext}`;
+          cb(null, filename);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedMimes.includes(file.mimetype)) {
+          return cb(
+            new BadRequestException(
+              `Invalid file type: ${file.mimetype}. Only JPEG, PNG, and WebP are allowed.`,
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Upload media files for a product' })
+  @ApiResponse({
+    status: 201,
+    description: 'Files uploaded and media records created successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid file type or size' })
+  @ApiResponse({ status: 404, description: 'Product not found' })
+  async uploadMedia(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('id', new ParseUUIDPipe()) productId: string,
+    @Request() req: AuthRequest,
+    @UploadedFiles() files?: Array<{ filename: string; originalname: string }>,
+  ): Promise<any> {
+    // Verify user belongs to the organization
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+
+    // Verify product exists and belongs to the organization
+    const product = await this.productsService.findOne(
+      organizationId,
+      productId,
+    );
+    if (!product) {
+      throw new BadRequestException(
+        'Product not found or does not belong to this organization',
+      );
+    }
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files were uploaded');
+    }
+
+    const uploadedMedia: any[] = [];
+
+    // Process each uploaded file
+    for (const file of files) {
+      const fileUrl = `/uploads/products/${file.filename}`;
+      const media = await this.productMediaService.createMedia(
+        productId,
+        fileUrl,
+        file.originalname,
+      );
+      uploadedMedia.push(media);
+    }
+
+    return {
+      message: `Successfully uploaded ${uploadedMedia.length} file(s)`,
+      data: uploadedMedia,
+    };
   }
 }
