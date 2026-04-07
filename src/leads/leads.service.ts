@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { LeadStatus, MembershipStatus, Prisma, Priority } from '@prisma/client';
+import { MembershipStatus, Prisma } from '@prisma/client';
 import { AppPermission } from '../constants/permissions.registry';
 import { PermissionsService } from '../auth/services/permissions.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +17,7 @@ import { UpdateLeadDto } from './dtos/update-lead.dto';
 import { I18nService } from 'nestjs-i18n';
 import { QueryBuilderService } from '../common/query/query-builder.service';
 import { FindLeadsQueryDto } from './dtos/find-leads-query.dto';
+import { BulkCreateLeadsDto } from './dtos/bulk-create-leads.dto';
 
 export interface FindLeadsResult {
   data: LeadWithRelations[];
@@ -192,6 +193,85 @@ export class LeadsService {
     };
   }
 
+  async exportAll(
+    organizationId: string,
+    userId: string,
+    filters: FindLeadsQueryDto = {},
+  ): Promise<LeadWithRelations[]> {
+    const canReadAllLeads = await this.canReadAllLeads(organizationId, userId);
+
+    const config = {
+      allowedFilterFields: [
+        'status',
+        'priority',
+        'source_id',
+        'assigned_agent_id',
+        'country',
+        'pipeline_stage_id',
+        'first_name',
+        'last_name',
+        'email',
+        'estimated_value',
+        'created_at',
+      ],
+      allowedSortFields: [
+        'created_at',
+        'first_name',
+        'estimated_value',
+        'status',
+        'priority',
+        'assigned_agent.first_name',
+        'pipeline_stage.order_index',
+      ],
+      uuidFields: ['source_id', 'assigned_agent_id', 'pipeline_stage_id'],
+      numberFields: ['estimated_value'],
+    };
+
+    const orderBy = this.queryBuilder.buildOrderBy(filters.sorts, config);
+    const dynamicWhere = this.queryBuilder.buildWhere(filters.filters, config);
+
+    const dynamicConditions: Prisma.LeadWhereInput[] = [];
+
+    if (!canReadAllLeads) {
+      dynamicConditions.push({ assigned_agent_id: userId });
+    }
+
+    if (filters.status) {
+      dynamicConditions.push({ status: filters.status });
+    }
+
+    if (filters.priority) {
+      dynamicConditions.push({ priority: filters.priority });
+    }
+
+    const search = filters.search?.trim();
+
+    if (search) {
+      dynamicConditions.push({
+        OR: [
+          { first_name: { contains: search, mode: 'insensitive' } },
+          { last_name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { phone_number: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (Object.keys(dynamicWhere).length > 0) {
+      dynamicConditions.push(dynamicWhere);
+    }
+
+    const where: Prisma.LeadWhereInput = {
+      ...(dynamicConditions.length > 0 ? { AND: dynamicConditions } : {}),
+    };
+
+    return this.prisma.lead.findMany({
+      where,
+      include: LEAD_RELATIONS_INCLUDE,
+      orderBy,
+    });
+  }
+
   async findOne(
     organizationId: string,
     userId: string,
@@ -276,6 +356,57 @@ export class LeadsService {
     }
 
     return updatedLead;
+  }
+
+  async bulkCreate(
+    organizationId: string,
+    _userId: string,
+    dto: BulkCreateLeadsDto,
+  ): Promise<{ count: number }> {
+    await this.validateScopedReferences(organizationId, {
+      pipeline_stage_id: dto.leads.find((lead) => lead.pipeline_stage_id)
+        ?.pipeline_stage_id,
+      assigned_agent_id: dto.leads.find((lead) => lead.assigned_agent_id)
+        ?.assigned_agent_id,
+      source_id: dto.leads.find((lead) => lead.source_id)?.source_id,
+    });
+
+    const mappedLeads: Prisma.LeadCreateManyInput[] = dto.leads.map((lead) => ({
+      organization_id: organizationId,
+      pipeline_stage_id: lead.pipeline_stage_id,
+      assigned_agent_id: lead.assigned_agent_id,
+      source_id: lead.source_id,
+      first_name: lead.first_name,
+      last_name: lead.last_name,
+      native_name: lead.native_name,
+      gender: lead.gender,
+      email: lead.email,
+      phone_number: lead.phone_number,
+      country: lead.country,
+      timezone: lead.timezone,
+      primary_language: lead.primary_language,
+      preferred_language: lead.preferred_language,
+      social_links: lead.social_links as Prisma.InputJsonValue,
+      status: lead.status,
+      priority: lead.priority,
+      estimated_value: lead.estimated_value,
+      currency: lead.currency,
+      expected_service_date: lead.expected_service_date
+        ? new Date(lead.expected_service_date)
+        : lead.expected_service_date,
+      next_follow_up_at: lead.next_follow_up_at
+        ? new Date(lead.next_follow_up_at)
+        : lead.next_follow_up_at,
+    }));
+
+    const result = await this.prisma.lead.createMany({
+      data: mappedLeads,
+      skipDuplicates: true,
+    });
+
+    return {
+      count: result.count,
+    };
   }
 
   async bulkUpdate(

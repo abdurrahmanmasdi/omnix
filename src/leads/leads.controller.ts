@@ -35,6 +35,7 @@ import {
   LeadWithRelations,
   LeadsService,
 } from './leads.service';
+import { BulkCreateLeadsDto } from './dtos/bulk-create-leads.dto';
 
 interface AuthRequest extends ExpressRequest {
   user: {
@@ -83,6 +84,22 @@ export class LeadsController {
     return this.leadsService.findAll(organizationId, req.user.id, query);
   }
 
+  @Get('export')
+  @ApiOperation({ summary: 'Export all matching leads in organization' })
+  @ApiResponse({ status: 200, description: 'Leads exported successfully' })
+  async exportAll(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Request() req: AuthRequest,
+    @Query() query: FindLeadsQueryDto,
+  ): Promise<LeadWithRelations[]> {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+
+    return this.leadsService.exportAll(organizationId, req.user.id, query);
+  }
+
   @Get(':leadId')
   @ApiOperation({ summary: 'Get a single lead from an organization' })
   @ApiResponse({ status: 200, description: 'Lead fetched successfully' })
@@ -98,6 +115,22 @@ export class LeadsController {
     );
 
     return this.leadsService.findOne(organizationId, req.user.id, leadId);
+  }
+
+  @Post('bulk-create')
+  @ApiOperation({ summary: 'Bulk create leads in an organization' })
+  @ApiResponse({ status: 201, description: 'Leads bulk created successfully' })
+  async bulkCreate(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Request() req: AuthRequest,
+    @Body() dto: BulkCreateLeadsDto,
+  ): Promise<{ count: number }> {
+    await this.accessVerificationService.verifyUserInOrganization(
+      organizationId,
+      req.user.id,
+    );
+
+    return this.leadsService.bulkCreate(organizationId, req.user.id, dto);
   }
 
   @Patch('bulk')
