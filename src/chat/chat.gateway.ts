@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ChatService } from './chat.service';
 import { RequestContextService } from '../request-context/request-context.service';
@@ -66,6 +66,7 @@ const chatCorsOrigin = configuredFrontendOrigin
     ? developmentCorsOrigins
     : false;
 
+@SkipThrottle()
 @WebSocketGateway({
   namespace: '/chat',
   cors: {

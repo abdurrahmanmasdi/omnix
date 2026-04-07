@@ -70,16 +70,6 @@ export class ProductsService {
       dynamicConditions.push({ type: filters.type });
     }
 
-    const search = filters.search?.trim();
-    if (search) {
-      dynamicConditions.push({
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-        ],
-      });
-    }
-
     if (Object.keys(dynamicWhere).length > 0) {
       dynamicConditions.push(dynamicWhere);
     }

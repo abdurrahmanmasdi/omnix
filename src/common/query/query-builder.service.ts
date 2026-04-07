@@ -39,6 +39,37 @@ export class QueryBuilderService {
       );
     }
 
+    if (Array.isArray(parsed)) {
+      const equalsGroups: Record<string, any[]> = {};
+      const otherConditions: any[] = [];
+
+      // Separate 'equals' operators from everything else
+      for (const cond of parsed) {
+        if (cond.operator === 'equals') {
+          if (!equalsGroups[cond.field]) equalsGroups[cond.field] = [];
+          equalsGroups[cond.field].push(cond.value);
+        } else {
+          otherConditions.push(cond);
+        }
+      }
+
+      // Merge grouped equals into 'in' operators
+      const mergedEqualsConditions = Object.entries(equalsGroups).map(
+        ([field, values]) => {
+          if (values.length === 1) {
+            return { field, operator: 'equals', value: values[0] };
+          }
+          return { field, operator: 'in', value: values };
+        },
+      );
+
+      // Reconstruct the payload as an AND group
+      parsed = {
+        logicalOperator: 'AND',
+        conditions: [...otherConditions, ...mergedEqualsConditions],
+      };
+    }
+
     const where = this.traverseFilterNode(parsed, config);
     return where ? { AND: [where] } : {};
   }
@@ -89,19 +120,45 @@ export class QueryBuilderService {
     value: any,
   ): any {
     const segments = field.split('.'); // Handle relations
-
-    let condition: any;
-
-    // String matching
-    if (['contains', 'startsWith', 'endsWith'].includes(operator)) {
-      condition = { [operator]: value, mode: 'insensitive' };
-    } else if (operator === 'equals') {
-      condition = value;
-    } else {
-      condition = { [operator]: value };
-    }
-
+    const condition = this.mapOperatorToPrisma(operator, value);
     return this.nestRelations(segments, condition);
+  }
+
+  private mapOperatorToPrisma(operator: string, value: any): any {
+    switch (operator) {
+      case 'equals':
+        return value;
+      case 'not_equals':
+        return { not: value };
+      case 'greater_than':
+        return { gt: value };
+      case 'greater_than_equals':
+        return { gte: value };
+      case 'less_than':
+        return { lt: value };
+      case 'less_than_equals':
+        return { lte: value };
+      case 'contains':
+        return { contains: String(value), mode: 'insensitive' };
+      case 'starts_with':
+        return { startsWith: String(value), mode: 'insensitive' };
+      case 'ends_with':
+        return { endsWith: String(value), mode: 'insensitive' };
+      case 'is_empty':
+        return { equals: null };
+      case 'is_not_empty':
+        return { not: null };
+      case 'in':
+        return { in: Array.isArray(value) ? value : [value] };
+      case 'not_in':
+        return { notIn: Array.isArray(value) ? value : [value] };
+      default:
+        throw new BadRequestException(
+          this.i18n.t('common.ERRORS.INVALID_OPERATOR', {
+            defaultValue: `Invalid operator: ${operator}`,
+          }),
+        );
+    }
   }
 
   private nestRelations(segments: string[], condition: any): any {

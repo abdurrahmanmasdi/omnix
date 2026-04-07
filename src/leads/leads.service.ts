@@ -150,19 +150,6 @@ export class LeadsService {
       dynamicConditions.push({ priority: filters.priority });
     }
 
-    const search = filters.search?.trim();
-
-    if (search) {
-      dynamicConditions.push({
-        OR: [
-          { first_name: { contains: search, mode: 'insensitive' } },
-          { last_name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { phone_number: { contains: search, mode: 'insensitive' } },
-        ],
-      });
-    }
-
     if (Object.keys(dynamicWhere).length > 0) {
       dynamicConditions.push(dynamicWhere);
     }
@@ -242,19 +229,6 @@ export class LeadsService {
 
     if (filters.priority) {
       dynamicConditions.push({ priority: filters.priority });
-    }
-
-    const search = filters.search?.trim();
-
-    if (search) {
-      dynamicConditions.push({
-        OR: [
-          { first_name: { contains: search, mode: 'insensitive' } },
-          { last_name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { phone_number: { contains: search, mode: 'insensitive' } },
-        ],
-      });
     }
 
     if (Object.keys(dynamicWhere).length > 0) {

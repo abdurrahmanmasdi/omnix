@@ -151,7 +151,7 @@ export class ChatService {
     });
 
     // Update the conversation's updated_at timestamp
-    await this.prisma.conversation.update({
+    await this.prisma.conversation.updateMany({
       where: { id: conversationId },
       data: { updated_at: new Date() },
     });

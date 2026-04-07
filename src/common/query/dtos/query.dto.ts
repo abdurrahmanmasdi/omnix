@@ -42,13 +42,4 @@ export class BaseQueryDto {
   @IsOptional()
   @IsString()
   sorts?: string;
-
-  @ApiPropertyOptional({
-    example: 'john',
-    description: 'Generic search text',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  search?: string;
 }

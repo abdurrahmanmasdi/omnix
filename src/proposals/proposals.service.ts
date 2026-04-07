@@ -91,15 +91,6 @@ export class ProposalsService {
       dynamicConditions.push(dynamicWhere);
     }
 
-    const search = filters.search?.trim();
-    if (search) {
-      dynamicConditions.push({
-        OR: [
-          { status: { in: search.toUpperCase() as any } }, // This is basic for string matching if status matches roughly
-        ],
-      });
-    }
-
     const where: Prisma.ProposalWhereInput = {
       ...(dynamicConditions.length > 0 ? { AND: dynamicConditions } : {}),
     };
