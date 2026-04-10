@@ -11,6 +11,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RequestContextService } from '../request-context/request-context.service';
 import { MembershipStatus } from '@prisma/client';
 import { INVITATION_STATUS } from '../constants/invitation-status';
+import { UpdateUserProfileDto } from './dtos/update-user-profile.dto';
+import { UpdateMemberProfileDto } from './dtos/update-member-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -359,5 +361,240 @@ export class UsersService {
       `[UsersService] User ${userId} has ${result.length} permissions in organization ${organizationId}`,
     );
     return result;
+  }
+
+  /**
+   * Get performance dashboard profile including user, membership, and calculated metrics
+   * Calculates MTD revenue (Month-to-Date) and active pipeline value
+   */
+  async getPerformanceProfile(userId: string, organizationId: string) {
+    this.logger.debug(
+      `[UsersService] Fetching performance profile for user ${userId} in organization ${organizationId}`,
+    );
+
+    // Fetch user and membership
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        avatar_url: true,
+        phone_number: true,
+        whatsapp_number: true,
+        spoken_languages: true,
+        created_at: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
+      );
+    }
+
+    // Fetch membership
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+      select: {
+        id: true,
+        job_title: true,
+        agent_tier: true,
+        specializations: true,
+        availability_status: true,
+        max_active_leads: true,
+        commission_rate: true,
+        monthly_revenue_target: true,
+        status: true,
+        created_at: true,
+      },
+    });
+
+    if (!membership) {
+      throw new NotFoundException(
+        this.i18n.t('organizations.ERRORS.MEMBERSHIP_NOT_FOUND'),
+      );
+    }
+
+    // Calculate MTD closed revenue (Month-to-Date)
+    const firstDayOfMonth = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      1,
+    );
+
+    const mtdRevenueResult = await this.prisma.lead.aggregate({
+      where: {
+        assigned_agent_id: userId,
+        organization_id: organizationId,
+        status: 'WON',
+        updated_at: {
+          gte: firstDayOfMonth,
+        },
+      },
+      _sum: {
+        estimated_value: true,
+      },
+    });
+
+    // Calculate active pipeline value
+    const activePipelineResult = await this.prisma.lead.aggregate({
+      where: {
+        assigned_agent_id: userId,
+        organization_id: organizationId,
+        status: 'OPEN',
+      },
+      _sum: {
+        estimated_value: true,
+      },
+    });
+
+    return {
+      user,
+      membership,
+      metrics: {
+        closed_revenue_mtd: mtdRevenueResult._sum.estimated_value ?? 0,
+        active_pipeline_value: activePipelineResult._sum.estimated_value ?? 0,
+      },
+    };
+  }
+
+  /**
+   * Update user's global profile information
+   * Applies to all organizations the user is a member of
+   */
+  async updateGlobalProfile(userId: string, data: UpdateUserProfileDto) {
+    this.logger.debug(
+      `[UsersService] Updating global profile for user ${userId}`,
+    );
+
+    const updateData: Record<string, any> = {};
+
+    if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
+    if (data.phone_number !== undefined)
+      updateData.phone_number = data.phone_number;
+    if (data.whatsapp_number !== undefined)
+      updateData.whatsapp_number = data.whatsapp_number;
+    if (data.spoken_languages !== undefined)
+      updateData.spoken_languages = data.spoken_languages;
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        avatar_url: true,
+        phone_number: true,
+        whatsapp_number: true,
+        spoken_languages: true,
+        created_at: true,
+      },
+    });
+
+    this.logger.debug(
+      `[UsersService] Global profile updated for user ${userId}`,
+    );
+    return updatedUser;
+  }
+
+  /**
+   * Update user's membership profile for a specific organization
+   * Organization-specific profile information like tier, specializations, etc.
+   *
+   * Security: Sensitive fields (commission_rate, monthly_revenue_target, agent_tier)
+   * can only be updated by users with 'members:manage' permission.
+   */
+  async updateMembershipProfile(
+    userId: string,
+    organizationId: string,
+    data: UpdateMemberProfileDto,
+  ) {
+    this.logger.debug(
+      `[UsersService] Updating membership profile for user ${userId} in organization ${organizationId}`,
+    );
+
+    // Check if sensitive fields are being updated
+    const sensitiveFields = [
+      'commission_rate',
+      'monthly_revenue_target',
+      'agent_tier',
+    ];
+    const hasSensitiveFields = sensitiveFields.some(
+      (field) => data[field as keyof UpdateMemberProfileDto] !== undefined,
+    );
+
+    // If sensitive fields are present, verify user has permission
+    if (hasSensitiveFields) {
+      const permissions = await this.getEffectivePermissions(
+        userId,
+        organizationId,
+      );
+      if (!permissions.includes('members:manage')) {
+        this.logger.warn(
+          `[UsersService] Unauthorized attempt to update sensitive membership fields by user ${userId} in organization ${organizationId}`,
+        );
+        throw new ForbiddenException(
+          this.i18n.t(
+            'organizations.ERRORS.ONLY_OWNER_CAN_PERFORM_THIS_ACTION',
+          ),
+        );
+      }
+    }
+
+    const updateData: Record<string, any> = {};
+
+    if (data.job_title !== undefined) updateData.job_title = data.job_title;
+    if (data.agent_tier !== undefined)
+      updateData.agent_tier = data.agent_tier as string;
+    if (data.specializations !== undefined)
+      updateData.specializations = data.specializations;
+    if (data.availability_status !== undefined)
+      updateData.availability_status = data.availability_status as string;
+    if (data.max_active_leads !== undefined)
+      updateData.max_active_leads = data.max_active_leads;
+    if (data.commission_rate !== undefined)
+      updateData.commission_rate = data.commission_rate;
+    if (data.monthly_revenue_target !== undefined)
+      updateData.monthly_revenue_target = data.monthly_revenue_target;
+
+    await this.prisma.organizationMembership.updateMany({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+      data: updateData,
+    });
+
+    // Fetch and return the updated membership for response
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+      select: {
+        id: true,
+        job_title: true,
+        agent_tier: true,
+        specializations: true,
+        availability_status: true,
+        max_active_leads: true,
+        commission_rate: true,
+        monthly_revenue_target: true,
+        status: true,
+        created_at: true,
+      },
+    });
+
+    this.logger.debug(
+      `[UsersService] Membership profile updated for user ${userId} in organization ${organizationId}`,
+    );
+    return membership;
   }
 }

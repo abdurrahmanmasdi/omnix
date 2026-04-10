@@ -18,6 +18,10 @@ model User {
   password_hash            String
   first_name               String
   last_name                String
+  avatar_url               String?
+  phone_number             String?
+  whatsapp_number          String?
+  spoken_languages         String[]                  @default([])
   created_at               DateTime                  @default(now())
   deleted_at               DateTime?
   is_email_verified        Boolean                   @default(false)
@@ -68,17 +72,24 @@ model Organization {
 }
 
 model OrganizationMembership {
-  id                  String                         @id @default(uuid()) @db.Uuid
-  user_id             String                         @db.Uuid
-  organization_id     String                         @db.Uuid
-  role_id             String                         @db.Uuid
-  created_at          DateTime                       @default(now())
-  status              MembershipStatus               @default(PENDING)
-  deleted_at          DateTime?
-  permissionOverrides MembershipPermissionOverride[]
-  organization        Organization                   @relation(fields: [organization_id], references: [id])
-  role                Role                           @relation(fields: [role_id], references: [id])
-  user                User                           @relation(fields: [user_id], references: [id])
+  id                     String                         @id @default(uuid()) @db.Uuid
+  user_id                String                         @db.Uuid
+  organization_id        String                         @db.Uuid
+  role_id                String                         @db.Uuid
+  job_title              String?
+  agent_tier             AgentTier                      @default(STANDARD)
+  specializations        String[]                       @default([])
+  availability_status    AvailabilityStatus             @default(ACTIVE)
+  max_active_leads       Int?
+  commission_rate        Decimal?                       @db.Decimal(5, 2)
+  monthly_revenue_target Decimal?                       @db.Decimal(12, 2)
+  created_at             DateTime                       @default(now())
+  status                 MembershipStatus               @default(PENDING)
+  deleted_at             DateTime?
+  permissionOverrides    MembershipPermissionOverride[]
+  organization           Organization                   @relation(fields: [organization_id], references: [id])
+  role                   Role                           @relation(fields: [role_id], references: [id])
+  user                   User                           @relation(fields: [user_id], references: [id])
 
   @@index([organization_id])
   @@index([organization_id, status])
@@ -410,6 +421,19 @@ enum ProposalStatus {
   VERIFIED
   REJECTED
   EXPIRED
+}
+
+enum AvailabilityStatus {
+  ACTIVE
+  ON_LEAVE
+  OFF_SHIFT
+}
+
+enum AgentTier {
+  JUNIOR
+  STANDARD
+  SENIOR
+  MANAGER
 }
 
 model Product {

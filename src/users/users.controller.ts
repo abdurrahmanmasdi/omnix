@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Delete,
+  Patch,
   Param,
   Request,
   UseGuards,
@@ -10,6 +11,7 @@ import {
   HttpStatus,
   Headers,
   BadRequestException,
+  Body,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,6 +22,8 @@ import {
 import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
+import { UpdateUserProfileDto } from './dtos/update-user-profile.dto';
+import { UpdateMemberProfileDto } from './dtos/update-member-profile.dto';
 
 interface AuthRequest extends ExpressRequest {
   user: { id: string };
@@ -233,5 +237,91 @@ export class UsersController {
     @Param('id') id: string,
   ): Promise<{ message: string }> {
     return await this.usersService.cancelJoinRequest(req.user.id, id);
+  }
+
+  @Get('performance-profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Get performance dashboard profile',
+    description:
+      'Retrieves combined user profile, membership info, and calculated sales metrics (MTD revenue and active pipeline value)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Performance profile retrieved successfully',
+    schema: {
+      properties: {
+        user: { type: 'object' },
+        membership: { type: 'object' },
+        metrics: {
+          type: 'object',
+          properties: {
+            closed_revenue_mtd: { type: 'number' },
+            active_pipeline_value: { type: 'number' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User or membership not found' })
+  async getPerformanceProfile(
+    @Request() req: AuthRequest,
+    @Headers('x-organization-id') organizationId: string,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('x-organization-id header is required');
+    }
+    return this.usersService.getPerformanceProfile(req.user.id, organizationId);
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Update global user profile',
+    description:
+      'Updates user profile information that applies across all organizations (avatar, phone, languages, etc.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async updateGlobalProfile(
+    @Request() req: AuthRequest,
+    @Body() data: UpdateUserProfileDto,
+  ) {
+    return this.usersService.updateGlobalProfile(req.user.id, data);
+  }
+
+  @Patch('me/membership')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Update membership profile',
+    description:
+      'Updates organization-specific profile information (job title, tier, specializations, availability, etc.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Membership profile updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Membership not found' })
+  async updateMembershipProfile(
+    @Request() req: AuthRequest,
+    @Headers('x-organization-id') organizationId: string,
+    @Body() data: UpdateMemberProfileDto,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('x-organization-id header is required');
+    }
+    return this.usersService.updateMembershipProfile(
+      req.user.id,
+      organizationId,
+      data,
+    );
   }
 }
