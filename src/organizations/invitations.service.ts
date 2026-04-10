@@ -188,8 +188,11 @@ export class InvitationsService {
       }
 
       // Check if user exists by email
-      const user = await this.prisma.user.findUnique({
-        where: { email: inviteDto.email },
+      const user = await this.prisma.user.findFirst({
+        where: {
+          email: inviteDto.email,
+          deleted_at: null,
+        },
       });
 
       // Check if user is already a member

@@ -111,8 +111,8 @@ export class OrganizationsService {
           const slug = this.generateSlug(createOrgDto.name);
 
           // Check for slug uniqueness
-          const existingOrg = await tx.organization.findUnique({
-            where: { slug: slug },
+          const existingOrg = await tx.organization.findFirst({
+            where: { slug, deleted_at: null },
           });
 
           if (existingOrg) {
@@ -212,8 +212,8 @@ export class OrganizationsService {
    */
   async findById(id: string): Promise<IOrganization> {
     try {
-      const organization = await this.prisma.organization.findUnique({
-        where: { id },
+      const organization = await this.prisma.organization.findFirst({
+        where: { id, deleted_at: null },
         include: { bank_accounts: true, social_links: true },
       });
       if (!organization) {
@@ -242,8 +242,8 @@ export class OrganizationsService {
    */
   async findBySlug(slug: string): Promise<IOrganization> {
     try {
-      const organization = await this.prisma.organization.findUnique({
-        where: { slug },
+      const organization = await this.prisma.organization.findFirst({
+        where: { slug, deleted_at: null },
         include: { bank_accounts: true, social_links: true },
       });
 

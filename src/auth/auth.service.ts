@@ -96,7 +96,12 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<IValidatedUser | null> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email,
+        deleted_at: null,
+      },
+    });
     if (!user) return null;
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return null;
@@ -265,7 +270,12 @@ export class AuthService {
     inviteToken?: string,
   ): Promise<IUserPublic> {
     return this.requestContextService.runWithBypass(async () => {
-      const existing = await this.prisma.user.findUnique({ where: { email } });
+      const existing = await this.prisma.user.findFirst({
+        where: {
+          email,
+          deleted_at: null,
+        },
+      });
       if (existing) {
         throw new BadRequestException(
           this.i18n.t('auth.ERRORS.USER_ALREADY_EXISTS'),
@@ -370,8 +380,11 @@ export class AuthService {
   }
 
   async resendVerification(email: string): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email,
+        deleted_at: null,
+      },
       select: {
         id: true,
         email: true,
@@ -394,8 +407,11 @@ export class AuthService {
   }
 
   async requestPasswordReset(email: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email,
+        deleted_at: null,
+      },
       select: {
         id: true,
         email: true,

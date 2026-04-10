@@ -9,6 +9,7 @@ import {
 import { I18nService } from 'nestjs-i18n';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestContextService } from '../request-context/request-context.service';
+import { PermissionsService } from '../auth/services/permissions.service';
 import { MembershipStatus } from '@prisma/client';
 import { INVITATION_STATUS } from '../constants/invitation-status';
 import { UpdateUserProfileDto } from './dtos/update-user-profile.dto';
@@ -22,6 +23,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
     private readonly requestContextService: RequestContextService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   /**
@@ -508,7 +510,7 @@ export class UsersService {
    * Update user's membership profile for a specific organization
    * Organization-specific profile information like tier, specializations, etc.
    *
-   * Security: Sensitive fields (commission_rate, monthly_revenue_target, agent_tier)
+   * Security: Sensitive fields (agent_tier, commission_rate, monthly_revenue_target, max_active_leads)
    * can only be updated by users with 'members:manage' permission.
    */
   async updateMembershipProfile(
@@ -522,9 +524,10 @@ export class UsersService {
 
     // Check if sensitive fields are being updated
     const sensitiveFields = [
+      'agent_tier',
       'commission_rate',
       'monthly_revenue_target',
-      'agent_tier',
+      'max_active_leads',
     ];
     const hasSensitiveFields = sensitiveFields.some(
       (field) => data[field as keyof UpdateMemberProfileDto] !== undefined,
@@ -532,11 +535,12 @@ export class UsersService {
 
     // If sensitive fields are present, verify user has permission
     if (hasSensitiveFields) {
-      const permissions = await this.getEffectivePermissions(
+      const hasManagePermission = await this.permissionsService.hasPermission(
         userId,
         organizationId,
+        'members:manage',
       );
-      if (!permissions.includes('members:manage')) {
+      if (!hasManagePermission) {
         this.logger.warn(
           `[UsersService] Unauthorized attempt to update sensitive membership fields by user ${userId} in organization ${organizationId}`,
         );

@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsOptional,
   IsString,
@@ -44,12 +44,7 @@ export class UpdateMemberProfileDto {
   })
   agent_tier?: AgentTier;
 
-  @ApiPropertyOptional({
-    description: 'List of specializations/expertise areas',
-    example: ['Real Estate', 'Commercial', 'Residential'],
-    type: [String],
-    isArray: true,
-  })
+  @ApiProperty({ type: [String], isArray: true, required: false })
   @IsOptional()
   @IsArray({
     message: 'specializations must be an array of strings',

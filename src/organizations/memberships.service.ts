@@ -12,9 +12,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JoinOrganizationDto } from './dtos/join-organization.dto';
 import { ApproveMembershipRequestDto } from './dtos/approve-membership-request.dto';
 import { MembershipStatus } from '@prisma/client';
-import { AccessVerificationService } from '../access-control/access-verification.service';
 import { RedisService } from '../redis/redis.service';
 import { RequestContextService } from '../request-context/request-context.service';
+import { PermissionsService } from '../auth/services/permissions.service';
+import { AppPermission } from '../constants/permissions.registry';
 
 @Injectable()
 export class MembershipsService {
@@ -23,9 +24,9 @@ export class MembershipsService {
   constructor(
     private prisma: PrismaService,
     private i18n: I18nService,
-    private accessVerificationService: AccessVerificationService,
     private redisService: RedisService,
     private requestContextService: RequestContextService,
+    private permissionsService: PermissionsService,
   ) {}
 
   /**
@@ -34,27 +35,22 @@ export class MembershipsService {
    */
   async getPendingRequests(organizationId: string, currentUserId: string) {
     try {
-      const activeMembership =
-        await this.prisma.organizationMembership.findFirst({
-          where: {
-            user_id: currentUserId,
-            status: {
-              // Keep backward compatibility while transitioning from legacy lowercase statuses.
-              in: [MembershipStatus.ACTIVE],
-            },
-          },
-          select: { id: true },
-        });
+      const hasManagePermission = await this.permissionsService.hasPermission(
+        currentUserId,
+        organizationId,
+        AppPermission.TEAM_MEMBERS_MANAGE,
+      );
 
-      if (!activeMembership) {
+      if (!hasManagePermission) {
         throw new ForbiddenException(
-          this.i18n.t('auth.ERRORS.UNAUTHORIZED_ACCESS'),
+          this.i18n.t('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
         );
       }
 
       const pendingRequests = await this.prisma.organizationMembership.findMany(
         {
           where: {
+            organization_id: organizationId,
             status: MembershipStatus.PENDING,
           },
           include: {
@@ -125,8 +121,11 @@ export class MembershipsService {
       }
 
       // Find organization by slug
-      const organization = await this.prisma.organization.findUnique({
-        where: { slug: joinOrgDto.slug },
+      const organization = await this.prisma.organization.findFirst({
+        where: {
+          slug: joinOrgDto.slug,
+          deleted_at: null,
+        },
       });
 
       if (!organization) {
@@ -243,10 +242,22 @@ export class MembershipsService {
   async approveJoinRequest(
     organizationId: string,
     membershipId: string,
-    _requesterUserId: string,
+    requesterUserId: string,
     dto: ApproveMembershipRequestDto,
   ): Promise<{ message: string; membershipId: string; status: string }> {
     try {
+      const hasManagePermission = await this.permissionsService.hasPermission(
+        requesterUserId,
+        organizationId,
+        AppPermission.TEAM_MEMBERS_MANAGE,
+      );
+
+      if (!hasManagePermission) {
+        throw new ForbiddenException(
+          this.i18n.t('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
+        );
+      }
+
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
       });
@@ -279,6 +290,7 @@ export class MembershipsService {
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {
           id: membershipId,
+          organization_id: organizationId,
         },
       });
 
@@ -337,10 +349,17 @@ export class MembershipsService {
     requesterUserId: string,
   ): Promise<{ message: string; membershipId: string; status: string }> {
     try {
-      await this.accessVerificationService.verifyIsOwnerOrAdmin(
-        organizationId,
+      const hasManagePermission = await this.permissionsService.hasPermission(
         requesterUserId,
+        organizationId,
+        AppPermission.TEAM_MEMBERS_MANAGE,
       );
+
+      if (!hasManagePermission) {
+        throw new ForbiddenException(
+          this.i18n.t('auth.ERRORS.INSUFFICIENT_PERMISSIONS'),
+        );
+      }
 
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
@@ -355,6 +374,7 @@ export class MembershipsService {
       const membership = await this.prisma.organizationMembership.findFirst({
         where: {
           id: membershipId,
+          organization_id: organizationId,
         },
         include: {
           role: {
@@ -381,6 +401,7 @@ export class MembershipsService {
       ) {
         const activeOwners = await this.prisma.organizationMembership.findMany({
           where: {
+            organization_id: organizationId,
             status: MembershipStatus.ACTIVE,
             role: {
               slug: 'owner',
@@ -450,6 +471,7 @@ export class MembershipsService {
       const activeMembership =
         await this.prisma.organizationMembership.findFirst({
           where: {
+            organization_id: organizationId,
             user_id: currentUserId,
             status: MembershipStatus.ACTIVE,
           },
@@ -465,6 +487,7 @@ export class MembershipsService {
       // ========== DATA FETCH: Query active members with their roles ==========
       const members = await this.prisma.organizationMembership.findMany({
         where: {
+          organization_id: organizationId,
           status: MembershipStatus.ACTIVE,
         },
         include: {

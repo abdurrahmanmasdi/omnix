@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsOptional,
   IsString,
@@ -55,12 +55,7 @@ export class UpdateUserProfileDto {
   })
   whatsapp_number?: string;
 
-  @ApiPropertyOptional({
-    description: 'List of languages spoken by the user',
-    example: ['English', 'Spanish', 'French'],
-    type: [String],
-    isArray: true,
-  })
+  @ApiProperty({ type: [String], isArray: true, required: false })
   @IsOptional()
   @IsArray({
     message: 'spoken_languages must be an array of strings',
