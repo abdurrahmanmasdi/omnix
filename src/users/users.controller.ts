@@ -244,7 +244,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Get performance dashboard profile',
     description:
-      'Retrieves combined user profile, membership info, and calculated sales metrics (MTD revenue and active pipeline value)',
+      'Retrieves combined user profile, membership info, and calculated sales metrics (MTD revenue)',
   })
   @ApiResponse({
     status: 200,
@@ -257,7 +257,6 @@ export class UsersController {
           type: 'object',
           properties: {
             closed_revenue_mtd: { type: 'number' },
-            active_pipeline_value: { type: 'number' },
           },
         },
       },

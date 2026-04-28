@@ -367,7 +367,7 @@ export class UsersService {
 
   /**
    * Get performance dashboard profile including user, membership, and calculated metrics
-   * Calculates MTD revenue (Month-to-Date) and active pipeline value
+   * Calculates MTD revenue (Month-to-Date)
    */
   async getPerformanceProfile(userId: string, organizationId: string) {
     this.logger.debug(
@@ -408,9 +408,6 @@ export class UsersService {
         agent_tier: true,
         specializations: true,
         availability_status: true,
-        max_active_leads: true,
-        commission_rate: true,
-        monthly_revenue_target: true,
         status: true,
         created_at: true,
       },
@@ -443,24 +440,11 @@ export class UsersService {
       },
     });
 
-    // Calculate active pipeline value
-    const activePipelineResult = await this.prisma.lead.aggregate({
-      where: {
-        assigned_agent_id: userId,
-        organization_id: organizationId,
-        status: 'OPEN',
-      },
-      _sum: {
-        estimated_value: true,
-      },
-    });
-
     return {
       user,
       membership,
       metrics: {
         closed_revenue_mtd: mtdRevenueResult._sum.estimated_value ?? 0,
-        active_pipeline_value: activePipelineResult._sum.estimated_value ?? 0,
       },
     };
   }
@@ -510,7 +494,7 @@ export class UsersService {
    * Update user's membership profile for a specific organization
    * Organization-specific profile information like tier, specializations, etc.
    *
-   * Security: Sensitive fields (agent_tier, commission_rate, monthly_revenue_target, max_active_leads)
+   * Security: Sensitive fields (agent_tier, commission_rate, monthly_revenue_target)
    * can only be updated by users with 'members:manage' permission.
    */
   async updateMembershipProfile(
@@ -527,7 +511,6 @@ export class UsersService {
       'agent_tier',
       'commission_rate',
       'monthly_revenue_target',
-      'max_active_leads',
     ];
     const hasSensitiveFields = sensitiveFields.some(
       (field) => data[field as keyof UpdateMemberProfileDto] !== undefined,
@@ -561,8 +544,6 @@ export class UsersService {
       updateData.specializations = data.specializations;
     if (data.availability_status !== undefined)
       updateData.availability_status = data.availability_status as string;
-    if (data.max_active_leads !== undefined)
-      updateData.max_active_leads = data.max_active_leads;
     if (data.commission_rate !== undefined)
       updateData.commission_rate = data.commission_rate;
     if (data.monthly_revenue_target !== undefined)
@@ -588,9 +569,6 @@ export class UsersService {
         agent_tier: true,
         specializations: true,
         availability_status: true,
-        max_active_leads: true,
-        commission_rate: true,
-        monthly_revenue_target: true,
         status: true,
         created_at: true,
       },

@@ -26,7 +26,6 @@ import {
   type MessageWithSender,
 } from './chat.service';
 import { CreateConversationDto } from './dtos/create-conversation.dto';
-import { CreateGroupConversationDto } from './dtos/create-group-conversation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 interface SuccessResponse<T> {
@@ -118,57 +117,6 @@ export class ChatController {
     return {
       status: 'success',
       data: conversation,
-    };
-  }
-
-  /**
-   * Create a new group conversation
-   * @param req - Express request with authenticated user
-   * @param orgId - Organization ID from x-organization-id header
-   * @param createGroupConversationDto - DTO containing name and participantIds
-   * @returns The created group conversation with all participants
-   */
-  @Post('groups')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new group conversation' })
-  @ApiResponse({
-    status: 201,
-    description: 'Group conversation created successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid request or missing organization ID header',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'One or more participants not found',
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createGroupConversation(
-    @Request() req: AuthRequest,
-    @Headers('x-organization-id') orgId?: string,
-    @Body() createGroupConversationDto?: CreateGroupConversationDto,
-  ): Promise<SuccessResponse<ConversationWithDetails>> {
-    if (!orgId) {
-      throw new BadRequestException(
-        'Organization ID header (x-organization-id) is required',
-      );
-    }
-
-    if (!createGroupConversationDto) {
-      throw new BadRequestException('Request body is required');
-    }
-
-    const groupConversation = await this.chatService.createGroupConversation(
-      orgId,
-      req.user.id,
-      createGroupConversationDto.name,
-      createGroupConversationDto.participantIds,
-    );
-
-    return {
-      status: 'success',
-      data: groupConversation,
     };
   }
 

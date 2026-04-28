@@ -5,7 +5,6 @@ import {
   IsEnum,
   IsArray,
   ArrayNotEmpty,
-  IsInt,
   Min,
   Max,
   IsNumber,
@@ -72,22 +71,6 @@ export class UpdateMemberProfileDto {
     message: 'availability_status must be one of: ACTIVE, ON_LEAVE, OFF_SHIFT',
   })
   availability_status?: AvailabilityStatus;
-
-  @ApiPropertyOptional({
-    description: 'Maximum number of active leads this member can handle',
-    example: 50,
-    type: Number,
-    minimum: 1,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({
-    message: 'max_active_leads must be an integer',
-  })
-  @Min(1, {
-    message: 'max_active_leads must be at least 1',
-  })
-  max_active_leads?: number;
 
   @ApiPropertyOptional({
     description: 'Commission rate as a percentage (0-100)',

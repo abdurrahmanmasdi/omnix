@@ -36,9 +36,6 @@ describe('LeadsService', () => {
       updateMany: jest.fn(),
       deleteMany: jest.fn(),
     },
-    pipelineStage: {
-      findFirst: jest.fn(),
-    },
     leadSource: {
       findFirst: jest.fn(),
     },
@@ -95,7 +92,6 @@ describe('LeadsService', () => {
 
       const result = await service.create('org-1', 'user-1', dto);
 
-      expect(mockPrismaService.pipelineStage.findFirst).not.toHaveBeenCalled();
       expect(mockPrismaService.leadSource.findFirst).not.toHaveBeenCalled();
       expect(
         mockPrismaService.organizationMembership.findFirst,
@@ -137,16 +133,12 @@ describe('LeadsService', () => {
         country: 'TR',
         timezone: 'Europe/Istanbul',
         primary_language: 'tr',
-        pipeline_stage_id: '11111111-1111-4111-8111-111111111111',
         source_id: '22222222-2222-4222-8222-222222222222',
         assigned_agent_id: '33333333-3333-4333-8333-333333333333',
         expected_service_date: '2026-05-01T10:00:00.000Z',
         next_follow_up_at: '2026-05-02T10:00:00.000Z',
       };
 
-      mockPrismaService.pipelineStage.findFirst.mockResolvedValueOnce({
-        id: dto.pipeline_stage_id,
-      });
       mockPrismaService.leadSource.findFirst.mockResolvedValueOnce({
         id: dto.source_id,
         is_active: true,
@@ -180,28 +172,6 @@ describe('LeadsService', () => {
       );
       expect(createPayload.data.next_follow_up_at).toEqual(
         new Date(dto.next_follow_up_at!),
-      );
-    });
-
-    it('throws when pipeline stage is outside organization scope', async () => {
-      mockPrismaService.pipelineStage.findFirst.mockResolvedValueOnce(null);
-
-      const dto: CreateLeadDto = {
-        first_name: 'Jane',
-        last_name: 'Doe',
-        phone_number: '+905551112233',
-        country: 'TR',
-        timezone: 'Europe/Istanbul',
-        primary_language: 'tr',
-        pipeline_stage_id: '11111111-1111-4111-8111-111111111111',
-      };
-
-      await expect(service.create('org-1', 'user-1', dto)).rejects.toThrow(
-        BadRequestException,
-      );
-
-      expect(mockI18nService.t).toHaveBeenCalledWith(
-        'leads.ERRORS.PIPELINE_STAGE_OUTSIDE_SCOPE',
       );
     });
 

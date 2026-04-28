@@ -259,49 +259,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Join a conversation room
-   */
-  @SubscribeMessage('join_conversation')
-  async handleJoinConversation(
-    @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: ConversationEventDto,
-  ): Promise<void> {
-    try {
-      const { conversationId } = payload;
-      const { userId, orgId } = this.getSocketIdentity(client);
-
-      await this.runWithTenantContext(orgId, async () => {
-        const conversation = await this.chatService.getConversation(
-          conversationId,
-          userId,
-        );
-
-        if (conversation.organization_id !== orgId) {
-          throw new ForbiddenException('Conversation is outside tenant scope');
-        }
-
-        await client.join(conversationId);
-
-        this.logger.log(
-          `[ChatGateway] User ${userId} joined conversation ${conversationId}`,
-        );
-
-        this.server.to(conversationId).emit('user_joined', {
-          userId,
-          conversationId,
-          timestamp: new Date(),
-        });
-      });
-    } catch (error) {
-      this.logger.error(`[ChatGateway] Failed to join conversation: ${error}`);
-      client.emit('error', {
-        message: 'Failed to join conversation',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-
-  /**
    * Send a message to a conversation
    */
   @UseGuards(ThrottlerGuard)
@@ -353,36 +310,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
-    }
-  }
-
-  /**
-   * Leave a conversation room
-   */
-  @SubscribeMessage('leave_conversation')
-  handleLeaveConversation(
-    @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() payload: ConversationEventDto,
-  ): void {
-    try {
-      const { conversationId } = payload;
-      const { userId } = this.getSocketIdentity(client);
-
-      void client.leave(conversationId);
-
-      this.logger.log(
-        `[ChatGateway] User ${userId} left conversation ${conversationId}`,
-      );
-
-      // Notify others in the room that user left
-
-      this.server.to(conversationId).emit('user_left', {
-        userId,
-        conversationId,
-        timestamp: new Date(),
-      });
-    } catch (error) {
-      this.logger.error(`[ChatGateway] Failed to leave conversation: ${error}`);
     }
   }
 

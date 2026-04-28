@@ -4,7 +4,6 @@
     "RESOURCE_NOT_FOUND": "Resource not found.",
     "ACCESS_FORBIDDEN": "You are not allowed to access this lead.",
     "INVALID_FILTERS": "Invalid leads filters payload.",
-    "PIPELINE_STAGE_OUTSIDE_SCOPE": "Pipeline stage is outside the tenant scope.",
     "SOURCE_OUTSIDE_SCOPE": "Lead source is outside the tenant scope.",
     "SOURCE_INACTIVE": "Cannot assign a lead to an inactive source.",
     "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Assigned agent must be an active member in this organization.",

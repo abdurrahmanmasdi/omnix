@@ -39,7 +39,6 @@ const LEAD_RELATIONS_INCLUDE = {
   assigned_agent: {
     select: LEAD_ASSIGNED_AGENT_SELECT,
   },
-  pipeline_stage: true,
   source: true,
 } as const;
 
@@ -66,7 +65,6 @@ export class LeadsService {
     return this.prisma.lead.create({
       data: {
         organization_id: organizationId,
-        pipeline_stage_id: dto.pipeline_stage_id,
         assigned_agent_id: dto.assigned_agent_id,
         source_id: dto.source_id,
         first_name: dto.first_name,
@@ -113,7 +111,6 @@ export class LeadsService {
         'source_id',
         'assigned_agent_id',
         'country',
-        'pipeline_stage_id',
         'first_name',
         'last_name',
         'email',
@@ -127,9 +124,8 @@ export class LeadsService {
         'status',
         'priority',
         'assigned_agent.first_name',
-        'pipeline_stage.order_index',
       ],
-      uuidFields: ['source_id', 'assigned_agent_id', 'pipeline_stage_id'],
+      uuidFields: ['source_id', 'assigned_agent_id'],
       numberFields: ['estimated_value'],
     };
 
@@ -194,7 +190,6 @@ export class LeadsService {
         'source_id',
         'assigned_agent_id',
         'country',
-        'pipeline_stage_id',
         'first_name',
         'last_name',
         'email',
@@ -208,9 +203,8 @@ export class LeadsService {
         'status',
         'priority',
         'assigned_agent.first_name',
-        'pipeline_stage.order_index',
       ],
-      uuidFields: ['source_id', 'assigned_agent_id', 'pipeline_stage_id'],
+      uuidFields: ['source_id', 'assigned_agent_id'],
       numberFields: ['estimated_value'],
     };
 
@@ -338,8 +332,6 @@ export class LeadsService {
     dto: BulkCreateLeadsDto,
   ): Promise<{ count: number }> {
     await this.validateScopedReferences(organizationId, {
-      pipeline_stage_id: dto.leads.find((lead) => lead.pipeline_stage_id)
-        ?.pipeline_stage_id,
       assigned_agent_id: dto.leads.find((lead) => lead.assigned_agent_id)
         ?.assigned_agent_id,
       source_id: dto.leads.find((lead) => lead.source_id)?.source_id,
@@ -347,7 +339,6 @@ export class LeadsService {
 
     const mappedLeads: Prisma.LeadCreateManyInput[] = dto.leads.map((lead) => ({
       organization_id: organizationId,
-      pipeline_stage_id: lead.pipeline_stage_id,
       assigned_agent_id: lead.assigned_agent_id,
       source_id: lead.source_id,
       first_name: lead.first_name,
@@ -389,7 +380,6 @@ export class LeadsService {
     dto: BulkUpdateLeadsDto,
   ): Promise<BulkUpdateLeadsResult> {
     await this.validateScopedReferences(organizationId, {
-      pipeline_stage_id: dto.update_data.pipeline_stage_id,
       assigned_agent_id: dto.update_data.assigned_agent_id,
     });
 
@@ -448,7 +438,6 @@ export class LeadsService {
         priority: dto.priority,
         estimated_value: dto.estimated_value,
         currency: dto.currency,
-        pipeline_stage_id: dto.pipeline_stage_id,
         assigned_agent_id: dto.assigned_agent_id,
         source_id: dto.source_id,
       }),
@@ -466,7 +455,6 @@ export class LeadsService {
       status: dto.status,
       priority: dto.priority,
       assigned_agent_id: dto.assigned_agent_id,
-      pipeline_stage_id: dto.pipeline_stage_id,
     });
   }
 
@@ -487,18 +475,10 @@ export class LeadsService {
   private async validateScopedReferences(
     organizationId: string,
     dto: {
-      pipeline_stage_id?: string | null;
       source_id?: string | null;
       assigned_agent_id?: string | null;
     },
   ): Promise<void> {
-    if (dto.pipeline_stage_id) {
-      await this.assertPipelineStageInOrganization(
-        organizationId,
-        dto.pipeline_stage_id,
-      );
-    }
-
     if (dto.source_id) {
       await this.assertSourceInOrganization(organizationId, dto.source_id);
     }
@@ -507,24 +487,6 @@ export class LeadsService {
       await this.assertAssignedAgentInOrganization(
         organizationId,
         dto.assigned_agent_id,
-      );
-    }
-  }
-
-  private async assertPipelineStageInOrganization(
-    organizationId: string,
-    pipelineStageId: string,
-  ): Promise<void> {
-    const stage = await this.prisma.pipelineStage.findFirst({
-      where: {
-        id: pipelineStageId,
-      },
-      select: { id: true },
-    });
-
-    if (!stage) {
-      throw new BadRequestException(
-        this.i18n.t('leads.ERRORS.PIPELINE_STAGE_OUTSIDE_SCOPE'),
       );
     }
   }

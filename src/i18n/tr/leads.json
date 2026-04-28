@@ -4,7 +4,6 @@
     "RESOURCE_NOT_FOUND": "Kaynak bulunamadı.",
     "ACCESS_FORBIDDEN": "Bu lead'e erişim yetkiniz yok.",
     "INVALID_FILTERS": "Lead filtreleri yükü geçersiz.",
-    "PIPELINE_STAGE_OUTSIDE_SCOPE": "Pipeline aşaması tenant kapsamı dışında.",
     "SOURCE_OUTSIDE_SCOPE": "Lead kaynağı tenant kapsamı dışında.",
     "SOURCE_INACTIVE": "Pasif bir kaynağa lead atanamaz.",
     "ASSIGNED_AGENT_OUTSIDE_SCOPE": "Atanan temsilci bu organizasyonda aktif üye olmalıdır.",

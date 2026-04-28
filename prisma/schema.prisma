@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"] // Required for pgvector
 }
 
 generator erd {
@@ -9,7 +10,9 @@ generator erd {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  // url        = env("DATABASE_URL")
+  extensions = [vector] // Enables pgvector
 }
 
 model User {
@@ -63,12 +66,51 @@ model Organization {
   leadSources          LeadSource[]
   leads                Lead[]
   memberships          OrganizationMembership[]
-  pipelineStages       PipelineStage[]
   roles                Role[]
   products             Product[]
   proposals            Proposal[]
+  
+  // --- New AI Engine Relations ---
+  knowledgeBase        OrganizationKnowledge[]
+  aiPersona            OrganizationAIPersona?
 
   @@map("organizations")
+}
+
+// --- NEW: The AI Persona Settings ---
+model OrganizationAIPersona {
+  id                      String       @id @default(uuid()) @db.Uuid
+  organization_id         String       @unique @db.Uuid
+  name                    String       @default("Assistant")
+  voice_id                String?      // For ElevenLabs or OpenAI TTS mapping
+  system_prompt           String?      @db.Text
+  can_negotiate           Boolean      @default(false)
+  auto_attend_new_leads   Boolean      @default(true)
+  outbound_messages_speed Int          @default(50) // For the Drip Campaign Queue
+  sleep_start_hour        String?      // e.g., "23:00"
+  sleep_end_hour          String?      // e.g., "08:00"
+  created_at              DateTime     @default(now())
+  updated_at              DateTime     @updatedAt
+
+  organization            Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@map("organization_ai_personas")
+}
+
+// --- NEW: The Vector Database for RAG ---
+model OrganizationKnowledge {
+  id              String       @id @default(uuid()) @db.Uuid
+  organization_id String       @db.Uuid
+  file_name       String
+  content         String       @db.Text
+  embedding       Unsupported("vector(1536)")? // 1536 is standard for OpenAI embeddings
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+
+  @@index([organization_id])
+  @@map("organization_knowledge")
 }
 
 model OrganizationMembership {
@@ -80,9 +122,9 @@ model OrganizationMembership {
   agent_tier             AgentTier                      @default(STANDARD)
   specializations        String[]                       @default([])
   availability_status    AvailabilityStatus             @default(ACTIVE)
-  max_active_leads       Int?
-  commission_rate        Decimal?                       @db.Decimal(5, 2)
-  monthly_revenue_target Decimal?                       @db.Decimal(12, 2)
+  
+  // Removed manual quota/commission tracking fields here
+  
   created_at             DateTime                       @default(now())
   status                 MembershipStatus               @default(PENDING)
   deleted_at             DateTime?
@@ -191,6 +233,7 @@ model Conversation {
   organization_id String                    @db.Uuid
   is_group        Boolean                   @default(false)
   name            String?
+  handled_by      ActiveHandler             @default(AI) // Determines if AI or Human is routing messages
   created_at      DateTime                  @default(now())
   updated_at      DateTime                  @updatedAt
   deleted_at      DateTime?
@@ -219,33 +262,21 @@ model ConversationParticipant {
 model Message {
   id              String       @id @default(uuid()) @db.Uuid
   conversation_id String       @db.Uuid
-  sender_id       String       @db.Uuid
-  content         String
+  sender_id       String?      @db.Uuid // Nullable because the AI or System doesn't have a standard User ID
+  type            MessageType  @default(USER_TEXT)
+  content         String       @db.Text
+  audio_url       String?      // For Voice Notes
+  metadata        Json?        // To store Tool Call JSON, execution times, token counts
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
   deleted_at      DateTime?
   conversation    Conversation @relation(fields: [conversation_id], references: [id])
-  sender          User         @relation("SentMessages", fields: [sender_id], references: [id])
+  sender          User?        @relation("SentMessages", fields: [sender_id], references: [id])
 
   @@index([conversation_id])
   @@index([conversation_id, created_at])
   @@index([sender_id])
   @@map("messages")
-}
-
-model PipelineStage {
-  id              String       @id @default(uuid()) @db.Uuid
-  organization_id String       @db.Uuid
-  name            String
-  order_index     Int
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
-  deleted_at      DateTime?
-  leads           Lead[]
-  organization    Organization @relation(fields: [organization_id], references: [id])
-
-  @@index([organization_id])
-  @@map("pipeline_stages")
 }
 
 model LeadSource {
@@ -299,7 +330,6 @@ model LeadAttachment {
 model Lead {
   id                    String           @id @default(uuid()) @db.Uuid
   organization_id       String           @db.Uuid
-  pipeline_stage_id     String?          @db.Uuid
   assigned_agent_id     String?          @db.Uuid
   source_id             String?          @db.Uuid
   first_name            String
@@ -313,7 +343,7 @@ model Lead {
   primary_language      String
   preferred_language    String?
   social_links          Json?
-  status                LeadStatus       @default(OPEN)
+  status                LeadStatus       @default(NEW) // Upgraded for AI logic
   priority              Priority         @default(WARM)
   estimated_value       Decimal?
   currency              Currency         @default(USD)
@@ -326,12 +356,10 @@ model Lead {
   notes                 LeadNote[]
   assigned_agent        User?            @relation(fields: [assigned_agent_id], references: [id])
   organization          Organization     @relation(fields: [organization_id], references: [id])
-  pipeline_stage        PipelineStage?   @relation(fields: [pipeline_stage_id], references: [id])
   source                LeadSource?      @relation(fields: [source_id], references: [id])
   proposals             Proposal[]
 
   @@index([organization_id])
-  @@index([pipeline_stage_id])
   @@index([assigned_agent_id])
   @@index([source_id])
   @@index([status])
@@ -367,6 +395,33 @@ model BankAccount {
   @@index([organization_id])
 }
 
+// --- UPDATED & NEW ENUMS ---
+
+enum ActiveHandler {
+  AI
+  HUMAN
+}
+
+enum MessageType {
+  USER_TEXT
+  USER_AUDIO
+  AI_TEXT
+  AI_AUDIO
+  SYSTEM_PROMPT
+  TOOL_CALL
+  TOOL_RESULT
+}
+
+enum LeadStatus {
+  NEW           // Just entered system via Ad/CSV
+  QUALIFYING    // AI is actively talking to them
+  READY_TO_PAY  // AI triggered payment intent tool
+  HANDED_OFF    // Moved to human queue for complex medical/operations
+  WON
+  LOST
+  UNQUALIFIED
+}
+
 enum MembershipStatus {
   PENDING
   ACTIVE
@@ -378,13 +433,6 @@ enum Gender {
   FEMALE
   OTHER
   UNKNOWN
-}
-
-enum LeadStatus {
-  OPEN
-  WON
-  LOST
-  UNQUALIFIED
 }
 
 enum Priority {
@@ -407,10 +455,10 @@ enum AuthTokenType {
 }
 
 enum ProductType {
-  REAL_ESTATE_ASSET // Fixed asset, no dates (e.g., Villa sale)
-  SCHEDULED_EVENT // Fixed dates/capacity bucket (e.g., Boat Tour)
-  RESOURCE_RENTAL // Fluid time-blocked asset (e.g., Car Rental)
-  DYNAMIC_SERVICE // Formula pricing, infinite capacity (e.g., Airport Transfer)
+  REAL_ESTATE_ASSET
+  SCHEDULED_EVENT
+  RESOURCE_RENTAL
+  DYNAMIC_SERVICE 
 }
 
 enum ProposalStatus {
@@ -445,16 +493,13 @@ model Product {
   base_price      Decimal     @db.Decimal(12, 2)
   currency        String      @default("USD")
 
-  // Dynamic frontend form data (e.g., { bedrooms: 4 } vs { max_speed: 200 })
   specifications Json?
-
-  // Predictable extras: [{ "name": "VIP Van", "price": 100 }]
   available_addons Json?
-
+  
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
-
+  
   organization Organization       @relation(fields: [organization_id], references: [id])
   instances    ProductInstance[]
   media        ProductMedia[]
@@ -469,7 +514,7 @@ model ProductMedia {
   product_id String
   file_url   String
   file_name  String?
-  is_primary Boolean  @default(false) // Identifies the Proposal Cover Photo
+  is_primary Boolean  @default(false) 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -504,17 +549,15 @@ model Proposal {
   lead_id         String  @db.Uuid
   created_by_id   String  @db.Uuid
   bank_account_id String?
-
   status       ProposalStatus @default(DRAFT)
   total_amount Decimal        @db.Decimal(12, 2)
   currency     String         @default("USD")
 
-  client_notes String? @db.Text // Public notes visible to client
+  client_notes String?        @db.Text
 
-  public_link_hash     String    // Secure short-link for WhatsApp
+  public_link_hash     String    
   client_accepted_privacy_policy Boolean   @default(false)
   deleted_at           DateTime?
-
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -535,17 +578,16 @@ model Proposal {
 model ProposalLineItem {
   id          String  @id @default(uuid())
   proposal_id String
-  product_id  String? // Nullable for custom on-the-fly agent fees
-  instance_id String? // Used ONLY for SCHEDULED_EVENT (Tours)
+  product_id  String? 
+  instance_id String? 
 
-  // Used for RESOURCE_RENTAL (Cars) to block dynamic time ranges
   start_date DateTime?
   end_date   DateTime?
 
-  custom_name     String // e.g., "Legal Fee" or copies Product title
-  unit_price      Decimal   @db.Decimal(12, 2) // Agent's negotiated price
+  custom_name     String 
+  unit_price      Decimal   @db.Decimal(12, 2) 
   quantity        Int       @default(1)
-  selected_addons Json? // Array of addons the client bought
+  selected_addons Json?
   deleted_at      DateTime?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt

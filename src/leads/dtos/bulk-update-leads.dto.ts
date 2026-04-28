@@ -30,15 +30,6 @@ export class BulkUpdateLeadDataDto {
   @IsOptional()
   @IsUUID('4')
   assigned_agent_id?: string | null;
-
-  @ApiProperty({
-    example: '2f41db92-cdf8-4a6c-a40f-a35e9f8d9f2a',
-    required: false,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsUUID('4')
-  pipeline_stage_id?: string | null;
 }
 
 export class BulkUpdateLeadsDto {

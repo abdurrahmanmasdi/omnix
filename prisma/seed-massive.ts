@@ -23,10 +23,13 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 const leadStatuses: readonly LeadStatus[] = [
-  LeadStatus.OPEN,
   LeadStatus.WON,
   LeadStatus.LOST,
   LeadStatus.UNQUALIFIED,
+  LeadStatus.HANDED_OFF,
+  LeadStatus.NEW,
+  LeadStatus.QUALIFYING,
+  LeadStatus.READY_TO_PAY,
 ];
 
 const priorities: readonly Priority[] = [
@@ -84,17 +87,13 @@ async function main() {
     );
   }
 
-  const [memberships, pipelineStages, leadSources] = await Promise.all([
+  const [memberships, leadSources] = await Promise.all([
     prisma.organizationMembership.findMany({
       where: {
         organization_id: organization.id,
         status: MembershipStatus.ACTIVE,
       },
       select: { user_id: true },
-    }),
-    prisma.pipelineStage.findMany({
-      where: { organization_id: organization.id },
-      select: { id: true },
     }),
     prisma.leadSource.findMany({
       where: { organization_id: organization.id, is_active: true },
@@ -108,12 +107,6 @@ async function main() {
     );
   }
 
-  if (pipelineStages.length === 0) {
-    throw new Error(
-      `No pipeline stages found for organization ${organization.id}.`,
-    );
-  }
-
   if (leadSources.length === 0) {
     throw new Error(
       `No active lead sources found for organization ${organization.id}.`,
@@ -121,7 +114,6 @@ async function main() {
   }
 
   const assignedAgentIds = memberships.map((membership) => membership.user_id);
-  const pipelineStageIds = pipelineStages.map((stage) => stage.id);
   const leadSourceIds = leadSources.map((source) => source.id);
 
   let inserted = 0;
@@ -142,7 +134,6 @@ async function main() {
         return {
           organization_id: organization.id,
           assigned_agent_id: randomFrom(assignedAgentIds),
-          pipeline_stage_id: randomFrom(pipelineStageIds),
           source_id: randomFrom(leadSourceIds),
           first_name: firstName,
           last_name: lastName,
@@ -182,7 +173,7 @@ async function main() {
   const durationSeconds = (durationMs / 1000).toFixed(2);
 
   console.log(
-    `Stress seed completed for organization \"${organization.name}\" (${organization.id}) in ${durationSeconds}s.`,
+    `Stress seed completed for organization "${organization.name}" (${organization.id}) in ${durationSeconds}s.`,
   );
 }
 

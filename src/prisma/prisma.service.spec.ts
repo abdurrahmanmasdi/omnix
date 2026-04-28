@@ -27,7 +27,6 @@ type MockedPrismaBaseClient = {
   role: Record<string, jest.Mock>;
   invitation: Record<string, jest.Mock>;
   organizationMembership: Record<string, jest.Mock>;
-  pipelineStage: Record<string, jest.Mock>;
   leadSource: Record<string, jest.Mock>;
   message: DelegateMock;
   leadNote: DelegateMock;
@@ -107,7 +106,6 @@ jest.mock('@prisma/client', () => {
     role = createGenericDelegate();
     invitation = createGenericDelegate();
     organizationMembership = createGenericDelegate();
-    pipelineStage = createGenericDelegate();
     leadSource = createGenericDelegate();
     message = createSoftDeleteDelegate('Message');
     leadNote = createSoftDeleteDelegate('LeadNote');
@@ -223,10 +221,6 @@ jest.mock('@prisma/client', () => {
           conversation: bindModel(
             'Conversation',
             (previousClient.conversation as Record<string, unknown>) ?? {},
-          ),
-          pipelineStage: bindModel(
-            'PipelineStage',
-            (previousClient.pipelineStage as Record<string, unknown>) ?? {},
           ),
           leadSource: bindModel(
             'LeadSource',

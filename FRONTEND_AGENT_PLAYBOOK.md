@@ -320,7 +320,6 @@ Endpoints:
   "priority": "WARM",
   "estimated_value": "15000.50",
   "currency": "USD",
-  "pipeline_stage_id": "2f41db92-cdf8-4a6c-a40f-a35e9f8d9f2a",
   "assigned_agent_id": "f9ce8f72-9ec8-4db0-bf07-614ec2ec6143",
   "source_id": "c9a3874e-ebed-4fdf-8c14-f299f4d75668"
 }

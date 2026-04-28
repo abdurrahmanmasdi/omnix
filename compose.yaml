@@ -16,7 +16,7 @@ services:
     ports:
       - 3000:3000
   db:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: saas_postgres
     restart: always
     environment:
@@ -24,7 +24,7 @@ services:
       POSTGRES_PASSWORD: TpYc3JVfXoiAQmJMHfc
       POSTGRES_DB: saas_db
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
   redis:

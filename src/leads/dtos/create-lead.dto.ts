@@ -72,7 +72,11 @@ export class CreateLeadDto {
   @IsObject()
   social_links?: Record<string, unknown> | null;
 
-  @ApiProperty({ enum: LeadStatus, required: false, default: LeadStatus.OPEN })
+  @ApiProperty({
+    enum: LeadStatus,
+    required: false,
+    default: LeadStatus.UNQUALIFIED,
+  })
   @IsOptional()
   @IsEnum(LeadStatus)
   status?: LeadStatus;
@@ -114,15 +118,6 @@ export class CreateLeadDto {
   @IsOptional()
   @IsDateString()
   next_follow_up_at?: string | null;
-
-  @ApiProperty({
-    example: '2f41db92-cdf8-4a6c-a40f-a35e9f8d9f2a',
-    required: false,
-    nullable: true,
-  })
-  @IsOptional()
-  @IsUUID('4')
-  pipeline_stage_id?: string | null;
 
   @ApiProperty({
     example: 'f9ce8f72-9ec8-4db0-bf07-614ec2ec6143',

@@ -10,7 +10,6 @@ describe('AnalyticsService', () => {
   const leadAggregateMock = jest.fn();
   const leadGroupByMock = jest.fn();
   const leadFindManyMock = jest.fn();
-  const pipelineStageFindManyMock = jest.fn();
   const leadSourceFindManyMock = jest.fn();
 
   const mockPrismaService = {
@@ -19,9 +18,6 @@ describe('AnalyticsService', () => {
       aggregate: leadAggregateMock,
       groupBy: leadGroupByMock,
       findMany: leadFindManyMock,
-    },
-    pipelineStage: {
-      findMany: pipelineStageFindManyMock,
     },
     leadSource: {
       findMany: leadSourceFindManyMock,

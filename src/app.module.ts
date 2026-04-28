@@ -23,7 +23,6 @@ import { SeederModule } from './seeders/seeder.module';
 import { AccessControlModule } from './access-control/access-control.module';
 import { ChatModule } from './chat/chat.module';
 import { LeadsModule } from './leads/leads.module';
-import { PipelineStagesModule } from './pipeline-stages/pipeline-stages.module';
 import { LeadSourcesModule } from './lead-sources/lead-sources.module';
 import { LeadNotesModule } from './lead-notes/lead-notes.module';
 import { LeadAttachmentsModule } from './lead-attachments/lead-attachments.module';
@@ -33,6 +32,7 @@ import { SocialLinksModule } from './social-links/social-links.module';
 import { ProductsModule } from './products/products.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { QueryModule } from './common/query/query.module';
+import { AiPersonasModule } from './ai-personas/ai-personas.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -112,7 +112,6 @@ mkdirSync(uploadsDir, { recursive: true });
     AccessControlModule,
     ChatModule,
     LeadsModule,
-    PipelineStagesModule,
     LeadSourcesModule,
     LeadNotesModule,
     LeadAttachmentsModule,
@@ -121,6 +120,7 @@ mkdirSync(uploadsDir, { recursive: true });
     SocialLinksModule,
     ProductsModule,
     ProposalsModule,
+    AiPersonasModule,
   ],
   controllers: [AppController],
   providers: [

@@ -36,18 +36,13 @@ async function main() {
     );
   }
 
-  const [memberships, pipelineStages, leadSources] = await Promise.all([
+  const [memberships, leadSources] = await Promise.all([
     prisma.organizationMembership.findMany({
       where: {
         organization_id: organization.id,
         status: MembershipStatus.ACTIVE,
       },
       select: { user_id: true },
-    }),
-    prisma.pipelineStage.findMany({
-      where: { organization_id: organization.id },
-      select: { id: true, order_index: true },
-      orderBy: { order_index: 'asc' },
     }),
     prisma.leadSource.findMany({
       where: { organization_id: organization.id, is_active: true },
@@ -56,7 +51,6 @@ async function main() {
   ]);
 
   const agentIds = memberships.map((m) => m.user_id);
-  const stageIds = pipelineStages.map((stage) => stage.id);
   const sourceIds = leadSources.map((source) => source.id);
 
   const leads = [
@@ -72,7 +66,7 @@ async function main() {
       primary_language: 'tr',
       preferred_language: 'en',
       social_links: { linkedin: 'https://linkedin.com/in/ahmet-yilmaz' },
-      status: LeadStatus.OPEN,
+      status: LeadStatus.UNQUALIFIED,
       priority: Priority.HOT,
       estimated_value: '18500.00',
       currency: Currency.TRY,
@@ -110,7 +104,7 @@ async function main() {
       primary_language: 'en',
       preferred_language: null,
       social_links: { linkedin: 'https://linkedin.com/in/james-walker' },
-      status: LeadStatus.OPEN,
+      status: LeadStatus.UNQUALIFIED,
       priority: Priority.COLD,
       estimated_value: '4200.00',
       currency: Currency.EUR,
@@ -148,7 +142,7 @@ async function main() {
       primary_language: 'ar',
       preferred_language: 'en',
       social_links: { linkedin: 'https://linkedin.com/in/omar-alnuaimi' },
-      status: LeadStatus.OPEN,
+      status: LeadStatus.UNQUALIFIED,
       priority: Priority.HOT,
       estimated_value: '29000.00',
       currency: Currency.USD,
@@ -205,7 +199,7 @@ async function main() {
       primary_language: 'tr',
       preferred_language: 'en',
       social_links: { linkedin: 'https://linkedin.com/in/zeynep-aydin' },
-      status: LeadStatus.OPEN,
+      status: LeadStatus.UNQUALIFIED,
       priority: Priority.WARM,
       estimated_value: '11800.00',
       currency: Currency.EUR,
@@ -224,7 +218,7 @@ async function main() {
       primary_language: 'ar',
       preferred_language: 'en',
       social_links: { linkedin: 'https://linkedin.com/in/ali-mansoori' },
-      status: LeadStatus.OPEN,
+      status: LeadStatus.UNQUALIFIED,
       priority: Priority.HOT,
       estimated_value: '26000.00',
       currency: Currency.USD,
@@ -281,7 +275,7 @@ async function main() {
       primary_language: 'ar',
       preferred_language: 'en',
       social_links: { linkedin: 'https://linkedin.com/in/nora-abdullah' },
-      status: LeadStatus.OPEN,
+      status: LeadStatus.UNQUALIFIED,
       priority: Priority.WARM,
       estimated_value: '19800.00',
       currency: Currency.USD,
@@ -292,8 +286,6 @@ async function main() {
 
   const data = leads.map((lead, index) => ({
     organization_id: organization.id,
-    pipeline_stage_id:
-      stageIds.length > 0 ? stageIds[index % stageIds.length] : null,
     source_id:
       sourceIds.length > 0 ? sourceIds[index % sourceIds.length] : null,
     assigned_agent_id:

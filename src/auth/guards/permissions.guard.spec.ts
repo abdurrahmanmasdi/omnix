@@ -163,15 +163,6 @@ describe('PermissionsGuard', () => {
     await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
-  it('allows access when route requires edit and user has edit_all', async () => {
-    const context = createContext(
-      ['pipeline_stages:edit'],
-      ['pipeline_stages:edit_all'],
-    );
-
-    await expect(guard.canActivate(context)).resolves.toBe(true);
-  });
-
   it('allows access when user has global wildcard permission', async () => {
     const context = createContext(['roles:delete'], ['*']);
 
