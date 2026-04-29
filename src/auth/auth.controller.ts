@@ -38,6 +38,7 @@ interface IUser {
   first_name: string;
   last_name: string;
   created_at: Date;
+  is_email_verified: boolean;
 }
 
 interface ILoginResponse {
@@ -48,6 +49,7 @@ interface ILoginResponse {
     first_name: string;
     last_name: string;
     created_at: Date;
+    is_email_verified: boolean;
     permissions: string[];
   };
 }
@@ -90,12 +92,26 @@ export class AuthController {
 
   @Public()
   @Post('verify-email')
-  @ApiOperation({ summary: 'Verify email using one-time token' })
-  @ApiResponse({ status: 201, description: 'Email verified successfully' })
+  @ApiOperation({
+    summary: 'Verify email using one-time token and issue session',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Email verified and session issued',
+  })
   async verifyEmail(
     @Body() verifyEmailDto: VerifyEmailDto,
-  ): Promise<{ message: string }> {
-    return this.authService.verifyEmail(verifyEmailDto.token);
+    @Res({ passthrough: true }) res?: ExpressResponse,
+  ): Promise<ILoginResponse> {
+    const verificationResult = await this.authService.verifyEmail(
+      verifyEmailDto.token,
+    );
+    this.setRefreshTokenCookie(res, verificationResult.refresh_token);
+
+    return {
+      access_token: verificationResult.access_token,
+      user: verificationResult.user,
+    };
   }
 
   @Public()

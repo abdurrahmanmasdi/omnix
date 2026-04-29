@@ -19,6 +19,7 @@ describe('AuthService', () => {
 
   const mockPrisma = {
     user: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -160,7 +161,7 @@ describe('AuthService', () => {
   });
 
   it('creates user with unverified email and sends verification token on register', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.findFirst.mockResolvedValue(null);
     jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-password' as never);
     mockPrisma.user.create.mockResolvedValue({
       id: 'u1',
@@ -210,7 +211,7 @@ describe('AuthService', () => {
   });
 
   it('throws when registering an existing user', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue({ id: 'u1' });
+    mockPrisma.user.findFirst.mockResolvedValue({ id: 'u1' });
 
     await expect(
       service.register('user@example.com', 'secret', 'A', 'B'),
@@ -218,7 +219,7 @@ describe('AuthService', () => {
   });
 
   it('issues and emails password reset token for existing users', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue({
+    mockPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'user@example.com',
     });
@@ -238,7 +239,7 @@ describe('AuthService', () => {
   });
 
   it('silently returns on password reset request for missing user', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.findFirst.mockResolvedValue(null);
 
     await expect(
       service.requestPasswordReset('missing@example.com'),
@@ -271,7 +272,17 @@ describe('AuthService', () => {
 
   it('verifies email using one-time token', async () => {
     mockTokenManagementService.validateAndRevokeToken.mockResolvedValue('u1');
-    mockPrisma.user.update.mockResolvedValue({ id: 'u1' });
+    mockPrisma.organizationMembership.findFirst.mockResolvedValue(null);
+    mockJwtService.sign.mockReturnValue('access-token');
+    mockTokenManagementService.issueToken.mockResolvedValue('refresh-token');
+    mockPrisma.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'user@example.com',
+      first_name: 'A',
+      last_name: 'B',
+      created_at: new Date('2026-03-30T00:00:00.000Z'),
+      is_email_verified: true,
+    });
 
     const result = await service.verifyEmail('verification-token');
 
@@ -286,11 +297,27 @@ describe('AuthService', () => {
       where: { id: 'u1' },
       data: { is_email_verified: true },
     });
-    expect(result).toEqual({ message: 'Email verified' });
+    expect(mockTokenManagementService.issueToken).toHaveBeenCalledWith(
+      'u1',
+      AuthTokenType.REFRESH,
+      7 * 24 * 60 * 60 * 1000,
+    );
+    expect(result).toEqual({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      user: {
+        id: 'u1',
+        email: 'user@example.com',
+        first_name: 'A',
+        last_name: 'B',
+        created_at: new Date('2026-03-30T00:00:00.000Z'),
+        permissions: [],
+      },
+    });
   });
 
   it('resends verification for existing unverified users', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue({
+    mockPrisma.user.findFirst.mockResolvedValue({
       id: 'u1',
       email: 'user@example.com',
       is_email_verified: false,
@@ -320,7 +347,7 @@ describe('AuthService', () => {
   });
 
   it('returns generic message when resending verification for missing users', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue(null);
+    mockPrisma.user.findFirst.mockResolvedValue(null);
 
     const result = await service.resendVerification('missing@example.com');
 

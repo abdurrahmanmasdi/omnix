@@ -56,6 +56,7 @@ export class UsersController {
         first_name: { type: 'string' },
         last_name: { type: 'string' },
         created_at: { type: 'string', format: 'date-time' },
+        is_email_verified: { type: 'boolean' },
         permissions: {
           type: 'array',
           items: { type: 'string' },

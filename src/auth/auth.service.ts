@@ -20,7 +20,6 @@ const ACCESS_TOKEN_EXPIRES_IN = '15m';
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
-const VERIFY_EMAIL_SUCCESS_MESSAGE = 'Email verified';
 const GENERIC_VERIFICATION_RESEND_MESSAGE =
   'If an account exists, a link has been sent';
 
@@ -30,6 +29,7 @@ interface IUserPublic {
   first_name: string;
   last_name: string;
   created_at: Date;
+  is_email_verified: boolean;
 }
 
 interface IValidatedUser extends IUserPublic {
@@ -76,6 +76,7 @@ function toPublicUser(user: IValidatedUser): IUserPublic {
     first_name: user.first_name,
     last_name: user.last_name,
     created_at: user.created_at,
+    is_email_verified: user.is_email_verified,
   };
 }
 
@@ -362,7 +363,7 @@ export class AuthService {
     });
   }
 
-  async verifyEmail(rawToken: string): Promise<{ message: string }> {
+  async verifyEmail(rawToken: string): Promise<ILoginResponse> {
     return this.requestContextService.runWithBypass(async () => {
       const userId = await this.tokenManagementService.validateAndRevokeToken(
         null,
@@ -370,12 +371,12 @@ export class AuthService {
         AuthTokenType.VERIFICATION,
       );
 
-      await this.prisma.user.update({
+      const verifiedUser = await this.prisma.user.update({
         where: { id: userId },
         data: { is_email_verified: true },
       });
 
-      return { message: VERIFY_EMAIL_SUCCESS_MESSAGE };
+      return this.login(excludePassword(verifiedUser));
     });
   }
 

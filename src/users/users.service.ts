@@ -40,6 +40,7 @@ export class UsersService {
         first_name: true,
         last_name: true,
         created_at: true,
+        is_email_verified: true,
       },
     });
 

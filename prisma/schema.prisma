@@ -403,6 +403,8 @@ enum ActiveHandler {
 }
 
 enum MessageType {
+  LEAD_TEXT
+  LEAD_AUDIO
   USER_TEXT
   USER_AUDIO
   AI_TEXT

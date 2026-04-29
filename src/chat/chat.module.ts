@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { ChatController } from './chat.controller';
+import { ChatRedisSubscriberService } from './chat-redis-subscriber.service';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { ChatController } from './chat.controller';
     }),
   ],
   controllers: [ChatController],
-  providers: [ChatService, ChatGateway],
+  providers: [ChatService, ChatGateway, ChatRedisSubscriberService],
   exports: [ChatService],
 })
 export class ChatModule {}

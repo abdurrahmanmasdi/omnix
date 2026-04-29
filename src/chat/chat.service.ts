@@ -177,12 +177,17 @@ export class ChatService {
 
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        participants: {
-          some: {
-            user_id: userId,
-          },
+        handled_by: {
+          equals: 'AI',
         },
       },
+      // where: {
+      //   participants: {
+      //     some: {
+      //       user_id: userId,
+      //     },
+      //   },
+      // },
       include: CONVERSATION_WITH_DETAILS_INCLUDE,
       orderBy: { updated_at: 'desc' },
     });
@@ -206,18 +211,18 @@ export class ChatService {
     limit: number = 50,
   ): Promise<MessageWithSender[]> {
     // Verify the user is a participant
-    const participant = await this.prisma.conversationParticipant.findUnique({
-      where: {
-        conversation_id_user_id: {
-          conversation_id: conversationId,
-          user_id: userId,
-        },
-      },
-    });
+    // const participant = await this.prisma.conversationParticipant.findUnique({
+    //   where: {
+    //     conversation_id_user_id: {
+    //       conversation_id: conversationId,
+    //       user_id: userId,
+    //     },
+    //   },
+    // });
 
-    if (!participant) {
-      throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
-    }
+    // if (!participant) {
+    //   throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
+    // }
 
     const query = {
       where: { conversation_id: conversationId },

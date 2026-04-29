@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrganizationAIPersona } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RequestContextService } from '../request-context/request-context.service';
 import { CreateAiPersonaDto } from './dto/create-ai-persona.dto';
 import { UpdateAiPersonaDto } from './dto/update-ai-persona.dto';
 
 @Injectable()
 export class AiPersonasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly requestContextService: RequestContextService,
+  ) {}
 
   /**
    * Create a new AI Persona for an organization
@@ -68,46 +72,48 @@ export class AiPersonasService {
     id: string,
     dto: UpdateAiPersonaDto,
   ): Promise<OrganizationAIPersona> {
-    // Verify persona exists
-    const persona = await this.prisma.organizationAIPersona.findUnique({
-      where: { id },
-    });
+    return this.requestContextService.runWithBypass(async () => {
+      // Verify persona exists
+      const persona = await this.prisma.organizationAIPersona.findUnique({
+        where: { id },
+      });
 
-    if (!persona) {
-      throw new NotFoundException(`AI Persona with ID ${id} not found`);
-    }
+      if (!persona) {
+        throw new NotFoundException(`AI Persona with ID ${id} not found`);
+      }
 
-    // Build update data, only including provided fields
-    const updateData: Record<string, any> = {};
+      // Build update data, only including provided fields
+      const updateData: Record<string, any> = {};
 
-    if (dto.systemPrompt !== undefined) {
-      updateData.system_prompt = dto.systemPrompt;
-    }
-    if (dto.name !== undefined) {
-      updateData.name = dto.name;
-    }
-    if (dto.voiceId !== undefined) {
-      updateData.voice_id = dto.voiceId;
-    }
-    if (dto.canNegotiate !== undefined) {
-      updateData.can_negotiate = dto.canNegotiate;
-    }
-    if (dto.autoAttendNewLeads !== undefined) {
-      updateData.auto_attend_new_leads = dto.autoAttendNewLeads;
-    }
-    if (dto.outboundMessagesSpeed !== undefined) {
-      updateData.outbound_messages_speed = dto.outboundMessagesSpeed;
-    }
-    if (dto.sleepStartHour !== undefined) {
-      updateData.sleep_start_hour = dto.sleepStartHour;
-    }
-    if (dto.sleepEndHour !== undefined) {
-      updateData.sleep_end_hour = dto.sleepEndHour;
-    }
+      if (dto.systemPrompt !== undefined) {
+        updateData.system_prompt = dto.systemPrompt;
+      }
+      if (dto.name !== undefined) {
+        updateData.name = dto.name;
+      }
+      if (dto.voiceId !== undefined) {
+        updateData.voice_id = dto.voiceId;
+      }
+      if (dto.canNegotiate !== undefined) {
+        updateData.can_negotiate = dto.canNegotiate;
+      }
+      if (dto.autoAttendNewLeads !== undefined) {
+        updateData.auto_attend_new_leads = dto.autoAttendNewLeads;
+      }
+      if (dto.outboundMessagesSpeed !== undefined) {
+        updateData.outbound_messages_speed = dto.outboundMessagesSpeed;
+      }
+      if (dto.sleepStartHour !== undefined) {
+        updateData.sleep_start_hour = dto.sleepStartHour;
+      }
+      if (dto.sleepEndHour !== undefined) {
+        updateData.sleep_end_hour = dto.sleepEndHour;
+      }
 
-    return this.prisma.organizationAIPersona.update({
-      where: { id },
-      data: updateData,
+      return this.prisma.organizationAIPersona.update({
+        where: { id },
+        data: updateData,
+      });
     });
   }
 
@@ -115,16 +121,18 @@ export class AiPersonasService {
    * Delete an AI Persona
    */
   async remove(id: string): Promise<void> {
-    const persona = await this.prisma.organizationAIPersona.findUnique({
-      where: { id },
-    });
+    return this.requestContextService.runWithBypass(async () => {
+      const persona = await this.prisma.organizationAIPersona.findUnique({
+        where: { id },
+      });
 
-    if (!persona) {
-      throw new NotFoundException(`AI Persona with ID ${id} not found`);
-    }
+      if (!persona) {
+        throw new NotFoundException(`AI Persona with ID ${id} not found`);
+      }
 
-    await this.prisma.organizationAIPersona.delete({
-      where: { id },
+      await this.prisma.organizationAIPersona.delete({
+        where: { id },
+      });
     });
   }
 }

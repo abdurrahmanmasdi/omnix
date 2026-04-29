@@ -185,17 +185,52 @@ describe('AuthController', () => {
 
   it('delegates email verification', async () => {
     mockAuthService.verifyEmail.mockResolvedValue({
-      message: 'Email verified',
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      user: {
+        id: 'u1',
+        email: 'user@example.com',
+        first_name: 'A',
+        last_name: 'B',
+        created_at: new Date('2026-03-30T00:00:00.000Z'),
+        permissions: ['leads:read'],
+      },
     });
 
-    const result = await controller.verifyEmail({
-      token: 'verification-token',
-    });
+    const res = {
+      cookie: jest.fn(),
+    };
+
+    const result = await controller.verifyEmail(
+      {
+        token: 'verification-token',
+      },
+      res as unknown as Parameters<AuthController['verifyEmail']>[1],
+    );
 
     expect(mockAuthService.verifyEmail).toHaveBeenCalledWith(
       'verification-token',
     );
-    expect(result).toEqual({ message: 'Email verified' });
+    expect(res.cookie).toHaveBeenCalledWith(
+      'refresh_token',
+      'refresh-token',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      }) as Record<string, unknown>,
+    );
+    expect(result).toEqual({
+      access_token: 'access-token',
+      user: {
+        id: 'u1',
+        email: 'user@example.com',
+        first_name: 'A',
+        last_name: 'B',
+        created_at: new Date('2026-03-30T00:00:00.000Z'),
+        permissions: ['leads:read'],
+      },
+    });
   });
 
   it('delegates resend verification request', async () => {
