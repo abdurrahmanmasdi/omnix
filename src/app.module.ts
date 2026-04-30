@@ -33,6 +33,7 @@ import { ProductsModule } from './products/products.module';
 import { ProposalsModule } from './proposals/proposals.module';
 import { QueryModule } from './common/query/query.module';
 import { AiPersonasModule } from './ai-personas/ai-personas.module';
+import { KnowledgeModule } from './knowledge/knowledge.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -121,6 +122,7 @@ mkdirSync(uploadsDir, { recursive: true });
     ProductsModule,
     ProposalsModule,
     AiPersonasModule,
+    KnowledgeModule,
   ],
   controllers: [AppController],
   providers: [

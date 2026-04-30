@@ -103,7 +103,7 @@ model OrganizationKnowledge {
   organization_id String       @db.Uuid
   file_name       String
   content         String       @db.Text
-  embedding       Unsupported("vector(1536)")? // 1536 is standard for OpenAI embeddings
+  embedding       Unsupported("vector(768)")? // 768 is standard for Gemini embeddings
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
