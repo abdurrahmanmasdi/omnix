@@ -16,26 +16,25 @@ datasource db {
 }
 
 model User {
-  id                       String                    @id @default(uuid()) @db.Uuid
-  email                    String
-  password_hash            String
-  first_name               String
-  last_name                String
-  avatar_url               String?
-  phone_number             String?
-  whatsapp_number          String?
-  spoken_languages         String[]                  @default([])
-  created_at               DateTime                  @default(now())
-  deleted_at               DateTime?
-  is_email_verified        Boolean                   @default(false)
-  authTokens               AuthToken[]
-  conversationParticipants ConversationParticipant[]
-  uploadedLeadAttachments  LeadAttachment[]
-  authoredLeadNotes        LeadNote[]
-  assignedLeads            Lead[]
-  sentMessages             Message[]                 @relation("SentMessages")
-  memberships              OrganizationMembership[]
-  proposals                Proposal[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  email                   String
+  password_hash           String
+  first_name              String
+  last_name               String
+  avatar_url              String?
+  phone_number            String?
+  whatsapp_number         String?
+  spoken_languages        String[]                 @default([])
+  created_at              DateTime                 @default(now())
+  deleted_at              DateTime?
+  is_email_verified       Boolean                  @default(false)
+  authTokens              AuthToken[]
+  assignedConversations   Conversation[]           @relation("ConversationAgent")
+  uploadedLeadAttachments LeadAttachment[]
+  authoredLeadNotes       LeadNote[]
+  assignedLeads           Lead[]
+  sentMessages            Message[]                @relation("SentMessages")
+  memberships             OrganizationMembership[]
 
   @@map("users")
 }
@@ -67,72 +66,71 @@ model Organization {
   leads                Lead[]
   memberships          OrganizationMembership[]
   roles                Role[]
-  products             Product[]
-  proposals            Proposal[]
-  pipelineStages       PipelineStage[]
-  
+
+  pipelineStages PipelineStage[]
+
   // --- New AI Engine Relations ---
-  knowledgeBase        OrganizationKnowledge[]
-  aiPersona            OrganizationAIPersona?
+  knowledgeBase OrganizationKnowledge[]
+  aiPersona     OrganizationAIPersona?
 
   @@map("organizations")
 }
 
 // --- NEW: The AI Persona Settings ---
 model OrganizationAIPersona {
-  id                      String       @id @default(uuid()) @db.Uuid
-  organization_id         String       @unique @db.Uuid
-  name                    String       @default("Assistant")
-  voice_id                String?      // For ElevenLabs or OpenAI TTS mapping
-  system_prompt           String?      @db.Text
-  can_negotiate           Boolean      @default(false)
-  auto_attend_new_leads   Boolean      @default(true)
-  outbound_messages_speed Int          @default(50) // For the Drip Campaign Queue
-  sleep_start_hour        String?      // e.g., "23:00"
-  sleep_end_hour          String?      // e.g., "08:00"
-  created_at              DateTime     @default(now())
-  updated_at              DateTime     @updatedAt
+  id                      String   @id @default(uuid()) @db.Uuid
+  organization_id         String   @unique @db.Uuid
+  name                    String   @default("Assistant")
+  voice_id                String? // For ElevenLabs or OpenAI TTS mapping
+  system_prompt           String?  @db.Text
+  can_negotiate           Boolean  @default(false)
+  auto_attend_new_leads   Boolean  @default(true)
+  outbound_messages_speed Int      @default(50) // For the Drip Campaign Queue
+  sleep_start_hour        String? // e.g., "23:00"
+  sleep_end_hour          String? // e.g., "08:00"
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
 
-  organization            Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@map("organization_ai_personas")
 }
 
 // --- NEW: The Vector Database for RAG ---
 model OrganizationKnowledge {
-  id              String       @id @default(uuid()) @db.Uuid
-  organization_id String       @db.Uuid
+  id              String                      @id @default(uuid()) @db.Uuid
+  organization_id String                      @db.Uuid
   file_name       String
-  content         String       @db.Text
+  content         String                      @db.Text
   embedding       Unsupported("vector(768)")? // 768 is standard for Gemini embeddings
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
+  created_at      DateTime                    @default(now())
+  updated_at      DateTime                    @updatedAt
 
-  organization    Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 
   @@index([organization_id])
   @@map("organization_knowledge")
 }
 
 model OrganizationMembership {
-  id                     String                         @id @default(uuid()) @db.Uuid
-  user_id                String                         @db.Uuid
-  organization_id        String                         @db.Uuid
-  role_id                String                         @db.Uuid
-  job_title              String?
-  agent_tier             AgentTier                      @default(STANDARD)
-  specializations        String[]                       @default([])
-  availability_status    AvailabilityStatus             @default(ACTIVE)
-  
+  id                  String             @id @default(uuid()) @db.Uuid
+  user_id             String             @db.Uuid
+  organization_id     String             @db.Uuid
+  role_id             String             @db.Uuid
+  job_title           String?
+  agent_tier          AgentTier          @default(STANDARD)
+  specializations     String[]           @default([])
+  availability_status AvailabilityStatus @default(ACTIVE)
+
   // Removed manual quota/commission tracking fields here
-  
-  created_at             DateTime                       @default(now())
-  status                 MembershipStatus               @default(PENDING)
-  deleted_at             DateTime?
-  permissionOverrides    MembershipPermissionOverride[]
-  organization           Organization                   @relation(fields: [organization_id], references: [id])
-  role                   Role                           @relation(fields: [role_id], references: [id])
-  user                   User                           @relation(fields: [user_id], references: [id])
+
+  created_at          DateTime                       @default(now())
+  status              MembershipStatus               @default(PENDING)
+  deleted_at          DateTime?
+  permissionOverrides MembershipPermissionOverride[]
+  organization        Organization                   @relation(fields: [organization_id], references: [id])
+  role                Role                           @relation(fields: [role_id], references: [id])
+  user                User                           @relation(fields: [user_id], references: [id])
 
   @@index([organization_id])
   @@index([organization_id, status])
@@ -230,34 +228,28 @@ model AuthToken {
 }
 
 model Conversation {
-  id              String                    @id @default(uuid()) @db.Uuid
-  organization_id String                    @db.Uuid
-  is_group        Boolean                   @default(false)
-  name            String?
-  handled_by      ActiveHandler             @default(AI) // Determines if AI or Human is routing messages
-  created_at      DateTime                  @default(now())
-  updated_at      DateTime                  @updatedAt
-  deleted_at      DateTime?
-  participants    ConversationParticipant[]
-  organization    Organization              @relation(fields: [organization_id], references: [id])
-  messages        Message[]
+  id                  String        @id @default(uuid()) @db.Uuid
+  organization_id     String        @db.Uuid
+  is_group            Boolean       @default(false)
+  name                String?
+  handled_by          ActiveHandler @default(AI) // Determines if AI or Human is routing messages
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+  deleted_at          DateTime?
+  lead_id             String?       @unique @db.Uuid
+  assigned_agent_id   String?       @db.Uuid
+  external_contact_id String?
+
+  assigned_agent User?        @relation("ConversationAgent", fields: [assigned_agent_id], references: [id])
+  lead           Lead?        @relation("LeadConversation", fields: [lead_id], references: [id])
+  organization   Organization @relation(fields: [organization_id], references: [id])
+  messages       Message[]
 
   @@index([organization_id])
+  @@index([lead_id])
+  @@index([assigned_agent_id])
+  @@index([external_contact_id])
   @@map("conversations")
-}
-
-model ConversationParticipant {
-  id              String       @id @default(uuid()) @db.Uuid
-  conversation_id String       @db.Uuid
-  user_id         String       @db.Uuid
-  joined_at       DateTime     @default(now())
-  conversation    Conversation @relation(fields: [conversation_id], references: [id])
-  user            User         @relation(fields: [user_id], references: [id])
-
-  @@unique([conversation_id, user_id])
-  @@index([conversation_id])
-  @@index([user_id])
-  @@map("conversation_participants")
 }
 
 model Message {
@@ -266,8 +258,8 @@ model Message {
   sender_id       String?      @db.Uuid // Nullable because the AI or System doesn't have a standard User ID
   type            MessageType  @default(USER_TEXT)
   content         String       @db.Text
-  audio_url       String?      // For Voice Notes
-  metadata        Json?        // To store Tool Call JSON, execution times, token counts
+  audio_url       String? // For Voice Notes
+  metadata        Json? // To store Tool Call JSON, execution times, token counts
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
   deleted_at      DateTime?
@@ -375,7 +367,7 @@ model Lead {
   organization          Organization     @relation(fields: [organization_id], references: [id])
   source                LeadSource?      @relation(fields: [source_id], references: [id])
   pipeline_stage        PipelineStage?   @relation(fields: [pipeline_stage_id], references: [id])
-  proposals             Proposal[]
+  conversation          Conversation?    @relation("LeadConversation")
 
   @@index([organization_id])
   @@index([pipeline_stage_id])
@@ -409,7 +401,6 @@ model BankAccount {
   updated_at          DateTime     @updatedAt
   organization_id     String       @db.Uuid
   organization        Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  proposals           Proposal[]
 
   @@index([organization_id])
 }
@@ -434,10 +425,10 @@ enum MessageType {
 }
 
 enum LeadStatus {
-  NEW           // Just entered system via Ad/CSV
-  QUALIFYING    // AI is actively talking to them
-  READY_TO_PAY  // AI triggered payment intent tool
-  HANDED_OFF    // Moved to human queue for complex medical/operations
+  NEW // Just entered system via Ad/CSV
+  QUALIFYING // AI is actively talking to them
+  READY_TO_PAY // AI triggered payment intent tool
+  HANDED_OFF // Moved to human queue for complex medical/operations
   WON
   LOST
   UNQUALIFIED
@@ -475,23 +466,6 @@ enum AuthTokenType {
   RESET
 }
 
-enum ProductType {
-  REAL_ESTATE_ASSET
-  SCHEDULED_EVENT
-  RESOURCE_RENTAL
-  DYNAMIC_SERVICE 
-}
-
-enum ProposalStatus {
-  DRAFT
-  SENT
-  ACCEPTED
-  RECEIPT_UPLOADED
-  VERIFIED
-  REJECTED
-  EXPIRED
-}
-
 enum AvailabilityStatus {
   ACTIVE
   ON_LEAVE
@@ -503,122 +477,4 @@ enum AgentTier {
   STANDARD
   SENIOR
   MANAGER
-}
-
-model Product {
-  id              String      @id @default(uuid())
-  organization_id String      @db.Uuid
-  type            ProductType
-  title           String
-  description     String?     @db.Text
-  base_price      Decimal     @db.Decimal(12, 2)
-  currency        String      @default("USD")
-
-  specifications Json?
-  available_addons Json?
-  
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
-  deleted_at DateTime?
-  
-  organization Organization       @relation(fields: [organization_id], references: [id])
-  instances    ProductInstance[]
-  media        ProductMedia[]
-  line_items   ProposalLineItem[]
-
-  @@index([organization_id])
-  @@map("products")
-}
-
-model ProductMedia {
-  id         String   @id @default(uuid())
-  product_id String
-  file_url   String
-  file_name  String?
-  is_primary Boolean  @default(false) 
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
-
-  @@index([product_id])
-  @@map("product_media")
-}
-
-model ProductInstance {
-  id              String    @id @default(uuid())
-  product_id      String
-  start_date      DateTime?
-  end_date        DateTime?
-  max_capacity    Int       @default(1)
-  booked_quantity Int       @default(0)
-  is_available    Boolean   @default(true)
-  deleted_at      DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-
-  product    Product            @relation(fields: [product_id], references: [id])
-  line_items ProposalLineItem[]
-
-  @@index([product_id])
-  @@map("product_instances")
-}
-
-model Proposal {
-  id              String  @id @default(uuid())
-  organization_id String  @db.Uuid
-  lead_id         String  @db.Uuid
-  created_by_id   String  @db.Uuid
-  bank_account_id String?
-  status       ProposalStatus @default(DRAFT)
-  total_amount Decimal        @db.Decimal(12, 2)
-  currency     String         @default("USD")
-
-  client_notes String?        @db.Text
-
-  public_link_hash     String    
-  client_accepted_privacy_policy Boolean   @default(false)
-  deleted_at           DateTime?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  organization Organization @relation(fields: [organization_id], references: [id])
-  lead         Lead         @relation(fields: [lead_id], references: [id])
-  created_by   User         @relation(fields: [created_by_id], references: [id])
-  bank_account BankAccount? @relation(fields: [bank_account_id], references: [id])
-
-  line_items ProposalLineItem[]
-
-  @@index([organization_id])
-  @@index([lead_id])
-  @@index([created_by_id])
-  @@index([status])
-  @@map("proposals")
-}
-
-model ProposalLineItem {
-  id          String  @id @default(uuid())
-  proposal_id String
-  product_id  String? 
-  instance_id String? 
-
-  start_date DateTime?
-  end_date   DateTime?
-
-  custom_name     String 
-  unit_price      Decimal   @db.Decimal(12, 2) 
-  quantity        Int       @default(1)
-  selected_addons Json?
-  deleted_at      DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-
-  proposal Proposal         @relation(fields: [proposal_id], references: [id], onDelete: Cascade)
-  product  Product?         @relation(fields: [product_id], references: [id])
-  instance ProductInstance? @relation(fields: [instance_id], references: [id])
-
-  @@index([proposal_id])
-  @@index([product_id])
-  @@index([instance_id])
-  @@map("proposal_line_items")
 }

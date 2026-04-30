@@ -29,8 +29,7 @@ import { LeadAttachmentsModule } from './lead-attachments/lead-attachments.modul
 import { AnalyticsModule } from './analytics/analytics.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { SocialLinksModule } from './social-links/social-links.module';
-import { ProductsModule } from './products/products.module';
-import { ProposalsModule } from './proposals/proposals.module';
+
 import { QueryModule } from './common/query/query.module';
 import { AiPersonasModule } from './ai-personas/ai-personas.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
@@ -120,8 +119,6 @@ mkdirSync(uploadsDir, { recursive: true });
     AnalyticsModule,
     BankAccountsModule,
     SocialLinksModule,
-    ProductsModule,
-    ProposalsModule,
     AiPersonasModule,
     KnowledgeModule,
     PipelineStagesModule,

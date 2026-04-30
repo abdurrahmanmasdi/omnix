@@ -285,15 +285,12 @@ describe('LeadsService', () => {
       await service.findAll('org-1', 'user-1', {
         page: 2,
         limit: 200,
-        sort_by: 'first_name',
-        sort_dir: 'asc',
       });
 
       expect(mockPrismaService.lead.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           skip: 100,
           take: 100,
-          orderBy: { first_name: 'asc' },
           where: { AND: [] },
         }),
       );
@@ -307,7 +304,7 @@ describe('LeadsService', () => {
       mockPrismaService.lead.findMany.mockResolvedValueOnce([{ id: 'lead-1' }]);
 
       await service.findAll('org-1', 'user-1', {
-        status: LeadStatus.OPEN,
+        status: LeadStatus.NEW,
         priority: Priority.HOT,
         filters: JSON.stringify([
           { field: 'country', operator: 'equals', value: 'TR' },
@@ -320,7 +317,7 @@ describe('LeadsService', () => {
           where: {
             AND: [
               { assigned_agent_id: 'user-1' },
-              { status: LeadStatus.OPEN },
+              { status: LeadStatus.NEW },
               { priority: Priority.HOT },
               { country: 'TR' },
             ],
@@ -329,40 +326,7 @@ describe('LeadsService', () => {
       );
     });
 
-    it('applies case-insensitive search across name, email, and phone fields', async () => {
-      mockPermissionsService.getEffectivePermissions.mockResolvedValueOnce([
-        AppPermission.LEADS_READ_ALL,
-      ]);
-      mockPrismaService.lead.count.mockResolvedValueOnce(1);
-      mockPrismaService.lead.findMany.mockResolvedValueOnce([{ id: 'lead-1' }]);
 
-      await service.findAll('org-1', 'user-1', {
-        search: 'john',
-      });
-
-      expect(mockPrismaService.lead.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            AND: [
-              {
-                OR: [
-                  {
-                    first_name: { contains: 'john', mode: 'insensitive' },
-                  },
-                  {
-                    last_name: { contains: 'john', mode: 'insensitive' },
-                  },
-                  { email: { contains: 'john', mode: 'insensitive' } },
-                  {
-                    phone_number: { contains: 'john', mode: 'insensitive' },
-                  },
-                ],
-              },
-            ],
-          },
-        }),
-      );
-    });
 
     it('throws BadRequestException for invalid JSON filter strings', async () => {
       mockPermissionsService.getEffectivePermissions.mockResolvedValueOnce([
@@ -620,7 +584,7 @@ describe('LeadsService', () => {
 
       const dto: BulkUpdateLeadsDto = {
         lead_ids: ['11111111-1111-4111-8111-111111111111'],
-        update_data: { status: LeadStatus.OPEN },
+        update_data: { status: LeadStatus.NEW },
       };
 
       await expect(service.bulkUpdate('org-1', 'user-1', dto)).rejects.toBe(

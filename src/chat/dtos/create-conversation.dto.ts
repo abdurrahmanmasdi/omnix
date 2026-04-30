@@ -1,7 +1,11 @@
-import { IsUUID, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsOptional, IsString } from 'class-validator';
 
 export class CreateConversationDto {
   @IsUUID()
-  @IsNotEmpty()
-  targetUserId: string;
+  @IsOptional()
+  leadId?: string;
+
+  @IsString()
+  @IsOptional()
+  externalContactId?: string;
 }

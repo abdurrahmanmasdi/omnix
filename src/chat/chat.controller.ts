@@ -84,7 +84,7 @@ export class ChatController {
    * Or return existing conversation if one already exists between the two users
    * @param req - Express request with authenticated user
    * @param orgId - Organization ID from x-organization-id header
-   * @param createConversationDto - DTO containing targetUserId
+   * @param createConversationDto - DTO containing leadId
    * @returns The created or existing conversation
    */
   @Post('conversations')
@@ -95,7 +95,7 @@ export class ChatController {
     description: 'Conversation created or retrieved successfully',
   })
   @ApiResponse({ status: 400, description: 'Missing organization ID header' })
-  @ApiResponse({ status: 404, description: 'Target user not found' })
+  @ApiResponse({ status: 404, description: 'Lead not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createConversation(
     @Request() req: AuthRequest,
@@ -111,7 +111,7 @@ export class ChatController {
     const conversation = await this.chatService.createConversation(
       orgId,
       req.user.id,
-      createConversationDto?.targetUserId || '',
+      createConversationDto || {},
     );
 
     return {

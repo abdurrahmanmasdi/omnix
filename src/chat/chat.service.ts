@@ -23,13 +23,10 @@ const MESSAGE_WITH_SENDER_INCLUDE = {
 } as const;
 
 const CONVERSATION_WITH_DETAILS_INCLUDE = {
-  participants: {
-    include: {
-      user: {
-        select: USER_PUBLIC_SELECT,
-      },
-    },
+  assigned_agent: {
+    select: USER_PUBLIC_SELECT,
   },
+  lead: true,
   messages: {
     orderBy: { created_at: 'desc' as const },
     take: 1,
@@ -59,6 +56,7 @@ export class ChatService {
     userIds: string[],
   ): Promise<void> {
     const uniqueUserIds = Array.from(new Set(userIds));
+    if (uniqueUserIds.length === 0) return;
 
     const activeMemberships = await this.prisma.organizationMembership.findMany(
       {
@@ -79,35 +77,27 @@ export class ChatService {
 
     if (invalidUserIds.length > 0) {
       throw new ForbiddenException(
-        this.i18n.t('chat.ERRORS.PARTICIPANTS_OUTSIDE_SCOPE'),
+        this.i18n.t('chat.ERRORS.PARTICIPANTS_OUTSIDE_SCOPE', {
+          defaultValue: 'Agent is outside scope',
+        }),
       );
     }
   }
 
-  private async findExistingDirectMessage(
-    _orgId: string,
-    userId1: string,
-    userId2: string,
+  private async findExistingLeadConversation(
+    orgId: string,
+    leadId?: string,
+    externalContactId?: string,
   ): Promise<ConversationWithDetails | null> {
-    void _orgId;
+    if (!leadId && !externalContactId) return null;
 
     return this.prisma.conversation.findFirst({
       where: {
-        is_group: false,
-        participants: {
-          every: {
-            user_id: {
-              in: [userId1, userId2],
-            },
-          },
-        },
-        AND: {
-          participants: {
-            every: {
-              OR: [{ user_id: userId1 }, { user_id: userId2 }],
-            },
-          },
-        },
+        organization_id: orgId,
+        OR: [
+          ...(leadId ? [{ lead_id: leadId }] : []),
+          ...(externalContactId ? [{ external_contact_id: externalContactId }] : []),
+        ],
       },
       include: CONVERSATION_WITH_DETAILS_INCLUDE,
     });
@@ -115,32 +105,24 @@ export class ChatService {
 
   /**
    * Send a message to a conversation
-   * @param conversationId - The conversation ID
-   * @param senderId - The user ID sending the message
-   * @param content - The message content
-   * @returns The created message with sender information
-   * @throws ForbiddenException if the sender is not a participant
    */
   async sendMessage(
     conversationId: string,
     senderId: string,
     content: string,
   ): Promise<MessageWithSender> {
-    // Validate that the sender is a participant in the conversation
-    const participant = await this.prisma.conversationParticipant.findUnique({
-      where: {
-        conversation_id_user_id: {
-          conversation_id: conversationId,
-          user_id: senderId,
-        },
-      },
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
     });
 
-    if (!participant) {
+    if (!conversation) {
+      throw new NotFoundException(this.i18n.t('chat.ERRORS.NOT_FOUND'));
+    }
+
+    if (conversation.assigned_agent_id !== senderId && conversation.handled_by !== 'AI') {
       throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
     }
 
-    // Create the message
     const message = await this.prisma.message.create({
       data: {
         conversation_id: conversationId,
@@ -150,8 +132,7 @@ export class ChatService {
       include: MESSAGE_WITH_SENDER_INCLUDE,
     });
 
-    // Update the conversation's updated_at timestamp
-    await this.prisma.conversation.updateMany({
+    await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { updated_at: new Date() },
     });
@@ -165,29 +146,19 @@ export class ChatService {
 
   /**
    * Get all conversations for a user in an organization
-   * @param userId - The user ID
-   * @param orgId - The organization ID
-   * @returns Array of conversations with latest message and participants
    */
   async getUserConversations(
     userId: string,
-    _orgId: string,
+    orgId: string,
   ): Promise<ConversationWithDetails[]> {
-    void _orgId;
-
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        handled_by: {
-          equals: 'AI',
-        },
+        organization_id: orgId,
+        OR: [
+          { handled_by: 'AI' },
+          { assigned_agent_id: userId },
+        ],
       },
-      // where: {
-      //   participants: {
-      //     some: {
-      //       user_id: userId,
-      //     },
-      //   },
-      // },
       include: CONVERSATION_WITH_DETAILS_INCLUDE,
       orderBy: { updated_at: 'desc' },
     });
@@ -197,12 +168,6 @@ export class ChatService {
 
   /**
    * Get messages for a conversation (cursor paginated)
-   * @param conversationId - The conversation ID
-   * @param userId - The user ID requesting the messages (for validation)
-   * @param cursor - Optional message ID cursor for pagination
-   * @param limit - Max number of messages to fetch (default 50)
-   * @returns Array of messages ordered by newest first
-   * @throws ForbiddenException if user is not a participant
    */
   async getConversationMessages(
     conversationId: string,
@@ -210,20 +175,6 @@ export class ChatService {
     cursor?: string,
     limit: number = 50,
   ): Promise<MessageWithSender[]> {
-    // Verify the user is a participant
-    // const participant = await this.prisma.conversationParticipant.findUnique({
-    //   where: {
-    //     conversation_id_user_id: {
-    //       conversation_id: conversationId,
-    //       user_id: userId,
-    //     },
-    //   },
-    // });
-
-    // if (!participant) {
-    //   throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
-    // }
-
     const query = {
       where: { conversation_id: conversationId },
       include: MESSAGE_WITH_SENDER_INCLUDE,
@@ -237,44 +188,23 @@ export class ChatService {
         : {}),
     } satisfies Prisma.MessageFindManyArgs;
 
-    // Fetch message history with cursor pagination (newest first)
-    const messages = await this.prisma.message.findMany(query);
-
-    return messages;
+    return this.prisma.message.findMany(query);
   }
 
   /**
    * Get conversation details
-   * @param conversationId - The conversation ID
-   * @param userId - The user ID requesting (for validation)
-   * @returns The conversation with all details
-   * @throws NotFoundException if conversation doesn't exist
-   * @throws ForbiddenException if user is not a participant
    */
   async getConversation(conversationId: string, userId: string) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: USER_PUBLIC_SELECT,
-            },
-          },
-        },
-      },
+      include: CONVERSATION_WITH_DETAILS_INCLUDE,
     });
 
     if (!conversation) {
       throw new NotFoundException(this.i18n.t('chat.ERRORS.NOT_FOUND'));
     }
 
-    // Verify user is a participant
-    const isParticipant = conversation.participants.some(
-      (p) => p.user_id === userId,
-    );
-
-    if (!isParticipant) {
+    if (conversation.assigned_agent_id !== userId && conversation.handled_by !== 'AI') {
       throw new ForbiddenException(this.i18n.t('chat.ERRORS.NOT_MEMBER'));
     }
 
@@ -282,43 +212,39 @@ export class ChatService {
   }
 
   /**
-   * Create a new 1-on-1 conversation (Direct Message)
-   * Or return existing conversation if one already exists between the two users
-   * @param orgId - The organization ID
-   * @param currentUserId - The user initiating the conversation
-   * @param targetUserId - The user to start a DM with
-   * @returns The created or existing conversation
-   * @throws NotFoundException if target user doesn't exist
+   * Create a new 1-on-1 conversation with a lead
    */
   async createConversation(
     orgId: string,
     currentUserId: string,
-    targetUserId: string,
+    params: { leadId?: string; externalContactId?: string },
   ): Promise<ConversationWithDetails> {
-    // Validate that target user exists (and is in the same org if needed)
-    const targetUser = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
-    });
+    const { leadId, externalContactId } = params;
 
-    if (!targetUser) {
-      throw new NotFoundException(
-        this.i18n.t('organizations.ERRORS.USER_NOT_FOUND'),
-      );
+    if (!leadId && !externalContactId) {
+      throw new BadRequestException('Either Lead ID or External Contact ID is required');
     }
 
-    await this.assertActiveOrganizationMembers(orgId, [
-      currentUserId,
-      targetUserId,
-    ]);
+    if (leadId) {
+      const lead = await this.prisma.lead.findUnique({
+        where: { id: leadId },
+      });
 
-    // Check if a 1-on-1 conversation already exists between these two users in this organization
-    const existingConversation = await this.findExistingDirectMessage(
+      if (!lead || lead.organization_id !== orgId) {
+        throw new NotFoundException(
+          this.i18n.t('leads.ERRORS.NOT_FOUND', { defaultValue: 'Lead not found' }),
+        );
+      }
+    }
+
+    await this.assertActiveOrganizationMembers(orgId, [currentUserId]);
+
+    const existingConversation = await this.findExistingLeadConversation(
       orgId,
-      currentUserId,
-      targetUserId,
+      leadId,
+      externalContactId,
     );
 
-    // If conversation exists, return it
     if (existingConversation) {
       this.logger.log(
         `[ChatService] Existing conversation found: ${existingConversation.id}`,
@@ -326,45 +252,22 @@ export class ChatService {
       return existingConversation;
     }
 
-    // Create new conversation using a transaction
-    const newConversation = await this.prisma.$transaction(async (tx) => {
-      // Create the conversation
-      const conversation = await tx.conversation.create({
-        data: {
-          organization_id: orgId,
-          is_group: false,
-        },
-      });
-
-      // Add both participants
-      await tx.conversationParticipant.createMany({
-        data: [
-          {
-            conversation_id: conversation.id,
-            user_id: currentUserId,
-          },
-          {
-            conversation_id: conversation.id,
-            user_id: targetUserId,
-          },
-        ],
-      });
-
-      // Return the conversation with all necessary relations
-      return tx.conversation.findUnique({
-        where: { id: conversation.id },
-        include: CONVERSATION_WITH_DETAILS_INCLUDE,
-      });
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        organization_id: orgId,
+        is_group: false,
+        lead_id: leadId,
+        external_contact_id: externalContactId,
+        assigned_agent_id: currentUserId,
+        handled_by: 'HUMAN', // created by human agent
+      },
+      include: CONVERSATION_WITH_DETAILS_INCLUDE,
     });
 
-    if (!newConversation) {
-      throw new NotFoundException(this.i18n.t('chat.ERRORS.NOT_FOUND'));
-    }
-
     this.logger.log(
-      `[ChatService] New conversation created: ${newConversation?.id}`,
+      `[ChatService] New conversation created: ${conversation.id}`,
     );
 
-    return newConversation;
+    return conversation;
   }
 }

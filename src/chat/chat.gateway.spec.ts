@@ -48,7 +48,6 @@ describe('ChatGateway', () => {
     getConversationMessages: jest.fn(),
     getUserConversations: jest.fn(),
     createConversation: jest.fn(),
-    createGroupConversation: jest.fn(),
   };
 
   const mockRequestContextService = {
@@ -191,70 +190,6 @@ describe('ChatGateway', () => {
       expect(mockChatService.getConversationMessages).not.toHaveBeenCalled();
       expect(mockSocket.join).toHaveBeenCalledWith(`org:${orgId}`);
       expect(mockSocket.disconnect).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('handleJoinConversation', () => {
-    const userId = 'user-1';
-    const orgId = 'org-1';
-    const conversationId = 'conv-1';
-
-    beforeEach(() => {
-      mockSocket.data.userId = userId;
-      mockSocket.data.orgId = orgId;
-    });
-
-    it('joins room and emits user_joined when conversation is in same tenant', async () => {
-      mockChatService.getConversation.mockResolvedValue({
-        id: conversationId,
-        organization_id: orgId,
-      });
-
-      await gateway.handleJoinConversation(mockSocket as any, {
-        conversationId,
-      });
-
-      expect(mockChatService.getConversation).toHaveBeenCalledWith(
-        conversationId,
-        userId,
-      );
-      expect(mockSocket.join).toHaveBeenCalledWith(conversationId);
-      expect(mockServer.to).toHaveBeenCalledWith(conversationId);
-      expect(roomEmitter.emit).toHaveBeenCalledWith(
-        'user_joined',
-        expect.objectContaining({ userId, conversationId }),
-      );
-    });
-
-    it('rejects when conversation belongs to different organization', async () => {
-      mockChatService.getConversation.mockResolvedValue({
-        id: conversationId,
-        organization_id: 'org-other',
-      });
-
-      await gateway.handleJoinConversation(mockSocket as any, {
-        conversationId,
-      });
-
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'error',
-        expect.objectContaining({ message: 'Failed to join conversation' }),
-      );
-      expect(mockSocket.join).not.toHaveBeenCalled();
-    });
-
-    it('rejects when socket identity is missing', async () => {
-      mockSocket.data = {};
-
-      await gateway.handleJoinConversation(mockSocket as any, {
-        conversationId,
-      });
-
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'error',
-        expect.objectContaining({ message: 'Failed to join conversation' }),
-      );
-      expect(mockChatService.getConversation).not.toHaveBeenCalled();
     });
   });
 
@@ -410,38 +345,6 @@ describe('ChatGateway', () => {
         message: 'You are not a member of this conversation',
       });
       expect(mockChatService.getConversationMessages).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('handleLeaveConversation', () => {
-    it('leaves room and emits user_left when identity exists', () => {
-      mockSocket.data.userId = 'user-1';
-      mockSocket.data.orgId = 'org-1';
-
-      gateway.handleLeaveConversation(mockSocket as any, {
-        conversationId: 'conv-1',
-      });
-
-      expect(mockSocket.leave).toHaveBeenCalledWith('conv-1');
-      expect(mockServer.to).toHaveBeenCalledWith('conv-1');
-      expect(roomEmitter.emit).toHaveBeenCalledWith(
-        'user_left',
-        expect.objectContaining({
-          userId: 'user-1',
-          conversationId: 'conv-1',
-        }),
-      );
-    });
-
-    it('does not throw if unauthenticated socket tries to leave', () => {
-      mockSocket.data = {};
-
-      expect(() =>
-        gateway.handleLeaveConversation(mockSocket as any, {
-          conversationId: 'conv-1',
-        }),
-      ).not.toThrow();
-      expect(mockSocket.leave).not.toHaveBeenCalled();
     });
   });
 
