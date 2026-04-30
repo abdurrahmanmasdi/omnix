@@ -34,6 +34,7 @@ import { ProposalsModule } from './proposals/proposals.module';
 import { QueryModule } from './common/query/query.module';
 import { AiPersonasModule } from './ai-personas/ai-personas.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
+import { PipelineStagesModule } from './pipeline-stages/pipeline-stages.module';
 
 const logsDir = path.join(process.cwd(), 'logs');
 mkdirSync(logsDir, { recursive: true });
@@ -123,6 +124,7 @@ mkdirSync(uploadsDir, { recursive: true });
     ProposalsModule,
     AiPersonasModule,
     KnowledgeModule,
+    PipelineStagesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -136,4 +136,13 @@ export class CreateLeadDto {
   @IsOptional()
   @IsUUID('4')
   source_id?: string | null;
+
+  @ApiProperty({
+    example: 'c9a3874e-ebed-4fdf-8c14-f299f4d75668',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID('4')
+  pipeline_stage_id?: string | null;
 }

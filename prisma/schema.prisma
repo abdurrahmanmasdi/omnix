@@ -69,6 +69,7 @@ model Organization {
   roles                Role[]
   products             Product[]
   proposals            Proposal[]
+  pipelineStages       PipelineStage[]
   
   // --- New AI Engine Relations ---
   knowledgeBase        OrganizationKnowledge[]
@@ -294,6 +295,21 @@ model LeadSource {
   @@map("lead_sources")
 }
 
+model PipelineStage {
+  id              String       @id @default(uuid()) @db.Uuid
+  organization_id String       @db.Uuid
+  name            String
+  order_index     Int
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  deleted_at      DateTime?
+  leads           Lead[]
+  organization    Organization @relation(fields: [organization_id], references: [id])
+
+  @@index([organization_id])
+  @@map("pipeline_stages")
+}
+
 model LeadNote {
   id         String    @id @default(uuid()) @db.Uuid
   lead_id    String    @db.Uuid
@@ -330,6 +346,7 @@ model LeadAttachment {
 model Lead {
   id                    String           @id @default(uuid()) @db.Uuid
   organization_id       String           @db.Uuid
+  pipeline_stage_id     String?          @db.Uuid
   assigned_agent_id     String?          @db.Uuid
   source_id             String?          @db.Uuid
   first_name            String
@@ -357,9 +374,11 @@ model Lead {
   assigned_agent        User?            @relation(fields: [assigned_agent_id], references: [id])
   organization          Organization     @relation(fields: [organization_id], references: [id])
   source                LeadSource?      @relation(fields: [source_id], references: [id])
+  pipeline_stage        PipelineStage?   @relation(fields: [pipeline_stage_id], references: [id])
   proposals             Proposal[]
 
   @@index([organization_id])
+  @@index([pipeline_stage_id])
   @@index([assigned_agent_id])
   @@index([source_id])
   @@index([status])

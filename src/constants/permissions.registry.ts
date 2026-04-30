@@ -23,6 +23,7 @@ export const AppResource = {
   ORGANIZATION: 'organization',
   LEADS: 'leads',
   LEAD_SOURCES: 'lead_sources',
+  PIPELINE_STAGES: 'pipeline_stages',
   PRODUCTS: 'products',
   PROPOSALS: 'proposals',
   // CONTACTS: 'contacts',
@@ -134,6 +135,26 @@ export const AppPermission = {
     `${AppResource.LEAD_SOURCES}:${AppAction.DELETE_ALL}` as const,
   LEAD_SOURCES_RESTORE:
     `${AppResource.LEAD_SOURCES}:${AppAction.RESTORE}` as const,
+
+  // Pipeline Stages
+  PIPELINE_STAGES_MANAGE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.MANAGE}` as const,
+  PIPELINE_STAGES_READ:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.READ}` as const,
+  PIPELINE_STAGES_READ_ALL:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.READ_ALL}` as const,
+  PIPELINE_STAGES_CREATE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.CREATE}` as const,
+  PIPELINE_STAGES_EDIT:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.EDIT}` as const,
+  PIPELINE_STAGES_EDIT_ALL:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.EDIT_ALL}` as const,
+  PIPELINE_STAGES_DELETE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.DELETE}` as const,
+  PIPELINE_STAGES_DELETE_ALL:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.DELETE_ALL}` as const,
+  PIPELINE_STAGES_RESTORE:
+    `${AppResource.PIPELINE_STAGES}:${AppAction.RESTORE}` as const,
 
   // Products
   PRODUCTS_MANAGE: `${AppResource.PRODUCTS}:${AppAction.MANAGE}` as const,
@@ -392,6 +413,44 @@ export const PERMISSIONS_LIST: readonly IPermissionDefinition[] = [
   {
     action: AppPermission.LEAD_SOURCES_RESTORE,
     description: 'Restore deleted lead sources',
+  },
+
+  // Pipeline Stages
+  {
+    action: AppPermission.PIPELINE_STAGES_MANAGE,
+    description: 'Manage all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_READ,
+    description: 'Read assigned pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_READ_ALL,
+    description: 'Read all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_CREATE,
+    description: 'Create new pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_EDIT,
+    description: 'Edit assigned pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_EDIT_ALL,
+    description: 'Edit all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_DELETE,
+    description: 'Delete assigned pipeline stages',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_DELETE_ALL,
+    description: 'Delete all pipeline stages in the organization',
+  },
+  {
+    action: AppPermission.PIPELINE_STAGES_RESTORE,
+    description: 'Restore deleted pipeline stages',
   },
 
   // Products
