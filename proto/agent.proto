@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+// This namespace is used by both NestJS and Python
+package agent;
+
+// The Service Definition
+service SalesAgent {
+  // Our primary synchronous generation method
+  rpc GenerateReply (AgentRequest) returns (AgentReply) {}
+  
+  // We'll use this later when you want token-by-token streaming!
+  // rpc StreamReply (AgentRequest) returns (stream AgentReply) {}
+}
+
+// What NestJS sends to Python
+message AgentRequest {
+  string organizationId = 1;
+  string conversationId = 2;
+  string latestMessage = 3;
+  // We can pass conversation history here later
+}
+
+// What Python sends back to NestJS
+message AgentReply {
+  string replyText = 1;
+  bool safetyFlag = 2; // Preparing for your future safety layer!
+  int32 confidenceScore = 3;
+}
