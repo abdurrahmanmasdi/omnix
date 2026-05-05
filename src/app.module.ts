@@ -1,152 +1,45 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
-import { LoggerModule } from 'nestjs-pino';
-import { I18nModule, AcceptLanguageResolver } from 'nestjs-i18n';
-import { mkdirSync } from 'fs';
-import * as path from 'path';
-import { validate } from './env.validation';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
-import { GlobalExceptionFilter } from './global-exception.filter';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { AuthModule } from './auth/auth.module';
-import { GlobalAuthGuard } from './auth/guards/global-auth.guard';
+import { PrismaModule } from './prisma/prisma.module';
+import { TenantMiddleware } from './core/tenant/tenant.middleware';
 import { OrganizationsModule } from './organizations/organizations.module';
-import { TenantInterceptor } from './organizations/interceptors/tenant.interceptor';
-import { UsersModule } from './users/users.module';
-import { SeederModule } from './seeders/seeder.module';
-import { AccessControlModule } from './access-control/access-control.module';
-import { ChatModule } from './chat/chat.module';
-import { LeadsModule } from './leads/leads.module';
-import { LeadSourcesModule } from './lead-sources/lead-sources.module';
-import { LeadNotesModule } from './lead-notes/lead-notes.module';
-import { LeadAttachmentsModule } from './lead-attachments/lead-attachments.module';
-import { AnalyticsModule } from './analytics/analytics.module';
-import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
-import { SocialLinksModule } from './social-links/social-links.module';
-
-import { QueryModule } from './common/query/query.module';
-import { AiPersonasModule } from './ai-personas/ai-personas.module';
-import { KnowledgeModule } from './knowledge/knowledge.module';
-import { PipelineStagesModule } from './pipeline-stages/pipeline-stages.module';
-
-const logsDir = path.join(process.cwd(), 'logs');
-mkdirSync(logsDir, { recursive: true });
-
-const uploadsDir = path.join(process.cwd(), 'uploads');
-mkdirSync(uploadsDir, { recursive: true });
+import { EventsModule } from './events/events.module';
+import { ConversationsModule } from './conversations/conversations.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // This makes the .env variables available everywhere
-      validate, // Use our custom validation function to ensure the .env file is correct
+      isGlobal: true,
     }),
-    EventEmitterModule.forRoot(),
-    ServeStaticModule.forRoot({
-      rootPath: uploadsDir,
-      serveRoot: '/uploads',
-    }),
-    LoggerModule.forRoot({
-      pinoHttp: {
-        transport: {
-          targets: [
-            ...(process.env.NODE_ENV !== 'production'
-              ? [
-                  {
-                    target: 'pino-pretty',
-                    options: {
-                      singleLine: true,
-                      colorize: true,
-                      translateTime: 'SYS:standard',
-                    },
-                  },
-                ]
-              : []),
-            {
-              target: 'pino/file',
-              options: {
-                destination: path.join(logsDir, 'app.log'),
-                mkdir: true,
-              },
-            },
-          ],
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        connection: {
+          url: configService.get<string>('REDIS_URL'),
         },
-      },
+      }),
+      inject: [ConfigService],
     }),
-    // Internationalization (i18n)
-    I18nModule.forRoot({
-      fallbackLanguage: 'en',
-      loaderOptions: {
-        path: path.join(
-          process.cwd(),
-          process.env.NODE_ENV === 'production' ? 'dist/i18n/' : 'src/i18n/',
-        ),
-        watch: true,
-      },
-      resolvers: [AcceptLanguageResolver],
-    }),
-    // Rate Limiting: Allow max 10 requests every 60 seconds per IP
-    // Disabled during testing to avoid rate limit failures in test suite
-    ...(process.env.NODE_ENV === 'test'
-      ? []
-      : [
-          ThrottlerModule.forRoot([
-            {
-              ttl: 60000,
-              limit: 10,
-            },
-          ]),
-        ]),
-    PrismaModule,
-    RedisModule,
-    QueryModule,
+    WebhooksModule,
     AuthModule,
+    PrismaModule,
     OrganizationsModule,
-    UsersModule,
-    SeederModule,
-    AccessControlModule,
-    ChatModule,
-    LeadsModule,
-    LeadSourcesModule,
-    LeadNotesModule,
-    LeadAttachmentsModule,
-    AnalyticsModule,
-    BankAccountsModule,
-    SocialLinksModule,
-    AiPersonasModule,
-    KnowledgeModule,
-    PipelineStagesModule,
+    EventsModule,
+    ConversationsModule,
+    DocumentsModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TenantInterceptor, // Extracts and verifies tenant from x-organization-id header
-    },
-    {
-      provide: APP_GUARD,
-      useClass: GlobalAuthGuard, // JWT guard for all routes except @Public()
-    },
-    // Throttler guard is disabled during testing
-    ...(process.env.NODE_ENV === 'test'
-      ? []
-      : [
-          {
-            provide: APP_GUARD,
-            useClass: ThrottlerGuard, // Applies rate limiting to all routes automatically
-          },
-        ]),
-    {
-      provide: APP_FILTER, // <-- Register the filter globally
-      useClass: GlobalExceptionFilter,
-    },
-  ],
+  providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // Apply the TenantMiddleware globally
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}

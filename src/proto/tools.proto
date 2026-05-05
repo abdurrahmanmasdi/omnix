@@ -1,0 +1,24 @@
+syntax = "proto3";
+package tools;
+
+// Python calls this, NestJS executes it!
+service CrmTools {
+  rpc BookAppointment (BookRequest) returns (ToolResponse) {}
+  rpc UpdateLeadStatus (UpdateLeadRequest) returns (ToolResponse) {}
+}
+
+message BookRequest {
+  string leadId = 1;
+  string dateTime = 2;
+}
+
+message UpdateLeadRequest {
+  string leadId = 1;
+  string status = 2;
+}
+
+message ToolResponse {
+  bool success = 1;
+  string message = 2;
+  string dataJson = 3; // Generic JSON payload to return to the AI
+}

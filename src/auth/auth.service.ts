@@ -1,566 +1,199 @@
 import {
   Injectable,
-  BadRequestException,
-  Logger,
-  NotFoundException,
-  ForbiddenException,
   UnauthorizedException,
+  ConflictException,
 } from '@nestjs/common';
-import { AuthTokenType, MembershipStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { I18nService } from 'nestjs-i18n';
-import * as bcrypt from 'bcryptjs';
-import { INVITATION_STATUS } from '../constants/invitation-status';
-import { RequestContextService } from '../request-context/request-context.service';
-import { TokenManagementService } from './services/token-management.service';
-import { MailingService } from './services/mailing.service';
-
-const ACCESS_TOKEN_EXPIRES_IN = '15m';
-const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
-const GENERIC_VERIFICATION_RESEND_MESSAGE =
-  'If an account exists, a link has been sent';
-
-interface IUserPublic {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  created_at: Date;
-  is_email_verified: boolean;
-}
-
-interface IValidatedUser extends IUserPublic {
-  is_email_verified: boolean;
-}
-
-interface ILoginResponse {
-  access_token: string;
-  refresh_token: string;
-  user: IUserPublic & { permissions: string[] };
-}
-
-interface IRefreshSessionResponse {
-  access_token: string;
-  refresh_token: string;
-}
-
-interface IJwtAccessPayload {
-  sub: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  created_at: string;
-}
-
-interface InvitationTokenRecord {
-  id: string;
-  email: string;
-  status: string;
-  organization_id: string;
-  role_id: string;
-}
-
-function excludePassword(user: any): IValidatedUser {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unused-vars
-  const { password_hash, ...rest } = user;
-  return rest as IValidatedUser;
-}
-
-function toPublicUser(user: IValidatedUser): IUserPublic {
-  return {
-    id: user.id,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    created_at: user.created_at,
-    is_email_verified: user.is_email_verified,
-  };
-}
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma/prisma.service';
+import { LoginDto } from './dto/login.dto';
+import { SignupDto } from './dto/signup.dto';
+import type { JwtPayload } from './jwt.strategy';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
-    private i18n: I18nService,
-    private tokenManagementService: TokenManagementService,
-    private mailingService: MailingService,
-    private requestContextService: RequestContextService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
-  async validateUser(
-    email: string,
-    password: string,
-  ): Promise<IValidatedUser | null> {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        email,
-        deleted_at: null,
-      },
-    });
-    if (!user) return null;
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return null;
-    return excludePassword(user);
-  }
-
-  async login(user: IValidatedUser): Promise<ILoginResponse> {
-    return this.requestContextService.runWithBypass(async () => {
-      this.logger.debug(`[AuthService] Login for user ${user.id}`);
-
-      if (!user.is_email_verified) {
-        throw new ForbiddenException(
-          this.i18n.t('auth.ERRORS.EMAIL_NOT_VERIFIED'),
-        );
-      }
-
-      const publicUser = toPublicUser(user);
-
-      // Get user's first (oldest by creation date) active organization membership
-      const membership = await this.prisma.organizationMembership.findFirst({
-        where: {
-          user_id: user.id,
-          status: 'ACTIVE',
-        },
-        orderBy: {
-          created_at: 'asc',
-        },
-      });
-
-      // If user has no active membership, return empty permissions
-      if (!membership) {
-        this.logger.debug(
-          `[AuthService] No active membership found for user ${user.id}`,
-        );
-        const refreshToken = await this.tokenManagementService.issueToken(
-          user.id,
-          AuthTokenType.REFRESH,
-          REFRESH_TOKEN_TTL_MS,
-        );
-        return {
-          access_token: this.signAccessToken(publicUser),
-          refresh_token: refreshToken,
-          user: { ...publicUser, permissions: [] },
-        };
-      }
-
-      // Calculate effective permissions for the user's primary organization
-      const effectivePermissions = await this.getEffectivePermissions(
-        user.id,
-        membership.organization_id,
-      );
-
-      const refreshToken = await this.tokenManagementService.issueToken(
-        user.id,
-        AuthTokenType.REFRESH,
-        REFRESH_TOKEN_TTL_MS,
-      );
-
-      return {
-        access_token: this.signAccessToken(publicUser),
-        refresh_token: refreshToken,
-        user: { ...publicUser, permissions: effectivePermissions },
-      };
-    });
-  }
-
-  /**
-   * Calculate a user's effective permissions for an organization
-   *
-   * Process:
-   * 1. Guard: If no organizationId, return []
-   * 2. Query the user's OrganizationMembership with its Role and RolePermissions
-   * 3. If membership is null, return []
-   * 4. Query MembershipPermissionOv overrides for this membership
-   * 5. Start with base role permissions (Set)
-   * 6. Apply overrides: add if is_granted=true, remove if is_granted=false
-   * 7. Return sorted array of permission action strings
-   */
-  async getEffectivePermissions(
-    userId: string,
-    organizationId: string,
-  ): Promise<string[]> {
-    // Guard clause: if no organization ID provided, return empty permissions
-    if (!organizationId) {
-      this.logger.debug(
-        `[AuthService] No organization ID provided for user ${userId}, returning empty permissions`,
-      );
-      return [];
-    }
-
-    this.logger.debug(
-      `[AuthService] Calculating effective permissions for user ${userId} in organization ${organizationId}`,
-    );
-
-    // Query 1: Get the membership with role and role permissions
-    const membership = await this.prisma.organizationMembership.findFirst({
-      where: {
-        user_id: userId,
-        organization_id: organizationId,
-      },
-      include: {
-        role: {
-          include: {
-            rolePermissions: {
-              include: {
-                permission: {
-                  select: {
-                    action: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+  async signup(signupDto: SignupDto) {
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: signupDto.email },
     });
 
-    if (!membership) {
-      this.logger.debug(
-        `[AuthService] No membership found for user ${userId} in organization ${organizationId}`,
-      );
-      return [];
-    }
+    if (existingUser)
+      throw new ConflictException('A user with this email already exists');
 
-    // Start with base role permissions in a Set
-    const permissionsSet = new Set<string>();
-    membership.role.rolePermissions.forEach((rp) => {
-      permissionsSet.add(rp.permission.action);
-    });
-
-    // Query 2: Get membership-level overrides
-    const overrides = await this.prisma.membershipPermissionOverride.findMany({
-      where: {
-        membership_id: membership.id,
-      },
-      include: {
-        permission: {
-          select: {
-            action: true,
-          },
-        },
-      },
-    });
-
-    // Apply overrides to the set
-    overrides.forEach((override) => {
-      if (override.is_granted) {
-        permissionsSet.add(override.permission.action);
-      } else {
-        permissionsSet.delete(override.permission.action);
-      }
-    });
-
-    const result = Array.from(permissionsSet).sort();
-    this.logger.debug(
-      `[AuthService] User ${userId} has ${result.length} permissions in organization ${organizationId}`,
-    );
-    return result;
-  }
-
-  async register(
-    email: string,
-    password: string,
-    first_name: string,
-    last_name: string,
-    inviteToken?: string,
-  ): Promise<IUserPublic> {
-    return this.requestContextService.runWithBypass(async () => {
-      const existing = await this.prisma.user.findFirst({
-        where: {
-          email,
-          deleted_at: null,
-        },
-      });
-      if (existing) {
-        throw new BadRequestException(
-          this.i18n.t('auth.ERRORS.USER_ALREADY_EXISTS'),
-        );
-      }
-
-      const hashed = await bcrypt.hash(password, 10);
-
-      if (!inviteToken) {
-        const user = await this.prisma.user.create({
-          data: {
-            email,
-            password_hash: hashed,
-            first_name,
-            last_name,
-            is_email_verified: false,
-          },
-        });
-        await this.sendVerificationToken(user.id, user.email);
-        return toPublicUser(excludePassword(user));
-      }
-
-      const user = await this.prisma.$transaction(async (tx) => {
-        const invitation = await tx.invitation.findFirst({
-          where: { token: inviteToken },
-          select: {
-            id: true,
-            email: true,
-            status: true,
-            organization_id: true,
-            role_id: true,
-          },
-        });
-
-        const validInvitation = this.validateInvitationForRegistration(
-          invitation,
-          email,
-        );
-
-        const invitationUpdate = await tx.invitation.updateMany({
-          where: {
-            id: validInvitation.id,
-            status: INVITATION_STATUS.PENDING,
-          },
-          data: {
-            status: INVITATION_STATUS.ACCEPTED,
-            accepted_at: new Date(),
-          },
-        });
-
-        if (invitationUpdate.count !== 1) {
-          throw new BadRequestException(
-            this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
-              args: { status: validInvitation.status },
-            }),
-          );
-        }
-
-        const createdUser = await tx.user.create({
-          data: {
-            email,
-            password_hash: hashed,
-            first_name,
-            last_name,
-            is_email_verified: false,
-          },
-        });
-
-        await tx.organizationMembership.create({
-          data: {
-            user_id: createdUser.id,
-            organization_id: validInvitation.organization_id,
-            role_id: validInvitation.role_id,
-            status: MembershipStatus.ACTIVE,
-          },
-        });
-
-        return createdUser;
-      });
-
-      await this.sendVerificationToken(user.id, user.email);
-
-      return toPublicUser(excludePassword(user));
-    });
-  }
-
-  async verifyEmail(rawToken: string): Promise<ILoginResponse> {
-    return this.requestContextService.runWithBypass(async () => {
-      const userId = await this.tokenManagementService.validateAndRevokeToken(
-        null,
-        rawToken,
-        AuthTokenType.VERIFICATION,
-      );
-
-      const verifiedUser = await this.prisma.user.update({
-        where: { id: userId },
-        data: { is_email_verified: true },
-      });
-
-      return this.login(excludePassword(verifiedUser));
-    });
-  }
-
-  async resendVerification(email: string): Promise<{ message: string }> {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        email,
-        deleted_at: null,
-      },
-      select: {
-        id: true,
-        email: true,
-        is_email_verified: true,
-      },
-    });
-
-    if (!user || user.is_email_verified) {
-      return { message: GENERIC_VERIFICATION_RESEND_MESSAGE };
-    }
-
-    await this.tokenManagementService.revokeAllUserTokens(
-      user.id,
-      AuthTokenType.VERIFICATION,
-    );
-
-    await this.sendVerificationToken(user.id, user.email);
-
-    return { message: GENERIC_VERIFICATION_RESEND_MESSAGE };
-  }
-
-  async requestPasswordReset(email: string): Promise<void> {
-    const user = await this.prisma.user.findFirst({
-      where: {
-        email,
-        deleted_at: null,
-      },
-      select: {
-        id: true,
-        email: true,
-      },
-    });
-
-    // Deliberately silent to avoid account enumeration.
-    if (!user) {
-      return;
-    }
-
-    const resetToken = await this.tokenManagementService.issueToken(
-      user.id,
-      AuthTokenType.RESET,
-      PASSWORD_RESET_TOKEN_TTL_MS,
-    );
-
-    await this.mailingService.sendPasswordResetEmail(user.email, resetToken);
-  }
-
-  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
-    const userId = await this.tokenManagementService.consumeToken(
-      rawToken,
-      AuthTokenType.RESET,
-    );
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
-
-    await this.prisma.user.update({
-      where: { id: userId },
+    const hashedPassword = await bcrypt.hash(signupDto.password, 10);
+    const user = await this.prisma.user.create({
       data: {
-        password_hash: newPasswordHash,
+        email: signupDto.email,
+        password_hash: hashedPassword,
+        firstName: signupDto.firstName,
+        lastName: signupDto.lastName,
+        isEmailVerified: false,
       },
     });
 
-    await this.tokenManagementService.revokeAllUserTokens(
-      userId,
-      AuthTokenType.REFRESH,
-    );
-  }
-
-  async refreshAccessToken(
-    rawRefreshToken: string,
-  ): Promise<IRefreshSessionResponse> {
-    const userId = await this.tokenManagementService.consumeToken(
-      rawRefreshToken,
-      AuthTokenType.REFRESH,
-    );
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        first_name: true,
-        last_name: true,
-        created_at: true,
-        is_email_verified: true,
+    // 1. Generate an Email Verification Token (Expires in 1 hour)
+    const emailVerificationToken = this.jwtService.sign(
+      { email: user.email },
+      {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '1h',
       },
-    });
+    );
 
-    if (!user) {
-      throw new UnauthorizedException(
-        this.i18n.t('auth.ERRORS.INVALID_CREDENTIALS'),
-      );
-    }
+    // 2. SIMULATE SENDING EMAIL (In production, use Resend, Sendgrid, AWS SES, etc.)
+    console.log(`\n📧 [EMAIL SIMULATION] To: ${user.email}`);
+    console.log(
+      `Please click here to verify your email: http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}\n`,
+    );
 
-    if (!user.is_email_verified) {
-      throw new ForbiddenException(
-        this.i18n.t('auth.ERRORS.EMAIL_NOT_VERIFIED'),
-      );
-    }
-
-    const nextRefreshToken = await this.tokenManagementService.issueToken(
+    return this.generateTokens(
       user.id,
-      AuthTokenType.REFRESH,
-      REFRESH_TOKEN_TTL_MS,
+      user.email,
+      null,
+      null,
+      user.firstName,
+      user.lastName,
     );
-
-    return {
-      access_token: this.signAccessToken(toPublicUser(user)),
-      refresh_token: nextRefreshToken,
-    };
   }
 
-  async logout(rawRefreshToken?: string): Promise<void> {
-    if (!rawRefreshToken) {
-      return;
+  // --- NEW: Verify Email Method ---
+  async verifyEmail(token: string) {
+    try {
+      // 1. Decode and verify the token
+      const payload = this.jwtService.verify<{ email: string }>(token, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      });
+
+      // 2. Update the user in the database
+      const user = await this.prisma.user.findFirst({
+        where: { email: payload.email },
+      });
+      if (!user) throw new UnauthorizedException('User not found');
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isEmailVerified: true },
+      });
+
+      return { message: 'Email successfully verified!' };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired verification token');
     }
+  }
 
-    await this.tokenManagementService.revokeTokenIfExists(
-      rawRefreshToken,
-      AuthTokenType.REFRESH,
+  async login(loginDto: LoginDto) {
+    const user = await this.prisma.user.findFirst({
+      where: { email: loginDto.email },
+      include: {
+        memberships: {
+          include: { role: true },
+        },
+      },
+    });
+
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.password_hash,
+    );
+    if (!isPasswordValid)
+      throw new UnauthorizedException('Invalid credentials');
+
+    // If they have no organization yet, these will just safely be null!
+    const activeMembership = user.memberships[0];
+    const organizationId = activeMembership?.organizationId || null;
+    const roleId = activeMembership?.roleId || null;
+
+    return this.generateTokens(
+      user.id,
+      user.email,
+      organizationId,
+      roleId,
+      user.firstName,
+      user.lastName,
     );
   }
 
-  private signAccessToken(user: IUserPublic): string {
-    return this.jwtService.sign(this.toJwtPayload(user), {
-      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
-    });
+  async refreshTokens(refreshToken: string) {
+    try {
+      // 1. Verify the token signature mathematically
+      const payload: JwtPayload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      // 2. Make sure the user still exists in the database
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        include: { memberships: true },
+      });
+
+      if (!user) throw new UnauthorizedException('User not found');
+
+      // 3. Issue fresh tokens
+      const activeMembership = user.memberships[0];
+      const organizationId = activeMembership?.organizationId || null;
+      const roleId = activeMembership?.roleId || null;
+
+      return this.generateTokens(
+        user.id,
+        user.email,
+        organizationId,
+        roleId,
+        user.firstName,
+        user.lastName,
+      );
+    } catch (e) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
   }
 
-  private toJwtPayload(user: IUserPublic): IJwtAccessPayload {
-    return {
-      sub: user.id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      created_at: user.created_at.toISOString(),
-    };
-  }
-
-  private async sendVerificationToken(
+  generateTokens(
     userId: string,
     email: string,
-  ): Promise<void> {
-    const verificationToken = await this.tokenManagementService.issueToken(
-      userId,
-      AuthTokenType.VERIFICATION,
-      VERIFICATION_TOKEN_TTL_MS,
-    );
+    organizationId: string | null,
+    roleId: string | null,
+    firstName: string,
+    lastName: string,
+  ) {
+    const payload = {
+      sub: userId,
+      email,
+      organizationId,
+      roleId,
+    };
 
-    await this.mailingService.sendVerificationEmail(email, verificationToken);
-  }
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRATION') as any,
+    });
 
-  private validateInvitationForRegistration(
-    invitation: InvitationTokenRecord | null,
-    email: string,
-  ): InvitationTokenRecord {
-    if (!invitation) {
-      throw new NotFoundException(
-        this.i18n.t('organizations.ERRORS.INVITATION.NOT_FOUND'),
-      );
-    }
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      expiresIn: this.configService.get<string>(
+        'JWT_REFRESH_EXPIRATION',
+      ) as any,
+    });
 
-    if (invitation.status !== INVITATION_STATUS.PENDING) {
-      throw new BadRequestException(
-        this.i18n.t('organizations.ERRORS.INVITATION.INVALID_STATUS', {
-          args: { status: invitation.status },
-        }),
-      );
-    }
-
-    if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-      throw new BadRequestException(
-        this.i18n.t('organizations.ERRORS.INVITATION.NOT_OWNER'),
-      );
-    }
-
-    return invitation;
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: userId,
+        firstName,
+        lastName,
+        organizationId,
+        hasCompletedOnboarding: !!organizationId, // Useful boolean for your frontend!
+      },
+    };
   }
 }

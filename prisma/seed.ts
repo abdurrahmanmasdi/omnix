@@ -1,52 +1,75 @@
-import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
+import 'dotenv/config';
+import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { SYSTEM_PERMISSIONS } from '../src/constants/permissions.list';
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
-
-const adapter = new PrismaPg({
-  connectionString,
-});
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-async function seedPermissions() {
-  console.log('  📝 Seeding permissions...');
-  const createdPermissions = await Promise.all(
-    SYSTEM_PERMISSIONS.map((permission) =>
-      prisma.permission.upsert({
-        where: { action: permission.action },
-        update: { description: permission.description },
-        create: {
-          action: permission.action,
-          description: permission.description,
-        },
-      }),
-    ),
-  );
-  console.log(`  ✅ Seeded ${createdPermissions.length} permissions`);
-}
-
 async function main() {
-  console.log('🌱 Starting database seed...');
+  console.log('🌱 Seeding database...');
 
-  try {
-    await seedPermissions();
-    console.log('✅ Database seed completed successfully');
-  } catch (error) {
-    console.error('❌ Error during seed:', error);
-    throw error;
-  }
+  // 1. Create a Test Organization
+  const org = await prisma.organization.create({
+    data: {
+      name: 'Istanbul Premium Hair & Dental',
+      slug: 'ist-premium-clinic',
+      industry_category: 'MEDICAL_TOURISM',
+    },
+  });
+
+  // 2. Create an Admin Role for this Organization
+  const role = await prisma.role.create({
+    data: {
+      name: 'Super Admin',
+      is_system: true,
+      organizationId: org.id,
+    },
+  });
+
+  // 3. Create a User with a securely hashed password
+  const hashedPassword = await bcrypt.hash('password123', 10);
+  const user = await prisma.user.create({
+    data: {
+      email: 'admin@clinic.com',
+      password_hash: hashedPassword,
+      firstName: 'Ahmed',
+      lastName: 'Founder',
+      isEmailVerified: true,
+    },
+  });
+
+  // 4. Link the User to the Organization via Membership
+  await prisma.organizationMembership.create({
+    data: {
+      userId: user.id,
+      organizationId: org.id,
+      roleId: role.id,
+      status: 'ACTIVE',
+      agentTier: 'MANAGER',
+    },
+  });
+
+  console.log('✅ Database seeded successfully!');
+  console.log('-----------------------------------');
+  console.log('📧 Test Email: admin@clinic.com');
+  console.log('🔑 Test Password: password123');
+  console.log('🏢 Organization ID:', org.id);
+  console.log('-----------------------------------');
 }
 
 main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(async () => {
+  .then(async () => {
     await prisma.$disconnect();
+    await pool.end();
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    await pool.end();
+    process.exit(1);
   });

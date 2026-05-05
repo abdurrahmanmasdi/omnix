@@ -1,51 +1,17 @@
-import { Global, Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { PrismaModule } from '../prisma/prisma.module';
-import { RedisModule } from '../redis/redis.module';
-import { AuthService } from './auth.service';
-import { PermissionsService } from './services/permissions.service';
-import { TokenManagementService } from './services/token-management.service';
-import { MailingService } from './services/mailing.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { PermissionsGuard } from './guards/permissions.guard';
 import { AuthController } from './auth.controller';
-import { GlobalAuthGuard } from './guards/global-auth.guard';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './jwt.strategy';
 
-@Global()
 @Module({
   imports: [
-    ConfigModule,
-    PrismaModule,
-    RedisModule,
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1d' },
-      }),
-    }),
-  ],
-  providers: [
-    AuthService,
-    PermissionsService,
-    TokenManagementService,
-    MailingService,
-    JwtStrategy,
-    GlobalAuthGuard,
-    PermissionsGuard,
-  ],
-  exports: [
-    AuthService,
-    PermissionsService,
-    TokenManagementService,
-    MailingService,
-    GlobalAuthGuard,
-    PermissionsGuard,
+    // Register the JwtModule. We don't set a default secret here
+    // because we have different secrets for Access and Refresh tokens.
+    JwtModule.register({}),
   ],
   controllers: [AuthController],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService], // Export AuthService for use in other modules (e.g., TenantModule)
 })
 export class AuthModule {}

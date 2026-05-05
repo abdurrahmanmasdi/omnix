@@ -1,9 +1,0 @@
-{
-  "ERRORS": {
-    "UNIQUE_CONSTRAINT_FAILED": "Bu {field} ile bir kayıt zaten mevcut.",
-    "RECORD_NOT_FOUND": "İstenen kayıt bulunamadı.",
-    "FOREIGN_KEY_FAILED": "İlişkili kayıt bulunamadı veya bağlanamıyor.",
-    "INTERNAL_SERVER_ERROR": "Bir iç sunucu hatası oluştu."
-  },
-  "MESSAGES": {}
-}

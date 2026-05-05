@@ -1,9 +1,0 @@
-{
-  "ERRORS": {
-    "UNIQUE_CONSTRAINT_FAILED": "يوجد سجل بالفعل بنفس {field}.",
-    "RECORD_NOT_FOUND": "لم يتم العثور على السجل المطلوب.",
-    "FOREIGN_KEY_FAILED": "السجل المرتبط غير موجود أو لا يمكن ربطه.",
-    "INTERNAL_SERVER_ERROR": "حدث خطأ في الخادم الداخلي."
-  },
-  "MESSAGES": {}
-}
