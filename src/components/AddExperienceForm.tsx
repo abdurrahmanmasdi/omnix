@@ -1,0 +1,230 @@
+"use client";
+
+import { useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
+import { axiosInstance } from "@/lib/api/axios-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+type AddExperienceFormProps = {
+  organizationId: string;
+};
+
+type ExperienceFormState = {
+  title: string;
+  patientCountry: string;
+  procedureType: string;
+  storyText: string;
+  beforeImageUrl: string;
+  afterImageUrl: string;
+};
+
+const initialFormState: ExperienceFormState = {
+  title: "",
+  patientCountry: "",
+  procedureType: "",
+  storyText: "",
+  beforeImageUrl: "",
+  afterImageUrl: "",
+};
+
+export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
+  const [form, setForm] = useState<ExperienceFormState>(initialFormState);
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+
+    if (successMessage) {
+      setSuccessMessage(null);
+    }
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    setIsSaving(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const payload = {
+        title: form.title,
+        storyText: form.storyText,
+        patientCountry: form.patientCountry || undefined,
+        procedureType: form.procedureType || undefined,
+        beforeImageUrl: form.beforeImageUrl || undefined,
+        afterImageUrl: form.afterImageUrl || undefined,
+      };
+
+      const response = await axiosInstance.post(
+        `/organizations/${organizationId}/experiences`,
+        payload,
+      );
+
+      if (response.status === 201) {
+        setForm(initialFormState);
+        setSuccessMessage("Experience saved successfully.");
+      } else {
+        setErrorMessage("The server did not confirm the save.");
+      }
+    } catch (error: unknown) {
+      const fallbackMessage = "Failed to save the experience.";
+
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "data" in error.response &&
+        typeof error.response.data === "object" &&
+        error.response.data !== null &&
+        "message" in error.response.data
+      ) {
+        const message = error.response.data.message;
+        setErrorMessage(
+          Array.isArray(message) ? message.join(", ") : String(message),
+        );
+        return;
+      }
+
+      if (error instanceof Error) {
+        setErrorMessage(error.message || fallbackMessage);
+        return;
+      }
+
+      setErrorMessage(fallbackMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-6 space-y-2">
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Add Experience
+        </h2>
+        <p className="text-sm text-slate-500">
+          Save a new patient experience for the selected organization.
+        </p>
+      </div>
+
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="grid gap-5 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title</Label>
+            <Input
+              id="title"
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="Before and after smile transformation"
+              disabled={isSaving}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="patientCountry">Patient Country</Label>
+            <Input
+              id="patientCountry"
+              name="patientCountry"
+              value={form.patientCountry}
+              onChange={handleChange}
+              placeholder="Canada"
+              disabled={isSaving}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="procedureType">Procedure Type</Label>
+            <Input
+              id="procedureType"
+              name="procedureType"
+              value={form.procedureType}
+              onChange={handleChange}
+              placeholder="Dental implants"
+              disabled={isSaving}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="beforeImageUrl">Before Image URL</Label>
+            <Input
+              id="beforeImageUrl"
+              name="beforeImageUrl"
+              type="url"
+              value={form.beforeImageUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/before.jpg"
+              disabled={isSaving}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="afterImageUrl">After Image URL</Label>
+            <Input
+              id="afterImageUrl"
+              name="afterImageUrl"
+              type="url"
+              value={form.afterImageUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/after.jpg"
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="storyText">The Story</Label>
+          <textarea
+            id="storyText"
+            name="storyText"
+            value={form.storyText}
+            onChange={handleChange}
+            placeholder="Describe the patient's journey and outcome."
+            disabled={isSaving}
+            required
+            rows={6}
+            className="flex min-h-32 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </div>
+
+        {successMessage && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {successMessage}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end">
+          <Button type="submit" disabled={isSaving} className="min-w-36">
+            {isSaving ? "Saving..." : "Save Experience"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+export default AddExperienceForm;

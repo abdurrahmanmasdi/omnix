@@ -1,27 +1,23 @@
 import { defineConfig } from 'orval';
 
 export default defineConfig({
-  crm: {
-    input: {
-      target: process.env.OPENAPI_SPEC_URL || 'http://localhost:3000/docs-json',
-    },
+  api: {
+    input: 'http://localhost:3000/api-json', // Your NestJS Swagger JSON
     output: {
-      mode: 'tags',
-      target: 'src/api-generated/endpoints/index.ts',
-      schemas: 'src/api-generated/model',
+      mode: 'tags-split',
+      target: 'src/lib/api/generated',
+      schemas: 'src/lib/api/model',
       client: 'react-query',
-      clean: true,
-      prettier: true,
+      mock: false,
       override: {
         mutator: {
-          path: 'src/lib/api-custom-instance.ts',
-          name: 'customInstance',
-        },
-        query: {
-          useQuery: true,
-          useInfinite: false,
+          path: 'src/lib/api/axios-client.ts',
+          name: 'customFetch', // Must match the exported function name
         },
       },
+    },
+    hooks: {
+      afterAllFilesWrite: 'prettier --write',
     },
   },
 });

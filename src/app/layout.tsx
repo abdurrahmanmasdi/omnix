@@ -1,13 +1,29 @@
-import '@/app/globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import QueryProvider from '@/providers/query-provider';
+import { Toaster } from '@/components/ui/sonner'; // shadcn toast
 
-interface RootLayoutProps {
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'Lean Commerce CRM',
+  description: 'AI-Powered WhatsApp CRM',
+};
+
+export default function RootLayout({
+  children,
+}: {
   children: React.ReactNode;
-}
-
-export default function RootLayout({ children }: RootLayoutProps) {
+}) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+    <html lang="en">
+      <body className={inter.className}>
+        <QueryProvider>
+          {children}
+          <Toaster />
+        </QueryProvider>
+      </body>
     </html>
   );
 }
