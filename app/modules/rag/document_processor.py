@@ -1,17 +1,21 @@
 import fitz  # PyMuPDF
 import uuid
+from google import genai
+from google.genai import types
 from sqlalchemy.orm import Session
 from sqlalchemy import delete
 from app.core.database import OrganizationKnowledge
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from openai import AsyncOpenAI
 
 
-class DocumentService:    
-    def __init__(self, db_session: Session, api_key: str):
+class DocumentService:
+    client: genai.Client;
+    
+    def __init__(self, db_session: Session, gemini_api_key: str):
         self.db = db_session
-        # Make sure to set your OpenAI API key in your environment variables!
-        self.client = AsyncOpenAI(api_key=api_key)
+        # Make sure to set your Gemini API key in your environment variables!
+        self.client = genai.Client(api_key=gemini_api_key)
+        # genai.configure(api_key=gemini_api_key)
 
     # Note: We now pass documentation_id so we can link the vectors!
     async def process_and_save_pdf(self, org_id: str, documentation_id: str, file_name: str, file_path: str) -> int:
@@ -32,12 +36,15 @@ class DocumentService:
         chunks_saved = 0
 
         for chunk_text in raw_chunks:
-            result = await self.client.embeddings.create(
-                input=chunk_text,
-                model="text-embedding-3-small",
+            result = await self.client.aio.models.embed_content(
+                model="gemini-embedding-001",
+                contents=chunk_text,
+                # This config tells Google to compress the 3072 vector down to 768
+                config=types.EmbedContentConfig(output_dimensionality=768, task_type="RETRIEVAL_DOCUMENT")
+                # config=types.EmbedContentConfig(output_dimensionality=768)
             )
             
-            embedding_vector = result.data[0].embedding
+            embedding_vector = result.embeddings[0].values
 
             new_chunk = OrganizationKnowledge(
                 id=uuid.uuid4(),

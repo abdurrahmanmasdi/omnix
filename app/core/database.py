@@ -27,6 +27,6 @@ class OrganizationKnowledge(Base):
     file_name = Column(String)
     documentationId = Column(UUID(as_uuid=True), index=True)
     content = Column(Text)
-    embedding = Column(Vector(1536)) # 🚀 Matches openai's 1536 dimension output
+    embedding = Column(Vector(768)) # 🚀 Matches Gemini's 768 dimension output
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

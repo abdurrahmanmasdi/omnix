@@ -1,17 +1,18 @@
-from typing import TypedDict, Annotated, Sequence
-from langchain_core.messages import BaseMessage
 import operator
+from typing import Annotated, TypedDict, Sequence
+from langchain_core.messages import BaseMessage
 
 class AgentState(TypedDict):
-    # 'messages' holds the chat history. 
-    # The 'operator.add' tells LangGraph to append new messages rather than overwrite them.
+    # Chat History
     messages: Annotated[Sequence[BaseMessage], operator.add]
     
-    # Context variables
+    # Core IDs
     organization_id: str
     conversation_id: str
-    patient_phone: str
+    lead_id: str | None # Might be None if it's a brand new WhatsApp number
     
-    # CRM Variables (This replaces your rigid if/else router!)
-    # By tracking this in the state, we can dynamically change the System Prompt
-    lead_priority: str # e.g., "COLD" (exploration), "WARM" (objection), "HOT" (closing)
+    # The AI's Cognitive Variables (Directly from your Prisma Enums)
+    first_name: str
+    country: str
+    lead_status: str # "NEW", "QUALIFYING", "READY_TO_PAY", "HANDED_OFF"
+    lead_priority: str # "COLD", "WARM", "HOT"

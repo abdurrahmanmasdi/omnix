@@ -6,7 +6,10 @@ from google import genai
 from contextlib import asynccontextmanager
 from app.core.database import SessionLocal
 from app.modules.rag.document_processor import DocumentService
-from app.modules.agent.sales_agent import SalesAgentCoordinator
+from app.modules.agent.graph import agent_app
+from sqlalchemy import text
+from langchain_core.messages import HumanMessage, AIMessage
+from app.core.config import settings
 
 # Import generated Protobuf files
 import agent_pb2
@@ -16,9 +19,9 @@ import rag_pb2_grpc
 import tools_pb2
 import tools_pb2_grpc
 
-# Make sure to set your OpenAI API key in your environment variables!
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-client = genai.Client(api_key=OPENAI_API_KEY)
+# Make sure to set your Gemini API key in your environment variables!
+GEMINI_API_KEY = settings.Gemini_API_KEY
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 # ---------------------------------------------------------
@@ -36,18 +39,60 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         
         db = SessionLocal()
         try:
-            # 🚀 Fire up the Agent!
-            agent = SalesAgentCoordinator(db_session=db, api_key=OPENAI_API_KEY)
-            reply_text = await agent.process_message(organization_id=org_id, message=latest_msg)
+            # 1. Fetch Lead Info & Status from the database (Using raw SQL to read Prisma tables safely)
+            # Assuming your conversations table has a leadId linking to the leads table
+            lead_query = text("""
+                SELECT l.id, l."firstName", l.country, l.status, l.priority 
+                FROM leads l 
+                JOIN conversations c ON c."leadId" = l.id 
+                WHERE c.id = :conv_id
+            """)
+            lead_result = db.execute(lead_query, {"conv_id": conv_id}).fetchone()
             
-            print(f"📤 Sending reply to WhatsApp: {reply_text}\n")
-            return agent_pb2.AgentReply(replyText=reply_text)
+            # Default state if lead doesn't exist yet
+            state_data = {
+                "organization_id": org_id,
+                "conversation_id": conv_id,
+                "lead_id": str(lead_result.id) if lead_result else None,
+                "first_name": lead_result.firstName if lead_result else "Unknown",
+                "country": lead_result.country if lead_result else "Unknown",
+                "lead_status": lead_result.status if lead_result else "NEW",
+                "lead_priority": lead_result.priority if lead_result else "COLD",
+                "messages": []
+            }
+
+            # 2. Fetch the last 6 messages for short-term memory
+            msg_query = text("""
+                SELECT content, type 
+                FROM messages 
+                WHERE "conversationId" = :conv_id 
+                ORDER BY "createdAt" ASC 
+                LIMIT 6
+            """)
+            history = db.execute(msg_query, {"conv_id": conv_id}).fetchall()
+            
+            for msg in history:
+                if msg.type in ['USER_TEXT', 'LEAD_TEXT']:
+                    state_data["messages"].append(HumanMessage(content=msg.content))
+                elif msg.type == 'AI_TEXT':
+                    state_data["messages"].append(AIMessage(content=msg.content))
+            
+            # 3. Add the brand new message from WhatsApp
+            state_data["messages"].append(HumanMessage(content=latest_msg))
+
+            # 4. 🚀 RUN THE LANGGRAPH AGENT
+            # Ainvoke streams the state through the graph until it hits the END node
+            final_state = await agent_app.ainvoke(state_data)
+            
+            # The last message in the state is the AI's final WhatsApp reply
+            ai_reply = final_state["messages"][-1].content
+            
+            print(f"📤 Sending reply to WhatsApp: {ai_reply}\n")
+            return agent_pb2.AgentReply(replyText=ai_reply)
             
         except Exception as e:
             print(f"❌ Error generating AI reply: {e}")
-            fallback_text = "I apologize, but I am experiencing a brief system update. Let me pass you to a human agent."
-            return agent_pb2.AgentReply(replyText=fallback_text)
-            
+            return agent_pb2.AgentReply(replyText="I apologize, but I am experiencing a brief system update. Let me pass you to a human agent.")
         finally:
             db.close()
 
@@ -67,7 +112,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         
         db = SessionLocal()
         try:
-            doc_service = DocumentService(db_session=db, api_key=OPENAI_API_KEY)
+            doc_service = DocumentService(db_session=db, gemini_api_key=GEMINI_API_KEY)
             
             chunks = await doc_service.process_and_save_pdf(
                 org_id=org_id,
@@ -90,7 +135,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         
         db = SessionLocal()
         try:
-            doc_service = DocumentService(db_session=db, api_key=OPENAI_API_KEY)
+            doc_service = DocumentService(db_session=db, gemini_api_key=GEMINI_API_KEY)
             deleted_count = await doc_service.delete_file_knowledge(
                 org_id=request.organizationId,
                 file_name=request.fileName
