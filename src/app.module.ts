@@ -11,6 +11,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { EventsModule } from './events/events.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { DocumentsModule } from './documents/documents.module';
+import { ExperiencesModule } from './experiences/experiences.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DocumentsModule } from './documents/documents.module';
     EventsModule,
     ConversationsModule,
     DocumentsModule,
+    ExperiencesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

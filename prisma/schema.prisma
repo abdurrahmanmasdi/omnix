@@ -68,6 +68,7 @@ model Organization {
   pipelineStages PipelineStage[]
   leads                Lead[]
   documentations       OrganizationDocumentation[]
+  experiences          OrganizationExperience[]
 
 
   @@map("organizations")
@@ -353,7 +354,7 @@ model OrganizationKnowledge {
   documentationId String?                     @db.Uuid // Add this!
   file_name       String
   content         String                      @db.Text
-  embedding       Unsupported("vector(1536)")? // 1536 is standard for openai embeddings
+  embedding       Unsupported("vector(768)")? // 768 is standard for Gemini embeddings
   createdAt      DateTime                    @default(now())
   updatedAt      DateTime                    @updatedAt
 
@@ -363,4 +364,32 @@ model OrganizationKnowledge {
   @@index([organizationId])
   @@index([documentationId])
   @@map("organization_knowledge")
+}
+
+model OrganizationExperience {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  
+  // Metadata to help the AI find the perfect match
+  title           String   // e.g., "FUE Hair Transplant - 4000 Grafts"
+  patientCountry  String?  // e.g., "Germany", "UK" (Crucial for building local trust)
+  procedureType   String?  // e.g., "Hair Transplant", "Dental Implants"
+  
+  // The actual story (The AI will read this and summarize it for the patient)
+  storyText       String   @db.Text 
+  
+  // Visual proof! The AI can send these links directly in the WhatsApp chat
+  beforeImageUrl  String?
+  afterImageUrl   String?
+  
+  // 🚀 The Vector Search Embedding (Gemini 768 dimensions)
+  embedding       Unsupported("vector(768)")? 
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("organization_experiences")
 }
