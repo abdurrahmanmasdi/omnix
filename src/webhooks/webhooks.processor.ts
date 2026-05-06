@@ -1,13 +1,13 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger, OnModuleInit } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import type { WhatsAppWebhookPayload } from './interfaces/whatsapp.interface';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { WhatsappService } from './whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import type { ClientGrpc } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
+import { InjectQueue } from '@nestjs/bullmq';
 import type { SalesAgentService } from './interfaces/agent.interface';
 
 @Processor('whatsapp-messages')
@@ -20,6 +20,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly whatsappService: WhatsappService,
     private readonly eventsGateway: EventsGateway,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
+    @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {
     super();
   }
@@ -121,6 +122,11 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 },
               });
 
+              this.eventsGateway.broadcastNewMessage(
+                organization.id,
+                wpMessage,
+              );
+
               this.logger.log(
                 `Saved new message from ${customerPhone} for organization ${organization.name}`,
               );
@@ -132,59 +138,36 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 return; // Terminate execution loop. AI will not reply.
               }
 
-              this.eventsGateway.broadcastNewMessage(
-                organization.id,
-                wpMessage,
-              );
-
               // const autoReplyText = `Hello! We received your message: "${messageContent}". Our AI agent will process this shortly.`;
 
               if (
                 organization.whatsappPhoneNumberId &&
                 organization.whatsappAccessToken
               ) {
-                // THE MAGIC BRIDGE: Call Python over gRPC!
-                // We use lastValueFrom to convert the RxJS Observable into a standard Promise
-                const aiResponse = await lastValueFrom(
-                  this.salesAgentService!.generateReply({
+                const jobId = `reply-${conversation.id}`; // Unique ID for this conversation
+
+                // Look for an existing countdown timer. If it exists, delete it!
+                const existingJob = await this.aiReplyQueue.getJob(jobId);
+                if (existingJob) {
+                  await existingJob.remove();
+                  this.logger.log(
+                    `User is typing again... Resetting 25s timer for Conv: ${conversation.id}`,
+                  );
+                }
+
+                // Add a NEW 25-second timer
+                await this.aiReplyQueue.add(
+                  'generate-reply',
+                  {
                     organizationId: organization.id,
                     conversationId: conversation.id,
-                    latestMessage: messageContent,
-                  }),
-                );
-
-                const autoReplyText = aiResponse.replyText;
-
-                // 1. Send to Meta
-                const metaResponse = await this.whatsappService.sendTextMessage(
-                  customerPhone,
-                  organization.whatsappAccessToken,
-                  organization.whatsappPhoneNumberId,
-                  autoReplyText,
-                );
-
-                // 2. Save the AI's response to the database
-                const aiMessage = await this.prisma.message.create({
-                  data: {
-                    conversationId: conversation.id,
-                    content: autoReplyText,
-                    // Meta returns the message ID of the message it just sent!
-                    metaMessageId: metaResponse?.messages?.[0]?.id || null,
-                    type: 'AI_TEXT', // Differentiate from USER_TEXT
-                    handledBy: 'AI',
+                    customerPhone: customerPhone,
                   },
-                });
-
-                // 3. Update the conversation's updatedAt timestamp so it jumps to the top of the list
-                await this.prisma.conversation.update({
-                  where: { id: conversation.id },
-                  data: { updatedAt: new Date() },
-                });
-
-                // 4. Broadcast the AI message to the frontend so the UI updates instantly
-                this.eventsGateway.broadcastNewMessage(
-                  organization.id,
-                  aiMessage,
+                  {
+                    jobId: jobId, // This ensures we can find and delete it later
+                    delay: 25000, // 🚀 Wait exactly 25 seconds
+                    removeOnComplete: true,
+                  },
                 );
               } else {
                 this.logger.warn(

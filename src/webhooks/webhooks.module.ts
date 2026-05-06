@@ -8,6 +8,7 @@ import { WebhooksService } from './webhooks.service';
 import { WebhooksProcessor } from './webhooks.processor';
 import { WhatsappService } from './whatsapp.service';
 import { EventsModule } from '../events/events.module';
+import { AiReplyProcessor } from './ai-reply.processor';
 
 @Module({
   imports: [
@@ -16,6 +17,9 @@ import { EventsModule } from '../events/events.module';
     // Register the specific queue we will push messages to
     BullModule.registerQueue({
       name: 'whatsapp-messages',
+    }),
+    BullModule.registerQueue({
+      name: 'ai-reply',
     }),
     ClientsModule.register([
       {
@@ -30,7 +34,12 @@ import { EventsModule } from '../events/events.module';
     ]),
   ],
   controllers: [WebhooksController],
-  providers: [WebhooksService, WebhooksProcessor, WhatsappService],
+  providers: [
+    WebhooksService,
+    WebhooksProcessor,
+    AiReplyProcessor,
+    WhatsappService,
+  ],
   exports: [WhatsappService],
 })
 export class WebhooksModule {}

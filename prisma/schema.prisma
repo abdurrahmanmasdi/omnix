@@ -190,9 +190,9 @@ enum LeadStatus {
   QUALIFYING // AI is actively talking to them
   READY_TO_PAY // AI triggered payment intent tool
   HANDED_OFF // Moved to human queue for complex medical/operations
+  UNQUALIFIED
   WON
   LOST
-  UNQUALIFIED
 }
 
 enum Currency {
