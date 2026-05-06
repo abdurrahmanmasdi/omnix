@@ -4,16 +4,38 @@ import {
   NotFoundException,
   InternalServerErrorException,
   Logger,
+  OnModuleInit,
+  Inject,
 } from '@nestjs/common';
+import type { ClientGrpc } from '@nestjs/microservices';
+import { lastValueFrom, Observable } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExperienceDto } from './dto/create-experience.dto';
+import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Prisma, OrganizationExperience } from '@prisma/client';
 
+// Define the gRPC interface
+interface DocumentProcessorService {
+  EmbedExperience(data: {
+    experienceId: string;
+    organizationId: string;
+  }): Observable<{ success: boolean; message: string }>;
+}
+
 @Injectable()
-export class ExperiencesService {
+export class ExperiencesService implements OnModuleInit {
+  private ragService: DocumentProcessorService | undefined;
   private readonly logger = new Logger(ExperiencesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject('RAG_PACKAGE') private readonly client: ClientGrpc,
+  ) {}
+
+  onModuleInit() {
+    this.ragService =
+      this.client.getService<DocumentProcessorService>('DocumentProcessor');
+  }
 
   async createExperience(
     organizationId: string,
@@ -68,6 +90,21 @@ export class ExperiencesService {
       });
 
       this.logger.log(`Experience created successfully: ${experience.id}`);
+
+      console.log(`Firing gRPC to embed experience ${experience.id}...`);
+      const response = await lastValueFrom(
+        this.ragService!.EmbedExperience({
+          experienceId: experience.id,
+          organizationId: organizationId,
+        }),
+      );
+
+      if (!response.success) {
+        console.error('Python failed to embed experience:', response.message);
+      } else {
+        console.log('✅ Python successfully embedded the experience.');
+      }
+
       return experience;
     } catch (error) {
       // Handle Prisma-specific errors
@@ -177,5 +214,63 @@ export class ExperiencesService {
         'Failed to fetch experiences. An unexpected error occurred.',
       );
     }
+  }
+
+  async getExperienceById(organizationId: string, experienceId: string) {
+    return this.prisma.organizationExperience.findUnique({
+      where: { id: experienceId, organizationId },
+    });
+  }
+
+  async updateExperience(
+    organizationId: string,
+    experienceId: string,
+    dto: UpdateExperienceDto,
+  ) {
+    // 1. Update the database via Prisma
+    const updatedExperience = await this.prisma.organizationExperience.update({
+      where: { id: experienceId, organizationId },
+      data: {
+        ...(dto.title && { title: dto.title.trim() }),
+        ...(dto.patientCountry && {
+          patientCountry: dto.patientCountry.trim(),
+        }),
+        ...(dto.procedureType && { procedureType: dto.procedureType.trim() }),
+        ...(dto.storyText && { storyText: dto.storyText.trim() }),
+        ...(dto.beforeImageUrl && {
+          beforeImageUrl: dto.beforeImageUrl.trim(),
+        }),
+        ...(dto.afterImageUrl && { afterImageUrl: dto.afterImageUrl.trim() }),
+      },
+    });
+
+    // 2. 🚀 If any text fields changed, we MUST recalculate the AI Vector
+    if (dto.title || dto.storyText || dto.patientCountry || dto.procedureType) {
+      console.log(
+        `Text changed for ${experienceId}. Re-firing gRPC to update vector...`,
+      );
+      try {
+        const response = await lastValueFrom(
+          this.ragService!.EmbedExperience({
+            experienceId: experienceId,
+            organizationId: organizationId,
+          }),
+        );
+        if (!response.success)
+          console.error('Python failed to re-embed:', response.message);
+      } catch (error) {
+        console.error('gRPC Error updating vector:', error);
+      }
+    }
+
+    return updatedExperience;
+  }
+
+  async deleteExperience(organizationId: string, experienceId: string) {
+    // We don't need to tell Python about deletes. Prisma removes the row,
+    // and the vector is deleted automatically because it lives in that row!
+    return this.prisma.organizationExperience.delete({
+      where: { id: experienceId, organizationId },
+    });
   }
 }
