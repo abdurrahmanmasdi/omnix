@@ -43,4 +43,13 @@ async def sync_lead_crm(
     
     return f"Successfully updated CRM. Status is {status}, Priority is {priority}."
 
-tools_list = [search_clinic_knowledge, sync_lead_crm]
+@tool
+async def fetch_social_proof(organization_id: str, user_objection: str) -> str:
+    """
+    Fetches social proof related to the user's objection.
+    """
+    print(f"🛠️ [TOOL] Fetching Social Proof for Objection: '{user_objection}'")
+    # TODO: Implement the logic to fetch social proof
+    return "Here is some social proof that might help!"
+
+tools_list = [search_clinic_knowledge, sync_lead_crm, fetch_social_proof]

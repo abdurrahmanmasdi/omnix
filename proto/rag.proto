@@ -4,6 +4,7 @@ package rag;
 service DocumentProcessor {
   rpc IngestPdf (IngestRequest) returns (IngestResponse) {}
   rpc DeleteFile (DeleteRequest) returns (DeleteResponse) {}
+  rpc EmbedExperience (EmbedExperienceRequest) returns (EmbedExperienceResponse);
 }
 
 message IngestRequest {
@@ -26,4 +27,14 @@ message DeleteRequest {
 message DeleteResponse {
   bool success = 1;
   int32 chunksDeleted = 2;
+}
+
+message EmbedExperienceRequest {
+  string experience_id = 1;
+  string organization_id = 2;
+}
+
+message EmbedExperienceResponse {
+  bool success = 1;
+  string message = 2;
 }

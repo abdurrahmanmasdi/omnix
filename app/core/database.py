@@ -1,7 +1,7 @@
 import os
 import uuid
 import datetime
-from sqlalchemy import Column, String, Text, DateTime
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import declarative_base
@@ -28,5 +28,23 @@ class OrganizationKnowledge(Base):
     documentationId = Column(UUID(as_uuid=True), index=True)
     content = Column(Text)
     embedding = Column(Vector(768)) # 🚀 Matches Gemini's 768 dimension output
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class OrganizationExperience(Base):
+    __tablename__ = 'organization_experiences'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizationId = Column(UUID(as_uuid=True), index=True)
+    title = Column(String)
+    patientCountry = Column(String, nullable=True)
+    procedureType = Column(String, nullable=True)
+    storyText = Column(Text)
+    beforeImageUrl = Column(String, nullable=True)
+    afterImageUrl = Column(String, nullable=True)
+    
+    # The 768-dimensional Gemini vector
+    embedding = Column(Vector(768)) 
+    
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

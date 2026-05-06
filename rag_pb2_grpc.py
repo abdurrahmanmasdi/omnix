@@ -44,6 +44,11 @@ class DocumentProcessorStub(object):
                 request_serializer=rag__pb2.DeleteRequest.SerializeToString,
                 response_deserializer=rag__pb2.DeleteResponse.FromString,
                 _registered_method=True)
+        self.EmbedExperience = channel.unary_unary(
+                '/rag.DocumentProcessor/EmbedExperience',
+                request_serializer=rag__pb2.EmbedExperienceRequest.SerializeToString,
+                response_deserializer=rag__pb2.EmbedExperienceResponse.FromString,
+                _registered_method=True)
 
 
 class DocumentProcessorServicer(object):
@@ -61,6 +66,12 @@ class DocumentProcessorServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def EmbedExperience(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DocumentProcessorServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +84,11 @@ def add_DocumentProcessorServicer_to_server(servicer, server):
                     servicer.DeleteFile,
                     request_deserializer=rag__pb2.DeleteRequest.FromString,
                     response_serializer=rag__pb2.DeleteResponse.SerializeToString,
+            ),
+            'EmbedExperience': grpc.unary_unary_rpc_method_handler(
+                    servicer.EmbedExperience,
+                    request_deserializer=rag__pb2.EmbedExperienceRequest.FromString,
+                    response_serializer=rag__pb2.EmbedExperienceResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +145,33 @@ class DocumentProcessor(object):
             '/rag.DocumentProcessor/DeleteFile',
             rag__pb2.DeleteRequest.SerializeToString,
             rag__pb2.DeleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EmbedExperience(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rag.DocumentProcessor/EmbedExperience',
+            rag__pb2.EmbedExperienceRequest.SerializeToString,
+            rag__pb2.EmbedExperienceResponse.FromString,
             options,
             channel_credentials,
             insecure,
