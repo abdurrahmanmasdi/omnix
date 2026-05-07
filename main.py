@@ -20,9 +20,9 @@ import rag_pb2_grpc
 import tools_pb2
 import tools_pb2_grpc
 
-# Make sure to set your Gemini API key in your environment variables!
-GEMINI_API_KEY = settings.Gemini_API_KEY
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Make sure to set your OPENAI API key in your environment variables!
+API_KEY = settings.OPENAI_API_KEY
+client = genai.Client(api_key=API_KEY)
 
 
 # ---------------------------------------------------------
@@ -78,8 +78,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 elif msg.type == 'AI_TEXT':
                     state_data["messages"].append(AIMessage(content=msg.content))
             
-            # 3. Add the brand new message from WhatsApp
-            state_data["messages"].append(HumanMessage(content=latest_msg))
+            # 3. Add the brand new message from WhatsApp (Unless it's the debouncing signal)
+            if latest_msg and not latest_msg.startswith("[User finished typing"):
+                state_data["messages"].append(HumanMessage(content=latest_msg))
 
             # 4. 🚀 RUN THE LANGGRAPH AGENT
             # Ainvoke streams the state through the graph until it hits the END node
@@ -114,7 +115,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         
         db = SessionLocal()
         try:
-            doc_service = DocumentService(db_session=db, gemini_api_key=GEMINI_API_KEY)
+            doc_service = DocumentService(db_session=db, api_key=API_KEY)
             
             chunks = await doc_service.process_and_save_pdf(
                 org_id=org_id,
@@ -155,7 +156,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         
         db = SessionLocal()
         try:
-            doc_service = DocumentService(db_session=db, gemini_api_key=GEMINI_API_KEY)
+            doc_service = DocumentService(db_session=db, api_key=API_KEY)
             deleted_count = await doc_service.delete_file_knowledge(
                 org_id=request.organizationId,
                 file_name=request.fileName

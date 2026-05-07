@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Sales Agent Engine"
     
     # Required keys
-    Gemini_API_KEY: str
+    OPENAI_API_KEY: str
 
     # This tells Pydantic to read from your .env file
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

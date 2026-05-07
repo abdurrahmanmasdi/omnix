@@ -1,13 +1,18 @@
 import os
 from sqlalchemy.orm import Session
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
+from sqlalchemy.orm import Session
 from app.core.database import OrganizationExperience, SessionLocal
 from app.core.config import settings
 
 class ExperienceProcessor:
     def __init__(self):
-        # Initialize Gemini Embeddings (Ensure GEMINI_API_KEY is in your .env)
-        self.embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", api_key=settings.Gemini_API_KEY)
+        # Initialize OpenAI Embeddings (Flagship 3072)
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large", 
+            dimensions=3072,
+            api_key=settings.OPENAI_API_KEY
+        )
 
     async def embed_and_save_experience(self, experience_id: str, org_id: str) -> bool:
         db: Session = SessionLocal()
@@ -33,14 +38,14 @@ class ExperienceProcessor:
             Story: {experience.storyText}
             """
 
-            # 3. Call Gemini to get the 768-number array
-            vector = await self.embeddings.aembed_query(text_to_embed, output_dimensionality=768)
+            # 3. Call OpenAI to get the 3072-number array
+            vector = await self.embeddings.aembed_query(text_to_embed)
 
             # 4. Save the vector into PostgreSQL
             experience.embedding = vector
             db.commit()
 
-            print(f"✅ Successfully saved 768-dim vector for Experience {experience_id}")
+            print(f"✅ Successfully saved 3072-dim vector for Experience {experience_id}")
             return True
 
         except Exception as e:

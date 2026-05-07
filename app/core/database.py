@@ -27,7 +27,7 @@ class OrganizationKnowledge(Base):
     file_name = Column(String)
     documentationId = Column(UUID(as_uuid=True), index=True)
     content = Column(Text)
-    embedding = Column(Vector(768)) # 🚀 Matches Gemini's 768 dimension output
+    embedding = Column(Vector(3072)) # 🚀 Flagship Precision: 3072 dimensions
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -43,8 +43,8 @@ class OrganizationExperience(Base):
     beforeImageUrl = Column(String, nullable=True)
     afterImageUrl = Column(String, nullable=True)
     
-    # The 768-dimensional Gemini vector
-    embedding = Column(Vector(768)) 
+    # The 3072-dimensional embedding vector
+    embedding = Column(Vector(3072)) # 🚀 Flagship Precision: 3072 dimensions
     
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

@@ -16,3 +16,6 @@ class AgentState(TypedDict):
     country: str
     lead_status: str # "NEW", "QUALIFYING", "READY_TO_PAY", "HANDED_OFF"
     lead_priority: str # "COLD", "WARM", "HOT"
+
+    # 🚀 NEW: Tracks which specific node called a tool, so we can route back to it
+    sender: str
