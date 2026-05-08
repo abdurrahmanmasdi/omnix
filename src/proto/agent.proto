@@ -23,6 +23,17 @@ message AgentRequest {
 // What Python sends back to NestJS
 message AgentReply {
   string replyText = 1;
-  bool safetyFlag = 2; // Preparing for your future safety layer!
+  bool safetyFlag = 2;
   int32 confidenceScore = 3;
+
+  // 🚀 New: Support for Multimodal replies (Images/Links)
+  string mediaUrl = 4;
+
+  // 🚀 New: Tool Call instructions for NestJS to handle
+  repeated ToolAction actions = 5;
+}
+
+message ToolAction {
+  string type = 1; // "UPDATE_LEAD", "CREATE_APPOINTMENT", etc.
+  string payload = 2; // JSON string with data like { "status": "WARM", "firstName": "John" }
 }

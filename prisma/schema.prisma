@@ -282,11 +282,11 @@ enum ActiveHandler {
 
 enum MessageType {
   LEAD_TEXT
-  LEAD_AUDIO
+  LEAD_MEDIA
   USER_TEXT
-  USER_AUDIO
+  USER_MEDIA
   AI_TEXT
-  AI_AUDIO
+  AI_MEDIA
   SYSTEM_PROMPT
   TOOL_CALL
   TOOL_RESULT
@@ -317,7 +317,7 @@ model Message {
   conversationId String       @db.Uuid     
   senderId       String?      @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
   content        String
-  audioUrl       String? // For Voice Notes
+  mediaUrl       String? // For Voice Notes, Images, etc.
   type            MessageType  @default(USER_TEXT)
   metadata        Json? // To store Tool Call JSON, execution times, token counts
   handledBy      ActiveHandler @default(AI) // Determines if AI or Human
@@ -354,7 +354,7 @@ model OrganizationKnowledge {
   documentationId String?                     @db.Uuid // Add this!
   file_name       String
   content         String                      @db.Text
-  embedding       Unsupported("vector(768)")? // 768 is standard for Gemini embeddings
+  embedding       Unsupported("vector(3072)")? // 3072 is standard for Gemini embeddings
   createdAt      DateTime                    @default(now())
   updatedAt      DateTime                    @updatedAt
 
@@ -382,8 +382,8 @@ model OrganizationExperience {
   beforeImageUrl  String?
   afterImageUrl   String?
   
-  // 🚀 The Vector Search Embedding (Gemini 768 dimensions)
-  embedding       Unsupported("vector(768)")? 
+  // 🚀 The Vector Search Embedding (Gemini 3072 dimensions)
+  embedding       Unsupported("vector(3072)")? 
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

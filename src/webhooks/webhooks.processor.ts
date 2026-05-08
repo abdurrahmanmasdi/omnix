@@ -9,6 +9,7 @@ import { EventsGateway } from '../events/events/events.gateway';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { SalesAgentService } from './interfaces/agent.interface';
+import parsePhoneNumberFromString from 'libphonenumber-js';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
@@ -77,27 +78,112 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 },
               });
 
-              if (!conversation) {
-                // Create a new Lead and Conversation if it doesn't exist
-                const newLead = await this.prisma.lead.create({
-                  data: {
-                    organizationId: organization.id,
-                    phoneNumber: customerPhone,
-                    firstName: value.contacts?.[0]?.profile?.name || 'Unknown',
-                    lastName: '',
-                    country: 'Unknown',
-                    timezone: 'Unknown',
-                    primaryLanguage: 'en', // Default, we can update via AI later
-                  },
+              // FIX: Even if conversation exists, ensure it has a leadId.
+              // If leadId is null, we need to fix it before sending to AI.
+              if (!conversation || !conversation.leadId) {
+                this.logger.log(
+                  `No linked lead found for ${customerPhone}. Creating/Repairing lead-conversation link...`,
+                );
+
+                // Use a transaction to ensure we don't end up with partial data
+                const result = await this.prisma.$transaction(async (tx) => {
+                  // Check if a lead already exists for this phone (maybe from a CSV import or previous deleted conv)
+                  let lead = await tx.lead.findFirst({
+                    where: {
+                      organizationId: organization.id,
+                      phoneNumber: customerPhone,
+                      deletedAt: null,
+                    },
+                  });
+
+                  if (!lead) {
+                    // 1. Parse the WhatsApp Number
+                    const phoneNumberObj = parsePhoneNumberFromString(
+                      `+${customerPhone}`,
+                    );
+                    const countryCode = phoneNumberObj?.country || 'Unknown'; // e.g., 'DE', 'US', 'TR'
+
+                    // 2. Simple EU detection for Currency
+                    const euCountries = [
+                      'AT',
+                      'BE',
+                      'BG',
+                      'HR',
+                      'CY',
+                      'CZ',
+                      'DK',
+                      'EE',
+                      'FI',
+                      'FR',
+                      'DE',
+                      'GR',
+                      'HU',
+                      'IE',
+                      'IT',
+                      'LV',
+                      'LT',
+                      'LU',
+                      'MT',
+                      'NL',
+                      'PL',
+                      'PT',
+                      'RO',
+                      'SK',
+                      'SI',
+                      'ES',
+                      'SE',
+                    ];
+                    const defaultCurrency = euCountries.includes(countryCode)
+                      ? 'EUR'
+                      : 'USD';
+
+                    // 3. Fetch the default Pipeline Stage (Order 0)
+                    const defaultPipeline =
+                      await this.prisma.pipelineStage.findFirst({
+                        where: { organizationId: organization.id },
+                        orderBy: { orderIndex: 'asc' },
+                      });
+
+                    // 4. Create the Enriched Lead!
+                    lead = await this.prisma.lead.create({
+                      data: {
+                        organizationId: organization.id,
+                        phoneNumber: customerPhone,
+                        firstName:
+                          value.contacts?.[0]?.profile?.name || 'Unknown',
+                        lastName: '',
+                        country: countryCode,
+                        timezone: 'Unknown', // Timezone requires a heavy library, country is usually enough
+                        primaryLanguage: 'Unknown', // AI will figure this out
+                        currency: defaultCurrency, // 🚀 EUR or USD based on phone prefix
+                        status: 'NEW',
+                        priority: 'COLD', // 🚀 STRICTLY COLD BY DEFAULT
+                        pipelineStageId: defaultPipeline?.id || null, // 🚀 Put them in Stage 0
+                        socialLinks: {
+                          whatsapp: `https://wa.me/${customerPhone}`, // 🚀 Add WP link
+                        },
+                      },
+                    });
+                  }
+
+                  if (!conversation) {
+                    return await tx.conversation.create({
+                      data: {
+                        organizationId: organization.id,
+                        externalContactId: customerPhone,
+                        leadId: lead.id,
+                      },
+                    });
+                  } else {
+                    // Repair the existing conversation by linking the lead
+                    return await tx.conversation.update({
+                      where: { id: conversation.id },
+                      data: { leadId: lead.id },
+                    });
+                  }
                 });
 
-                conversation = await this.prisma.conversation.create({
-                  data: {
-                    organizationId: organization.id,
-                    externalContactId: customerPhone,
-                    leadId: newLead.id,
-                  },
-                });
+                conversation = result;
               }
 
               const existingMessage = await this.prisma.message.findUnique({
@@ -165,7 +251,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                   },
                   {
                     jobId: jobId, // This ensures we can find and delete it later
-                    delay: 25000, // 🚀 Wait exactly 25 seconds
+                    delay: 7000, // 🚀 Wait exactly 7 seconds
                     removeOnComplete: true,
                   },
                 );

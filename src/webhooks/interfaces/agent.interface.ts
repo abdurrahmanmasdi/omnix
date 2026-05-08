@@ -6,8 +6,17 @@ export interface AgentRequest {
   latestMessage: string;
 }
 
+export interface ToolAction {
+  type: string;
+  payload: string; // JSON string
+}
+
 export interface AgentReply {
   replyText: string;
+  safetyFlag: boolean;
+  confidenceScore: number;
+  mediaUrl?: string;
+  actions?: ToolAction[];
 }
 
 export interface SalesAgentService {

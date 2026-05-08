@@ -9,6 +9,7 @@ import { WebhooksProcessor } from './webhooks.processor';
 import { WhatsappService } from './whatsapp.service';
 import { EventsModule } from '../events/events.module';
 import { AiReplyProcessor } from './ai-reply.processor';
+import { ActionExecutorService } from './action-executor.service';
 
 @Module({
   imports: [
@@ -39,7 +40,8 @@ import { AiReplyProcessor } from './ai-reply.processor';
     WebhooksProcessor,
     AiReplyProcessor,
     WhatsappService,
+    ActionExecutorService,
   ],
-  exports: [WhatsappService],
+  exports: [WhatsappService, ActionExecutorService],
 })
 export class WebhooksModule {}

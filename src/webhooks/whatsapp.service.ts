@@ -25,13 +25,6 @@ export class WhatsappService {
     phoneNumberId: string,
     message: string,
   ): Promise<MetaMessageResponse> {
-    if (!phoneNumberId || !accessToken) {
-      this.logger.error('Missing WhatsApp credentials for this organization.');
-      throw new Error('Missing WhatsApp credentials');
-    }
-
-    const url = `${this.apiUrl}/${phoneNumberId}/messages`;
-
     const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
@@ -43,6 +36,42 @@ export class WhatsappService {
       },
     };
 
+    return this.postToMeta(phoneNumberId, accessToken, payload);
+  }
+
+  async sendImageMessage(
+    toPhoneNumber: string,
+    accessToken: string,
+    phoneNumberId: string,
+    imageUrl: string,
+    caption?: string,
+  ): Promise<MetaMessageResponse> {
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: toPhoneNumber,
+      type: 'image',
+      image: {
+        link: imageUrl,
+        ...(caption && { caption }),
+      },
+    };
+
+    return this.postToMeta(phoneNumberId, accessToken, payload);
+  }
+
+  private async postToMeta(
+    phoneNumberId: string,
+    accessToken: string,
+    payload: any,
+  ): Promise<MetaMessageResponse> {
+    if (!phoneNumberId || !accessToken) {
+      this.logger.error('Missing WhatsApp credentials for this organization.');
+      throw new Error('Missing WhatsApp credentials');
+    }
+
+    const url = `${this.apiUrl}/${phoneNumberId}/messages`;
+
     try {
       const response = await firstValueFrom(
         this.httpService.post(url, payload, {
@@ -53,8 +82,9 @@ export class WhatsappService {
         }),
       );
 
-      this.logger.log(`Successfully sent message to ${toPhoneNumber}`);
-
+      this.logger.log(
+        `Successfully sent ${payload.type} message to ${payload.to}`,
+      );
       return response.data as MetaMessageResponse;
     } catch (error: any) {
       this.logger.error(
