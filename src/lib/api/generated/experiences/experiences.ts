@@ -21,21 +21,22 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { CreateExperienceDto } from "../../model";
+import type { CreateExperienceDto, UpdateExperienceDto } from "../../model";
 
 import { customFetch } from "../../axios-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * @summary Create a new experience (social proof) for the authenticated organization
+ * Creates a new experience/testimonial for the authenticated organization. The story will be automatically embedded for AI-powered patient matching.
+ * @summary Create a new patient experience (social proof)
  */
 export const experiencesControllerCreateExperience = (
   createExperienceDto: CreateExperienceDto,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     {
       url: `/experiences`,
       method: "POST",
@@ -48,7 +49,7 @@ export const experiencesControllerCreateExperience = (
 };
 
 export const getExperiencesControllerCreateExperienceMutationOptions = <
-  TError = void | void | void,
+  TError = unknown | unknown | unknown,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -91,15 +92,15 @@ export type ExperiencesControllerCreateExperienceMutationResult = NonNullable<
 export type ExperiencesControllerCreateExperienceMutationBody =
   CreateExperienceDto;
 export type ExperiencesControllerCreateExperienceMutationError =
-  | void
-  | void
-  | void;
+  | unknown
+  | unknown
+  | unknown;
 
 /**
- * @summary Create a new experience (social proof) for the authenticated organization
+ * @summary Create a new patient experience (social proof)
  */
 export const useExperiencesControllerCreateExperience = <
-  TError = void | void | void,
+  TError = unknown | unknown | unknown,
   TContext = unknown,
 >(
   options?: {
@@ -124,13 +125,14 @@ export const useExperiencesControllerCreateExperience = <
   return useMutation(mutationOptions, queryClient);
 };
 /**
+ * Retrieves all patient experiences/testimonials for the organization. Results are sorted by creation date (newest first).
  * @summary Get all experiences for the authenticated organization
  */
 export const experiencesControllerGetExperiences = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     { url: `/experiences`, method: "GET", signal },
     options,
   );
@@ -279,3 +281,359 @@ export function useExperiencesControllerGetExperiences<
 
   return query;
 }
+
+/**
+ * Retrieves a single patient experience by its ID.
+ * @summary Get a specific experience by ID
+ */
+export const experiencesControllerFindOne = (
+  id: string,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<unknown>(
+    { url: `/experiences/${id}`, method: "GET", signal },
+    options,
+  );
+};
+
+export const getExperiencesControllerFindOneQueryKey = (id?: string) => {
+  return [`/experiences/${id}`] as const;
+};
+
+export const getExperiencesControllerFindOneQueryOptions = <
+  TData = Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+  TError = void | void | unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getExperiencesControllerFindOneQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof experiencesControllerFindOne>>
+  > = ({ signal }) => experiencesControllerFindOne(id, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ExperiencesControllerFindOneQueryResult = NonNullable<
+  Awaited<ReturnType<typeof experiencesControllerFindOne>>
+>;
+export type ExperiencesControllerFindOneQueryError = void | void | unknown;
+
+export function useExperiencesControllerFindOne<
+  TData = Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+  TError = void | void | unknown,
+>(
+  id: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+          TError,
+          Awaited<ReturnType<typeof experiencesControllerFindOne>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useExperiencesControllerFindOne<
+  TData = Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+  TError = void | void | unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+          TError,
+          Awaited<ReturnType<typeof experiencesControllerFindOne>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useExperiencesControllerFindOne<
+  TData = Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+  TError = void | void | unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get a specific experience by ID
+ */
+
+export function useExperiencesControllerFindOne<
+  TData = Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+  TError = void | void | unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof experiencesControllerFindOne>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getExperiencesControllerFindOneQueryOptions(id, options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * Updates a patient experience. Any text field changes will trigger re-embedding for AI matching.
+ * @summary Update an existing experience
+ */
+export const experiencesControllerUpdate = (
+  id: string,
+  updateExperienceDto: UpdateExperienceDto,
+  options?: SecondParameter<typeof customFetch>,
+) => {
+  return customFetch<unknown>(
+    {
+      url: `/experiences/${id}`,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      data: updateExperienceDto,
+    },
+    options,
+  );
+};
+
+export const getExperiencesControllerUpdateMutationOptions = <
+  TError = void | void | void | void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof experiencesControllerUpdate>>,
+    TError,
+    { id: string; data: UpdateExperienceDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof experiencesControllerUpdate>>,
+  TError,
+  { id: string; data: UpdateExperienceDto },
+  TContext
+> => {
+  const mutationKey = ["experiencesControllerUpdate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof experiencesControllerUpdate>>,
+    { id: string; data: UpdateExperienceDto }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return experiencesControllerUpdate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExperiencesControllerUpdateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof experiencesControllerUpdate>>
+>;
+export type ExperiencesControllerUpdateMutationBody = UpdateExperienceDto;
+export type ExperiencesControllerUpdateMutationError =
+  | void
+  | void
+  | void
+  | void;
+
+/**
+ * @summary Update an existing experience
+ */
+export const useExperiencesControllerUpdate = <
+  TError = void | void | void | void,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof experiencesControllerUpdate>>,
+      TError,
+      { id: string; data: UpdateExperienceDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof experiencesControllerUpdate>>,
+  TError,
+  { id: string; data: UpdateExperienceDto },
+  TContext
+> => {
+  const mutationOptions =
+    getExperiencesControllerUpdateMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * Permanently deletes a patient experience from the system.
+ * @summary Delete an experience
+ */
+export const experiencesControllerRemove = (
+  id: string,
+  options?: SecondParameter<typeof customFetch>,
+) => {
+  return customFetch<unknown>(
+    { url: `/experiences/${id}`, method: "DELETE" },
+    options,
+  );
+};
+
+export const getExperiencesControllerRemoveMutationOptions = <
+  TError = void | void | void | void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof experiencesControllerRemove>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof experiencesControllerRemove>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["experiencesControllerRemove"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof experiencesControllerRemove>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return experiencesControllerRemove(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExperiencesControllerRemoveMutationResult = NonNullable<
+  Awaited<ReturnType<typeof experiencesControllerRemove>>
+>;
+
+export type ExperiencesControllerRemoveMutationError =
+  | void
+  | void
+  | void
+  | void;
+
+/**
+ * @summary Delete an experience
+ */
+export const useExperiencesControllerRemove = <
+  TError = void | void | void | void,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof experiencesControllerRemove>>,
+      TError,
+      { id: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof experiencesControllerRemove>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationOptions =
+    getExperiencesControllerRemoveMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};

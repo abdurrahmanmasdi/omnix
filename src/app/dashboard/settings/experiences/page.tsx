@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import AddExperienceForm from "@/components/AddExperienceForm";
+import ExperiencesTable from "@/components/ExperiencesTable";
 
 export default function ExperiencesSettingsPage() {
   const organizationId = useAuthStore((state) => state.user?.organizationId);
@@ -59,40 +59,8 @@ export default function ExperiencesSettingsPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
-        <AddExperienceForm organizationId={organizationId} />
-
-        <Card className="h-fit border-slate-200 bg-slate-950 text-slate-50 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-slate-50">What to include</CardTitle>
-            <CardDescription className="text-slate-300">
-              Good entries make the AI and your team more useful.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm leading-6 text-slate-300">
-            <div>
-              <p className="font-medium text-slate-50">Clear title</p>
-              <p>
-                Use a short headline that describes the transformation or
-                outcome.
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-slate-50">Specific story</p>
-              <p>
-                Explain the patient context, treatment journey, and results in
-                plain language.
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-slate-50">Useful imagery</p>
-              <p>
-                Provide valid before and after image URLs so the experience can
-                be displayed consistently.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="">
+        <ExperiencesTable />
       </div>
     </div>
   );

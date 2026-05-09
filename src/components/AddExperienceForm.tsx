@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { axiosInstance } from "@/lib/api/axios-client";
+import type { CreateExperienceDto } from "@/lib/api/model";
+import { useExperiencesControllerCreateExperience } from "@/lib/api/generated/experiences/experiences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,9 +32,11 @@ const initialFormState: ExperienceFormState = {
 
 export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
   const [form, setForm] = useState<ExperienceFormState>(initialFormState);
-  const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const createExperienceMutation = useExperiencesControllerCreateExperience();
+  const isSaving = createExperienceMutation.isPending;
+  const isSubmitDisabled = isSaving || !organizationId;
 
   const handleChange = (
     event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -53,64 +56,59 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
     }
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    setIsSaving(true);
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    try {
-      const payload = {
-        title: form.title,
-        storyText: form.storyText,
-        patientCountry: form.patientCountry || undefined,
-        procedureType: form.procedureType || undefined,
-        beforeImageUrl: form.beforeImageUrl || undefined,
-        afterImageUrl: form.afterImageUrl || undefined,
-      };
+    const payload: CreateExperienceDto = {
+      title: form.title,
+      storyText: form.storyText,
+      patientCountry: form.patientCountry || undefined,
+      procedureType: form.procedureType || undefined,
+      beforeImageUrl: form.beforeImageUrl || undefined,
+      afterImageUrl: form.afterImageUrl || undefined,
+    };
 
-      const response = await axiosInstance.post(
-        `/organizations/${organizationId}/experiences`,
-        payload,
-      );
+    createExperienceMutation.mutate(
+      { data: payload },
+      {
+        onSuccess: () => {
+          setForm(initialFormState);
+          setSuccessMessage("Experience saved successfully.");
+          setErrorMessage(null);
+        },
+        onError: (error: unknown) => {
+          const fallbackMessage = "Failed to save the experience.";
 
-      if (response.status === 201) {
-        setForm(initialFormState);
-        setSuccessMessage("Experience saved successfully.");
-      } else {
-        setErrorMessage("The server did not confirm the save.");
-      }
-    } catch (error: unknown) {
-      const fallbackMessage = "Failed to save the experience.";
+          if (
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof error.response === "object" &&
+            error.response !== null &&
+            "data" in error.response &&
+            typeof error.response.data === "object" &&
+            error.response.data !== null &&
+            "message" in error.response.data
+          ) {
+            const message = error.response.data.message;
+            setErrorMessage(
+              Array.isArray(message) ? message.join(", ") : String(message),
+            );
+            return;
+          }
 
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof error.response === "object" &&
-        error.response !== null &&
-        "data" in error.response &&
-        typeof error.response.data === "object" &&
-        error.response.data !== null &&
-        "message" in error.response.data
-      ) {
-        const message = error.response.data.message;
-        setErrorMessage(
-          Array.isArray(message) ? message.join(", ") : String(message),
-        );
-        return;
-      }
+          if (error instanceof Error) {
+            setErrorMessage(error.message || fallbackMessage);
+            return;
+          }
 
-      if (error instanceof Error) {
-        setErrorMessage(error.message || fallbackMessage);
-        return;
-      }
-
-      setErrorMessage(fallbackMessage);
-    } finally {
-      setIsSaving(false);
-    }
+          setErrorMessage(fallbackMessage);
+        },
+      },
+    );
   };
 
   return (
@@ -134,7 +132,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
               value={form.title}
               onChange={handleChange}
               placeholder="Before and after smile transformation"
-              disabled={isSaving}
+              disabled={isSubmitDisabled}
               required
             />
           </div>
@@ -147,7 +145,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
               value={form.patientCountry}
               onChange={handleChange}
               placeholder="Canada"
-              disabled={isSaving}
+              disabled={isSubmitDisabled}
             />
           </div>
 
@@ -159,7 +157,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
               value={form.procedureType}
               onChange={handleChange}
               placeholder="Dental implants"
-              disabled={isSaving}
+              disabled={isSubmitDisabled}
             />
           </div>
 
@@ -172,7 +170,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
               value={form.beforeImageUrl}
               onChange={handleChange}
               placeholder="https://example.com/before.jpg"
-              disabled={isSaving}
+              disabled={isSubmitDisabled}
             />
           </div>
 
@@ -185,7 +183,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
               value={form.afterImageUrl}
               onChange={handleChange}
               placeholder="https://example.com/after.jpg"
-              disabled={isSaving}
+              disabled={isSubmitDisabled}
             />
           </div>
         </div>
@@ -198,7 +196,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
             value={form.storyText}
             onChange={handleChange}
             placeholder="Describe the patient's journey and outcome."
-            disabled={isSaving}
+            disabled={isSubmitDisabled}
             required
             rows={6}
             className="flex min-h-32 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -218,7 +216,11 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
         )}
 
         <div className="flex items-center justify-end">
-          <Button type="submit" disabled={isSaving} className="min-w-36">
+          <Button
+            type="submit"
+            disabled={isSubmitDisabled}
+            className="min-w-36"
+          >
             {isSaving ? "Saving..." : "Save Experience"}
           </Button>
         </div>
