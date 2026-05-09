@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { FilterCondition, FilterOperator } from '@/lib/utils/ast-filter-builder';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,52 +11,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { X, Plus, Trash2, Filter } from 'lucide-react';
-import { CreateLeadDtoStatus } from '@/lib/api/model/createLeadDtoStatus';
-import { CreateLeadDtoPriority } from '@/lib/api/model/createLeadDtoPriority';
-import { useLeadSourcesControllerFindAll } from '@/lib/api/generated/lead-sources/lead-sources';
+import { Filter, Plus, Trash2 } from 'lucide-react';
 
-interface LeadFilterBuilderProps {
-  onFiltersChange: (conditions: FilterCondition[]) => void;
-  initialConditions?: FilterCondition[];
+export interface FilterFieldDef {
+  label: string;
+  value: string;
+  type: 'text' | 'number' | 'select';
+  options?: { label: string; value: string }[];
 }
 
-export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: LeadFilterBuilderProps) {
+interface FilterBuilderProps {
+  fields: FilterFieldDef[];
+  initialConditions?: FilterCondition[];
+  onFiltersChange: (conditions: FilterCondition[]) => void;
+  title?: string;
+}
+
+export function FilterBuilder({
+  fields,
+  initialConditions = [],
+  onFiltersChange,
+  title = 'Advanced Filters',
+}: FilterBuilderProps) {
   const [conditions, setConditions] = useState<FilterCondition[]>(initialConditions);
-
-  // 1. Fetch sources for the filter dropdown
-  const { data: sourcesData } = useLeadSourcesControllerFindAll();
-  const sources = useMemo(() => {
-    const data = sourcesData as any;
-    if (Array.isArray(data)) return data;
-    if (data?.items) return data.items;
-    return [];
-  }, [sourcesData]);
-
-  const FIELDS = useMemo(() => [
-    { label: 'First Name', value: 'firstName', type: 'text' },
-    { label: 'Last Name', value: 'lastName', type: 'text' },
-    { 
-      label: 'Status', 
-      value: 'status', 
-      type: 'select', 
-      options: Object.values(CreateLeadDtoStatus).map(s => ({ label: s, value: s }))
-    },
-    { 
-      label: 'Priority', 
-      value: 'priority', 
-      type: 'select', 
-      options: Object.values(CreateLeadDtoPriority).map(p => ({ label: p, value: p }))
-    },
-    { 
-      label: 'Marketing Source', 
-      value: 'sourceId', 
-      type: 'select', 
-      options: sources.map((s: any) => ({ label: s.name, value: s.id }))
-    },
-    { label: 'Estimated Value', value: 'estimatedValue', type: 'number' },
-    { label: 'Country', value: 'country', type: 'text' },
-  ], [sources]);
 
   const OPERATORS: { label: string; value: FilterOperator }[] = [
     { label: 'Equals', value: 'equals' },
@@ -68,10 +45,11 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
   ];
 
   const addCondition = () => {
+    const defaultField = fields[0];
     const newCondition: FilterCondition = {
-      field: 'status',
+      field: defaultField.value,
       operator: 'equals',
-      value: CreateLeadDtoStatus.NEW,
+      value: defaultField.type === 'select' ? defaultField.options?.[0]?.value || 'none' : '',
     };
     setConditions([...conditions, newCondition]);
   };
@@ -86,7 +64,7 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
       if (i === index) {
         const newCondition = { ...c, ...updates };
         if (updates.field) {
-          const fieldDef = FIELDS.find(f => f.value === updates.field);
+          const fieldDef = fields.find(f => f.value === updates.field);
           if (fieldDef?.type === 'select') {
             newCondition.value = fieldDef.options?.[0]?.value || 'none';
             newCondition.operator = 'equals';
@@ -113,7 +91,7 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
       <div className="p-5 border-b flex items-center justify-between bg-slate-50/80 backdrop-blur-sm">
         <div className="flex items-center space-x-2">
           <Filter className="h-4 w-4 text-blue-600" />
-          <h4 className="font-bold text-xs uppercase tracking-widest text-slate-700">Filter Pipeline</h4>
+          <h4 className="font-bold text-xs uppercase tracking-widest text-slate-700">{title}</h4>
         </div>
         <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-[10px] font-black uppercase tracking-tighter text-slate-400 hover:text-slate-900">
           RESET ALL
@@ -131,7 +109,7 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
           </div>
         ) : (
           conditions.map((condition, index) => {
-            const currentField = FIELDS.find(f => f.value === condition.field);
+            const currentField = fields.find(f => f.value === condition.field);
             
             return (
               <div key={index} className="group flex items-center space-x-2 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -143,7 +121,7 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
-                    {FIELDS.map((f) => (
+                    {fields.map((f) => (
                       <SelectItem key={f.value} value={f.value} className="text-[11px] font-bold">
                         {f.label}
                       </SelectItem>
