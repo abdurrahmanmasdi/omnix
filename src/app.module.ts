@@ -11,6 +11,8 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { EventsModule } from './events/events.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { DocumentsModule } from './documents/documents.module';
+import { LeadSourcesModule } from './lead-sources/lead-sources.module';
+import { LeadsModule } from './leads/leads.module';
 import { ExperiencesModule } from './experiences/experiences.module';
 
 @Module({
@@ -35,6 +37,8 @@ import { ExperiencesModule } from './experiences/experiences.module';
     ConversationsModule,
     DocumentsModule,
     ExperiencesModule,
+    LeadSourcesModule,
+    LeadsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
