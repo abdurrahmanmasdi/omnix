@@ -17,7 +17,7 @@ export class ActionExecutorService {
     for (const action of actions) {
       try {
         await this.handleAction(organizationId, conversationId, action);
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error(
           `Failed to execute action ${action.type}: ${error.message}`,
         );
@@ -36,43 +36,74 @@ export class ActionExecutorService {
     );
 
     switch (action.type) {
-      case 'UPDATE_LEAD':
-        await this.handleUpdateLead(conversationId, payload);
+      case 'CREATE_LEAD':
+        await this.handleUpsertLead(organizationId, conversationId, payload);
         break;
 
-      // We can add more cases here as the "Brain" grows (e.g., CREATE_APPOINTMENT)
+      // We can add more cases here as the "Brain" grows
       default:
         this.logger.warn(`Unknown action type received: ${action.type}`);
     }
   }
 
-  private async handleUpdateLead(conversationId: string, payload: any) {
-    // Find the lead associated with this conversation
+  private async handleUpsertLead(
+    organizationId: string,
+    conversationId: string,
+    payload: any,
+  ) {
+    // 1. Find the conversation and its existing lead link
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { leadId: true },
+      include: { lead: true },
     });
 
-    if (!conversation?.leadId) {
-      this.logger.error(`No lead found for conversation ${conversationId}`);
+    if (!conversation) {
+      this.logger.error(
+        `Conversation ${conversationId} not found. Cannot upsert lead.`,
+      );
       return;
     }
 
     const updateData: any = {};
-
     if (payload.status) updateData.status = payload.status as LeadStatus;
     if (payload.priority) updateData.priority = payload.priority as Priority;
     if (payload.firstName) updateData.firstName = payload.firstName;
     if (payload.lastName) updateData.lastName = payload.lastName;
     if (payload.email) updateData.email = payload.email;
+    if (payload.phoneNumber) updateData.phoneNumber = payload.phoneNumber;
+    if (payload.country) updateData.country = payload.country;
 
-    await this.prisma.lead.update({
-      where: { id: conversation.leadId },
-      data: updateData,
-    });
+    // 2. If a lead is already linked, UPDATE it
+    if (conversation.leadId) {
+      await this.prisma.lead.update({
+        where: { id: conversation.leadId },
+        data: updateData,
+      });
+      this.logger.log(
+        `Updated existing Lead ${conversation.leadId} for Conv: ${conversationId}`,
+      );
+    }
+    // 3. If no lead is linked, CREATE one and link it
+    else {
+      const newLead = await this.prisma.lead.create({
+        data: {
+          ...updateData,
+          organizationId: organizationId,
+          // Use conversation's externalContactId if phone is missing in payload
+          phoneNumber:
+            payload.phoneNumber || conversation.externalContactId || 'Unknown',
+          firstName: payload.firstName || 'Unknown',
+        },
+      });
 
-    this.logger.log(
-      `Updated Lead ${conversation.leadId} with: ${JSON.stringify(updateData)}`,
-    );
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { leadId: newLead.id },
+      });
+
+      this.logger.log(
+        `Created and linked new Lead ${newLead.id} for Conv: ${conversationId}`,
+      );
+    }
   }
 }

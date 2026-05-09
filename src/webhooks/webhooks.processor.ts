@@ -248,6 +248,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                     organizationId: organization.id,
                     conversationId: conversation.id,
                     customerPhone: customerPhone,
+                    latestMetaMessageId: metaMessageId,
                   },
                   {
                     jobId: jobId, // This ensures we can find and delete it later

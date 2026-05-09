@@ -60,6 +60,23 @@ export class WhatsappService {
     return this.postToMeta(phoneNumberId, accessToken, payload);
   }
 
+  async sendTypingIndicator(
+    accessToken: string,
+    phoneNumberId: string,
+    messageId: string,
+  ): Promise<any> {
+    const payload = {
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: messageId,
+      typing_indicator: {
+        type: 'text',
+      },
+    };
+
+    return this.postToMeta(phoneNumberId, accessToken, payload);
+  }
+
   private async postToMeta(
     phoneNumberId: string,
     accessToken: string,

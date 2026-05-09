@@ -35,10 +35,16 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       organizationId: string;
       conversationId: string;
       customerPhone: string;
+      latestMetaMessageId?: string;
     }>,
   ): Promise<any> {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
-      const { organizationId, conversationId, customerPhone } = job.data;
+      const {
+        organizationId,
+        conversationId,
+        customerPhone,
+        latestMetaMessageId,
+      } = job.data;
 
       this.logger.log(
         `⏳ 7 seconds passed with no new messages. Sending Conv ${conversationId} to AI...`,
@@ -63,6 +69,25 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       }
 
       try {
+        // 🚀 NEW: Simulate Typing Indicator on WhatsApp
+        if (
+          latestMetaMessageId &&
+          organization.whatsappAccessToken &&
+          organization.whatsappPhoneNumberId
+        ) {
+          try {
+            await this.whatsappService.sendTypingIndicator(
+              organization.whatsappAccessToken,
+              organization.whatsappPhoneNumberId,
+              latestMetaMessageId,
+            );
+          } catch (e) {
+            this.logger.warn(
+              `Typing indicator failed (likely API version mismatch or expired msg): ${e.message}`,
+            );
+          }
+        }
+
         // THE MAGIC BRIDGE: Call Python over gRPC!
         const aiResponse = await lastValueFrom(
           this.salesAgentService!.generateReply({
@@ -100,7 +125,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         } else if (replyText) {
           // Split the reply into multiple bubbles if the separator is present
           const messages = replyText
-            .split('---MESSAGE_BREAK---')
+            .split('|||')
             .map((m) => m.trim())
             .filter((m) => m.length > 0);
 
