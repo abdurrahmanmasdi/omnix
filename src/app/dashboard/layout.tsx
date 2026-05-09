@@ -7,7 +7,7 @@ import { axiosInstance } from "@/lib/api/axios-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, MessageSquare, LayoutDashboard, Settings } from "lucide-react"; // Make sure to npm install lucide-react if you haven't!
+import { LogOut, MessageSquare, LayoutDashboard, Settings, Users } from "lucide-react"; // Make sure to npm install lucide-react if you haven't!
 
 export default function DashboardLayout({
   children,
@@ -79,6 +79,15 @@ export default function DashboardLayout({
             >
               <LayoutDashboard className="mr-2 h-4 w-4" />
               Overview
+            </Button>
+          </Link>
+          <Link href="/dashboard/leads">
+            <Button
+              variant={pathname.includes("/leads") ? "secondary" : "ghost"}
+              className="w-full justify-start"
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Leads
             </Button>
           </Link>
           <Link href="/dashboard/conversations">
