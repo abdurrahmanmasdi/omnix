@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FilterCondition } from '@/lib/utils/ast-filter-builder';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -35,13 +35,24 @@ export function LeadsToolbar({
   const [search, setSearch] = useState(initialSearch);
   const [advancedConditions, setAdvancedConditions] = useState<FilterCondition[]>(initialFilters);
 
-  // Debounce search
+  // Use a ref for the callback so the debounce effect only depends on `search`
+  const onSearchChangeRef = useRef(onSearchChange);
+  onSearchChangeRef.current = onSearchChange;
+
+  // Track whether this is the first render to skip the initial fire
+  const isFirstRender = useRef(true);
+
+  // Debounce search — only fires when `search` actually changes (not on mount)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
-      onSearchChange(search);
+      onSearchChangeRef.current(search);
     }, 500);
     return () => clearTimeout(timer);
-  }, [search, onSearchChange]);
+  }, [search]);
 
   const handleClearFilters = () => {
     setAdvancedConditions([]);

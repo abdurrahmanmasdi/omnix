@@ -27,12 +27,15 @@ import { customFetch } from "../../axios-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
+/**
+ * @summary Create a new lead source
+ */
 export const leadSourcesControllerCreate = (
   createLeadSourceDto: CreateLeadSourceDto,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     {
       url: `/lead-sources`,
       method: "POST",
@@ -45,7 +48,7 @@ export const leadSourcesControllerCreate = (
 };
 
 export const getLeadSourcesControllerCreateMutationOptions = <
-  TError = unknown,
+  TError = void | void | void,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -86,10 +89,13 @@ export type LeadSourcesControllerCreateMutationResult = NonNullable<
   Awaited<ReturnType<typeof leadSourcesControllerCreate>>
 >;
 export type LeadSourcesControllerCreateMutationBody = CreateLeadSourceDto;
-export type LeadSourcesControllerCreateMutationError = unknown;
+export type LeadSourcesControllerCreateMutationError = void | void | void;
 
+/**
+ * @summary Create a new lead source
+ */
 export const useLeadSourcesControllerCreate = <
-  TError = unknown,
+  TError = void | void | void,
   TContext = unknown,
 >(
   options?: {
@@ -113,11 +119,15 @@ export const useLeadSourcesControllerCreate = <
 
   return useMutation(mutationOptions, queryClient);
 };
+/**
+ * Retrieves all active and inactive lead sources
+ * @summary Get all lead sources for organization
+ */
 export const leadSourcesControllerFindAll = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     { url: `/lead-sources`, method: "GET", signal },
     options,
   );
@@ -129,7 +139,7 @@ export const getLeadSourcesControllerFindAllQueryKey = () => {
 
 export const getLeadSourcesControllerFindAllQueryOptions = <
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindAll>>,
-  TError = unknown,
+  TError = void | void,
 >(options?: {
   query?: Partial<
     UseQueryOptions<
@@ -159,11 +169,11 @@ export const getLeadSourcesControllerFindAllQueryOptions = <
 export type LeadSourcesControllerFindAllQueryResult = NonNullable<
   Awaited<ReturnType<typeof leadSourcesControllerFindAll>>
 >;
-export type LeadSourcesControllerFindAllQueryError = unknown;
+export type LeadSourcesControllerFindAllQueryError = void | void;
 
 export function useLeadSourcesControllerFindAll<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindAll>>,
-  TError = unknown,
+  TError = void | void,
 >(
   options: {
     query: Partial<
@@ -189,7 +199,7 @@ export function useLeadSourcesControllerFindAll<
 };
 export function useLeadSourcesControllerFindAll<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindAll>>,
-  TError = unknown,
+  TError = void | void,
 >(
   options?: {
     query?: Partial<
@@ -215,7 +225,7 @@ export function useLeadSourcesControllerFindAll<
 };
 export function useLeadSourcesControllerFindAll<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindAll>>,
-  TError = unknown,
+  TError = void | void,
 >(
   options?: {
     query?: Partial<
@@ -231,10 +241,13 @@ export function useLeadSourcesControllerFindAll<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
+/**
+ * @summary Get all lead sources for organization
+ */
 
 export function useLeadSourcesControllerFindAll<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindAll>>,
-  TError = unknown,
+  TError = void | void,
 >(
   options?: {
     query?: Partial<
@@ -270,7 +283,7 @@ export const leadSourcesControllerFindOne = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     { url: `/lead-sources/${id}`, method: "GET", signal },
     options,
   );
@@ -282,7 +295,7 @@ export const getLeadSourcesControllerFindOneQueryKey = (id?: string) => {
 
 export const getLeadSourcesControllerFindOneQueryOptions = <
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindOne>>,
-  TError = unknown,
+  TError = void | unknown,
 >(
   id: string,
   options?: {
@@ -320,11 +333,11 @@ export const getLeadSourcesControllerFindOneQueryOptions = <
 export type LeadSourcesControllerFindOneQueryResult = NonNullable<
   Awaited<ReturnType<typeof leadSourcesControllerFindOne>>
 >;
-export type LeadSourcesControllerFindOneQueryError = unknown;
+export type LeadSourcesControllerFindOneQueryError = void | unknown;
 
 export function useLeadSourcesControllerFindOne<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindOne>>,
-  TError = unknown,
+  TError = void | unknown,
 >(
   id: string,
   options: {
@@ -351,7 +364,7 @@ export function useLeadSourcesControllerFindOne<
 };
 export function useLeadSourcesControllerFindOne<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindOne>>,
-  TError = unknown,
+  TError = void | unknown,
 >(
   id: string,
   options?: {
@@ -378,7 +391,7 @@ export function useLeadSourcesControllerFindOne<
 };
 export function useLeadSourcesControllerFindOne<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindOne>>,
-  TError = unknown,
+  TError = void | unknown,
 >(
   id: string,
   options?: {
@@ -401,7 +414,7 @@ export function useLeadSourcesControllerFindOne<
 
 export function useLeadSourcesControllerFindOne<
   TData = Awaited<ReturnType<typeof leadSourcesControllerFindOne>>,
-  TError = unknown,
+  TError = void | unknown,
 >(
   id: string,
   options?: {
@@ -430,12 +443,15 @@ export function useLeadSourcesControllerFindOne<
   return query;
 }
 
+/**
+ * @summary Update a specific lead source
+ */
 export const leadSourcesControllerUpdate = (
   id: string,
   updateLeadSourceDto: UpdateLeadSourceDto,
   options?: SecondParameter<typeof customFetch>,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     {
       url: `/lead-sources/${id}`,
       method: "PATCH",
@@ -447,7 +463,7 @@ export const leadSourcesControllerUpdate = (
 };
 
 export const getLeadSourcesControllerUpdateMutationOptions = <
-  TError = unknown,
+  TError = void | void | void | void,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -488,10 +504,17 @@ export type LeadSourcesControllerUpdateMutationResult = NonNullable<
   Awaited<ReturnType<typeof leadSourcesControllerUpdate>>
 >;
 export type LeadSourcesControllerUpdateMutationBody = UpdateLeadSourceDto;
-export type LeadSourcesControllerUpdateMutationError = unknown;
+export type LeadSourcesControllerUpdateMutationError =
+  | void
+  | void
+  | void
+  | void;
 
+/**
+ * @summary Update a specific lead source
+ */
 export const useLeadSourcesControllerUpdate = <
-  TError = unknown,
+  TError = void | void | void | void,
   TContext = unknown,
 >(
   options?: {
@@ -515,18 +538,21 @@ export const useLeadSourcesControllerUpdate = <
 
   return useMutation(mutationOptions, queryClient);
 };
+/**
+ * @summary Soft delete a lead source
+ */
 export const leadSourcesControllerRemove = (
   id: string,
   options?: SecondParameter<typeof customFetch>,
 ) => {
-  return customFetch<void>(
+  return customFetch<unknown>(
     { url: `/lead-sources/${id}`, method: "DELETE" },
     options,
   );
 };
 
 export const getLeadSourcesControllerRemoveMutationOptions = <
-  TError = unknown,
+  TError = void | void,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -567,10 +593,13 @@ export type LeadSourcesControllerRemoveMutationResult = NonNullable<
   Awaited<ReturnType<typeof leadSourcesControllerRemove>>
 >;
 
-export type LeadSourcesControllerRemoveMutationError = unknown;
+export type LeadSourcesControllerRemoveMutationError = void | void;
 
+/**
+ * @summary Soft delete a lead source
+ */
 export const useLeadSourcesControllerRemove = <
-  TError = unknown,
+  TError = void | void,
   TContext = unknown,
 >(
   options?: {

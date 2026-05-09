@@ -9,17 +9,21 @@ import type { LeadsControllerFindAllStatus } from "./leadsControllerFindAllStatu
 import type { LeadsControllerFindAllPriority } from "./leadsControllerFindAllPriority";
 
 export type LeadsControllerFindAllParams = {
+  /**
+   * Page number (default: 1)
+   */
   page?: number;
   /**
+   * Items per page, max 100 (default: 20)
    * @maximum 100
    */
   limit?: number;
   /**
-   * A JSON-stringified AST for filtering with AND/OR logic and dynamic operators.
+   * JSON AST filter array
    */
   filters?: string;
   /**
-   * A JSON-stringified array of sort nodes.
+   * JSON AST sort array
    */
   sorts?: string;
   status?: LeadsControllerFindAllStatus;

@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useLeadsControllerFindAll, useLeadsControllerRemove } from '@/lib/api/generated/leads/leads';
 import { useLeadSourcesControllerFindAll } from '@/lib/api/generated/lead-sources/lead-sources';
 import { buildSearchFilter, combineFilters, FilterCondition } from '@/lib/utils/ast-filter-builder';
 import { LeadDetailDrawer } from './LeadDetailDrawer';
 import { LeadFormModal } from './LeadFormModal';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 import { LeadsHeader } from './LeadsHeader';
@@ -20,33 +20,14 @@ export function LeadsDashboardClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // URL State
-  const page = Number(searchParams.get('page')) || 1;
-  const limit = 10;
-  const search = searchParams.get('search') || '';
-  const filtersParam = searchParams.get('filters');
-  
-  // Local state for complex object (easier than full serialization for now, but could be pushed to URL)
-  // For 'advancedConditions', to keep URLs clean we could stringify/parse, or keep it local to avoid giant URLs.
-  // The user requested URL state, so let's try to sync it if possible, but AST JSON can be huge.
-  // Let's keep advancedConditions in local state for now, but search, page, and sort in URL.
-  const [advancedConditions, setAdvancedConditions] = useState<FilterCondition[]>(
-    filtersParam ? JSON.parse(filtersParam) : []
-  );
-  const [sortBy, setSortBy] = useState<{ field: string, direction: 'asc' | 'desc' }>(
-    searchParams.get('sortField') 
-      ? { field: searchParams.get('sortField') as string, direction: (searchParams.get('sortDir') as 'asc' | 'desc') || 'desc' } 
-      : { field: 'createdAt', direction: 'desc' }
-  );
+  // ─── Stable URL update helper ─────────────────────────────
+  // We use a ref so the callback identity never changes, breaking the
+  // render-loop that occurs when searchParams triggers a new useCallback.
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
 
-  // Modal/Drawer States
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [leadToEdit, setLeadToEdit] = useState<string | null>(null);
-
-  // Sync state to URL
   const updateUrl = useCallback((updates: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParamsRef.current.toString());
     Object.entries(updates).forEach(([key, value]) => {
       if (value === null || value === '') {
         params.delete(key);
@@ -55,31 +36,55 @@ export function LeadsDashboardClient() {
       }
     });
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [searchParams, pathname, router]);
+  }, [pathname, router]);
 
-  const handleSearchChange = (newSearch: string) => {
+  // ─── URL-derived state ────────────────────────────────────
+  const page = Number(searchParams.get('page')) || 1;
+  const limit = 10;
+  const search = searchParams.get('search') || '';
+  const filtersParam = searchParams.get('filters');
+
+  // Advanced conditions & sort (local state synced to URL on change)
+  const [advancedConditions, setAdvancedConditions] = useState<FilterCondition[]>(
+    filtersParam ? JSON.parse(filtersParam) : []
+  );
+  const [sortBy, setSortBy] = useState<{ field: string, direction: 'asc' | 'desc' }>(
+    searchParams.get('sortField')
+      ? { field: searchParams.get('sortField') as string, direction: (searchParams.get('sortDir') as 'asc' | 'desc') || 'desc' }
+      : { field: 'createdAt', direction: 'desc' }
+  );
+
+  // ─── Modal / Drawer state ─────────────────────────────────
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [leadToEdit, setLeadToEdit] = useState<string | null>(null);
+
+  // ─── Stable event handlers ────────────────────────────────
+  const handleSearchChange = useCallback((newSearch: string) => {
     updateUrl({ search: newSearch, page: '1' });
-  };
+  }, [updateUrl]);
 
-  const handleFiltersChange = (conditions: FilterCondition[]) => {
+  const handleFiltersChange = useCallback((conditions: FilterCondition[]) => {
     setAdvancedConditions(conditions);
-    updateUrl({ 
+    updateUrl({
       filters: conditions.length > 0 ? JSON.stringify(conditions) : null,
-      page: '1' 
+      page: '1'
     });
-  };
+  }, [updateUrl]);
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     updateUrl({ page: newPage.toString() });
-  };
+  }, [updateUrl]);
 
-  const handleSortChange = (field: string) => {
-    const newDir = sortBy.field === field && sortBy.direction === 'desc' ? 'asc' : 'desc';
-    setSortBy({ field, direction: newDir });
-    updateUrl({ sortField: field, sortDir: newDir, page: '1' });
-  };
+  const handleSortChange = useCallback((field: string) => {
+    setSortBy(prev => {
+      const newDir = prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc';
+      updateUrl({ sortField: field, sortDir: newDir, page: '1' });
+      return { field, direction: newDir };
+    });
+  }, [updateUrl]);
 
-  // Build the AST filters
+  // ─── AST filters ─────────────────────────────────────────
   const filters = useMemo(() => {
     return combineFilters(
       buildSearchFilter(search, ['firstName', 'lastName', 'phoneNumber', 'email', 'country']),
@@ -87,7 +92,7 @@ export function LeadsDashboardClient() {
     );
   }, [search, advancedConditions]);
 
-  // 1. Fetch leads
+  // ─── Data fetching ────────────────────────────────────────
   const { data, isLoading, refetch } = useLeadsControllerFindAll({
     page,
     limit,
@@ -95,7 +100,6 @@ export function LeadsDashboardClient() {
     sorts: JSON.stringify([sortBy]),
   });
 
-  // 2. Fetch sources for grid display
   const { data: sourcesData } = useLeadSourcesControllerFindAll();
   const sources = useMemo(() => {
     const d = sourcesData as any;
@@ -117,12 +121,13 @@ export function LeadsDashboardClient() {
   const totalLeads = paginatedLeads?.total || paginatedLeads?.meta?.totalItems || leads.length;
   const totalPages = paginatedLeads?.totalPages || paginatedLeads?.meta?.totalPages || 1;
 
-  const handleEdit = (id: string) => {
+  // ─── Row-level actions ────────────────────────────────────
+  const handleEdit = useCallback((id: string) => {
     setLeadToEdit(id);
     setIsFormModalOpen(true);
-  };
+  }, []);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = useCallback((id: string) => {
     if (confirm('Are you sure you want to delete this high-priority record?')) {
       deleteMutation.mutate({ id }, {
         onSuccess: () => {
@@ -132,22 +137,24 @@ export function LeadsDashboardClient() {
         onError: () => toast.error('Encryption policy prevents deletion or server error.')
       });
     }
-  };
+  }, [deleteMutation, refetch]);
 
-  const handleOpenConversation = (conversationId?: string) => {
+  const handleOpenConversation = useCallback((conversationId?: string) => {
     if (conversationId) {
       router.push(`/dashboard/conversations/${conversationId}`);
     } else {
       toast.error('No conversation linked to this patient yet.');
     }
-  };
+  }, [router]);
+
+  const handleClearFilters = useCallback(() => handleFiltersChange([]), [handleFiltersChange]);
 
   return (
     <div className="p-8 space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       <LeadsHeader onNewOnboarding={() => { setLeadToEdit(null); setIsFormModalOpen(true); }} />
 
       <Card className="shadow-2xl shadow-slate-200/40 border-slate-100 overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl">
-        <LeadsToolbar 
+        <LeadsToolbar
           onSearchChange={handleSearchChange}
           onFiltersChange={handleFiltersChange}
           initialSearch={search}
@@ -156,9 +163,9 @@ export function LeadsDashboardClient() {
           page={page}
           totalPages={totalPages}
         />
-        
+
         <CardContent className="p-0">
-          <LeadsTable 
+          <LeadsTable
             leads={leads}
             sources={sources}
             isLoading={isLoading}
@@ -168,10 +175,10 @@ export function LeadsDashboardClient() {
             onDelete={handleDelete}
             onViewProfile={setSelectedLeadId}
             onOpenConversation={handleOpenConversation}
-            onClearFilters={() => handleFiltersChange([])}
+            onClearFilters={handleClearFilters}
           />
 
-          <LeadsPagination 
+          <LeadsPagination
             page={page}
             totalPages={totalPages}
             totalItems={totalLeads}
@@ -180,14 +187,14 @@ export function LeadsDashboardClient() {
         </CardContent>
       </Card>
 
-      <LeadDetailDrawer 
-        leadId={selectedLeadId} 
-        onClose={() => setSelectedLeadId(null)} 
+      <LeadDetailDrawer
+        leadId={selectedLeadId}
+        onClose={() => setSelectedLeadId(null)}
         onUpdate={refetch}
         onEdit={handleEdit}
       />
 
-      <LeadFormModal 
+      <LeadFormModal
         isOpen={isFormModalOpen}
         leadId={leadToEdit}
         onClose={() => { setIsFormModalOpen(false); setLeadToEdit(null); }}

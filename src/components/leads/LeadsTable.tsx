@@ -143,7 +143,7 @@ export function LeadsTable({
               </TableCell>
             </TableRow>
           ) : (
-            leads.map((lead: any) => {
+            leads.map((lead) => {
               const source = sources.find((s: any) => s.id === lead.sourceId);
               return (
                 <TableRow 
@@ -215,7 +215,7 @@ export function LeadsTable({
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             className="rounded-lg font-bold text-slate-700 py-2.5 cursor-pointer"
-                            onClick={() => onOpenConversation(lead.conversationId)}
+                            onClick={() => onOpenConversation(lead.conversation?.id)}
                           >
                             <MessageSquare className="mr-3 h-4 w-4 text-emerald-500" /> Open Conversation
                           </DropdownMenuItem>
