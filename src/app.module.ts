@@ -14,6 +14,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { LeadSourcesModule } from './lead-sources/lead-sources.module';
 import { PipelineStagesModule } from './pipeline-stages/pipeline-stages.module';
 import { LeadsModule } from './leads/leads.module';
+import { NotificationsModule } from './notifications/notification.module';
 import { ExperiencesModule } from './experiences/experiences.module';
 
 @Module({
@@ -40,6 +41,7 @@ import { ExperiencesModule } from './experiences/experiences.module';
     ExperiencesModule,
     LeadSourcesModule,
     LeadsModule,
+    NotificationsModule,
     PipelineStagesModule,
   ],
   controllers: [AppController],
