@@ -34,15 +34,26 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const STATUS_COLORS: Record<string, string> = {
-  NEW: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  QUALIFYING: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
-  READY_TO_PAY: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  HANDED_OFF: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  UNQUALIFIED: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
-  WON: 'bg-green-500/10 text-green-600 border-green-500/20',
-  LOST: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
-};
+const STATUS_PALETTE = [
+  'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  'bg-purple-500/10 text-purple-600 border-purple-500/20',
+  'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
+  'bg-green-500/10 text-green-600 border-green-500/20',
+  'bg-rose-500/10 text-rose-600 border-rose-500/20',
+  'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+];
+
+function getStatusColor(status: string): string {
+  // Simple hash to pick a consistent color for any stage name
+  let hash = 0;
+  for (let i = 0; i < status.length; i++) {
+    hash = status.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return STATUS_PALETTE[Math.abs(hash) % STATUS_PALETTE.length];
+}
 
 const PRIORITY_COLORS: Record<string, string> = {
   HOT: 'bg-red-500/10 text-red-600 border-red-500/20',
@@ -153,7 +164,7 @@ export function LeadsTable({
                 >
                   <TableCell className="px-8">
                     <div className="flex items-center space-x-4">
-                      <div className={`h-11 w-11 rounded-2xl flex items-center justify-center text-[10px] font-black border-2 border-white shadow-lg shadow-slate-200/50 ${STATUS_COLORS[lead.status]?.split(' ')[0] || 'bg-slate-100'}`}>
+                      <div className={`h-11 w-11 rounded-2xl flex items-center justify-center text-[10px] font-black border-2 border-white shadow-lg shadow-slate-200/50 ${getStatusColor(lead.status).split(' ')[0] || 'bg-slate-100'}`}>
                         {lead.firstName?.charAt(0)}{lead.lastName?.charAt(0)}
                       </div>
                       <div>
@@ -182,7 +193,7 @@ export function LeadsTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`${STATUS_COLORS[lead.status] || 'bg-slate-100'} px-3 py-1 border shadow-sm text-[10px] font-bold rounded-lg tracking-tight`}>
+                    <Badge variant="outline" className={`${getStatusColor(lead.status)} px-3 py-1 border shadow-sm text-[10px] font-bold rounded-lg tracking-tight`}>
                       {lead.status}
                     </Badge>
                   </TableCell>

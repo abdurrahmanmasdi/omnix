@@ -43,3 +43,7 @@ export * from "./updateLeadDtoStatus";
 export * from "./updateLeadSourceDto";
 export * from "./uploadDocumentDto";
 export * from "./webhooksControllerVerifyWebhookParams";
+export * from "./bulkReorderStagesDto";
+export * from "./createPipelineStageDto";
+export * from "./reorderStageItemDto";
+export * from "./updatePipelineStageDto";

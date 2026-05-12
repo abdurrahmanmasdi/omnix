@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { CreateLeadDtoStatus } from '../api/model/createLeadDtoStatus';
 import { CreateLeadDtoPriority } from '../api/model/createLeadDtoPriority';
 import { CreateLeadDtoCurrency } from '../api/model/createLeadDtoCurrency';
 
@@ -9,12 +8,12 @@ export const leadSchema = z.object({
   phoneNumber: z.string().min(5, 'Valid phone number is required'),
   country: z.string().min(1, 'Country is required'),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  status: z.nativeEnum(CreateLeadDtoStatus),
+  status: z.string().min(1, 'Status is required'),
   priority: z.nativeEnum(CreateLeadDtoPriority),
-  currency: z.nativeEnum(CreateLeadDtoCurrency).default(CreateLeadDtoCurrency.USD),
-  estimatedValue: z.number().min(0).default(0),
-  timezone: z.string().default('UTC'),
-  primaryLanguage: z.string().default('en'),
+  currency: z.nativeEnum(CreateLeadDtoCurrency),
+  estimatedValue: z.number().min(0),
+  timezone: z.string(),
+  primaryLanguage: z.string(),
   expectedServiceDate: z.string().optional().or(z.literal('')),
   sourceId: z.string().optional().or(z.literal('')).or(z.literal('none')),
   socialLinks: z.object({

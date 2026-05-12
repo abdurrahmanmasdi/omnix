@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { leadSchema, LeadFormData } from '@/lib/validations/lead';
 import { useLeadsControllerCreate, useLeadsControllerUpdate, useLeadsControllerFindOne } from '@/lib/api/generated/leads/leads';
 import { useLeadSourcesControllerFindAll } from '@/lib/api/generated/lead-sources/lead-sources';
+import { usePipelineStagesControllerFindAll } from '@/lib/api/generated/pipeline-stages/pipeline-stages';
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,6 @@ import { FaInstagram, FaFacebookF } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
 
 import { toast } from 'sonner';
-import { CreateLeadDtoStatus } from '@/lib/api/model/createLeadDtoStatus';
 import { CreateLeadDtoPriority } from '@/lib/api/model/createLeadDtoPriority';
 import { CreateLeadDtoCurrency } from '@/lib/api/model/createLeadDtoCurrency';
 
@@ -61,6 +61,21 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     return [];
   }, [sourcesData]);
 
+  // Fetch pipeline stages dynamically
+  const { data: stagesData } = usePipelineStagesControllerFindAll({
+    query: { enabled: isOpen }
+  });
+  const stages = useMemo(() => {
+    const d = stagesData as any;
+    const arr = Array.isArray(d) ? d : d?.items || d?.data || [];
+    return [...arr].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+  }, [stagesData]);
+
+  // Default status: first pipeline stage name (or fallback)
+  const defaultStatus = useMemo(() => {
+    return stages.length > 0 ? stages[0].name : 'NEW';
+  }, [stages]);
+
   // 2. Mutations
   const createMutation = useLeadsControllerCreate();
   const updateMutation = useLeadsControllerUpdate();
@@ -75,7 +90,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
-      status: CreateLeadDtoStatus.NEW,
+      status: 'NEW',
       priority: CreateLeadDtoPriority.WARM,
       currency: CreateLeadDtoCurrency.USD,
       estimatedValue: 0,
@@ -127,7 +142,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
         phoneNumber: '',
         country: '',
         email: '',
-        status: CreateLeadDtoStatus.NEW,
+        status: 'NEW',
         priority: CreateLeadDtoPriority.WARM,
         currency: CreateLeadDtoCurrency.USD,
         estimatedValue: 0,
@@ -301,13 +316,13 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                   <div className="grid grid-cols-2 gap-6 pt-2">
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-widest text-slate-500">Lifecycle Status</Label>
-                      <Select value={statusValue} onValueChange={(val) => setValue('status', val as CreateLeadDtoStatus)}>
+                      <Select value={statusValue} onValueChange={(val) => setValue('status', val as any)}>
                         <SelectTrigger className="h-11 rounded-lg border-slate-200">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.values(CreateLeadDtoStatus).map(opt => (
-                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          {stages.map((stage: any) => (
+                            <SelectItem key={stage.id} value={stage.name}>{stage.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

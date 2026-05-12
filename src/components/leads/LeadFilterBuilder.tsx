@@ -3,9 +3,9 @@
 import { useMemo } from 'react';
 import { FilterCondition } from '@/lib/utils/ast-filter-builder';
 import { FilterBuilder, FilterFieldDef } from '@/components/ui/filter-builder/FilterBuilder';
-import { CreateLeadDtoStatus } from '@/lib/api/model/createLeadDtoStatus';
 import { CreateLeadDtoPriority } from '@/lib/api/model/createLeadDtoPriority';
 import { useLeadSourcesControllerFindAll } from '@/lib/api/generated/lead-sources/lead-sources';
+import { usePipelineStagesControllerFindAll } from '@/lib/api/generated/pipeline-stages/pipeline-stages';
 
 interface LeadFilterBuilderProps {
   onFiltersChange: (conditions: FilterCondition[]) => void;
@@ -22,6 +22,14 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
     return [];
   }, [sourcesData]);
 
+  // Fetch pipeline stages dynamically
+  const { data: stagesData } = usePipelineStagesControllerFindAll();
+  const stages = useMemo(() => {
+    const data = stagesData as any;
+    const arr = Array.isArray(data) ? data : data?.items || data?.data || [];
+    return [...arr].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+  }, [stagesData]);
+
   const fields: FilterFieldDef[] = useMemo(() => [
     { label: 'First Name', value: 'firstName', type: 'text' },
     { label: 'Last Name', value: 'lastName', type: 'text' },
@@ -29,7 +37,7 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
       label: 'Status', 
       value: 'status', 
       type: 'select', 
-      options: Object.values(CreateLeadDtoStatus).map(s => ({ label: s, value: s }))
+      options: stages.map((s: any) => ({ label: s.name, value: s.name }))
     },
     { 
       label: 'Priority', 
@@ -45,7 +53,7 @@ export function LeadFilterBuilder({ onFiltersChange, initialConditions = [] }: L
     },
     { label: 'Estimated Value', value: 'estimatedValue', type: 'number' },
     { label: 'Country', value: 'country', type: 'text' },
-  ], [sources]);
+  ], [sources, stages]);
 
   return (
     <FilterBuilder 
