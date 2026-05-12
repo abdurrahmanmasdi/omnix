@@ -12,6 +12,7 @@ import { EventsModule } from './events/events.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { DocumentsModule } from './documents/documents.module';
 import { LeadSourcesModule } from './lead-sources/lead-sources.module';
+import { PipelineStagesModule } from './pipeline-stages/pipeline-stages.module';
 import { LeadsModule } from './leads/leads.module';
 import { ExperiencesModule } from './experiences/experiences.module';
 
@@ -39,6 +40,7 @@ import { ExperiencesModule } from './experiences/experiences.module';
     ExperiencesModule,
     LeadSourcesModule,
     LeadsModule,
+    PipelineStagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

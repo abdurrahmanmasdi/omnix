@@ -32,7 +32,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Leads')
-@ApiBearerAuth('access-token')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('leads')
 export class LeadsController {

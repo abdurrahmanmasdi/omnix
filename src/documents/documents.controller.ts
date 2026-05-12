@@ -8,7 +8,7 @@ import {
   UploadedFile,
   Body,
   UseGuards,
-  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -41,7 +41,7 @@ export class DocumentsController {
   @ApiResponse({ status: 200, description: 'List of documents' })
   async getDocuments(@CurrentUser() user: AuthenticatedUser) {
     if (!user.organizationId) {
-      throw new NotFoundException('Organization not found for the user');
+      throw new BadRequestException('Organization not found for the user');
     }
     return this.documentsService.getDocuments(user.organizationId);
   }
@@ -66,7 +66,7 @@ export class DocumentsController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!user.organizationId) {
-      throw new NotFoundException('Organization not found for the user');
+      throw new BadRequestException('Organization not found for the user');
     }
     return this.documentsService.uploadDocument(user.organizationId, file);
   }
@@ -79,7 +79,7 @@ export class DocumentsController {
     @Param('id') documentId: string,
   ) {
     if (!user.organizationId) {
-      throw new NotFoundException('Organization not found for the user');
+      throw new BadRequestException('Organization not found for the user');
     }
     return this.documentsService.deleteDocument(
       user.organizationId,
