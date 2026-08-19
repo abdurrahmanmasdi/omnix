@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSocket, LiveMessagePayload } from "@/hooks/use-socket";
+import { useSocket, LiveMessagePayload } from "@/hooks/useSocket";
 import {
   useConversationsControllerGetConversations,
   useConversationsControllerGetMessages,

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { axiosInstance } from '@/lib/api/axios-client';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { Header } from '@/components/layout/Header';
+import { Loader2 } from 'lucide-react';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -48,16 +50,22 @@ export function DashboardShell({ children }: DashboardShellProps) {
   // Loading / auth guard
   if (!hasHydrated || !accessToken || !user?.hasCompletedOnboarding) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        Loading...
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          <p className="text-sm font-medium text-slate-500">Initializing secure session...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar user={user} onLogout={handleLogout} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header onLogout={handleLogout} />
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
 }
