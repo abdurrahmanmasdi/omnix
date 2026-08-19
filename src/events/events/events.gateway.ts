@@ -40,9 +40,13 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       // 3. Lock them into their specific Clinic's "Room"
-      const organizationId = payload.organizationId;
-      if (organizationId) {
+      const { organizationId, sub: userId } = payload;
+      if (organizationId && userId) {
+        // 1. Join Organization Room (Tenant level)
         await client.join(organizationId);
+        // 2. Join User Room (Private level)
+        await client.join(`user_${userId}`);
+
         this.logger.log(`Client ${client.id} joined room: ${organizationId}`);
       } else {
         throw new Error('User has no organization');
@@ -61,5 +65,20 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   broadcastNewMessage(organizationId: string, messageData: any) {
     // Emits specifically to the organization's room
     this.server.to(organizationId).emit('onNewMessage', messageData);
+  }
+
+  // 🚀 Broadcast CRM state changes (lead updates, pipeline moves)
+  broadcastLeadUpdate(organizationId: string, leadData: any) {
+    this.server.to(organizationId).emit('onLeadUpdate', leadData);
+  }
+
+  // 🚀 Broadcast conversation state changes (AI paused/resumed)
+  broadcastConversationUpdate(
+    organizationId: string,
+    conversationData: any,
+  ) {
+    this.server
+      .to(organizationId)
+      .emit('onConversationUpdate', conversationData);
   }
 }

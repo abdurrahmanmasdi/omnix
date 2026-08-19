@@ -10,6 +10,8 @@ import type { ClientGrpc } from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { SalesAgentService } from './interfaces/agent.interface';
 import parsePhoneNumberFromString from 'libphonenumber-js';
+import { NotificationEmitterService } from '../notifications/notification-emitter.service';
+import { NotificationType } from '@prisma/client';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
@@ -18,6 +20,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly notificationEmitter: NotificationEmitterService,
     private readonly whatsappService: WhatsappService,
     private readonly eventsGateway: EventsGateway,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
@@ -218,6 +221,29 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               );
 
               if (conversation.aiPaused) {
+                const lead = await this.prisma.lead.findFirst({
+                  where: {
+                    organizationId: organization.id,
+                    phoneNumber: customerPhone,
+                    deletedAt: null,
+                  },
+                });
+
+                if (conversation.assignedAgentId) {
+                  await this.notificationEmitter.send({
+                    organizationId: conversation.organizationId,
+                    userId: conversation.assignedAgentId, // Route directly to the human who owns this conversation
+                    type: NotificationType.NEW_MESSAGE,
+                    title: `New Message from ${`${lead?.firstName || ''} ${lead?.lastName || ''}`}`,
+                    body:
+                      wpMessage.content.length > 50
+                        ? `${wpMessage.content.substring(0, 50)}...`
+                        : wpMessage.content,
+                    referenceId: conversation.id,
+                    referenceType: 'CONVERSATION',
+                  });
+                }
+
                 this.logger.log(
                   `AI execution bypassed for conversation ${conversation.id}. State: Paused.`,
                 );

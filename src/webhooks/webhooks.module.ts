@@ -9,6 +9,7 @@ import { WebhooksProcessor } from './webhooks.processor';
 import { WhatsappService } from './whatsapp.service';
 import { EventsModule } from '../events/events.module';
 import { AiReplyProcessor } from './ai-reply.processor';
+import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { ActionExecutorService } from './action-executor.service';
 
 @Module({
@@ -41,6 +42,7 @@ import { ActionExecutorService } from './action-executor.service';
     AiReplyProcessor,
     WhatsappService,
     ActionExecutorService,
+    NotificationEmitterService,
   ],
   exports: [WhatsappService, ActionExecutorService],
 })
