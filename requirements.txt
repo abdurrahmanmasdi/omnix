@@ -1,0 +1,28 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+
+# LLM & AI Agent
+langchain-core
+langchain-openai
+langchain-text-splitters
+langgraph
+openai
+google-genai
+
+# Database & ORM
+sqlalchemy
+psycopg2-binary
+pgvector
+
+# Data Validation & Settings
+pydantic
+pydantic-settings
+
+# gRPC
+grpcio
+grpcio-tools
+protobuf
+
+# PDF Processing
+PyMuPDF

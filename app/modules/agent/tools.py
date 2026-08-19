@@ -1,21 +1,25 @@
 from langchain_core.tools import tool
+from langchain_core.runnables import RunnableConfig
 from app.core.database import SessionLocal
 from app.modules.rag.retriever import RAGRetriever
 from app.core.config import settings
+from langchain_openai import OpenAIEmbeddings
+from sqlalchemy import text
+import json
 
 # 🚀 Tool 1: The RAG Database Search
 @tool
-async def search_clinic_knowledge(organization_id: str, search_query: str) -> str:
+async def search_clinic_knowledge(search_query: str, config: RunnableConfig) -> str:
     """
     Searches the clinic's PDF database for prices, medical procedures, or rules.
     Use this WHENEVER the patient asks a specific question about the clinic's services.
     """
-    print(f"🛠️ [TOOL] Searching Knowledge Base for: '{search_query}'")
+    org_id = config["configurable"].get("organization_id")
+    print(f"🛠️ [TOOL] Searching Knowledge Base for: '{search_query}' (Org: {org_id})")
     db = SessionLocal()
     try:
         retriever = RAGRetriever(db_session=db, api_key=settings.OPENAI_API_KEY)
-        # Reusing the exact OpenAI 3072-dimension search logic we built earlier
-        context = await retriever.get_relevant_context(organization_id, search_query)
+        context = await retriever.get_relevant_context(org_id, search_query)
         return context
     except Exception as e:
         print(f"❌ Database search error: {e}")
@@ -23,36 +27,53 @@ async def search_clinic_knowledge(organization_id: str, search_query: str) -> st
     finally:
         db.close()
 
-# 🚀 Tool 2: Full Lead Profile Sync
+# 🚀 Tool 2: Virtual CRM Sync (Instructions for NestJS)
 @tool
-async def sync_lead_crm(
-    organization_id: str,
-    lead_id: str, 
-    status: str = None, 
-    priority: str = None
+async def create_lead(
+    first_name: str,
+    last_name: str = None,
+    phone_number: str = None,
+    gender: str = None,
+    country: str = None,
+    timezone: str = None,
+    currency: str = "USD",
+    preferred_language: str = None,
+    primary_language: str = None,
+    social_links: dict = None
 ) -> str:
     """
-    Updates the patient's CRM profile.
-    ALLOWED STATUSES: "QUALIFYING", "READY_TO_PAY", "HANDED_OFF", "UNQUALIFIED"
-    ALLOWED PRIORITIES: "COLD", "WARM", "HOT"
+    Creates a new patient profile in the CRM with full enrichment.
+    Use this ONLY when 'lead_id' is missing and you have gathered the name.
     """
-    print(f"🛠️ [TOOL] Syncing CRM for Lead {lead_id} | Status: {status} | Priority: {priority}")
-    # (Future SQLAlchemy update code goes here)
-    return f"CRM updated. Status: {status}, Priority: {priority}."
+    data = {
+        "firstName": first_name,
+        "lastName": last_name,
+        "phoneNumber": phone_number,
+        "gender": gender,
+        "country": country,
+        "timezone": timezone,
+        "currency": currency,
+        "preferredLanguage": preferred_language,
+        "primaryLanguage": primary_language,
+        "socialLinks": social_links or {"whatsapp": phone_number},
+        "status": "NEW",
+        "pipelineStageId": "INQUIRY", # Fixed field name
+        "priority": "COLD"
+    }
+    payload = {k: v for k, v in data.items() if v is not None}
+    print(f"🛠️ [VIRTUAL TOOL] Comprehensive Lead Creation: {payload}")
+    return f"TOOL_ACTION:CREATE_LEAD:{json.dumps(payload)}"
 
 @tool
-async def fetch_social_proof(organization_id: str, user_objection: str) -> str:
+async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str:
     """
     Fetches real patient stories and 'Before & After' links related to a user's fear or objection.
     Use this when the patient shows hesitation, fear of pain, or doubts about the result.
     """
-    print(f"🛠️ [TOOL] Searching Social Proof for: '{user_objection}'")
+    org_id = config["configurable"].get("organization_id")
+    print(f"🛠️ [TOOL] Searching Social Proof for: '{user_objection}' (Org: {org_id})")
     db = SessionLocal()
     try:
-        from langchain_openai import OpenAIEmbeddings
-        from app.core.database import OrganizationExperience
-        from sqlalchemy import text
-        
         embeddings = OpenAIEmbeddings(
             model="text-embedding-3-large", 
             dimensions=3072,
@@ -60,20 +81,26 @@ async def fetch_social_proof(organization_id: str, user_objection: str) -> str:
         )
         query_vector = await embeddings.aembed_query(user_objection)
 
-        # 🚀 Vector Similarity Search (PostgreSQL pgvector)
-        # We find the top 1 experience that matches the user's fear
+        # 🚀 FIX: Query the exact columns defined in Prisma
         sql = text("""
-            SELECT title, "storyText", "patientCountry", "procedureType", "beforeAfterLinks"
+            SELECT title, "storyText", "patientCountry", "procedureType", "beforeImageUrl", "afterImageUrl"
             FROM organization_experiences
             WHERE "organizationId" = :org_id
             ORDER BY embedding <=> :vector
             LIMIT 1
         """)
         
-        result = db.execute(sql, {"org_id": organization_id, "vector": str(query_vector)}).fetchone()
+        result = db.execute(sql, {"org_id": org_id, "vector": str(query_vector)}).fetchone()
         
         if not result:
             return "We have many successful cases! I can tell you more about our procedure's high success rate."
+
+        # Safely format the image URLs if they exist in the DB
+        photos_str = ""
+        if result.beforeImageUrl:
+            photos_str += f"Before: {result.beforeImageUrl} "
+        if result.afterImageUrl:
+            photos_str += f"After: {result.afterImageUrl}"
 
         proof = f"""
         RELEVANT CASE STUDY:
@@ -81,7 +108,7 @@ async def fetch_social_proof(organization_id: str, user_objection: str) -> str:
         Patient from: {result.patientCountry}
         Procedure: {result.procedureType}
         Experience: {result.storyText}
-        Photos: {result.beforeAfterLinks}
+        Photos: {photos_str if photos_str else "No photos available for this specific case."}
         """
         return proof
 
@@ -91,4 +118,61 @@ async def fetch_social_proof(organization_id: str, user_objection: str) -> str:
     finally:
         db.close()
 
-tools_list = [search_clinic_knowledge, sync_lead_crm, fetch_social_proof]
+@tool
+async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
+    """
+    Escalates the conversation to a human agent. 
+    Use this ONLY when the patient explicitly asks for a human, is extremely frustrated, or is ready to make a payment and needs human assistance.
+    """
+    org_id = config["configurable"].get("organization_id")
+    conv_id = config["configurable"].get("conversation_id")
+    
+    print(f"🛠️ [TOOL] Escalating Conv: {conv_id} to Human. Reason: {reason}")
+    
+    db = SessionLocal()
+    try:
+        # 1. Fetch the Lead and the Assigned Human Agent's ID
+        query = text("""
+            SELECT l.id, l."assignedAgentId", l."firstName"
+            FROM conversations c
+            LEFT JOIN leads l ON c."leadId" = l.id
+            WHERE c.id = :conv_id
+        """)
+        result = db.execute(query, {"conv_id": conv_id}).fetchone()
+        
+        if not result or not result[0]:
+            return "Error: Could not find associated lead to escalate."
+            
+        lead_id = result[0]
+        agent_id = result[1]
+        first_name = result[2]
+        
+        # 2. Update Database: Pause the AI and mark Lead as HANDED_OFF
+        update_sql = text("""
+            UPDATE leads SET status = 'HANDED_OFF' WHERE id = :lead_id;
+            UPDATE conversations SET "aiPaused" = true WHERE id = :conv_id;
+        """)
+        db.execute(update_sql, {"lead_id": lead_id, "conv_id": conv_id})
+        db.commit()
+        
+        # 3. Trigger the NestJS Notification via Virtual Tool Action
+        if agent_id:
+            payload = {
+                "userId": str(agent_id),
+                "title": f"Handoff Required: {first_name}",
+                "body": reason,
+                "referenceId": str(lead_id),
+                "referenceType": "LEAD"
+            }
+            # This string is caught by main.py and sent to NestJS!
+            return f"TOOL_ACTION:NOTIFY_AGENT:{json.dumps(payload)}"
+        else:
+            return "Conversation paused, but no specific human agent is assigned to notify."
+            
+    except Exception as e:
+        print(f"❌ Escalation error: {e}")
+        return "Failed to escalate."
+    finally:
+        db.close()
+
+tools_list = [search_clinic_knowledge, fetch_social_proof, create_lead, escalate_to_human]

@@ -40,35 +40,44 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         
         db = SessionLocal()
         try:
-            # 1. Fetch Lead Info & Status from the database (Using raw SQL to read Prisma tables safely)
-            # Assuming your conversations table has a leadId linking to the leads table
+            # 1. Fetch Lead Info & Status from the database
+            # We use a LEFT JOIN to ensure we get the conversation even if the leadId is currently NULL
             lead_query = text("""
-                SELECT l.id, l."firstName", l.country, l.status, l.priority 
-                FROM leads l 
-                JOIN conversations c ON c."leadId" = l.id 
+                SELECT c.id as conv_id, l.id as lead_id, l."firstName", l."lastName", l.gender, l.country, l.status, l.priority, c."externalContactId"
+                FROM conversations c
+                LEFT JOIN leads l ON c."leadId" = l.id 
                 WHERE c.id = :conv_id
             """)
-            lead_result = db.execute(lead_query, {"conv_id": conv_id}).fetchone()
+            res = db.execute(lead_query, {"conv_id": conv_id}).fetchone()
             
+            if not res:
+                print(f"⚠️ [gRPC] Conversation {conv_id} not found in DB!")
+                return agent_pb2.AgentReply(replyText="System error: Conversation not found.")
+
             # Default state if lead doesn't exist yet
             state_data = {
                 "organization_id": org_id,
                 "conversation_id": conv_id,
-                "lead_id": str(lead_result.id) if lead_result else None,
-                "first_name": lead_result.firstName if lead_result else "Unknown",
-                "country": lead_result.country if lead_result else "Unknown",
-                "lead_status": lead_result.status if lead_result else "NEW",
-                "lead_priority": lead_result.priority if lead_result else "COLD",
+                "lead_id": str(res.lead_id) if res.lead_id else None,
+                "first_name": res.firstName if res.lead_id else "Guest",
+                "last_name": res.lastName if res.lead_id else None,
+                "phone_number": res.externalContactId,
+                "gender": res.gender if res.lead_id else "UNKNOWN",
+                "country": res.country if res.lead_id else "Unknown",
+                "lead_status": res.status if res.lead_id else "NEW",
+                "lead_priority": res.priority if res.lead_id else "COLD",
                 "messages": []
             }
 
-            # 2. Fetch the last 6 messages for short-term memory
+            print(f"🔍 [State] Lead: {state_data['first_name']} | Status: {state_data['lead_status']} | ID: {state_data['lead_id']}")
+
+            # 2. Fetch the last 120 messages for short-term memory
             msg_query = text("""
                 SELECT content, type 
                 FROM messages 
                 WHERE "conversationId" = :conv_id 
                 ORDER BY "createdAt" ASC 
-                LIMIT 6
+                LIMIT 120
             """)
             history = db.execute(msg_query, {"conv_id": conv_id}).fetchall()
             
@@ -83,14 +92,54 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 state_data["messages"].append(HumanMessage(content=latest_msg))
 
             # 4. 🚀 RUN THE LANGGRAPH AGENT
-            # Ainvoke streams the state through the graph until it hits the END node
-            final_state = await agent_app.ainvoke(state_data)
+            # We pass the organization_id in the 'configurable' config so tools can access it 
+            # without the LLM needing to manage it. This is the "Full Pattern" approach.
+            config = {"configurable": {"organization_id": org_id}}
+            final_state = await agent_app.ainvoke(state_data, config=config)
             
-            # The last message in the state is the AI's final WhatsApp reply
-            ai_reply = final_state["messages"][-1].content
+            # 5. Extract Final Content & Media
+            ai_reply_msg = final_state["messages"][-1]
+            ai_reply_text = ai_reply_msg.content
             
-            print(f"📤 Sending reply to WhatsApp: {ai_reply}\n")
-            return agent_pb2.AgentReply(replyText=ai_reply)
+            # 🚀 SPLIT MESSAGES for "Human-like" feel
+            # We look for the "PART_SPLIT" token we added to the prompt
+            reply_parts = [p.strip() for p in ai_reply_text.split("|||") if p.strip()]
+            
+            # Detect Media Links in the reply
+            media_url = ""
+            if "Photos:" in ai_reply_text:
+                import re
+                urls = re.findall(r'(https?://\S+)', ai_reply_text)
+                if urls:
+                    media_url = urls[0]
+            
+            # 6. Extract "Virtual" Tool Actions for NestJS
+            tool_actions = []
+            for msg in final_state["messages"]:
+                if hasattr(msg, "content") and "TOOL_ACTION:" in msg.content:
+                    try:
+                        parts = msg.content.split(":", 2)
+                        if len(parts) == 3:
+                            tool_actions.append(agent_pb2.ToolAction(
+                                type=parts[1],
+                                payload=parts[2]
+                            ))
+                    except Exception as te:
+                        print(f"⚠️ Error parsing virtual tool: {te}")
+
+            # Note: Since the gRPC proto AgentReply usually takes a single string, 
+            # we join them with a unique separator that the NestJS backend can split on.
+            # I recommend adding a "messages" repeated field to the proto later.
+            # For now, we join with \n\n|||\n\n
+            final_reply_to_send = "\n\n|||\n\n".join(reply_parts)
+
+            print(f"📤 Sending {len(reply_parts)} messages to WhatsApp.")
+            
+            return agent_pb2.AgentReply(
+                replyText=final_reply_to_send,
+                mediaUrl=media_url,
+                actions=tool_actions
+            )
             
         except Exception as e:
             print(f"❌ Error generating AI reply: {e}")

@@ -1,21 +1,24 @@
-import operator
-from typing import Annotated, TypedDict, Sequence
+from typing import TypedDict, Annotated, Sequence
 from langchain_core.messages import BaseMessage
+import operator
 
 class AgentState(TypedDict):
     # Chat History
     messages: Annotated[Sequence[BaseMessage], operator.add]
     
-    # Core IDs
+    # CRM Data
     organization_id: str
     conversation_id: str
-    lead_id: str | None # Might be None if it's a brand new WhatsApp number
-    
-    # The AI's Cognitive Variables (Directly from your Prisma Enums)
+    lead_id: str | None
     first_name: str
+    last_name: str | None
+    phone_number: str
+    gender: str
     country: str
-    lead_status: str # "NEW", "QUALIFYING", "READY_TO_PAY", "HANDED_OFF"
-    lead_priority: str # "COLD", "WARM", "HOT"
-
-    # 🚀 NEW: Tracks which specific node called a tool, so we can route back to it
+    lead_status: str
+    lead_priority: str
+    
+    # AI Routing Data (Added for V3)
+    user_intent: str
+    user_language: str
     sender: str
