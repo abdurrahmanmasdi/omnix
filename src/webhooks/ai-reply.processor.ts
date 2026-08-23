@@ -52,6 +52,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
+        include: { aiPersona: true },
       });
 
       if (!organization) return;
@@ -88,6 +89,9 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           }
         }
 
+        const persona = organization.aiPersona;
+        const businessRulesJson = persona?.businessRules ? JSON.stringify(persona.businessRules) : '{}';
+
         // THE MAGIC BRIDGE: Call Python over gRPC!
         const aiResponse = await lastValueFrom(
           this.salesAgentService!.generateReply({
@@ -95,6 +99,9 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             conversationId: conversationId,
             latestMessage:
               '[User finished typing multi-part message. Please respond to the context above.]',
+            clinicName: persona?.clinicName || 'OmniDesk Clinic',
+            agentTone: persona?.tone || 'Professional and empathetic',
+            businessRulesJson: businessRulesJson,
           }),
         );
 

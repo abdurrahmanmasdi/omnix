@@ -17,6 +17,9 @@ message AgentRequest {
   string organizationId = 1;
   string conversationId = 2;
   string latestMessage = 3;
+  string clinicName = 4;
+  string agentTone = 5;
+  string businessRulesJson = 6;
   // We can pass conversation history here later
 }
 

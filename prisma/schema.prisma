@@ -61,6 +61,7 @@ model Organization {
 
   // Relationships
   conversations Conversation[]
+  aiPersona            AiPersona?
   leadSources          LeadSource[]
   knowledgeBase OrganizationKnowledge[]
   memberships          OrganizationMembership[]
@@ -421,4 +422,20 @@ model Notification {
   @@index([organizationId, userId])
   @@index([userId, isRead]) // Super fast querying for "Unread count" badge
   @@map("notifications")
+}
+
+model AiPersona {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @unique @db.Uuid
+  agentName       String       @default("Assistant")
+  clinicName      String
+  tone            String       @default("Professional and empathetic")
+  businessRules   Json?
+  handoffMessage  String       @default("I will transfer you to our medical coordinator.")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("ai_personas")
 }

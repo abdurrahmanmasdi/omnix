@@ -4,6 +4,9 @@ export interface AgentRequest {
   organizationId: string;
   conversationId: string;
   latestMessage: string;
+  clinicName?: string;
+  agentTone?: string;
+  businessRulesJson?: string;
 }
 
 export interface ToolAction {
