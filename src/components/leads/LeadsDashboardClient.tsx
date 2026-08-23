@@ -1,10 +1,13 @@
 'use client';
 
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useLeadsControllerFindAll, useLeadsControllerRemove } from '@/lib/api/generated/leads/leads';
 import { useLeadSourcesControllerFindAll } from '@/lib/api/generated/lead-sources/lead-sources';
 import { buildSearchFilter, combineFilters, FilterCondition } from '@/lib/utils/ast-filter-builder';
+import { useSocket } from '@/hooks/useSocket';
+import type { LeadUpdatePayload } from '@/hooks/useSocket';
+import { useQueryClient } from '@tanstack/react-query';
 import { LeadDetailDrawer } from './LeadDetailDrawer';
 import { LeadFormModal } from './LeadFormModal';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,6 +22,8 @@ export function LeadsDashboardClient() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   // ─── Stable URL update helper ─────────────────────────────
   // We use a ref so the callback identity never changes, breaking the
@@ -99,6 +104,26 @@ export function LeadsDashboardClient() {
     filters: filters ? JSON.stringify(filters) : undefined,
     sorts: JSON.stringify([sortBy]),
   });
+
+  // ─── Real-time: Invalidate on lead updates from backend ────
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleLeadUpdate = (data: LeadUpdatePayload) => {
+      console.log('[Socket] onLeadUpdate received:', data.leadId, data.updatedFields);
+
+      // Invalidate all leads queries (list, individual, any filtered view)
+      queryClient.invalidateQueries({ queryKey: [`/leads`] });
+
+      // Invalidate pipeline stages since lead stage assignments may have changed
+      queryClient.invalidateQueries({ queryKey: [`/pipeline-stages`] });
+    };
+
+    socket.on('onLeadUpdate', handleLeadUpdate);
+    return () => {
+      socket.off('onLeadUpdate', handleLeadUpdate);
+    };
+  }, [socket, queryClient]);
 
   const { data: sourcesData } = useLeadSourcesControllerFindAll();
   const sources = useMemo(() => {

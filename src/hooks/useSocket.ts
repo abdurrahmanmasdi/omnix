@@ -21,6 +21,21 @@ export interface LiveMessagePayload {
   };
 }
 
+export interface LeadUpdatePayload {
+  leadId: string;
+  status?: string;
+  priority?: string;
+  pipelineStageId?: string;
+  updatedFields: string[];
+}
+
+export interface ConversationUpdatePayload {
+  conversationId: string;
+  aiPaused: boolean;
+  reason?: string;
+  handoffTriggeredBy?: 'AI' | 'USER';
+}
+
 // ─── Singleton Socket Manager ───────────────────────────
 let globalSocket: Socket | null = null;
 let connected = false;

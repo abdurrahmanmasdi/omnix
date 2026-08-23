@@ -3,20 +3,26 @@
 import { useEffect, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSocket, LiveMessagePayload } from "@/hooks/useSocket";
+import type { ConversationUpdatePayload } from "@/hooks/useSocket";
 import {
   useConversationsControllerGetConversations,
   useConversationsControllerGetMessages,
   useConversationsControllerSendMessage,
   useConversationsControllerToggleAi,
+  getConversationsControllerGetConversationsQueryKey,
 } from "@/lib/api/generated/conversations/conversations";
-import type { ConversationsControllerGetMessages200Item } from "@/lib/api/model";
+import type {
+  ConversationsControllerGetMessages200Item,
+  ConversationsControllerGetConversations200Item,
+} from "@/lib/api/model";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Send, User, Bot, Play, Pause } from 'lucide-react';
+import { Send, User, Bot, Play, Pause, AlertTriangle } from 'lucide-react';
 
 export default function ConversationsPage() {
   const queryClient = useQueryClient();
@@ -102,6 +108,47 @@ export default function ConversationsPage() {
     };
   }, [socket, refetchConversations]);
 
+  // 4b. Listen for real-time conversation updates (AI paused / handoff)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleConversationUpdate = (data: ConversationUpdatePayload) => {
+      // Optimistically patch the conversations list cache so sidebar reflects immediately
+      queryClient.setQueriesData<(ConversationsControllerGetConversations200Item & { aiPaused?: boolean })[]>(
+        { queryKey: [`/conversations`] },
+        (old) => {
+          if (!old) return old;
+          return old.map((conv) =>
+            conv.id === data.conversationId
+              ? { ...conv, aiPaused: data.aiPaused }
+              : conv
+          );
+        }
+      );
+
+      // Also refetch to ensure full consistency
+      refetchConversations();
+
+      // Show toast when AI is paused (handoff scenario)
+      if (data.aiPaused) {
+        toast.warning('AI has been paused', {
+          description: data.reason || 'A human agent needs to step in for this conversation.',
+          duration: 8000,
+        });
+      } else {
+        toast.success('AI resumed', {
+          description: 'The AI agent is now handling this conversation again.',
+          duration: 4000,
+        });
+      }
+    };
+
+    socket.on('onConversationUpdate', handleConversationUpdate);
+    return () => {
+      socket.off('onConversationUpdate', handleConversationUpdate);
+    };
+  }, [socket, queryClient, refetchConversations]);
+
   // 1. Add the state for the input field at the top of your component
   const [messageInput, setMessageInput] = useState("");
 
@@ -141,7 +188,10 @@ export default function ConversationsPage() {
 
   const toggleAiMutation = useConversationsControllerToggleAi();
   // Retrieve the current conversation object to read its aiPaused state
-  const activeConversationData = conversations?.find((c: any) => c.id === activeConversationId);
+  // (aiPaused is returned by the API but not yet in the Orval-generated type)
+  const activeConversationData = conversations?.find((c: any) => c.id === activeConversationId) as
+    | (ConversationsControllerGetConversations200Item & { aiPaused?: boolean })
+    | undefined;
   const isAiPaused = activeConversationData?.aiPaused || false;
 
   const handleToggleAi = () => {
@@ -263,6 +313,29 @@ export default function ConversationsPage() {
                 </Button>
               </div>
             </div>
+
+            {/* AI Paused Banner */}
+            {isAiPaused && (
+              <div className="mx-6 mt-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 animate-in slide-in-from-top-2 duration-300">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-900">AI Agent Paused</p>
+                  <p className="text-xs text-amber-700">Human intervention required. Type a reply or resume the AI.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggleAi}
+                  disabled={toggleAiMutation.isPending}
+                  className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                >
+                  <Play size={12} className="mr-1" />
+                  Resume
+                </Button>
+              </div>
+            )}
 
             {/* Chat History */}
             <div
