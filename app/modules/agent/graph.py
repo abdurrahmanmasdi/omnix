@@ -15,6 +15,7 @@ from app.modules.agent.tools import (
     fetch_social_proof,
     create_lead,
     escalate_to_human,
+    update_patient_profile,
 )
 from app.core.config import settings
 
@@ -41,7 +42,7 @@ flagship_llm = ChatOpenAI(
 )
 
 # 2. Tool Binding (Giving the writers power to read RAG and update CRM)
-tool_belt = [create_lead, search_clinic_knowledge, fetch_social_proof, escalate_to_human]
+tool_belt = [create_lead, search_clinic_knowledge, fetch_social_proof, escalate_to_human, update_patient_profile]
 smart_writer_llm = flagship_llm.bind_tools(tool_belt)
 
 
@@ -72,12 +73,12 @@ Classify into exactly ONE of the following intents:
 - PRICE_OBJECTION: Complaining that dental work (implants, veneers, Hollywood smile) is too expensive or asking for steep discounts.
 - COMPETITOR_COMPARISON: Mentioning cheaper clinics in Istanbul/locally, or questionable "all-inclusive free flight" offers.
 - MEDICAL_FEAR: Anxious about dental pain, anesthesia, drill sensitivity, swollen gums, or failing implants.
-- TREATMENT_QUALIFICATION: Asking about procedures (Veneers vs. Crowns, All-on-4 vs. Single Implants, Whitening).
+- TREATMENT_QUALIFICATION: Asking about procedures (Veneers vs. Crowns, All-on-4 vs. Single Implants, Whitening). Also use this for general greetings, casual chit-chat, or if the user asks for the agent's name.
 - READY_TO_BOOK: Asking to schedule consultation, book a clinic visit, or send deposit/flight details.
 - LOGISTICS_INQUIRY: Asking about airport VIP pickup, clinic location, hotel arrangements, or trip duration.
 - AUTHORITY_PROOF: Asking for dentist credentials, before/after smile makeovers, clinic certifications.
 - POST_OP_SUPPORT: An existing patient reporting pain, bleeding, or issues after receiving treatment.
-- OUT_OF_SCOPE: Irrelevant spam, sales pitches to the clinic, or gibberish.
+- OUT_OF_SCOPE: Spam, B2B sales pitches trying to sell to the clinic, or completely irrelevant non-medical gibberish.
 
 Also detect the ISO language code ('ar', 'en', 'tr', 'ru', 'fr', 'de'). Default to 'ar' if Arabic dialect."""
 
@@ -219,6 +220,9 @@ async def qualifier_writer(state: AgentState):
     CRITICAL BUSINESS RULES FOR THIS CLINIC:
     {business_rules}
 
+    SILENT CRM UPDATE RULE:
+    Whenever you learn the patient's name, location, or can deduce their gender from their Arabic name/grammar, you MUST call the `update_patient_profile` tool to save it. You can deduce gender easily (e.g., 'Abdulrahman' is MALE). Do this silently while continuing the conversation.
+
     OBJECTIVE:
     Qualify the patient's dental needs, build trust, and obtain dental photos or a panoramic X-Ray (OPG).
 
@@ -292,7 +296,7 @@ async def post_op_support_writer(state: AgentState):
     {business_rules}
 
     CRITICAL PROTOCOL:
-    1. STRICT MEDICAL SAFETY: Do NOT diagnose or prescribe medications.
+    1. STRICT MEDICAL SAFETY: Do NOT diagnose or prescribe medications. Tell the patient to visit OUR clinic immediately for an emergency checkup. Do NOT tell them to visit the nearest clinic.
     2. IMMEDIATE REASSURANCE: "Your health and recovery are our priority. I am alerting our on-duty dental surgeon and clinic staff immediately."
     3. ESCALATION: Call `escalate_to_human(reason="Existing patient post-op medical inquiry")` to pause AI and flag the lead as HANDED_OFF."""
     messages = [SystemMessage(content=prompt)] + state["messages"]

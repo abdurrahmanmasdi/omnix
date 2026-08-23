@@ -180,4 +180,45 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
     finally:
         db.close()
 
-tools_list = [search_clinic_knowledge, fetch_social_proof, create_lead, escalate_to_human]
+@tool
+async def update_patient_profile(
+    first_name: str = None,
+    gender: str = None,
+    country: str = None,
+    service_interested: str = None,
+    has_provided_image: bool = False
+) -> dict:
+    """
+    Updates the patient's CRM profile with newly discovered demographic or preference info.
+    Use this silently when the user reveals their name, location, or you deduce their gender.
+    """
+    data = {}
+    state_updates = {}
+    
+    if first_name:
+        data["firstName"] = first_name
+        state_updates["is_name_collected"] = True
+    if gender in ["MALE", "FEMALE", "Male", "Female", "male", "female"]:
+        data["gender"] = gender.upper()
+    if country:
+        data["country"] = country
+        
+    if service_interested:
+        state_updates["is_service_identified"] = True
+        
+    if has_provided_image:
+        state_updates["has_medical_evidence"] = True
+        
+    action_str = ""
+    if data:
+        print(f"🛠️ [VIRTUAL TOOL] Update Patient Profile: {data}")
+        action_str = f"TOOL_ACTION:UPDATE_LEAD:{json.dumps(data)}"
+    else:
+        action_str = "No valid CRM fields provided to update."
+        
+    return {
+        "action": action_str,
+        **state_updates
+    }
+
+tools_list = [search_clinic_knowledge, fetch_social_proof, create_lead, escalate_to_human, update_patient_profile]

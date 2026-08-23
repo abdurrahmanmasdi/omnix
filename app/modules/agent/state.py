@@ -27,3 +27,8 @@ class AgentState(TypedDict):
     clinic_name: str
     agent_tone: str
     business_rules: str
+    
+    # Deterministic Workflow State
+    is_name_collected: bool
+    is_service_identified: bool
+    has_medical_evidence: bool
