@@ -34,6 +34,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
         conv_id = getattr(request, 'conversationId', getattr(request, 'conversation_id', None))
         latest_msg = getattr(request, 'latestMessage', getattr(request, 'latest_message', None))
+        
+        # New Dynamic AI config properties
+        clinic_name = getattr(request, 'clinicName', getattr(request, 'clinic_name', 'our clinic'))
+        agent_tone = getattr(request, 'agentTone', getattr(request, 'agent_tone', 'Professional and empathetic'))
+        business_rules = getattr(request, 'businessRulesJson', getattr(request, 'business_rules_json', '{}'))
 
         print(f"\n📥 [gRPC] NestJS asked to reply to Conv: {conv_id}")
         print(f"💬 User said: {latest_msg}")
@@ -66,6 +71,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 "country": res.country if res.lead_id else "Unknown",
                 "lead_status": res.status if res.lead_id else "NEW",
                 "lead_priority": res.priority if res.lead_id else "COLD",
+                "clinic_name": clinic_name,
+                "agent_tone": agent_tone,
+                "business_rules": business_rules,
                 "messages": []
             }
 

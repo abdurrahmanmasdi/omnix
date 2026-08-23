@@ -22,3 +22,8 @@ class AgentState(TypedDict):
     user_intent: str
     user_language: str
     sender: str
+    
+    # Dynamic Configuration
+    clinic_name: str
+    agent_tone: str
+    business_rules: str

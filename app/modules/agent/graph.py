@@ -107,8 +107,16 @@ async def classification_node(state: AgentState):
 
 
 async def price_objection_writer(state: AgentState):
-    prompt = f"""You are the Senior Treatment Coordinator at a premier dental clinic.
-    Patient Name: {state.get('first_name', 'Guest')}
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
+    prompt = f"""
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
 
     OBJECTIVE:
     Defend dental treatment value, handle budget objections, and prevent price-shopping drop-offs.
@@ -124,8 +132,16 @@ async def price_objection_writer(state: AgentState):
 
 
 async def competitor_writer(state: AgentState):
-    prompt = f"""You are the Head Patient Advocate for our clinic.
-    Patient Name: {state.get('first_name', 'Guest')}
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
+    prompt = f"""
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
 
     OBJECTIVE:
     Protect the lead from cut-rate dental clinics and explain why low-cost dental tourism can be risky.
@@ -142,8 +158,16 @@ async def competitor_writer(state: AgentState):
 
 
 async def empathy_writer(state: AgentState):
-    prompt = f"""You are the Patient Care Coordinator at the clinic.
-    Patient Name: {state.get('first_name', 'Guest')}
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
+    prompt = f"""
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
 
     OBJECTIVE:
     Resolve dental anxiety, fear of pain, or fear of artificial-looking "toilet-seat white" teeth.
@@ -159,8 +183,16 @@ async def empathy_writer(state: AgentState):
 
 
 async def closer_writer(state: AgentState):
-    prompt = f"""You are the Booking Concierge at our premier dental clinic.
-    Patient Name: {state.get('first_name', 'Guest')}
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
+    prompt = f"""
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
 
     OBJECTIVE:
     The patient is ready to schedule a consultation, book a clinic visit, or send deposit/flight details.
@@ -176,8 +208,16 @@ async def closer_writer(state: AgentState):
 
 
 async def qualifier_writer(state: AgentState):
-    prompt = f"""You are the Senior Dental Treatment Coordinator at a premier dental clinic.
-    Patient Name: {state.get('first_name', 'Guest')}
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
+    prompt = f"""
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
 
     OBJECTIVE:
     Qualify the patient's dental needs, build trust, and obtain dental photos or a panoramic X-Ray (OPG).
@@ -192,8 +232,17 @@ async def qualifier_writer(state: AgentState):
     return {"messages": [response], "sender": "qualifier_writer"}
 
 async def logistics_writer(state: AgentState):
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
     prompt = f"""
-    You are the VIP Travel Concierge. Patient: {state.get('first_name', 'Guest')}
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
+
     INTENT: The user is asking about flights, hotels, airport transfers, or Istanbul logistics.
     
     MISSION:
@@ -207,8 +256,17 @@ async def logistics_writer(state: AgentState):
 
 
 async def authority_writer(state: AgentState):
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
     prompt = f"""
-    You are the Medical Director's Assistant. Patient: {state.get('first_name', 'Guest')}
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
+
     INTENT: The user is asking for doctor credentials, before/after photos, or hospital accreditations.
     
     MISSION:
@@ -222,8 +280,16 @@ async def authority_writer(state: AgentState):
 
 
 async def post_op_support_writer(state: AgentState):
-    prompt = f"""You are the Urgent Patient Care Assistant.
-    Patient Name: {state.get('first_name', 'Guest')}
+    clinic_name = state.get('clinic_name', 'our clinic')
+    agent_tone = state.get('agent_tone', 'Professional and empathetic')
+    business_rules = state.get('business_rules', '{}')
+    
+    prompt = f"""
+    You are the Digital Assistant for {clinic_name}. Patient: {state.get('first_name', 'Guest')}
+    Your conversational tone MUST be: {agent_tone}.
+    
+    CRITICAL BUSINESS RULES FOR THIS CLINIC:
+    {business_rules}
 
     CRITICAL PROTOCOL:
     1. STRICT MEDICAL SAFETY: Do NOT diagnose or prescribe medications.

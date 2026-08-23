@@ -121,17 +121,21 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
 @tool
 async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
     """
-    Escalates the conversation to a human agent. 
-    Use this ONLY when the patient explicitly asks for a human, is extremely frustrated, or is ready to make a payment and needs human assistance.
+    Escalates the conversation to a human agent.
+    Use this ONLY when the patient explicitly asks for a human, is extremely frustrated,
+    is ready to make a payment and needs human assistance, or reports a post-op medical issue.
+
+    IMPORTANT: This tool does NOT modify the database. It returns virtual actions
+    for the NestJS orchestrator to execute (Separation of Concerns).
     """
     org_id = config["configurable"].get("organization_id")
     conv_id = config["configurable"].get("conversation_id")
-    
+
     print(f"🛠️ [TOOL] Escalating Conv: {conv_id} to Human. Reason: {reason}")
-    
+
     db = SessionLocal()
     try:
-        # 1. Fetch the Lead and the Assigned Human Agent's ID
+        # READ-ONLY: Fetch Lead context and the assigned human agent
         query = text("""
             SELECT l.id, l."assignedAgentId", l."firstName"
             FROM conversations c
@@ -139,36 +143,37 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
             WHERE c.id = :conv_id
         """)
         result = db.execute(query, {"conv_id": conv_id}).fetchone()
-        
+
         if not result or not result[0]:
             return "Error: Could not find associated lead to escalate."
-            
-        lead_id = result[0]
-        agent_id = result[1]
-        first_name = result[2]
-        
-        # 2. Update Database: Pause the AI and mark Lead as HANDED_OFF
-        update_sql = text("""
-            UPDATE leads SET status = 'HANDED_OFF' WHERE id = :lead_id;
-            UPDATE conversations SET "aiPaused" = true WHERE id = :conv_id;
-        """)
-        db.execute(update_sql, {"lead_id": lead_id, "conv_id": conv_id})
-        db.commit()
-        
-        # 3. Trigger the NestJS Notification via Virtual Tool Action
+
+        lead_id = str(result[0])
+        agent_id = str(result[1]) if result[1] else None
+        first_name = result[2] or "Patient"
+
+        # Build virtual actions for NestJS to execute
+        actions = []
+
+        # Action 1: Mark the lead as HANDED_OFF
+        actions.append(f"TOOL_ACTION:UPDATE_LEAD:{json.dumps({'leadId': lead_id, 'status': 'HANDED_OFF'})}")
+
+        # Action 2: Pause the AI on this conversation
+        actions.append(f"TOOL_ACTION:PAUSE_CONVERSATION:{json.dumps({'conversationId': conv_id})}")
+
+        # Action 3: Notify the assigned human agent (if one exists)
         if agent_id:
-            payload = {
-                "userId": str(agent_id),
+            notify_payload = {
+                "userId": agent_id,
                 "title": f"Handoff Required: {first_name}",
                 "body": reason,
-                "referenceId": str(lead_id),
+                "referenceId": lead_id,
                 "referenceType": "LEAD"
             }
-            # This string is caught by main.py and sent to NestJS!
-            return f"TOOL_ACTION:NOTIFY_AGENT:{json.dumps(payload)}"
-        else:
-            return "Conversation paused, but no specific human agent is assigned to notify."
-            
+            actions.append(f"TOOL_ACTION:NOTIFY_AGENT:{json.dumps(notify_payload)}")
+
+        print(f"📤 [VIRTUAL] Returning {len(actions)} actions for NestJS to execute.")
+        return "\n\n|||\n\n".join(actions)
+
     except Exception as e:
         print(f"❌ Escalation error: {e}")
         return "Failed to escalate."
