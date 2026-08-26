@@ -189,8 +189,10 @@ enum Priority {
 }
 
 enum LeadStatus {
-  NEW // Just entered system via Ad/CSV
+  NEW 
   QUALIFYING // AI is actively talking to them
+  QUALIFIED
+  READY_TO_BOOK // AI triggered booking tool (needs confirmation)
   READY_TO_PAY // AI triggered payment intent tool
   HANDED_OFF // Moved to human queue for complex medical/operations
   UNQUALIFIED

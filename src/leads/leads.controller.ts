@@ -26,6 +26,7 @@ import {
   CreateLeadDto,
   FindLeadsQueryDto,
   UpdateLeadDto,
+  UpdateLeadStageDto,
 } from './dtos/lead.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -267,6 +268,44 @@ export class LeadsController {
     if (!user.organizationId)
       throw new UnauthorizedException('Organization context missing');
     return this.leadsService.findOne(user.organizationId, user.id, id);
+  }
+
+  @Patch(':id/stage')
+  @ApiOperation({ summary: 'Update the pipeline stage and optionally the status of a lead' })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    description: 'Lead UUID',
+  })
+  @ApiBody({ type: UpdateLeadStageDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Lead stage updated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Lead not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  updateStage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateLeadStageDto,
+  ) {
+    if (!user.organizationId)
+      throw new UnauthorizedException('Organization context missing');
+    return this.leadsService.updateStage(user.organizationId, user.id, id, dto);
   }
 
   @Patch(':id')

@@ -116,6 +116,11 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           );
         }
 
+        if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
+          this.logger.log('AI requested to sleep. Aborting WhatsApp message delivery.');
+          return; // Stop execution here, do not send anything to WhatsApp
+        }
+
         // 2. Handle Multimodal Reply
         let metaMessageId: string | undefined = undefined;
 

@@ -10,7 +10,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AiPersonaService } from './ai-persona.service';
 import { UpsertAiPersonaDto } from './dto/upsert-ai-persona.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { CurrentUser, AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 
 @ApiTags('AI Persona Settings')
 @ApiBearerAuth()

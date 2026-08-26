@@ -125,3 +125,14 @@ export class CreateLeadDto {
 
 // Automatically makes all CreateLeadDto fields optional for PATCH requests!
 export class UpdateLeadDto extends PartialType(CreateLeadDto) {}
+
+export class UpdateLeadStageDto {
+  @ApiProperty({ description: 'The UUID of the pipeline stage to move the lead to' })
+  @IsUUID()
+  pipelineStageId!: string;
+
+  @ApiPropertyOptional({ enum: LeadStatus, description: 'Optional status update when moving stage' })
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  status?: LeadStatus;
+}

@@ -12,7 +12,9 @@ import {
   CreateLeadDto,
   FindLeadsQueryDto,
   UpdateLeadDto,
+  UpdateLeadStageDto,
 } from './dtos/lead.dto';
+import { EventsGateway } from '../events/events/events.gateway';
 import { Prisma } from '@prisma/client';
 
 const LEAD_RELATIONS_INCLUDE = {
@@ -31,6 +33,7 @@ export class LeadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queryBuilder: QueryBuilderService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   async create(organizationId: string, dto: CreateLeadDto) {
@@ -164,6 +167,39 @@ export class LeadsService {
 
     if (!lead) throw new NotFoundException('Lead not found');
     return lead;
+  }
+
+  async updateStage(
+    organizationId: string,
+    userId: string,
+    leadId: string,
+    dto: UpdateLeadStageDto,
+  ) {
+    await this.findOne(organizationId, userId, leadId); // Verifies existence and access
+
+    // Validate the pipeline stage belongs to the org
+    const stage = await this.prisma.pipelineStage.findFirst({
+      where: { id: dto.pipelineStageId, organizationId, deletedAt: null },
+    });
+    if (!stage) {
+      throw new BadRequestException('Invalid Pipeline Stage');
+    }
+
+    const updateData: any = { pipelineStageId: dto.pipelineStageId };
+    if (dto.status) {
+      updateData.status = dto.status;
+    }
+
+    const updatedLead = await this.prisma.lead.update({
+      where: { id: leadId },
+      data: updateData,
+      include: LEAD_RELATIONS_INCLUDE,
+    });
+
+    // Broadcast the update so UI reacts in real-time
+    this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead);
+
+    return updatedLead;
   }
 
   async update(

@@ -250,6 +250,10 @@ export class ActionExecutorService {
           phoneNumber:
             payload.phoneNumber || conversation.externalContactId || 'Unknown',
           firstName: payload.firstName || 'Unknown',
+          lastName: payload.lastName || 'Unknown',
+          country: payload.country || 'Unknown',
+          timezone: payload.timezone || 'UTC',
+          primaryLanguage: payload.primaryLanguage || 'en',
         },
       });
 
