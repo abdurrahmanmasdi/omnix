@@ -58,6 +58,9 @@ model Organization {
   whatsappPhoneNumberId String? @unique
   whatsappAccessToken   String?
 
+  // External CRM Credentials
+  crmAccessToken        String?
+
 
   // Relationships
   conversations Conversation[]
@@ -206,6 +209,13 @@ enum Currency {
   EUR
   GBP
 }
+
+enum ExternalCrmType {
+  HUB_SPOT
+  ZOHO
+  NONE
+}
+
 model Lead {
   id                    String           @id @default(uuid()) @db.Uuid
   organizationId       String           @db.Uuid
@@ -229,6 +239,9 @@ model Lead {
   currency              Currency         @default(USD)
   expectedServiceDate DateTime?
   nextFollowUpAt     DateTime?
+  externalCrmType    ExternalCrmType  @default(NONE)
+  externalContactId  String?
+  externalDealId     String?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   deletedAt            DateTime?

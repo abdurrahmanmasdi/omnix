@@ -4,6 +4,13 @@ import { ToolAction } from './interfaces/agent.interface';
 import { LeadStatus, Priority, NotificationType } from '@prisma/client';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { EventsGateway } from '../events/events/events.gateway';
+import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
+
+/** Statuses that trigger an automatic CRM sync */
+const CRM_SYNC_STATUSES: LeadStatus[] = [
+  LeadStatus.QUALIFIED,
+  LeadStatus.READY_TO_BOOK,
+];
 
 @Injectable()
 export class ActionExecutorService {
@@ -13,6 +20,7 @@ export class ActionExecutorService {
     private readonly prisma: PrismaService,
     private readonly notificationEmitter: NotificationEmitterService,
     private readonly eventsGateway: EventsGateway,
+    private readonly crmIntegration: CrmIntegrationService,
   ) {}
 
   /**
@@ -123,6 +131,7 @@ export class ActionExecutorService {
     const updatedLead = await this.prisma.lead.update({
       where: { id: conversation.leadId },
       data: updateData,
+      include: { organization: true },
     });
 
     // Broadcast so the frontend pipeline/leads table reacts instantly
@@ -131,6 +140,40 @@ export class ActionExecutorService {
     this.logger.log(
       `✅ Lead ${conversation.leadId} updated [${Object.keys(updateData).join(', ')}] for Conv: ${conversationId}`,
     );
+
+    // ─── CRM SYNC TRIGGER ────────────────────────────────────
+    // If the status just changed to a sales-ready stage and the
+    // lead hasn't been synced yet, push it to the external CRM.
+    if (
+      updateData.status &&
+      CRM_SYNC_STATUSES.includes(updateData.status) &&
+      !updatedLead.externalContactId
+    ) {
+      try {
+        const { externalContactId, externalDealId } =
+          await this.crmIntegration.syncLeadToExternalCrm(
+            updatedLead,
+            updatedLead.externalCrmType,
+          );
+
+        if (externalContactId) {
+          await this.prisma.lead.update({
+            where: { id: updatedLead.id },
+            data: { externalContactId, externalDealId },
+          });
+
+          this.logger.log(
+            `🔗 Lead ${updatedLead.id} synced to external CRM → Contact: ${externalContactId}, Deal: ${externalDealId}`,
+          );
+        }
+      } catch (crmError: any) {
+        // CRM sync is non-blocking — log the error but don't fail the action
+        this.logger.error(
+          `CRM sync failed for Lead ${updatedLead.id}: ${crmError.message}`,
+          crmError.stack,
+        );
+      }
+    }
   }
 
   // ─── PAUSE_CONVERSATION ───────────────────────────────────

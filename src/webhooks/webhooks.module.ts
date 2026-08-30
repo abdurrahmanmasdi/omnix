@@ -11,11 +11,13 @@ import { EventsModule } from '../events/events.module';
 import { AiReplyProcessor } from './ai-reply.processor';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { ActionExecutorService } from './action-executor.service';
+import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 
 @Module({
   imports: [
     HttpModule,
     EventsModule,
+    CrmIntegrationModule,
     // Register the specific queue we will push messages to
     BullModule.registerQueue({
       name: 'whatsapp-messages',
