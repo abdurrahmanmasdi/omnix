@@ -186,39 +186,27 @@ async def update_patient_profile(
     gender: str = None,
     country: str = None,
     service_interested: str = None,
-    has_provided_image: bool = False
-) -> dict:
+) -> str:
     """
     Updates the patient's CRM profile with newly discovered demographic or preference info.
     Use this silently when the user reveals their name, location, or you deduce their gender.
+    Returns a virtual action string for NestJS to execute.
     """
     data = {}
-    state_updates = {}
     
     if first_name:
         data["firstName"] = first_name
-        state_updates["is_name_collected"] = True
-    if gender in ["MALE", "FEMALE", "Male", "Female", "male", "female"]:
+    if gender and gender.upper() in ["MALE", "FEMALE"]:
         data["gender"] = gender.upper()
     if country:
         data["country"] = country
-        
     if service_interested:
-        state_updates["is_service_identified"] = True
+        data["serviceInterested"] = service_interested
         
-    if has_provided_image:
-        state_updates["has_medical_evidence"] = True
-        
-    action_str = ""
     if data:
         print(f"🛠️ [VIRTUAL TOOL] Update Patient Profile: {data}")
-        action_str = f"TOOL_ACTION:UPDATE_LEAD:{json.dumps(data)}"
-    else:
-        action_str = "No valid CRM fields provided to update."
-        
-    return {
-        "action": action_str,
-        **state_updates
-    }
+        return f"TOOL_ACTION:UPDATE_LEAD:{json.dumps(data)}"
+    
+    return "No valid CRM fields provided to update."
 
 tools_list = [search_clinic_knowledge, fetch_social_proof, create_lead, escalate_to_human, update_patient_profile]

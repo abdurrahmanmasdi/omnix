@@ -20,7 +20,7 @@ message AgentRequest {
   string clinicName = 4;
   string agentTone = 5;
   string businessRulesJson = 6;
-  // We can pass conversation history here later
+  string imageBase64 = 7;
 }
 
 // What Python sends back to NestJS

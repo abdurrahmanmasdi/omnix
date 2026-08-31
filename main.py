@@ -1,6 +1,7 @@
 import os
 import asyncio
 import grpc
+import base64
 from fastapi import FastAPI
 from google import genai
 from contextlib import asynccontextmanager
@@ -40,6 +41,25 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         agent_tone = getattr(request, 'agentTone', getattr(request, 'agent_tone', 'Professional and empathetic'))
         business_rules = getattr(request, 'businessRulesJson', getattr(request, 'business_rules_json', '{}'))
 
+        # Extract optional image from gRPC request
+        image_base64 = getattr(request, 'imageBase64', getattr(request, 'image_base64', None))
+        if image_base64:
+            print(f"📸 [gRPC] Received Image Base64! Length: {len(image_base64)} characters.")
+            
+            # --- DEBUG: DUMP IMAGE TO DISK ---
+            if len(image_base64) > 1000:
+                try:
+                    print("💾 [DEBUG] Attempting to save Base64 to disk...")
+                    image_data = base64.b64decode(image_base64)
+                    with open("debug_received_image.jpg", "wb") as f:
+                        f.write(image_data)
+                    print("✅ [DEBUG] Image saved successfully as 'debug_received_image.jpg'")
+                except Exception as e:
+                    print(f"❌ [DEBUG] Failed to save image: {e}")
+            # ---------------------------------
+        else:
+            print("⚠️ [gRPC] NO IMAGE RECEIVED IN REQUEST!")
+
         print(f"\n📥 [gRPC] NestJS asked to reply to Conv: {conv_id}")
         print(f"💬 User said: {latest_msg}")
         
@@ -59,25 +79,32 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 print(f"⚠️ [gRPC] Conversation {conv_id} not found in DB!")
                 return agent_pb2.AgentReply(replyText="System error: Conversation not found.")
 
+            first_name = res.firstName if res.lead_id else "Guest"
+            # Deduce state flags from the DATABASE, not from gRPC (those fields don't exist in protobuf)
+            is_name_collected = bool(res.lead_id and res.firstName and str(res.firstName).strip().lower() != "guest")
+            has_medical_evidence = bool(res.lead_id and res.status in ["QUALIFIED", "READY_TO_BOOK", "HANDED_OFF", "WON"])
+
             # Default state if lead doesn't exist yet
             state_data = {
                 "organization_id": org_id,
                 "conversation_id": conv_id,
                 "lead_id": str(res.lead_id) if res.lead_id else None,
-                "first_name": res.firstName if res.lead_id else "Guest",
-                "last_name": res.lastName if res.lead_id else None,
-                "phone_number": res.externalContactId,
-                "gender": res.gender if res.lead_id else "UNKNOWN",
-                "country": res.country if res.lead_id else "Unknown",
-                "lead_status": res.status if res.lead_id else "NEW",
-                "lead_priority": res.priority if res.lead_id else "COLD",
-                "clinic_name": clinic_name,
-                "agent_tone": agent_tone,
-                "business_rules": business_rules,
+                "customer": {
+                    "name": f"{first_name} {res.lastName}" if getattr(res, 'lastName', None) else first_name,
+                    "phone": res.externalContactId,
+                    "country": res.country if res.lead_id else "Unknown",
+                    "service_interested": None,
+                    "is_medical_evidence_provided": has_medical_evidence
+                },
+                "current_intent": None,
+                "active_objection": None,
+                "visual_pixel_analysis": None,
+                "current_stage": res.status if res.lead_id else "NEW",
+                "pending_crm_actions": [],
                 "messages": []
             }
 
-            print(f"🔍 [State] Lead: {state_data['first_name']} | Status: {state_data['lead_status']} | ID: {state_data['lead_id']}")
+            print(f"🔍 [State] Lead: {state_data['customer']['name']} | Status: {state_data['current_stage']} | ID: {state_data['lead_id']}")
 
             # 2. Fetch the last 120 messages for short-term memory
             msg_query = text("""
@@ -96,9 +123,34 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                     state_data["messages"].append(AIMessage(content=msg.content))
             
             # 3. Add the brand new message from WhatsApp (Unless it's the debouncing signal)
-            if latest_msg and not latest_msg.startswith("[User finished typing"):
-                state_data["messages"].append(HumanMessage(content=latest_msg))
+            if latest_msg and latest_msg.startswith("[User finished typing"):
+                latest_msg = "" 
 
+
+            # بناء الرسالة إذا كان هناك نص أو صورة
+            if latest_msg or (image_base64 and len(image_base64) > 100):
+                if image_base64 and len(image_base64) > 100:
+                    # Ensure the prefix exists
+                    if not image_base64.startswith("data:image"):
+                        image_url = f"data:image/jpeg;base64,{image_base64}"
+                    else:
+                        image_url = image_base64
+                                             
+                    content = [
+                        {"type": "text", "text": latest_msg if latest_msg else " "},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]
+                else:
+                    content = latest_msg
+                                     
+                message = HumanMessage(content=content)
+                state_data["messages"].append(message)
+
+            
+            # Lead Creation Hook
+            if state_data["customer"]["name"] != "Guest" and not state_data["lead_id"]:
+                state_data["pending_crm_actions"].append(f'TOOL_ACTION:CREATE_LEAD:{{"firstName": "{first_name}", "phoneNumber": "{res.externalContactId}"}}')
+                
             # 4. 🚀 RUN THE LANGGRAPH AGENT
             # We pass the organization_id in the 'configurable' config so tools can access it 
             # without the LLM needing to manage it. This is the "Full Pattern" approach.
@@ -134,6 +186,19 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                             ))
                     except Exception as te:
                         print(f"⚠️ Error parsing virtual tool: {te}")
+                        
+            # Also extract from pending_crm_actions
+            for action_str in final_state.get("pending_crm_actions", []):
+                if "TOOL_ACTION:" in action_str:
+                    try:
+                        parts = action_str.split(":", 2)
+                        if len(parts) == 3:
+                            tool_actions.append(agent_pb2.ToolAction(
+                                type=parts[1],
+                                payload=parts[2]
+                            ))
+                    except Exception as te:
+                        print(f"⚠️ Error parsing virtual tool from state: {te}")
 
             # Note: Since the gRPC proto AgentReply usually takes a single string, 
             # we join them with a unique separator that the NestJS backend can split on.

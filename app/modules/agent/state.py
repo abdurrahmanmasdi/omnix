@@ -2,33 +2,32 @@ from typing import TypedDict, Annotated, Sequence
 from langchain_core.messages import BaseMessage
 import operator
 
-class AgentState(TypedDict):
-    # Chat History
+# 1. Customer Facts (الحقائق المجردة للعميل)
+class CustomerData(TypedDict, total=False):
+    name: str | None
+    phone: str | None
+    country: str | None
+    service_interested: str | None
+    is_medical_evidence_provided: bool
+
+# 2. The Global State (حالة المحادثة الكاملة)
+class ConversationState(TypedDict):
+    # Chat History (يتم تجميع الرسائل هنا)
     messages: Annotated[Sequence[BaseMessage], operator.add]
     
-    # CRM Data
+    # Context & IDs
     organization_id: str
     conversation_id: str
     lead_id: str | None
-    first_name: str
-    last_name: str | None
-    phone_number: str
-    gender: str
-    country: str
-    lead_status: str
-    lead_priority: str
     
-    # AI Routing Data (Added for V3)
-    user_intent: str
-    user_language: str
-    sender: str
+    # Customer Facts
+    customer: CustomerData
     
-    # Dynamic Configuration
-    clinic_name: str
-    agent_tone: str
-    business_rules: str
+    # Sales Intelligence (عقل المبيعات)
+    current_intent: str | None       # نية العميل الحالية (مثال: ask_price, book_appointment)
+    active_objection: str | None     # الاعتراض الحالي (مثال: too_expensive, fear_of_pain)
+    visual_pixel_analysis: str | None
     
-    # Deterministic Workflow State
-    is_name_collected: bool
-    is_service_identified: bool
-    has_medical_evidence: bool
+    # Workflow Execution (التوجيه)
+    current_stage: str | None        # أين نحن في مسار المبيعات؟ (مثال: QUALIFYING, PITCHING)
+    pending_crm_actions: list[str]   # الإجراءات التي سيتم إرسالها لـ NestJS
