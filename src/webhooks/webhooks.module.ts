@@ -12,6 +12,7 @@ import { AiReplyProcessor } from './ai-reply.processor';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
+import { WhatsappMediaService } from './whatsapp-media.service';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration
     WebhooksProcessor,
     AiReplyProcessor,
     WhatsappService,
+    WhatsappMediaService,
     ActionExecutorService,
     NotificationEmitterService,
   ],

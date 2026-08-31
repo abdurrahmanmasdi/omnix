@@ -12,6 +12,7 @@ import type { SalesAgentService } from './interfaces/agent.interface';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { NotificationType } from '@prisma/client';
+import { WhatsappMediaService } from './whatsapp-media.service';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
@@ -22,6 +23,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly notificationEmitter: NotificationEmitterService,
     private readonly whatsappService: WhatsappService,
+    private readonly whatsappMediaService: WhatsappMediaService,
     private readonly eventsGateway: EventsGateway,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
@@ -68,10 +70,20 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
             for (const message of value.messages) {
               const customerPhone = message.from; // The user's WhatsApp number
               const metaMessageId = message.id;
-              const messageContent =
-                message.type === 'text' && message.text
-                  ? message.text.body
-                  : '[Non-text message]';
+              let messageContent = '[Non-text message]';
+              let imageBase64: string | null = null;
+
+              if (message.type === 'text' && message.text) {
+                messageContent = message.text.body;
+              } else if (message.type === 'image' && message.image?.id) {
+                messageContent = '[Image message]';
+                if (organization.whatsappAccessToken) {
+                  imageBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
+                    message.image.id,
+                    organization.whatsappAccessToken
+                  );
+                }
+              }
 
               // 1. Find or create the active conversation for this customer and organization
               let conversation = await this.prisma.conversation.findFirst({
@@ -275,6 +287,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                     conversationId: conversation.id,
                     customerPhone: customerPhone,
                     latestMetaMessageId: metaMessageId,
+                    imageBase64: imageBase64 || undefined,
                   },
                   {
                     jobId: jobId, // This ensures we can find and delete it later

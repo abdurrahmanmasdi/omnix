@@ -7,6 +7,7 @@ export interface AgentRequest {
   clinicName?: string;
   agentTone?: string;
   businessRulesJson?: string;
+  imageBase64?: string;
 }
 
 export interface ToolAction {

@@ -46,6 +46,11 @@ export interface WhatsAppMessage {
   text?: {
     body: string;
   };
+  image?: {
+    id: string;
+    mime_type?: string;
+    sha256?: string;
+  };
   // Add other types as you expand (e.g., audio: { id: string }, etc.)
 }
 
