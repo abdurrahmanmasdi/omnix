@@ -3,6 +3,8 @@ import json
 import asyncio
 import grpc
 import base64
+import io
+from openai import AsyncOpenAI
 from fastapi import FastAPI
 from google import genai
 from contextlib import asynccontextmanager
@@ -25,6 +27,7 @@ import tools_pb2_grpc
 # Make sure to set your OPENAI API key in your environment variables!
 API_KEY = settings.OPENAI_API_KEY
 client = genai.Client(api_key=API_KEY)
+openai_client = AsyncOpenAI(api_key=API_KEY)
 
 
 # ---------------------------------------------------------
@@ -60,6 +63,27 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             # ---------------------------------
         else:
             print("⚠️ [gRPC] NO IMAGE RECEIVED IN REQUEST!")
+
+        # Extract optional audio from gRPC request
+        audio_base64 = getattr(request, 'audioBase64', getattr(request, 'audio_base64', None))
+        if audio_base64:
+            print(f"🎙️ [gRPC] Received Audio Base64! Length: {len(audio_base64)} characters.")
+            try:
+                audio_bytes = base64.b64decode(audio_base64)
+                audio_file = io.BytesIO(audio_bytes)
+                audio_file.name = "audio.ogg"
+                
+                transcription = await openai_client.audio.transcriptions.create(
+                    model="gpt-4o-mini-transcribe", 
+                    file=audio_file
+                )
+                
+                transcribed_text = transcription.text
+                print(f"✅ [WHISPER] Transcription success: {transcribed_text}")
+                latest_msg = f"🎙️ [Voice Note Transcription]: {transcribed_text}"
+            except Exception as e:
+                print(f"❌ [WHISPER ERROR]: {e}")
+                latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
 
         print(f"\n📥 [gRPC] NestJS asked to reply to Conv: {conv_id}")
         print(f"💬 User said: {latest_msg}")

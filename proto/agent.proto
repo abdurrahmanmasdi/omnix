@@ -21,6 +21,7 @@ message AgentRequest {
   string agentTone = 5;
   string businessRulesJson = 6;
   string imageBase64 = 7;
+  string audioBase64 = 8;
 }
 
 // What Python sends back to NestJS
