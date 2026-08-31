@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 import grpc
 import base64
@@ -149,7 +150,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
             # Lead Creation Hook
             if state_data["customer"]["name"] != "Guest" and not state_data["lead_id"]:
-                state_data["pending_crm_actions"].append(f'TOOL_ACTION:CREATE_LEAD:{{"firstName": "{first_name}", "phoneNumber": "{res.externalContactId}"}}')
+                create_lead_payload = json.dumps({
+                    "firstName": first_name, 
+                    "phoneNumber": res.externalContactId
+                })
+                state_data["pending_crm_actions"].append(f'TOOL_ACTION:CREATE_LEAD:{create_lead_payload}')
                 
             # 4. 🚀 RUN THE LANGGRAPH AGENT
             # We pass the organization_id in the 'configurable' config so tools can access it 

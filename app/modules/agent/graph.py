@@ -1,4 +1,5 @@
 import os
+import json
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_openai import ChatOpenAI
@@ -20,7 +21,7 @@ class ExtractionOutput(BaseModel):
     name: str | None = Field(description="Extract if the user mentions their name.")
     service_interested: str | None = Field(description="e.g., dental implants, veneers.")
     is_medical_image: bool = Field(description="True ONLY if the provided vision system description confirms it's a dental/medical image. False otherwise.")
-    customer_intent: str | None = Field(description="Classify the main goal: 'inquiry', 'pricing', 'booking', or 'general'.")
+    customer_intent: str | None = Field(description="Classify the main goal: 'inquiry', 'pricing', 'booking', 'general', or 'out_of_domain' if the user asks about something completely unrelated to dental/medical services.")
     active_objection: str | None = Field(description="ONLY classify as an objection if the user explicitly complains about high prices ('too expensive'), expresses intense fear, or distrusts the clinic. Explaining dental problems (like a missing tooth/empty space) or asking for prices are NOT objections. Default to 'none'.")
 
 # 3. Build the Extraction Node
@@ -110,13 +111,34 @@ Follow the steps in the schema exactly."""
         
     if vision_text:
         updates["visual_pixel_analysis"] = vision_text
+
+    # 🚀 Lead Qualification Sync (State Amnesia Fix)
+    is_fully_qualified = bool(new_customer_data.get("name")) and bool(new_customer_data.get("is_medical_evidence_provided"))
+    is_currently_new = state.get("current_stage") == "NEW"
+
+    if is_fully_qualified and is_currently_new:
+        # Pull existing actions to prevent overwriting
+        current_actions = state.get("pending_crm_actions", [])
+        new_actions = list(current_actions)
+        
+        # Safely dump JSON payload for the NestJS parser
+        payload = json.dumps({"status": "QUALIFIED"})
+        new_actions.append(f'TOOL_ACTION:UPDATE_LEAD:{payload}')
+        
+        # Update the node outputs
+        updates["pending_crm_actions"] = new_actions
+        updates["current_stage"] = "QUALIFYING"
         
     return updates
 
-# 4. The Deterministic Sales Router
 def sales_router(state: ConversationState) -> str:
+    current_intent = state.get("current_intent")
     active_objection = state.get("active_objection")
     
+    # Priority 0: Out of Domain Guardrail
+    if current_intent == "out_of_domain":
+        return "out_of_domain_node"
+        
     # Priority 1: Objections
     if active_objection and active_objection.lower() != "none":
         return "objection_handler_node"
@@ -127,7 +149,6 @@ def sales_router(state: ConversationState) -> str:
         return "qualification_node"
         
     # Priority 3: Intent-based Routing
-    current_intent = state.get("current_intent")
     if current_intent == "booking":
         return "closing_node"
     if current_intent == "pricing":
@@ -138,7 +159,37 @@ def sales_router(state: ConversationState) -> str:
 
 # 5. Specialized Sales Nodes (Placeholders)
 async def objection_handler_node(state: ConversationState):
-    return {"messages": [AIMessage(content="[DUMMY: Handling Objection]")], "current_stage": "OBJECTION_HANDLING"}
+    from langchain_core.messages import ToolMessage
+    from app.modules.agent.tools import fetch_social_proof
+    
+    prompt = """Act as an empathetic medical sales consultant. The user has an objection (fear, price, trust). 
+    Use the fetch_social_proof tool to find a relevant patient success story. Acknowledge their concern with deep empathy, present the social proof, and end with a gentle question to move forward. Max 3-4 sentences."""
+    
+    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    
+    # 1. Initial Call with tool-enabled LLM
+    response = await smart_writer_llm.ainvoke(messages)
+    
+    new_messages = [response]
+    
+    # 2. Execute RAG if requested
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        messages.append(response)
+        for tool_call in response.tool_calls:
+            if tool_call["name"] == "fetch_social_proof":
+                tool_result = await fetch_social_proof.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"]}}
+                )
+                tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+                messages.append(tool_msg)
+                new_messages.append(tool_msg)
+                
+        # 3. Final Call: MUST use flagship_llm (unbound) to FORCE text output and prevent infinite tool loops
+        final_response = await flagship_llm.ainvoke(messages)
+        new_messages.append(final_response)
+        
+    return {"messages": new_messages, "current_stage": "OBJECTION_HANDLING"}
 
 async def qualification_node(state: ConversationState):
     customer = state.get("customer", {})
@@ -206,10 +257,52 @@ async def value_pitch_node(state: ConversationState):
     return {"messages": new_messages, "current_stage": "PITCHING"}
 
 async def closing_node(state: ConversationState):
-    return {"messages": [AIMessage(content="[DUMMY: Closing the Deal / Booking]")], "current_stage": "CLOSING"}
+    prompt = """Act as an elite medical closer. The user is ready to book or showing high intent. 
+    Create a sense of urgency (e.g., 'Dr. [Name] has only 2 slots left this week' or 'We have a special discount ending tomorrow'). 
+    Ask them explicitly for their preferred day and time for the consultation. 
+    Keep it under 3 sentences, conversational (WhatsApp style), and extremely warm."""
+    
+    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    response = await flagship_llm.ainvoke(messages)
+    
+    return {"messages": [response], "current_stage": "CLOSING"}
+
+async def out_of_domain_node(state: ConversationState):
+    prompt = """Act as a professional medical sales consultant. The user just asked a question that is completely outside the scope of our dental/medical clinic (e.g., tech support, general knowledge, pets, etc).
+    Politely and warmly apologize, state that you can only assist with clinic-related inquiries or bookings, and ask if they need help with their dental care."""
+    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    response = await flagship_llm.ainvoke(messages)
+    return {"messages": [response], "current_stage": "OUT_OF_DOMAIN"}
 
 async def general_qa_node(state: ConversationState):
-    return {"messages": [AIMessage(content="[DUMMY: General QA]")], "current_stage": "NURTURING"}
+    from langchain_core.messages import ToolMessage
+    from app.modules.agent.tools import search_clinic_knowledge
+    
+    prompt = """Act as a helpful and professional medical receptionist. The user is asking general questions about the clinic, doctors, location, or procedures.
+    Use the search_clinic_knowledge tool to find accurate information. NEVER invent details. 
+    Keep your response friendly, concise, and conversational (WhatsApp style). End by asking if they have any other questions or if they'd like to book a consultation."""
+    
+    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    
+    response = await smart_writer_llm.ainvoke(messages)
+    new_messages = [response]
+    
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        messages.append(response)
+        for tool_call in response.tool_calls:
+            if tool_call["name"] == "search_clinic_knowledge":
+                tool_result = await search_clinic_knowledge.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"]}}
+                )
+                tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+                messages.append(tool_msg)
+                new_messages.append(tool_msg)
+                
+        final_response = await flagship_llm.ainvoke(messages)
+        new_messages.append(final_response)
+        
+    return {"messages": new_messages, "current_stage": "NURTURING"}
 
 # 6. Build the Graph
 builder = StateGraph(ConversationState)
@@ -221,6 +314,7 @@ builder.add_node("qualification_node", qualification_node)
 builder.add_node("value_pitch_node", value_pitch_node)
 builder.add_node("closing_node", closing_node)
 builder.add_node("general_qa_node", general_qa_node)
+builder.add_node("out_of_domain_node", out_of_domain_node)
 
 # Flow Logic
 builder.add_edge(START, "extract_and_classify")
@@ -232,6 +326,7 @@ builder.add_edge("qualification_node", END)
 builder.add_edge("value_pitch_node", END)
 builder.add_edge("closing_node", END)
 builder.add_edge("general_qa_node", END)
+builder.add_edge("out_of_domain_node", END)
 
 # Compile
 agent_app = builder.compile()
