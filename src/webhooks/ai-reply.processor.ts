@@ -37,6 +37,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       customerPhone: string;
       latestMetaMessageId?: string;
       imageBase64?: string;
+      audioBase64?: string;
     }>,
   ): Promise<any> {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
@@ -46,6 +47,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         customerPhone,
         latestMetaMessageId,
         imageBase64,
+        audioBase64,
       } = job.data;
 
       this.logger.log(
@@ -105,6 +107,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             agentTone: persona?.tone || 'Professional and empathetic',
             businessRulesJson: businessRulesJson,
             imageBase64: imageBase64,
+            audioBase64: audioBase64,
           }),
         );
 

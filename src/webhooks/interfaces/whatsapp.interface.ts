@@ -39,6 +39,7 @@ export interface WhatsAppMessage {
     | 'text'
     | 'image'
     | 'audio'
+    | 'voice'
     | 'document'
     | 'interactive'
     | 'button'
@@ -51,7 +52,15 @@ export interface WhatsAppMessage {
     mime_type?: string;
     sha256?: string;
   };
-  // Add other types as you expand (e.g., audio: { id: string }, etc.)
+  audio?: {
+    id: string;
+    mime_type?: string;
+  };
+  voice?: {
+    id: string;
+    mime_type?: string;
+  };
+  // Add other types as you expand (e.g., document: { id: string }, etc.)
 }
 
 export interface WhatsAppStatus {

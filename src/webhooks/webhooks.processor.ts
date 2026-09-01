@@ -72,6 +72,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               const metaMessageId = message.id;
               let messageContent = '[Non-text message]';
               let imageBase64: string | null = null;
+              let audioBase64: string | null = null;
 
               if (message.type === 'text' && message.text) {
                 messageContent = message.text.body;
@@ -80,6 +81,15 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 if (organization.whatsappAccessToken) {
                   imageBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
                     message.image.id,
+                    organization.whatsappAccessToken
+                  );
+                }
+              } else if ((message.type === 'audio' && message.audio?.id) || (message.type === 'voice' && message.voice?.id)) {
+                const audioId = message.audio?.id || message.voice?.id;
+                messageContent = '[Audio message]';
+                if (organization.whatsappAccessToken && audioId) {
+                  audioBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
+                    audioId,
                     organization.whatsappAccessToken
                   );
                 }
@@ -288,6 +298,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                     customerPhone: customerPhone,
                     latestMetaMessageId: metaMessageId,
                     imageBase64: imageBase64 || undefined,
+                    audioBase64: audioBase64 || undefined,
                   },
                   {
                     jobId: jobId, // This ensures we can find and delete it later

@@ -8,6 +8,7 @@ export interface AgentRequest {
   agentTone?: string;
   businessRulesJson?: string;
   imageBase64?: string;
+  audioBase64?: string;
 }
 
 export interface ToolAction {
