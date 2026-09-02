@@ -93,6 +93,10 @@ export class ActionExecutorService {
         await this.handleNotifyAgent(organizationId, payload);
         break;
 
+      case 'UPDATE_SUMMARY':
+        await this.handleUpdateSummary(conversationId, payload);
+        break;
+
       default:
         this.logger.warn(
           `Unknown action type received: "${action.type}". Dropping silently.`,
@@ -314,6 +318,37 @@ export class ActionExecutorService {
   }
 
   // ─── HELPERS ──────────────────────────────────────────────
+
+  private async handleUpdateSummary(conversationId: string, payload: any) {
+    const summary = payload.summary;
+    if (!summary) {
+      this.logger.warn(
+        `UPDATE_SUMMARY action missing 'summary' string. Payload: ${JSON.stringify(
+          payload,
+        )}`,
+      );
+      return;
+    }
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { leadId: true },
+    });
+
+    if (conversation?.leadId) {
+      await this.prisma.lead.update({
+        where: { id: conversation.leadId },
+        data: { summary },
+      });
+      this.logger.log(
+        `[ActionExecutor] Updated Lead summary for Conv: ${conversationId}`,
+      );
+    } else {
+      this.logger.warn(
+        `[ActionExecutor] Cannot update summary. No Lead linked to Conv: ${conversationId}`,
+      );
+    }
+  }
 
   /**
    * Safely extracts known lead fields from an untyped payload.

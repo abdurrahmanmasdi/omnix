@@ -9,6 +9,8 @@ export interface AgentRequest {
   businessRulesJson?: string;
   imageBase64?: string;
   audioBase64?: string;
+  totalMessageCount?: number;
+  leadSummary?: string;
 }
 
 export interface ToolAction {

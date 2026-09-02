@@ -233,6 +233,7 @@ model Lead {
   primaryLanguage      String
   preferredLanguage    String?
   socialLinks          Json?
+  summary               String?          @db.Text
   status                LeadStatus       @default(NEW)
   priority              Priority         @default(WARM)
   estimatedValue       Decimal?

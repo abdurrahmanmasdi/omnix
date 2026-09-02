@@ -64,6 +64,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       // Ensure the conversation wasn't manually paused by a human during the window
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
+        include: { lead: true },
       });
 
       if (conversation?.aiPaused) {
@@ -72,6 +73,16 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         );
         return;
       }
+
+      // 🚀 NEW: Get total message count for python summarization
+      const totalMessageCount = await this.prisma.message.count({
+        where: { conversationId: conversationId },
+      });
+
+      // 🚀 NEW: Extract existing summary from the lead
+      // We use @ts-ignore or explicit typing here if TS complains before prisma generate,
+      // but assuming schema is generated this will just work.
+      const leadSummary = (conversation as any)?.lead?.summary || '';
 
       try {
         // 🚀 NEW: Simulate Typing Indicator on WhatsApp
@@ -108,6 +119,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             businessRulesJson: businessRulesJson,
             imageBase64: imageBase64,
             audioBase64: audioBase64,
+            totalMessageCount: totalMessageCount,
+            leadSummary: leadSummary,
           }),
         );
 
