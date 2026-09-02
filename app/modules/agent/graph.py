@@ -6,14 +6,14 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from app.modules.agent.state import ConversationState
 from app.core.config import settings
-from app.modules.agent.tools import search_clinic_knowledge
+from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof
 
 
 # 1. Initialize LLMs
-extractor_llm = ChatOpenAI(model="gpt-5.4-mini",api_key=settings.OPENAI_API_KEY, temperature=0.1)
-flagship_llm = ChatOpenAI(model="gpt-5.4-nano", api_key=settings.OPENAI_API_KEY, temperature=0.3)
+extractor_llm = ChatOpenAI(model="gpt-5.6-luna", api_key=settings.OPENAI_API_KEY, temperature=0.1, model_kwargs={"reasoning_effort": "none"})
+flagship_llm = ChatOpenAI(model="gpt-5.6-terra", api_key=settings.OPENAI_API_KEY, temperature=0.3, model_kwargs={"reasoning_effort": "none"})
 
-tool_belt = [search_clinic_knowledge]
+tool_belt = [search_clinic_knowledge, fetch_social_proof]
 smart_writer_llm = flagship_llm.bind_tools(tool_belt)
 
 # 2. Define Structured Output Schema
@@ -181,9 +181,17 @@ async def objection_handler_node(state: ConversationState):
                     tool_call, 
                     config={"configurable": {"organization_id": state["organization_id"]}}
                 )
-                tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-                messages.append(tool_msg)
-                new_messages.append(tool_msg)
+            elif tool_call["name"] == "search_clinic_knowledge":
+                tool_result = await search_clinic_knowledge.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"]}}
+                )
+            else:
+                tool_result = "Error: Tool not found."
+                
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+            messages.append(tool_msg)
+            new_messages.append(tool_msg)
                 
         # 3. Final Call: MUST use flagship_llm (unbound) to FORCE text output and prevent infinite tool loops
         final_response = await flagship_llm.ainvoke(messages)
@@ -246,9 +254,17 @@ async def value_pitch_node(state: ConversationState):
                     tool_call, 
                     config={"configurable": {"organization_id": state["organization_id"]}}
                 )
-                tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-                messages.append(tool_msg)
-                new_messages.append(tool_msg)
+            elif tool_call["name"] == "fetch_social_proof":
+                tool_result = await fetch_social_proof.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"]}}
+                )
+            else:
+                tool_result = "Error: Tool not found."
+                
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+            messages.append(tool_msg)
+            new_messages.append(tool_msg)
         
         # 3. Final Call: MUST use flagship_llm (unbound) to FORCE text output and prevent infinite tool loops
         final_response = await flagship_llm.ainvoke(messages)
@@ -304,6 +320,25 @@ async def general_qa_node(state: ConversationState):
         
     return {"messages": new_messages, "current_stage": "NURTURING"}
 
+def after_sales_router(state: ConversationState) -> str:
+    if state.get("needs_summarization"):
+        return "summarizer_node"
+    return END
+
+async def summarizer_node(state: ConversationState):
+    prompt = "Summarize the key medical requirements, objections, and user traits from this conversation history. Keep it concise."
+    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    response = await extractor_llm.ainvoke(messages)
+    
+    new_summary = response.content
+    action_payload = json.dumps({"summary": new_summary})
+    
+    current_actions = state.get("pending_crm_actions", [])
+    new_actions = list(current_actions)
+    new_actions.append(f"TOOL_ACTION:UPDATE_SUMMARY:{action_payload}")
+    
+    return {"pending_crm_actions": new_actions}
+
 # 6. Build the Graph
 builder = StateGraph(ConversationState)
 
@@ -315,18 +350,17 @@ builder.add_node("value_pitch_node", value_pitch_node)
 builder.add_node("closing_node", closing_node)
 builder.add_node("general_qa_node", general_qa_node)
 builder.add_node("out_of_domain_node", out_of_domain_node)
+builder.add_node("summarizer_node", summarizer_node)
 
 # Flow Logic
 builder.add_edge(START, "extract_and_classify")
 builder.add_conditional_edges("extract_and_classify", sales_router)
 
-# All sales nodes terminal for this turn
-builder.add_edge("objection_handler_node", END)
-builder.add_edge("qualification_node", END)
-builder.add_edge("value_pitch_node", END)
-builder.add_edge("closing_node", END)
-builder.add_edge("general_qa_node", END)
-builder.add_edge("out_of_domain_node", END)
+# All sales nodes conditionally route to summarizer if needed
+for node in ["objection_handler_node", "qualification_node", "value_pitch_node", "closing_node", "general_qa_node", "out_of_domain_node"]:
+    builder.add_conditional_edges(node, after_sales_router)
+
+builder.add_edge("summarizer_node", END)
 
 # Compile
 agent_app = builder.compile()

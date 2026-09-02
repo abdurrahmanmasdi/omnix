@@ -22,6 +22,8 @@ message AgentRequest {
   string businessRulesJson = 6;
   string imageBase64 = 7;
   string audioBase64 = 8;
+  int32 totalMessageCount = 9;
+  string leadSummary = 10;
 }
 
 // What Python sends back to NestJS

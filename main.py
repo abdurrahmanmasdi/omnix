@@ -12,7 +12,7 @@ from app.core.database import SessionLocal
 from app.modules.rag.document_processor import DocumentService
 from app.modules.agent.graph import agent_app
 from sqlalchemy import text
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.core.config import settings
 from app.modules.rag.experience_processor import ExperienceProcessor
 
@@ -44,6 +44,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         clinic_name = getattr(request, 'clinicName', getattr(request, 'clinic_name', 'our clinic'))
         agent_tone = getattr(request, 'agentTone', getattr(request, 'agent_tone', 'Professional and empathetic'))
         business_rules = getattr(request, 'businessRulesJson', getattr(request, 'business_rules_json', '{}'))
+        total_count = getattr(request, 'totalMessageCount', getattr(request, 'total_message_count', 0))
+        lead_summary = getattr(request, 'leadSummary', getattr(request, 'lead_summary', ''))
+        needs_summarization = total_count > 0 and (total_count % 10 == 0)
 
         # Extract optional image from gRPC request
         image_base64 = getattr(request, 'imageBase64', getattr(request, 'image_base64', None))
@@ -124,12 +127,17 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 "current_intent": None,
                 "active_objection": None,
                 "visual_pixel_analysis": None,
+                "lead_summary": lead_summary if lead_summary else None,
+                "needs_summarization": needs_summarization,
                 "current_stage": res.status if res.lead_id else "NEW",
                 "pending_crm_actions": [],
                 "messages": []
             }
 
             print(f"🔍 [State] Lead: {state_data['customer']['name']} | Status: {state_data['current_stage']} | ID: {state_data['lead_id']}")
+
+            if lead_summary:
+                state_data["messages"].append(SystemMessage(content=f"Previous Conversation Summary:\n{lead_summary}"))
 
             # 2. Fetch the last 120 messages for short-term memory
             msg_query = text("""

@@ -27,6 +27,8 @@ class ConversationState(TypedDict):
     current_intent: str | None       # نية العميل الحالية (مثال: ask_price, book_appointment)
     active_objection: str | None     # الاعتراض الحالي (مثال: too_expensive, fear_of_pain)
     visual_pixel_analysis: str | None
+    lead_summary: str | None
+    needs_summarization: bool
     
     # Workflow Execution (التوجيه)
     current_stage: str | None        # أين نحن في مسار المبيعات؟ (مثال: QUALIFYING, PITCHING)
