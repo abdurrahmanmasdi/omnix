@@ -25,6 +25,7 @@ import type {
   CreateLeadDto,
   LeadsControllerFindAllParams,
   UpdateLeadDto,
+  UpdateLeadStageDto,
 } from "../../model";
 
 import { customFetch } from "../../axios-client";
@@ -627,6 +628,96 @@ export const useLeadsControllerRemove = <
   TContext
 > => {
   const mutationOptions = getLeadsControllerRemoveMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary Update the pipeline stage and optionally the status of a lead
+ */
+export const leadsControllerUpdateStage = (
+  id: string,
+  updateLeadStageDto: UpdateLeadStageDto,
+  options?: SecondParameter<typeof customFetch>,
+) => {
+  return customFetch<void>(
+    {
+      url: `/leads/${id}/stage`,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      data: updateLeadStageDto,
+    },
+    options,
+  );
+};
+
+export const getLeadsControllerUpdateStageMutationOptions = <
+  TError = void | void | void | void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof leadsControllerUpdateStage>>,
+    TError,
+    { id: string; data: UpdateLeadStageDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof leadsControllerUpdateStage>>,
+  TError,
+  { id: string; data: UpdateLeadStageDto },
+  TContext
+> => {
+  const mutationKey = ["leadsControllerUpdateStage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof leadsControllerUpdateStage>>,
+    { id: string; data: UpdateLeadStageDto }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return leadsControllerUpdateStage(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LeadsControllerUpdateStageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof leadsControllerUpdateStage>>
+>;
+export type LeadsControllerUpdateStageMutationBody = UpdateLeadStageDto;
+export type LeadsControllerUpdateStageMutationError = void | void | void | void;
+
+/**
+ * @summary Update the pipeline stage and optionally the status of a lead
+ */
+export const useLeadsControllerUpdateStage = <
+  TError = void | void | void | void,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof leadsControllerUpdateStage>>,
+      TError,
+      { id: string; data: UpdateLeadStageDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof leadsControllerUpdateStage>>,
+  TError,
+  { id: string; data: UpdateLeadStageDto },
+  TContext
+> => {
+  const mutationOptions = getLeadsControllerUpdateStageMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

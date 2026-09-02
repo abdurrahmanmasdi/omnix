@@ -32,12 +32,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: <LayoutDashboard className="mr-2.5 h-4 w-4" />,
     matchPath: '/dashboard',
   },
-  // {
-  //   href: '/dashboard/leads',
-  //   label: 'Leads',
-  //   icon: <Users className="mr-2.5 h-4 w-4" />,
-  //   matchPath: '/leads',
-  // },
+  {
+    href: '/dashboard/leads',
+    label: 'Leads',
+    icon: <Users className="mr-2.5 h-4 w-4" />,
+    matchPath: '/leads',
+  },
   {
     href: '/dashboard/conversations',
     label: 'Conversations',
@@ -56,8 +56,8 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Settings className="mr-2.5 h-4 w-4" />,
     matchPath: '/settings',
     children: [
-      // { href: '/dashboard/settings/lead-sources', label: 'Lead Sources', icon: <Target className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/lead-sources' },
-      // { href: '/dashboard/settings/pipeline-stages', label: 'Pipeline Stages', icon: <Layers className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/pipeline-stages' },
+      { href: '/dashboard/settings/lead-sources', label: 'Lead Sources', icon: <Target className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/lead-sources' },
+      { href: '/dashboard/settings/pipeline-stages', label: 'Pipeline Stages', icon: <Layers className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/pipeline-stages' },
       { href: '/dashboard/settings/experiences', label: 'Experiences', icon: <Briefcase className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/experiences' },
       {
         href: '/dashboard/settings/documents',
