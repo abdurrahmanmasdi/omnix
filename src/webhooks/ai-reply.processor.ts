@@ -61,6 +61,15 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
       if (!organization) return;
 
+      // 🚀 NEW: Get active WhatsApp channel
+      const channel = await this.prisma.channel.findFirst({
+        where: {
+          organizationId,
+          provider: 'WHATSAPP_CLOUD_API',
+          status: 'ACTIVE',
+        },
+      });
+
       // Ensure the conversation wasn't manually paused by a human during the window
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
@@ -88,13 +97,13 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         // 🚀 NEW: Simulate Typing Indicator on WhatsApp
         if (
           latestMetaMessageId &&
-          organization.whatsappAccessToken &&
-          organization.whatsappPhoneNumberId
+          channel?.accessToken &&
+          channel?.providerAccountId
         ) {
           try {
             await this.whatsappService.sendTypingIndicator(
-              organization.whatsappAccessToken,
-              organization.whatsappPhoneNumberId,
+              channel.accessToken,
+              channel.providerAccountId,
               latestMetaMessageId,
             );
           } catch (e) {
@@ -147,8 +156,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           // If there's media, we send the image first
           const mediaResponse = await this.whatsappService.sendImageMessage(
             customerPhone,
-            organization.whatsappAccessToken!,
-            organization.whatsappPhoneNumberId!,
+            channel!.accessToken,
+            channel!.providerAccountId,
             mediaUrl,
             replyText || undefined, // Use replyText as caption if it's short/not split
           );
@@ -166,8 +175,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             // Send to Meta
             const metaResponse = await this.whatsappService.sendTextMessage(
               customerPhone,
-              organization.whatsappAccessToken!,
-              organization.whatsappPhoneNumberId!,
+              channel!.accessToken,
+              channel!.providerAccountId,
               message,
             );
 

@@ -77,6 +77,25 @@ export class WhatsappService {
     return this.postToMeta(phoneNumberId, accessToken, payload);
   }
 
+  async verifyCredentials(
+    accessToken: string,
+    phoneNumberId: string,
+  ): Promise<boolean> {
+    const url = `${this.apiUrl}/${phoneNumberId}`;
+    try {
+      await firstValueFrom(
+        this.httpService.get(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }),
+      );
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   private async postToMeta(
     phoneNumberId: string,
     accessToken: string,

@@ -84,10 +84,16 @@ export class ConversationsService {
 
     const { organization, lead } = conversation;
 
-    if (
-      !organization.whatsappPhoneNumberId ||
-      !organization.whatsappAccessToken
-    ) {
+    // 🚀 NEW: Get active WhatsApp channel
+    const channel = await this.prisma.channel.findFirst({
+      where: {
+        organizationId: organizationId,
+        provider: 'WHATSAPP_CLOUD_API',
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!channel) {
       throw new BadRequestException(
         'Organization WhatsApp credentials missing',
       );
@@ -96,8 +102,8 @@ export class ConversationsService {
     // 2. Send the message to Meta
     const metaResponse = await this.whatsappService.sendTextMessage(
       lead?.phoneNumber || '', // Assuming the lead table holds the phone number!
-      organization.whatsappAccessToken,
-      organization.whatsappPhoneNumberId,
+      channel.accessToken,
+      channel.providerAccountId,
       content,
     );
 

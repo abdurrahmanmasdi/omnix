@@ -55,8 +55,6 @@ model Organization {
 
   // Meta / WhatsApp API Credentials
   metaAccountId String?  @unique
-  whatsappPhoneNumberId String? @unique
-  whatsappAccessToken   String?
 
   // External CRM Credentials
   crmAccessToken        String?
@@ -74,7 +72,7 @@ model Organization {
   documentations       OrganizationDocumentation[]
   experiences          OrganizationExperience[]
   notifications       Notification[]
-
+  channels            Channel[]
 
   @@map("organizations")
 }
@@ -455,4 +453,34 @@ model AiPersona {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("ai_personas")
+}
+// ------------------------------------------------------
+// Channels (Omnichannel Architecture)
+// ------------------------------------------------------
+
+enum ChannelProvider {
+  WHATSAPP_CLOUD_API
+}
+
+enum ChannelStatus {
+  ACTIVE
+  ERROR
+  DISCONNECTED
+}
+
+model Channel {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @db.Uuid
+  provider          ChannelProvider
+  providerAccountId String
+  accessToken       String
+  status            ChannelStatus   @default(ACTIVE)
+  metadata          Json?           // Additional provider-specific configurations
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("channels")
 }

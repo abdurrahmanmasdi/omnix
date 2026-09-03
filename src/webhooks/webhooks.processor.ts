@@ -54,10 +54,18 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
             // If there are no messages (e.g., it's just a status update like "delivered" or "read"), skip for now.
             if (!value.messages || value.messages.length === 0) continue;
 
-            // Find which organization this WhatsApp account belongs to
-            const organization = await this.prisma.organization.findUnique({
-              where: { whatsappPhoneNumberId: receivingPhoneNumberId },
+            // Find the channel and its organization
+            const channel = await this.prisma.channel.findUnique({
+              where: {
+                provider_providerAccountId: {
+                  provider: 'WHATSAPP_CLOUD_API',
+                  providerAccountId: receivingPhoneNumberId,
+                },
+              },
+              include: { organization: true },
             });
+
+            const organization = channel?.organization;
 
             if (!organization) {
               this.logger.warn(
@@ -78,19 +86,19 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 messageContent = message.text.body;
               } else if (message.type === 'image' && message.image?.id) {
                 messageContent = '[Image message]';
-                if (organization.whatsappAccessToken) {
+                if (channel.accessToken) {
                   imageBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
                     message.image.id,
-                    organization.whatsappAccessToken
+                    channel.accessToken
                   );
                 }
               } else if ((message.type === 'audio' && message.audio?.id) || (message.type === 'voice' && message.voice?.id)) {
                 const audioId = message.audio?.id || message.voice?.id;
                 messageContent = '[Audio message]';
-                if (organization.whatsappAccessToken && audioId) {
+                if (channel.accessToken && audioId) {
                   audioBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
                     audioId,
-                    organization.whatsappAccessToken
+                    channel.accessToken
                   );
                 }
               }
@@ -274,10 +282,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
 
               // const autoReplyText = `Hello! We received your message: "${messageContent}". Our AI agent will process this shortly.`;
 
-              if (
-                organization.whatsappPhoneNumberId &&
-                organization.whatsappAccessToken
-              ) {
+              if (channel) {
                 const jobId = `reply-${conversation.id}`; // Unique ID for this conversation
 
                 // Look for an existing countdown timer. If it exists, delete it!
