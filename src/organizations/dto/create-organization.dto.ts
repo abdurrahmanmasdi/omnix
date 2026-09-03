@@ -16,4 +16,16 @@ export class CreateOrganizationDto {
   @IsString()
   @IsOptional()
   industry_category?: string;
+
+  @ApiPropertyOptional({ example: 'Professional and empathetic' })
+  @IsString()
+  @IsOptional()
+  agentTone?: string;
+
+  @ApiPropertyOptional({
+    example: { rules: ['Must ask for patient age', 'Never promise specific results'] },
+    description: 'JSON payload containing business rules for the AI',
+  })
+  @IsOptional()
+  businessRules?: any;
 }
