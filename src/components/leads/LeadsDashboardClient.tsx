@@ -17,7 +17,6 @@ import { LeadsHeader } from './LeadsHeader';
 import { LeadsToolbar } from './LeadsToolbar';
 import { LeadsTable } from './LeadsTable';
 import { LeadsPagination } from './LeadsPagination';
-import { KanbanBoard } from './KanbanBoard';
 
 export function LeadsDashboardClient() {
   const router = useRouter();
@@ -60,11 +59,9 @@ export function LeadsDashboardClient() {
       : { field: 'createdAt', direction: 'desc' }
   );
 
-  // ─── Modal / Drawer state ─────────────────────────────────
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
 
   // ─── Stable event handlers ────────────────────────────────
   const handleSearchChange = useCallback((newSearch: string) => {
@@ -101,8 +98,8 @@ export function LeadsDashboardClient() {
 
   // ─── Data fetching ────────────────────────────────────────
   const { data, isLoading, refetch } = useLeadsControllerFindAll({
-    page: viewMode === 'board' ? 1 : page,
-    limit: viewMode === 'board' ? 100 : limit,
+    page,
+    limit,
     filters: filters ? JSON.stringify(filters) : undefined,
     sorts: JSON.stringify([sortBy]),
   });
@@ -179,8 +176,6 @@ export function LeadsDashboardClient() {
   return (
     <div className="p-8 space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       <LeadsHeader 
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onNewOnboarding={() => { setLeadToEdit(null); setIsFormModalOpen(true); }} 
       />
 
@@ -195,38 +190,26 @@ export function LeadsDashboardClient() {
           totalPages={totalPages}
         />
 
-        <CardContent className={viewMode === 'board' ? 'p-6 bg-slate-50/50' : 'p-0'}>
-          {viewMode === 'table' ? (
-            <>
-              <LeadsTable
-                leads={leads}
-                sources={sources}
-                isLoading={isLoading}
-                sortBy={sortBy}
-                onSortChange={handleSortChange}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onViewProfile={setSelectedLeadId}
-                onOpenConversation={handleOpenConversation}
-                onClearFilters={handleClearFilters}
-              />
+        <CardContent className="p-0">
+          <LeadsTable
+            leads={leads}
+            sources={sources}
+            isLoading={isLoading}
+            sortBy={sortBy}
+            onSortChange={handleSortChange}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onViewProfile={setSelectedLeadId}
+            onOpenConversation={handleOpenConversation}
+            onClearFilters={handleClearFilters}
+          />
 
-              <LeadsPagination
-                page={page}
-                totalPages={totalPages}
-                totalItems={totalLeads}
-                onPageChange={handlePageChange}
-              />
-            </>
-          ) : (
-            <KanbanBoard 
-              leads={leads} 
-              isLoading={isLoading} 
-              onEdit={handleEdit}
-              onViewProfile={setSelectedLeadId}
-              onOpenConversation={handleOpenConversation}
-            />
-          )}
+          <LeadsPagination
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalLeads}
+            onPageChange={handlePageChange}
+          />
         </CardContent>
       </Card>
 

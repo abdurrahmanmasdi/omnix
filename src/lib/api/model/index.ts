@@ -18,6 +18,8 @@ export * from "./conversationsControllerGetConversationsParams";
 export * from "./conversationsControllerGetMessages200Item";
 export * from "./conversationsControllerGetMessagesParams";
 export * from "./conversationsControllerToggleAi200";
+export * from "./createChannelDto";
+export * from "./createChannelDtoProvider";
 export * from "./createExperienceDto";
 export * from "./createLeadDto";
 export * from "./createLeadDtoCurrency";
