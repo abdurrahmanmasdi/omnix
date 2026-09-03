@@ -60,3 +60,5 @@ export * from "./uploadDocumentDto";
 export * from "./upsertAiPersonaDto";
 export * from "./upsertAiPersonaDtoBusinessRules";
 export * from "./webhooksControllerVerifyWebhookParams";
+export * from "./analyticsSummaryDto";
+export * from "./recentActivityDto";
