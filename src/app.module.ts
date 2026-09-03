@@ -18,6 +18,7 @@ import { NotificationsModule } from './notifications/notification.module';
 import { ExperiencesModule } from './experiences/experiences.module';
 import { AiPersonaModule } from './settings/ai-persona/ai-persona.module';
 import { ChannelsModule } from './channels/channels.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ChannelsModule } from './channels/channels.module';
     PipelineStagesModule,
     AiPersonaModule,
     ChannelsModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
