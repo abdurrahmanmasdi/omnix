@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -41,6 +41,7 @@ interface PipelineStage {
   id: string;
   name: string;
   orderIndex: number;
+  mappedStatus?: string;
 }
 
 export default function PipelineStagesPage() {
@@ -50,15 +51,19 @@ export default function PipelineStagesPage() {
 
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [localStages, setLocalStages] = useState<PipelineStage[]>([]);
 
-  // Normalize response to array
-  const stages: PipelineStage[] = useMemo(() => {
-    const d = data as any;
-    const arr = Array.isArray(d) ? d : d?.items || d?.data || [];
-    return [...arr].sort((a: PipelineStage, b: PipelineStage) => a.orderIndex - b.orderIndex);
+  // Sync server data to local state
+  useEffect(() => {
+    if (data) {
+      const d = data as any;
+      const arr = Array.isArray(d) ? d : d?.items || d?.data || [];
+      const sorted = [...arr].sort((a: PipelineStage, b: PipelineStage) => a.orderIndex - b.orderIndex);
+      setLocalStages(sorted);
+    }
   }, [data]);
 
-  const stageIds = useMemo(() => stages.map(s => s.id), [stages]);
+  const stageIds = useMemo(() => localStages.map(s => s.id), [localStages]);
 
   // DnD sensors
   const sensors = useSensors(
@@ -70,9 +75,13 @@ export default function PipelineStagesPage() {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = stages.findIndex(s => s.id === active.id);
-    const newIndex = stages.findIndex(s => s.id === over.id);
-    const reordered = arrayMove(stages, oldIndex, newIndex);
+    // Optimistic Update
+    const oldIndex = localStages.findIndex(s => s.id === active.id);
+    const newIndex = localStages.findIndex(s => s.id === over.id);
+    const reordered = arrayMove(localStages, oldIndex, newIndex);
+    
+    // Update local state instantly
+    setLocalStages(reordered);
 
     // Build the bulk reorder payload
     const payload = reordered.map((stage, index) => ({
@@ -85,12 +94,15 @@ export default function PipelineStagesPage() {
       {
         onSuccess: () => {
           toast.success('Pipeline reordered');
-          refetch();
+          refetch(); // Ensure sync with server
         },
-        onError: () => toast.error('Failed to reorder pipeline'),
+        onError: () => {
+          toast.error('Failed to reorder pipeline');
+          refetch(); // Revert to server state on failure
+        },
       }
     );
-  }, [stages, reorderMutation, refetch]);
+  }, [localStages, reorderMutation, refetch]);
 
   const handleEdit = (id: string) => {
     setSelectedStageId(id);
@@ -150,7 +162,7 @@ export default function PipelineStagesPage() {
             <span>Pipeline Flow</span>
           </div>
           <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-200 shadow-inner font-black px-3 py-1">
-            {stages.length} Stages
+            {localStages.length} Stages
           </Badge>
         </CardHeader>
         <CardContent className="p-0">
@@ -174,7 +186,7 @@ export default function PipelineStagesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : stages.length === 0 ? (
+                ) : localStages.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="h-48 text-center">
                       <p className="text-sm font-medium text-slate-500">No pipeline stages configured yet.</p>
@@ -188,7 +200,7 @@ export default function PipelineStagesPage() {
                     onDragEnd={handleDragEnd}
                   >
                     <SortableContext items={stageIds} strategy={verticalListSortingStrategy}>
-                      {stages.map((stage) => (
+                      {localStages.map((stage) => (
                         <SortableStageRow
                           key={stage.id}
                           stage={stage}

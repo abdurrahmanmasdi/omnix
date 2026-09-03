@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { pipelineStageSchema, PipelineStageFormData } from '@/lib/validations/pipeline-stage';
 import {
@@ -20,6 +20,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, Save, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,18 +52,19 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<PipelineStageFormData>({
     resolver: zodResolver(pipelineStageSchema),
-    defaultValues: { name: '' },
+    defaultValues: { name: '', mappedStatus: 'UNMAPPED' },
   });
 
   useEffect(() => {
     if (existingStage && isEdit) {
       const data = existingStage as any;
-      reset({ name: data.name });
+      reset({ name: data.name, mappedStatus: data.mappedStatus || 'UNMAPPED' });
     } else if (!isEdit && isOpen) {
-      reset({ name: '' });
+      reset({ name: '', mappedStatus: 'UNMAPPED' });
     }
   }, [existingStage, isEdit, reset, isOpen]);
 
@@ -125,6 +133,34 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
                   className="h-11 rounded-lg border-slate-200 focus:ring-indigo-500/20"
                 />
                 {errors.name && <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.name.message}</p>}
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="mappedStatus" className="text-xs font-bold uppercase tracking-widest text-slate-500">AI Status Mapping (Optional)</Label>
+                <Controller
+                  name="mappedStatus"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value || 'UNMAPPED'}>
+                      <SelectTrigger className="h-11 rounded-lg border-slate-200 focus:ring-indigo-500/20">
+                        <SelectValue placeholder="No Mapping (Manual Stage)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UNMAPPED">No Mapping (Manual Stage)</SelectItem>
+                        <SelectItem value="NEW">NEW</SelectItem>
+                        <SelectItem value="QUALIFYING">QUALIFYING</SelectItem>
+                        <SelectItem value="QUALIFIED">QUALIFIED</SelectItem>
+                        <SelectItem value="READY_TO_BOOK">READY_TO_BOOK</SelectItem>
+                        <SelectItem value="READY_TO_PAY">READY_TO_PAY</SelectItem>
+                        <SelectItem value="HANDED_OFF">HANDED_OFF</SelectItem>
+                        <SelectItem value="UNQUALIFIED">UNQUALIFIED</SelectItem>
+                        <SelectItem value="WON">WON</SelectItem>
+                        <SelectItem value="LOST">LOST</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Select an AI status to automatically move leads into this column when their status changes. Leave blank for a purely manual pipeline stage.</p>
               </div>
             </div>
 

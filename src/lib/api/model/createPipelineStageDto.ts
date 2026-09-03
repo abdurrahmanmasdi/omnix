@@ -5,9 +5,12 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
+import type { CreatePipelineStageDtoMappedStatus } from "./createPipelineStageDtoMappedStatus";
 
 export interface CreatePipelineStageDto {
   name: string;
   /** Optional: If omitted, it will be placed at the end of the pipeline. */
   orderIndex?: number;
+  /** Optional: Map this stage to a core AI state. */
+  mappedStatus?: CreatePipelineStageDtoMappedStatus;
 }

@@ -13,10 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { GripVertical, Edit, Trash2, MoreVertical } from 'lucide-react';
+import { GripVertical, Edit, Trash2, MoreVertical, Bot } from 'lucide-react';
 
 interface SortableStageRowProps {
-  stage: { id: string; name: string; orderIndex: number };
+  stage: { id: string; name: string; orderIndex: number; mappedStatus?: string };
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -61,6 +61,12 @@ export function SortableStageRow({ stage, onEdit, onDelete }: SortableStageRowPr
             {stage.orderIndex + 1}
           </div>
           <span className="font-bold text-slate-800 text-sm">{stage.name}</span>
+          {stage.mappedStatus && (
+            <Badge variant="secondary" className="ml-3 bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm text-[10px] font-bold">
+              <Bot className="w-3 h-3 mr-1" />
+              AI: {stage.mappedStatus}
+            </Badge>
+          )}
         </div>
       </TableCell>
 

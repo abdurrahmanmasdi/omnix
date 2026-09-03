@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useCallback } from 'react';
 import { 
   useDocumentsControllerGetDocuments,
   useDocumentsControllerUploadDocument,
@@ -10,142 +9,317 @@ import {
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { FileText, UploadCloud, Trash2, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { FileText, UploadCloud, Trash2, CheckCircle2, Loader2, AlertCircle, FilePlus } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function DocumentsSettingsPage() {
-  const queryClient = useQueryClient();
-  const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  // 1. Fetch Documents
-  const { data: documents = [], refetch } = useDocumentsControllerGetDocuments();
-
-  // 2. Mutations
+  const { data: documents = [], refetch, isLoading } = useDocumentsControllerGetDocuments();
   const uploadMutation = useDocumentsControllerUploadDocument();
   const deleteMutation = useDocumentsControllerDeleteDocument();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+  // Drag & Drop State
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Delete Dialog State
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const validateAndUpload = (file: File) => {
+    if (file.type !== 'application/pdf') {
+      toast.error('Only PDF files are supported.');
+      return;
     }
-  };
-
-  const handleUpload = () => {
-    if (!file) return;
-
-    // Orval expects formData for binary uploads
-    const formData = new FormData();
-    formData.append('file', file);
+    
+    // 10MB limit (10 * 1024 * 1024 bytes)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File exceeds the maximum limit of 10MB.');
+      return;
+    }
 
     uploadMutation.mutate(
-      { data: { file: file as any } }, // Adjust this based on exactly how Orval types the mutation
+      { data: { file: file as any } },
       {
         onSuccess: () => {
-          setFile(null);
-          refetch(); // Refresh the list
+          toast.success('Document uploaded successfully. Processing started.');
+          refetch();
         },
-        onError: (err) => {
-          console.error('Upload failed', err);
-          alert("Failed to upload and process document.");
+        onError: () => {
+          toast.error('Failed to upload the document. Please try again.');
         }
       }
     );
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Are you sure? This will delete the AI knowledge base vectors.')) return;
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
     
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      validateAndUpload(e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  }, []); // eslint-disable-next-line react-hooks/exhaustive-deps
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      validateAndUpload(e.target.files[0]);
+      // Reset input value so same file can be selected again if needed
+      e.target.value = '';
+    }
+  };
+
+  const confirmDelete = () => {
+    if (!documentToDelete) return;
     deleteMutation.mutate(
-      { id },
+      { id: documentToDelete },
       {
-        onSuccess: () => refetch(),
+        onSuccess: () => {
+          toast.success('Document deleted successfully.');
+          setDocumentToDelete(null);
+          refetch();
+        },
+        onError: () => {
+          toast.error('Failed to delete document.');
+          setDocumentToDelete(null);
+        }
       }
     );
   };
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <div className="max-w-[1000px] mx-auto space-y-8 animate-in fade-in duration-500 p-8">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">AI Knowledge Base</h2>
-        <p className="text-muted-foreground">Upload PDFs containing your prices, policies, and clinic details to train your AI agent.</p>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight">AI Knowledge Base</h2>
+        <p className="text-slate-500 font-medium mt-1">Upload PDFs containing your pricing, doctor CVs, and FAQs to train your AI agent.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Upload Document</CardTitle>
-          <CardDescription>Supported formats: PDF. Max size: 10MB.</CardDescription>
+      {/* Upload Zone */}
+      <Card className="shadow-xl shadow-slate-200/50 border-slate-100 rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-6">
+          <CardTitle className="flex items-center text-lg font-bold text-slate-800">
+            <UploadCloud className="mr-2 h-5 w-5 text-indigo-500" />
+            Upload Document
+          </CardTitle>
+          <CardDescription className="font-medium">Supported formats: Strictly PDF only. Max size: 10MB.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4 border-2 border-dashed border-slate-200 rounded-lg p-6 bg-slate-50 justify-center">
-            <Input 
+        <CardContent className="p-8">
+          <div 
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => !uploadMutation.isPending && fileInputRef.current?.click()}
+            className={`
+              relative flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
+              ${isDragging ? 'border-indigo-500 bg-indigo-50/50 scale-[1.02]' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}
+              ${uploadMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <input 
               type="file" 
-              accept=".pdf" 
-              onChange={handleFileChange} 
-              className="max-w-xs cursor-pointer"
+              accept="application/pdf" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              disabled={uploadMutation.isPending}
             />
-            <Button 
-              onClick={handleUpload} 
-              disabled={!file || uploadMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {uploadMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-              {uploadMutation.isPending ? 'Vectorizing in Python...' : 'Upload & Train'}
-            </Button>
+            
+            <div className="h-16 w-16 bg-white shadow-sm border border-slate-100 rounded-2xl flex items-center justify-center text-indigo-500 mb-4 transition-transform group-hover:scale-110">
+              {uploadMutation.isPending ? (
+                <Loader2 className="h-8 w-8 animate-spin" />
+              ) : (
+                <FilePlus className="h-8 w-8" />
+              )}
+            </div>
+            
+            {uploadMutation.isPending ? (
+              <div className="text-center space-y-1">
+                <p className="text-sm font-bold text-indigo-600">Uploading & Vectorizing...</p>
+                <p className="text-xs font-medium text-slate-500">This may take a few moments</p>
+              </div>
+            ) : (
+              <div className="text-center space-y-1">
+                <p className="text-sm font-bold text-slate-700">
+                  <span className="text-indigo-600">Click to upload</span> or drag and drop
+                </p>
+                <p className="text-xs font-medium text-slate-500">PDF documents up to 10MB</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Documents</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {documents.length === 0 && <p className="text-sm text-slate-500">No documents uploaded yet.</p>}
-            
-            {documents.map((doc: any) => (
-              <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg bg-white">
-                <div className="flex items-center space-x-4">
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                    <FileText size={24} />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-sm">{doc.fileName}</h4>
-                    <p className="text-xs text-slate-500">Uploaded: {new Date(doc.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  {doc.status === 'PROCESSED' && (
-                    <span className="flex items-center text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                      <CheckCircle2 size={12} className="mr-1" /> Active in AI
-                    </span>
-                  )}
-                  {doc.status === 'ERROR' && (
-                    <span className="flex items-center text-xs text-red-600 bg-red-50 px-2 py-1 rounded-full">
-                      <AlertCircle size={12} className="mr-1" /> Failed
-                    </span>
-                  )}
-                  {doc.status === 'PENDING' && (
-                    <span className="flex items-center text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full">
-                      <Loader2 size={12} className="mr-1 animate-spin" /> Processing
-                    </span>
-                  )}
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => handleDelete(doc.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 size={18} />
-                  </Button>
-                </div>
-              </div>
-            ))}
+      {/* Documents Table */}
+      <Card className="shadow-xl shadow-slate-200/50 border-slate-100 rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-5">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center text-lg font-bold text-slate-800">
+              <FileText className="mr-2 h-5 w-5 text-indigo-500" />
+              Knowledge Base Documents
+            </CardTitle>
+            <Badge className="bg-white text-slate-500 border-slate-200 shadow-sm font-black px-3 py-1">
+              {(documents as any[])?.length || 0} Files
+            </Badge>
           </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/30 hover:bg-slate-50/30 border-b border-slate-100">
+                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12 pl-6">File Name</TableHead>
+                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12">Upload Date</TableHead>
+                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12">Status</TableHead>
+                <TableHead className="text-right font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12 pr-6">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-40 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading documents...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (!documents || (documents as any[]).length === 0) ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-40 text-center">
+                    <p className="text-sm font-medium text-slate-500">No documents found.</p>
+                    <p className="text-xs text-slate-400 mt-1">Upload a PDF above to get started.</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                (documents as any[]).map((doc: any) => (
+                  <TableRow key={doc.id} className="hover:bg-slate-50/80 transition-colors">
+                    <TableCell className="pl-6">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-500">
+                          <FileText size={18} />
+                        </div>
+                        <span className="font-bold text-slate-800 text-sm">{doc.fileName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-medium text-slate-500">
+                        {new Date(doc.createdAt).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {doc.status === 'PROCESSED' && (
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm font-bold text-[10px]">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          PROCESSED
+                        </Badge>
+                      )}
+                      {doc.status === 'PENDING' && (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 shadow-sm font-bold text-[10px]">
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          PENDING
+                        </Badge>
+                      )}
+                      {doc.status === 'ERROR' && (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 shadow-sm font-bold text-[10px]">
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          ERROR
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right pr-6">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setDocumentToDelete(doc.id)}
+                        className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!documentToDelete} onOpenChange={(open) => !open && setDocumentToDelete(null)}>
+        <DialogContent className="sm:max-w-[400px] p-0 border-none shadow-2xl rounded-2xl overflow-hidden">
+          <DialogHeader className="p-6 bg-slate-50 border-b border-slate-100">
+            <div className="flex items-center space-x-3 mb-2">
+              <div className="h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+                <AlertCircle size={20} />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold text-slate-900">Delete Document</DialogTitle>
+                <DialogDescription className="text-slate-500 font-medium">This action cannot be undone.</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="p-6">
+            <p className="text-sm font-medium text-slate-700">
+              Are you sure you want to delete this document? All associated AI training data and vectors will be permanently removed.
+            </p>
+          </div>
+          <DialogFooter className="p-6 pt-4 border-t border-slate-100 bg-slate-50">
+            <div className="flex items-center justify-end w-full space-x-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setDocumentToDelete(null)} 
+                className="h-10 px-4 rounded-xl font-bold border-slate-200"
+                disabled={deleteMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={confirmDelete}
+                className="h-10 px-6 rounded-xl font-bold shadow-lg shadow-red-200 transition-all active:scale-95"
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Document
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
