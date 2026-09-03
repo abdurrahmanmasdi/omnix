@@ -5,9 +5,13 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
+import type { CreateOrganizationDtoBusinessRules } from "./createOrganizationDtoBusinessRules";
 
 export interface CreateOrganizationDto {
   name: string;
   slug: string;
   industry_category?: string;
+  agentTone?: string;
+  /** JSON payload containing business rules for the AI */
+  businessRules?: CreateOrganizationDtoBusinessRules;
 }

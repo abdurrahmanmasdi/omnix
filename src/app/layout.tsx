@@ -7,8 +7,8 @@ import { Toaster } from '@/components/ui/sonner'; // shadcn toast
 const outfit = Outfit({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Lean Commerce CRM',
-  description: 'AI-Powered WhatsApp CRM',
+  title: 'OmniDesk CRM',
+  description: 'AI-Powered CRM for Modern Clinics',
 };
 
 export default function RootLayout({

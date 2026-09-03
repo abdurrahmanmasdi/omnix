@@ -16,6 +16,8 @@ export type UpdateLeadStageDtoStatus =
 export const UpdateLeadStageDtoStatus = {
   NEW: "NEW",
   QUALIFYING: "QUALIFYING",
+  QUALIFIED: "QUALIFIED",
+  READY_TO_BOOK: "READY_TO_BOOK",
   READY_TO_PAY: "READY_TO_PAY",
   HANDED_OFF: "HANDED_OFF",
   UNQUALIFIED: "UNQUALIFIED",

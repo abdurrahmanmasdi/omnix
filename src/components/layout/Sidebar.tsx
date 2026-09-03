@@ -15,6 +15,7 @@ import {
   Target,
   FileText,
   Briefcase,
+  Building2,
 } from 'lucide-react';
 
 interface NavItem {
@@ -70,9 +71,12 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+import { useAuthStore } from '@/store/auth-store';
+
 export function Sidebar() {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(pathname.includes('/settings'));
+  const user = useAuthStore((state) => state.user);
 
   const isActive = (item: NavItem) => {
     if (item.href === '/dashboard') return pathname === '/dashboard';
@@ -85,11 +89,11 @@ export function Sidebar() {
     <aside className="w-[260px] border-r border-slate-200/80 bg-white flex flex-col shrink-0">
       {/* Brand */}
       <div className="flex h-16 items-center px-6 border-b border-slate-200/80">
-        <div className="flex items-center space-x-2.5">
-          <div className="h-8 w-8 rounded-xl bg-slate-900 flex items-center justify-center">
-            <span className="text-white text-sm font-black">LC</span>
+        <div className="flex items-center gap-3 w-full">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shrink-0">
+            <Building2 size={18} className="text-white" />
           </div>
-          <span className="text-[15px] font-bold text-slate-900 tracking-tight">Lean Commerce</span>
+          <span className="text-[15px] font-bold text-slate-900 tracking-tight">OmniDesk</span>
         </div>
       </div>
 
@@ -158,9 +162,16 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-slate-100">
-        <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Platform</p>
-          <p className="text-[11px] font-medium text-slate-600 mt-0.5">Lean Commerce v2.0</p>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden shrink-0">
+            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.firstName || 'user'}`} alt="Avatar" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-sm font-semibold text-slate-700 truncate">
+              {user?.firstName} {user?.lastName}
+            </span>
+            <p className="text-[11px] font-medium text-slate-600 mt-0.5">OmniDesk v2.0</p>
+          </div>
         </div>
       </div>
     </aside>

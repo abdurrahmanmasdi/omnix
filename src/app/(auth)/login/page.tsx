@@ -3,6 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth';
 
@@ -70,7 +71,7 @@ export default function LoginPage() {
     <Card className="w-full shadow-lg">
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Lean Commerce
+          OmniDesk
         </CardTitle>
         <CardDescription>
           Enter your email and password to log in to your CRM.
@@ -113,7 +114,7 @@ export default function LoginPage() {
           </div>
         </CardContent>
         
-        <CardFooter>
+        <CardFooter className="flex flex-col gap-4">
           <Button 
             type="submit" 
             className="w-full" 
@@ -121,6 +122,12 @@ export default function LoginPage() {
           >
             {loginMutation.isPending ? 'Logging in...' : 'Log in'}
           </Button>
+          <div className="text-center text-sm text-slate-500">
+            Don't have an account?{' '}
+            <Link href="/signup" className="text-blue-600 hover:underline font-medium">
+              Sign up
+            </Link>
+          </div>
         </CardFooter>
       </form>
     </Card>
