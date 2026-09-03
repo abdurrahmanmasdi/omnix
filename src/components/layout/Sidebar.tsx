@@ -16,6 +16,7 @@ import {
   FileText,
   Briefcase,
   Building2,
+  Plug,
 } from 'lucide-react';
 
 interface NavItem {
@@ -60,6 +61,7 @@ const NAV_ITEMS: NavItem[] = [
       { href: '/dashboard/settings/lead-sources', label: 'Lead Sources', icon: <Target className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/lead-sources' },
       { href: '/dashboard/settings/pipeline-stages', label: 'Pipeline Stages', icon: <Layers className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/pipeline-stages' },
       { href: '/dashboard/settings/experiences', label: 'Experiences', icon: <Briefcase className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/experiences' },
+      { href: '/dashboard/settings/channels', label: 'Channels', icon: <Plug className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/channels' },
       {
         href: '/dashboard/settings/documents',
         label: 'Documents',
