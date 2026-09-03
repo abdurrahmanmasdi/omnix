@@ -59,6 +59,16 @@ export class DocumentsController {
           cb(null, `${uuidv4()}${extname(file.originalname)}`);
         },
       }),
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10 MB limit
+      },
+      fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/pdf') {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only PDF files are allowed.'), false);
+        }
+      },
     }),
   )
   async uploadDocument(

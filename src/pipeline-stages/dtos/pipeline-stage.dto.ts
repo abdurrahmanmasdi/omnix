@@ -7,8 +7,10 @@ import {
   Min,
   IsArray,
   ValidateNested,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { LeadStatus } from '@prisma/client';
 
 export class CreatePipelineStageDto {
   @ApiProperty({ example: 'Initial Contact' })
@@ -24,6 +26,14 @@ export class CreatePipelineStageDto {
   @IsInt()
   @Min(0)
   orderIndex?: number;
+
+  @ApiPropertyOptional({
+    enum: LeadStatus,
+    description: 'Optional: Map this stage to a core AI state.',
+  })
+  @IsOptional()
+  @IsEnum(LeadStatus)
+  mappedStatus?: LeadStatus;
 }
 
 export class UpdatePipelineStageDto extends PartialType(

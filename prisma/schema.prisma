@@ -281,6 +281,7 @@ model PipelineStage {
   organizationId String       @db.Uuid
   name            String
   orderIndex     Int
+  mappedStatus   LeadStatus?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   deletedAt      DateTime?

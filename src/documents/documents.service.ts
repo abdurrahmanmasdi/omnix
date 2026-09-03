@@ -4,6 +4,7 @@ import {
   Logger,
   OnModuleInit,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom, Observable } from 'rxjs';
@@ -63,7 +64,7 @@ export class DocumentsService implements OnModuleInit {
       const absolutePath = join(process.cwd(), file.path);
 
       this.logger.log(`🤖 Telling Python to ingest ${file.originalname}...`);
-      await lastValueFrom(
+      const result = await lastValueFrom(
         this.ragService!.ingestPdf({
           organizationId,
           documentationId: doc.id,
@@ -72,19 +73,26 @@ export class DocumentsService implements OnModuleInit {
         }),
       );
 
+      if (!result || !result.success) {
+        throw new Error('Python AI engine returned an unsuccessful response.');
+      }
+
       // 3. Mark as processed!
-      return this.prisma.organizationDocumentation.update({
+      return await this.prisma.organizationDocumentation.update({
         where: { id: doc.id },
         data: { status: 'PROCESSED' },
       });
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to process document: ${error.message}`);
       // Mark as error so the user knows it failed
       await this.prisma.organizationDocumentation.update({
         where: { id: doc.id },
         data: { status: 'ERROR' },
       });
-      throw error;
+      throw new InternalServerErrorException(
+        'Failed to process document in the AI engine.',
+        { cause: error },
+      );
     }
   }
 
