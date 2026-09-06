@@ -171,6 +171,13 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
     return [];
   }, [stagesData]);
 
+  const extendedStages = useMemo(() => {
+    return [
+      { id: 'needs-attention', name: 'Needs Attention', icon: '🚨', isVirtual: true },
+      ...stages
+    ];
+  }, [stages]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -184,16 +191,18 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
 
   const columns = useMemo(() => {
     const cols: Record<string, Lead[]> = {};
-    stages.forEach((stage: Stage) => {
+    extendedStages.forEach((stage: Stage | any) => {
       cols[stage.id] = [];
     });
     localLeads.forEach((lead) => {
-      if (lead.pipelineStageId && cols[lead.pipelineStageId]) {
+      if (lead.status === 'HANDED_OFF') {
+        cols['needs-attention'].push(lead);
+      } else if (lead.pipelineStageId && cols[lead.pipelineStageId]) {
         cols[lead.pipelineStageId].push(lead);
       }
     });
     return cols;
-  }, [stages, localLeads]);
+  }, [extendedStages, localLeads]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -319,7 +328,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        {stages.map((stage: Stage) => (
+        {extendedStages.map((stage: Stage | any) => (
           <KanbanColumn 
             key={stage.id} 
             stage={stage} 
@@ -354,6 +363,8 @@ interface KanbanColumnProps {
 }
 
 function KanbanColumn({ stage, leads, activeConversationId, onSelectConversation }: KanbanColumnProps) {
+  const isVirtual = stage.isVirtual;
+
   const { setNodeRef } = useSortable({
     id: stage.id,
     data: {
@@ -365,13 +376,13 @@ function KanbanColumn({ stage, leads, activeConversationId, onSelectConversation
   const leadIds = useMemo(() => leads.map(l => l.id), [leads]);
 
   return (
-    <div className="flex flex-col bg-slate-100/60 rounded-xl border border-slate-200 min-w-[300px] max-w-[300px] snap-center shrink-0 flex-1 overflow-hidden shadow-sm">
-      <div className="p-3 bg-white/70 border-b border-slate-200 flex justify-between items-center sticky top-0 backdrop-blur-md z-10">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wide">
+    <div className={`flex flex-col rounded-xl border min-w-[300px] max-w-[300px] snap-center shrink-0 flex-1 overflow-hidden shadow-sm ${isVirtual ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-100/60 border-slate-200'}`}>
+      <div className={`p-3 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-10 ${isVirtual ? 'bg-amber-100/70 border-amber-200' : 'bg-white/70 border-slate-200'}`}>
+        <h3 className={`font-bold flex items-center gap-2 text-sm uppercase tracking-wide ${isVirtual ? 'text-amber-800' : 'text-slate-800'}`}>
           {stage.icon && <span className="text-base">{stage.icon}</span>}
           {stage.name}
         </h3>
-        <Badge variant="secondary" className="bg-slate-200 text-slate-700 font-bold">
+        <Badge variant="secondary" className={`${isVirtual ? 'bg-amber-200 text-amber-900' : 'bg-slate-200 text-slate-700'} font-bold`}>
           {leads.length}
         </Badge>
       </div>

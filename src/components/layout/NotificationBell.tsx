@@ -109,11 +109,24 @@ export function NotificationBell() {
         queryKey: getNotificationsControllerGetNotificationsQueryKey(),
       });
 
-      // Fire a system-wide toast
-      toast.info(payload.title, {
-        description: payload.body,
-        duration: 6000,
-      });
+      if (payload.type === 'LEAD_HANDED_OFF') {
+        toast.error(payload.title, {
+          description: payload.body,
+          duration: 10000,
+        });
+        // Attempt audio ping
+        try {
+          const audio = new Audio('/sounds/ping.mp3');
+          audio.volume = 0.5;
+          audio.play().catch(() => { /* silent failure if not interacted */ });
+        } catch (e) {}
+      } else {
+        // Fire a system-wide toast
+        toast.info(payload.title, {
+          description: payload.body,
+          duration: 6000,
+        });
+      }
     };
 
     socket.on('new_notification', handler);
