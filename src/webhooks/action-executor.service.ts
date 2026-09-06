@@ -97,6 +97,14 @@ export class ActionExecutorService {
         await this.handleUpdateSummary(conversationId, payload);
         break;
 
+      case 'HANDOFF_TO_HUMAN':
+        await this.handleHandoffToHuman(
+          organizationId,
+          conversationId,
+          payload,
+        );
+        break;
+
       default:
         this.logger.warn(
           `Unknown action type received: "${action.type}". Dropping silently.`,
@@ -315,6 +323,62 @@ export class ActionExecutorService {
         `Created and linked new Lead ${newLead.id} for Conv: ${conversationId}`,
       );
     }
+  }
+
+  // ─── HANDOFF TO HUMAN ─────────────────────────────────────
+  private async handleHandoffToHuman(
+    organizationId: string,
+    conversationId: string,
+    payload: any,
+  ) {
+    const reason = payload.reason || 'User requested human intervention';
+    
+    // 1. Fetch the conversation to get the leadId
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: true },
+    });
+
+    if (!conversation?.leadId) {
+      this.logger.error(`Cannot HANDOFF_TO_HUMAN: No lead linked to Conv ${conversationId}`);
+      return;
+    }
+
+    // 2. Wrap DB updates in a transaction: set aiPaused=true and status=HANDED_OFF
+    const [updatedConversation, updatedLead] = await this.prisma.$transaction([
+      this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { aiPaused: true },
+      }),
+      this.prisma.lead.update({
+        where: { id: conversation.leadId },
+        data: { status: LeadStatus.HANDED_OFF },
+        include: { organization: true },
+      }),
+    ]);
+
+    this.logger.log(`✋ Handed off Conv ${conversationId} to human. Lead ${updatedLead.id} status is now HANDED_OFF.`);
+
+    // 3. Notify all users (admins) in this organization
+    const memberships = await this.prisma.organizationMembership.findMany({
+      where: { organizationId },
+    });
+
+    for (const membership of memberships) {
+      await this.notificationEmitter.send({
+        organizationId,
+        userId: membership.userId,
+        type: NotificationType.LEAD_HANDED_OFF,
+        title: 'Human Intervention Required',
+        body: `Lead ${updatedLead.firstName || ''} ${updatedLead.lastName || ''} requires human attention: ${reason}`,
+        referenceId: updatedLead.id,
+        referenceType: 'LEAD',
+      });
+    }
+
+    // 4. Broadcast updates to Frontend
+    this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead);
+    this.eventsGateway.broadcastConversationUpdate(organizationId, updatedConversation);
   }
 
   // ─── HELPERS ──────────────────────────────────────────────
