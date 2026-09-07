@@ -115,6 +115,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             # Default state if lead doesn't exist yet
             state_data = {
                 "organization_id": org_id,
+                "clinic_name": clinic_name,
                 "conversation_id": conv_id,
                 "lead_id": str(res.lead_id) if res.lead_id else None,
                 "customer": {
@@ -226,7 +227,18 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                         
             # Also extract from pending_crm_actions
             for action_str in final_state.get("pending_crm_actions", []):
-                if "TOOL_ACTION:" in action_str:
+                if action_str.startswith("{"):
+                    try:
+                        import json
+                        action_obj = json.loads(action_str)
+                        if "action" in action_obj:
+                            tool_actions.append(agent_pb2.ToolAction(
+                                type=action_obj["action"],
+                                payload=json.dumps(action_obj)
+                            ))
+                    except Exception as te:
+                        print(f"⚠️ Error parsing JSON virtual tool from state: {te}")
+                elif "TOOL_ACTION:" in action_str:
                     try:
                         parts = action_str.split(":", 2)
                         if len(parts) == 3:

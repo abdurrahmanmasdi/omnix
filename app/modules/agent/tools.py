@@ -151,28 +151,15 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
         agent_id = str(result[1]) if result[1] else None
         first_name = result[2] or "Patient"
 
-        # Build virtual actions for NestJS to execute
-        actions = []
+        # Build virtual action for NestJS to execute
+        action = {
+            "action": "HANDOFF_TO_HUMAN",
+            "lead_id": lead_id,
+            "reason": reason
+        }
 
-        # Action 1: Mark the lead as HANDED_OFF
-        actions.append(f"TOOL_ACTION:UPDATE_LEAD:{json.dumps({'leadId': lead_id, 'status': 'HANDED_OFF'})}")
-
-        # Action 2: Pause the AI on this conversation
-        actions.append(f"TOOL_ACTION:PAUSE_CONVERSATION:{json.dumps({'conversationId': conv_id})}")
-
-        # Action 3: Notify the assigned human agent (if one exists)
-        if agent_id:
-            notify_payload = {
-                "userId": agent_id,
-                "title": f"Handoff Required: {first_name}",
-                "body": reason,
-                "referenceId": lead_id,
-                "referenceType": "LEAD"
-            }
-            actions.append(f"TOOL_ACTION:NOTIFY_AGENT:{json.dumps(notify_payload)}")
-
-        print(f"📤 [VIRTUAL] Returning {len(actions)} actions for NestJS to execute.")
-        return "\n\n|||\n\n".join(actions)
+        print(f"📤 [VIRTUAL] Returning handoff action for NestJS to execute.")
+        return json.dumps(action)
 
     except Exception as e:
         print(f"❌ Escalation error: {e}")

@@ -17,6 +17,7 @@ class ConversationState(TypedDict):
     
     # Context & IDs
     organization_id: str
+    clinic_name: str
     conversation_id: str
     lead_id: str | None
     

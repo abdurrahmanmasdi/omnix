@@ -6,15 +6,25 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from app.modules.agent.state import ConversationState
 from app.core.config import settings
-from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof
+from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof, escalate_to_human
 
 
 # 1. Initialize LLMs
 extractor_llm = ChatOpenAI(model="gpt-5.6-luna", api_key=settings.OPENAI_API_KEY, temperature=0.1, model_kwargs={"reasoning_effort": "none"})
 flagship_llm = ChatOpenAI(model="gpt-5.6-terra", api_key=settings.OPENAI_API_KEY, temperature=0.3, model_kwargs={"reasoning_effort": "none"})
 
-tool_belt = [search_clinic_knowledge, fetch_social_proof]
+tool_belt = [search_clinic_knowledge, fetch_social_proof, escalate_to_human]
 smart_writer_llm = flagship_llm.bind_tools(tool_belt)
+
+HANDOFF_PROMPT = """
+CRITICAL RULE - HUMAN HANDOFF:
+You have access to the `escalate_to_human` tool. You MUST use it IMMEDIATELY if any of these psychological triggers occur:
+1. EXPLICIT REQUEST: The user explicitly asks for a "human", "doctor", "manager", or "agent".
+2. HIGH FRUSTRATION: The user expresses severe anger, uses profanity, or is repeatedly dissatisfied with your answers.
+3. COMPLEX MEDICAL ADVICE: The user asks for post-op diagnostic advice or complex medical opinions exceeding general sales knowledge.
+4. PAYMENT BOTTLENECK: The user is ready to pay but requires a custom discount or custom payment link you cannot provide.
+If you decide to hand off, your final text message MUST reassure the user (e.g., "I understand completely. I'm transferring you to one of our senior medical consultants right now. They will review our chat and message you here shortly!").
+"""
 
 # 2. Define Structured Output Schema
 class ExtractionOutput(BaseModel):
@@ -162,8 +172,11 @@ async def objection_handler_node(state: ConversationState):
     from langchain_core.messages import ToolMessage
     from app.modules.agent.tools import fetch_social_proof
     
-    prompt = """Act as an empathetic medical sales consultant. The user has an objection (fear, price, trust). 
+    clinic_name = state.get("clinic_name", "our clinic")
+    prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user has an objection (fear, price, trust). 
     Use the fetch_social_proof tool to find a relevant patient success story. Acknowledge their concern with deep empathy, present the social proof, and end with a gentle question to move forward. Max 3-4 sentences."""
+    
+    prompt += "\n" + HANDOFF_PROMPT
     
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     
@@ -186,6 +199,11 @@ async def objection_handler_node(state: ConversationState):
                     tool_call, 
                     config={"configurable": {"organization_id": state["organization_id"]}}
                 )
+            elif tool_call["name"] == "escalate_to_human":
+                tool_result = await escalate_to_human.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}}
+                )
             else:
                 tool_result = "Error: Tool not found."
                 
@@ -201,6 +219,8 @@ async def objection_handler_node(state: ConversationState):
 
 async def qualification_node(state: ConversationState):
     customer = state.get("customer", {})
+    clinic_name = state.get("clinic_name", "our clinic")
+    
     missing_info = []
     if not customer.get("name"):
         missing_info.append("Patient Name")
@@ -210,8 +230,16 @@ async def qualification_node(state: ConversationState):
     missing_str = ", ".join(missing_info)
     visual_analysis = state.get("visual_pixel_analysis", "")
     
-    prompt = f"""You are a warm, professional medical sales coordinator on WhatsApp.
-The patient is currently missing the following information to proceed: {missing_str}.
+    prompt = f"""You are a Senior Medical Sales Consultant representing {clinic_name} on WhatsApp.
+Your goal is to build rapport, answer the user's questions, and gently guide them toward providing the information we need to quote them.
+
+CRITICAL SALES RULE (Acknowledge -> Answer -> Pivot):
+1. ALWAYS start by warmly acknowledging what the user just said or asked.
+2. If they asked a direct question (e.g. 'how much is it?'), answer it naturally or give an estimated range. Do NOT ignore their questions.
+3. Finally, PIVOT gracefully by asking a conversational question to gather missing info.
+
+The patient is currently missing: {missing_str}.
+DO NOT aggressively demand an OPG X-ray in every message. Build trust first. If they are just asking general questions, answer them nicely and casually mention that a photo of their teeth would help give a precise quote.
 """
     if visual_analysis:
         prompt += f"""
@@ -221,8 +249,7 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
 """
     
     prompt += """
-Keep your response under 3 sentences. Use a natural, friendly WhatsApp tone.
-Do not answer medical questions or provide pricing yet."""
+Keep your response under 3 sentences. Use a natural, friendly WhatsApp tone."""
 
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     response = await flagship_llm.ainvoke(messages)
@@ -233,10 +260,13 @@ async def value_pitch_node(state: ConversationState):
     from langchain_core.messages import ToolMessage
     from app.modules.agent.tools import search_clinic_knowledge
     
-    prompt = """Act as an elite medical sales consultant. The user is asking for pricing or service details.
+    clinic_name = state.get("clinic_name", "our clinic")
+    prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is asking for pricing or service details.
     Use the search_clinic_knowledge tool to find real prices and info. NEVER invent prices. 
     Use the 'Value Sandwich' technique: [State high quality] -> [Give the price from tool] -> [Highlight pain-free/warranty].
     Keep it conversational (WhatsApp style) and end with a Call-To-Action (e.g., free consultation check)."""
+    
+    prompt += "\n" + HANDOFF_PROMPT
     
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     
@@ -259,6 +289,11 @@ async def value_pitch_node(state: ConversationState):
                     tool_call, 
                     config={"configurable": {"organization_id": state["organization_id"]}}
                 )
+            elif tool_call["name"] == "escalate_to_human":
+                tool_result = await escalate_to_human.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}}
+                )
             else:
                 tool_result = "Error: Tool not found."
                 
@@ -273,7 +308,8 @@ async def value_pitch_node(state: ConversationState):
     return {"messages": new_messages, "current_stage": "PITCHING"}
 
 async def closing_node(state: ConversationState):
-    prompt = """Act as an elite medical closer. The user is ready to book or showing high intent. 
+    clinic_name = state.get("clinic_name", "our clinic")
+    prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is ready to book or showing high intent. 
     Create a sense of urgency (e.g., 'Dr. [Name] has only 2 slots left this week' or 'We have a special discount ending tomorrow'). 
     Ask them explicitly for their preferred day and time for the consultation. 
     Keep it under 3 sentences, conversational (WhatsApp style), and extremely warm."""
@@ -294,9 +330,12 @@ async def general_qa_node(state: ConversationState):
     from langchain_core.messages import ToolMessage
     from app.modules.agent.tools import search_clinic_knowledge
     
-    prompt = """Act as a helpful and professional medical receptionist. The user is asking general questions about the clinic, doctors, location, or procedures.
+    clinic_name = state.get("clinic_name", "our clinic")
+    prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user is asking general questions about the clinic, doctors, location, or procedures.
     Use the search_clinic_knowledge tool to find accurate information. NEVER invent details. 
     Keep your response friendly, concise, and conversational (WhatsApp style). End by asking if they have any other questions or if they'd like to book a consultation."""
+    
+    prompt += "\n" + HANDOFF_PROMPT
     
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     
@@ -311,9 +350,17 @@ async def general_qa_node(state: ConversationState):
                     tool_call, 
                     config={"configurable": {"organization_id": state["organization_id"]}}
                 )
-                tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-                messages.append(tool_msg)
-                new_messages.append(tool_msg)
+            elif tool_call["name"] == "escalate_to_human":
+                tool_result = await escalate_to_human.ainvoke(
+                    tool_call, 
+                    config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}}
+                )
+            else:
+                tool_result = "Error: Tool not found."
+                
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+            messages.append(tool_msg)
+            new_messages.append(tool_msg)
                 
         final_response = await flagship_llm.ainvoke(messages)
         new_messages.append(final_response)
