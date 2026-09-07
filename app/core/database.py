@@ -1,19 +1,13 @@
-import os
 import uuid
 import datetime
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
-from sqlalchemy.orm import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-from pgvector.sqlalchemy import Vector
+from app.core.config import settings
 
-# Replace with your actual PostgreSQL URL
-# Example: postgresql://user:password@localhost:5432/digital_sales
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/sales_agent")
-
-engine = create_engine(DATABASE_URL)
+engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -27,7 +21,7 @@ class OrganizationKnowledge(Base):
     file_name = Column(String)
     documentationId = Column(UUID(as_uuid=True), index=True)
     content = Column(Text)
-    embedding = Column(Vector(3072)) # 🚀 Flagship Precision: 3072 dimensions
+    embedding = Column(Vector(3072)) # Flagship Precision: 3072 dimensions
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -44,7 +38,7 @@ class OrganizationExperience(Base):
     afterImageUrl = Column(String, nullable=True)
     
     # The 3072-dimensional embedding vector
-    embedding = Column(Vector(3072)) # 🚀 Flagship Precision: 3072 dimensions
+    embedding = Column(Vector(3072)) 
     
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

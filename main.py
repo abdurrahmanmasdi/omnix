@@ -10,7 +10,7 @@ from google import genai
 from contextlib import asynccontextmanager
 from app.core.database import SessionLocal
 from app.modules.rag.document_processor import DocumentService
-from app.modules.agent.graph import agent_app
+from app.modules.agent.graph_builder import agent_app
 from sqlalchemy import text
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.core.config import settings
