@@ -38,7 +38,7 @@ export default function CreateOrganizationPage() {
   const user = useAuthStore((state) => state.user);
 
   const form = useForm<CreateOrganizationFormData>({
-    resolver: zodResolver(createOrganizationSchema),
+    resolver: zodResolver(createOrganizationSchema) as any,
     defaultValues: { 
       name: "", 
       slug: "", 

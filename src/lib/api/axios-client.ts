@@ -32,7 +32,9 @@ axiosInstance.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       originalRequest &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/refresh')
     ) {
       originalRequest._retry = true; // Prevent infinite loops
 
@@ -60,7 +62,9 @@ axiosInstance.interceptors.response.use(
         // If the refresh fails (e.g., refresh token expired after 7 days)
         console.error("Session completely expired. Logging out.");
         useAuthStore.getState().logout();
-        window.location.href = "/login"; // Force them to the login screen
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = "/login"; // Force them to the login screen
+        }
         return Promise.reject(refreshError);
       }
     }

@@ -55,7 +55,7 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
     control,
     formState: { errors },
   } = useForm<PipelineStageFormData>({
-    resolver: zodResolver(pipelineStageSchema),
+    resolver: zodResolver(pipelineStageSchema) as any,
     defaultValues: { name: '', mappedStatus: 'UNMAPPED' },
   });
 
@@ -71,7 +71,7 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
   const onSubmit = (data: PipelineStageFormData) => {
     if (isEdit && stageId) {
       updateMutation.mutate(
-        { id: stageId, data },
+        { id: stageId, data: data as any },
         {
           onSuccess: () => {
             toast.success('Stage updated');
@@ -83,7 +83,7 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
       );
     } else {
       createMutation.mutate(
-        { data },
+        { data: data as any },
         {
           onSuccess: () => {
             toast.success('Stage created');

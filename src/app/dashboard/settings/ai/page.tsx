@@ -42,7 +42,7 @@ const formSchema = z.object({
     message: "Agent name is required.",
   }),
   tone: z.string({
-    required_error: "Please select a tone for the AI agent.",
+    message: "Please select a tone for the AI agent.",
   }),
   handoffMessage: z.string().min(1, {
     message: "Handoff message is required.",

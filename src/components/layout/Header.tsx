@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth-store';
 import { NotificationBell } from '@/components/layout/NotificationBell';
@@ -66,6 +66,7 @@ function useBreadcrumbs() {
 }
 
 export function Header({ onLogout }: HeaderProps) {
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const breadcrumbs = useBreadcrumbs();
   const pageTitle = breadcrumbs[breadcrumbs.length - 1]?.label || 'Dashboard';
@@ -141,7 +142,7 @@ export function Header({ onLogout }: HeaderProps) {
             <DropdownMenuItem
               className="rounded-lg font-medium text-slate-700 py-2.5 cursor-pointer"
               onClick={() => {
-                window.location.href = '/dashboard/settings/lead-sources';
+                router.push('/dashboard/settings/lead-sources');
               }}
             >
               <Settings className="mr-3 h-4 w-4 text-slate-400" /> Settings

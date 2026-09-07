@@ -91,7 +91,9 @@ function getOrCreateSocket(token: string): Socket {
       } catch {
         console.error('[Socket] Refresh failed — session dead.');
         useAuthStore.getState().logout();
-        window.location.href = '/login';
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
     }
   });

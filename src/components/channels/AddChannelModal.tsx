@@ -34,9 +34,9 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
     reset,
     formState: { errors },
   } = useForm<CreateChannelInput>({
-    resolver: zodResolver(createChannelSchema),
+    resolver: zodResolver(createChannelSchema) as any,
     defaultValues: {
-      provider: 'WHATSAPP',
+      provider: 'WHATSAPP_CLOUD_API',
       providerAccountId: '',
       accessToken: '',
     },

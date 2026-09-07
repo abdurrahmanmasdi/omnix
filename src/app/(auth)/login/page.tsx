@@ -47,7 +47,7 @@ export default function LoginPage() {
           toast.success('Welcome back!');
           
           // The backend sends us { access_token, user }
-          const { access_token, user } = response;
+          const { access_token, user } = response as any;
           
           useAuthStore.getState().setAuth(access_token, user);
           
