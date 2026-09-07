@@ -13,7 +13,7 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.enableCors({
-    origin: 'http://localhost:3001', // Your Next.js frontend URL
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Read from env for production
     credentials: true, // Required to allow cookies to pass through
   });
 
@@ -49,6 +49,6 @@ async function bootstrap() {
   // Start the microservice listeners
   await app.startAllMicroservices();
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }
 bootstrap();

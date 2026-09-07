@@ -26,6 +26,7 @@ export class PipelineStagesService {
       data: {
         organizationId,
         name: dto.name,
+        mappedStatus: dto.mappedStatus,
         orderIndex: newOrderIndex,
       },
     });
