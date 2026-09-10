@@ -19,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
-      <body className={`${inter.className} bg-brand-navy text-brand-ice antialiased`}>
+      <body className={`${inter.className} bg-background text-foreground antialiased`}>
         <QueryProvider>
           {children}
           <Toaster />
