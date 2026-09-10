@@ -65,13 +65,13 @@ export function LeadsToolbar({
   };
 
   return (
-    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 px-8 py-5 border-b border-slate-100 bg-white/80 backdrop-blur-xl rounded-t-2xl">
+    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 px-8 py-5 border-b border-white/5 bg-brand-navy/50 backdrop-blur-xl rounded-t-2xl">
       <div className="flex flex-1 items-center space-x-3 max-w-4xl">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-ice/40" />
           <Input
             placeholder="Search identity, phone or region..."
-            className="pl-11 h-12 bg-slate-50 border-none focus:ring-2 focus:ring-blue-500/10 transition-all font-medium rounded-xl"
+            className="pl-11 h-12 bg-[#051126] border border-white/10 focus:ring-2 focus:ring-brand-electric/50 text-white placeholder:text-brand-ice/40 transition-all font-medium rounded-xl"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -79,17 +79,17 @@ export function LeadsToolbar({
         
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="h-12 bg-white border-slate-200 hover:bg-slate-50 transition-colors px-5 rounded-xl font-bold text-slate-700 shadow-sm">
-              <FilterIcon className="mr-2 h-4 w-4 text-blue-500" />
+            <Button variant="outline" className="h-12 bg-[#051126] border-white/10 hover:bg-brand-electric/10 transition-colors px-5 rounded-xl font-bold text-brand-ice/80 shadow-none">
+              <FilterIcon className="mr-2 h-4 w-4 text-brand-electric" />
               Advanced Rules
               {advancedConditions.length > 0 && (
-                <Badge className="ml-2 bg-blue-600 text-white border-none px-1.5 h-5 min-w-5 justify-center">
+                <Badge className="ml-2 bg-brand-deep text-brand-cyan border-none px-1.5 h-5 min-w-5 justify-center">
                   {advancedConditions.length}
                 </Badge>
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[500px] p-0 shadow-2xl border-slate-200 rounded-2xl overflow-hidden" align="start">
+          <PopoverContent className="w-[500px] p-0 shadow-2xl border-white/10 bg-[#051126] text-brand-ice rounded-2xl overflow-hidden" align="start">
             <LeadFilterBuilder 
               onFiltersChange={handleApplyFilters}
               initialConditions={advancedConditions}
@@ -102,7 +102,7 @@ export function LeadsToolbar({
             variant="ghost" 
             size="sm" 
             onClick={handleClearFilters}
-            className="text-slate-400 hover:text-slate-900 h-12 px-4 font-bold"
+            className="text-brand-ice/40 hover:text-brand-ice h-12 px-4 font-bold"
           >
             <X className="mr-2 h-4 w-4" />
             RESET
@@ -110,13 +110,13 @@ export function LeadsToolbar({
         )}
       </div>
       
-      <div className="flex items-center space-x-6 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-6 py-3 rounded-xl border border-slate-100 shadow-inner">
+      <div className="flex items-center space-x-6 text-[10px] font-black uppercase tracking-widest text-brand-ice/60 bg-brand-deep/10 px-6 py-3 rounded-xl border border-brand-electric/20 shadow-inner">
         <div className="flex items-center">
-          <div className="h-2 w-2 rounded-full bg-emerald-500 mr-2 shadow-sm shadow-emerald-200"></div>
+          <div className="h-2 w-2 rounded-full bg-emerald-500 mr-2 shadow-none shadow-emerald-500/20"></div>
           {totalLeads} HIGH-INTEGRITY RECORDS
         </div>
         <div className="flex items-center space-x-2">
-          <Target size={12} className="text-blue-500" />
+          <Target size={12} className="text-brand-electric" />
           <span>PAGE {page} OF {Math.max(1, totalPages)}</span>
         </div>
       </div>

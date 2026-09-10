@@ -57,13 +57,13 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
     <div 
       ref={ref}
       style={style}
-      className={`bg-white border rounded-lg p-3 shadow-sm flex flex-col gap-2 cursor-grab active:cursor-grabbing hover:border-blue-300 transition-colors ${isOverlay ? 'shadow-xl rotate-2 scale-105' : ''} ${isHandedOff ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'}`}
+      className={`bg-[#051126] border rounded-lg p-3 shadow-none flex flex-col gap-2 cursor-grab active:cursor-grabbing hover:border-brand-electric transition-colors ${isOverlay ? 'shadow-none shadow-black/50 rotate-2 scale-105' : ''} ${isHandedOff ? 'border-brand-cyan/50 bg-brand-cyan/10' : 'border-white/10'}`}
       {...props}
     >
       <div className="flex justify-between items-start">
-        <h4 className="font-semibold text-slate-900 text-sm">{lead.firstName} {lead.lastName}</h4>
+        <h4 className="font-semibold text-brand-ice text-sm">{lead.firstName} {lead.lastName}</h4>
         {isHandedOff && (
-          <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">
+          <Badge variant="outline" className="text-[10px] bg-brand-cyan/20 text-brand-cyan border-brand-cyan/50">
             HANDED OFF
           </Badge>
         )}
@@ -71,28 +71,28 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
       
       <div className="flex flex-col gap-1 mt-1">
         {lead.phoneNumber && (
-          <div className="flex items-center text-xs text-slate-500">
+          <div className="flex items-center text-xs text-brand-ice/60">
             <Phone className="h-3 w-3 mr-1" />
             {lead.phoneNumber}
           </div>
         )}
         {lead.email && (
-          <div className="flex items-center text-xs text-slate-500">
+          <div className="flex items-center text-xs text-brand-ice/60">
             <Mail className="h-3 w-3 mr-1" />
             <span className="truncate">{lead.email}</span>
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
-        <div className="text-[10px] text-slate-400 font-medium">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
+        <div className="text-[10px] text-brand-ice/40 font-medium">
           {new Date(lead.createdAt).toLocaleDateString()}
         </div>
         <div className="flex gap-1">
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-6 w-6 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+            className="h-6 w-6 text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10"
             onClick={(e) => { e.stopPropagation(); onViewProfile(lead.id); }}
             onPointerDown={(e) => e.stopPropagation()} // Prevent drag start when clicking button
           >
@@ -101,7 +101,7 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
           <Button 
             variant="ghost" 
             size="icon" 
-            className={`h-6 w-6 ${lead.conversationId ? 'text-slate-400 hover:text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
+            className={`h-6 w-6 ${lead.conversationId ? 'text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10' : 'text-brand-ice/20 cursor-not-allowed'}`}
             onClick={(e) => { e.stopPropagation(); onOpenConversation(lead.conversationId); }}
             onPointerDown={(e) => e.stopPropagation()}
             disabled={!lead.conversationId}
@@ -307,16 +307,16 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
   if (isLoading || stagesLoading) {
     return (
       <div className="flex items-center justify-center h-[500px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-brand-cyan" />
       </div>
     );
   }
 
   if (stages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[500px] text-slate-500">
-        <AlertCircle className="h-10 w-10 mb-4 text-slate-300" />
-        <h3 className="text-lg font-semibold text-slate-700">No Pipeline Stages</h3>
+      <div className="flex flex-col items-center justify-center h-[500px] text-brand-ice/40">
+        <AlertCircle className="h-10 w-10 mb-4 text-brand-ice/20" />
+        <h3 className="text-lg font-semibold text-brand-ice">No Pipeline Stages</h3>
         <p>You need to create pipeline stages before using the Kanban board.</p>
       </div>
     );
@@ -378,14 +378,14 @@ function KanbanColumn({ stage, leads, onViewProfile, onOpenConversation }: Kanba
 
   return (
     <div 
-      className="flex flex-col bg-slate-100/50 rounded-xl border border-slate-200 min-w-[320px] max-w-[320px] snap-center shrink-0 flex-1 overflow-hidden"
+      className="flex flex-col bg-brand-deep/50 rounded-xl border border-white/10 min-w-[320px] max-w-[320px] snap-center shrink-0 flex-1 overflow-hidden"
     >
-      <div className="p-4 bg-white/50 border-b border-slate-200 flex justify-between items-center sticky top-0 backdrop-blur-md z-10">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+      <div className="p-4 bg-[#01081A]/50 border-b border-white/10 flex justify-between items-center sticky top-0 backdrop-blur-md z-10">
+        <h3 className="font-bold text-brand-ice flex items-center gap-2">
           {stage.icon && <span className="text-lg">{stage.icon}</span>}
           {stage.name}
         </h3>
-        <Badge variant="secondary" className="bg-slate-200 text-slate-600">
+        <Badge variant="secondary" className="bg-brand-navy text-brand-ice">
           {leads.length}
         </Badge>
       </div>
@@ -406,8 +406,8 @@ function KanbanColumn({ stage, leads, onViewProfile, onOpenConversation }: Kanba
         </SortableContext>
         
         {leads.length === 0 && (
-          <div className="flex-1 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center">
-            <span className="text-sm font-medium text-slate-400">Drop leads here</span>
+          <div className="flex-1 border-2 border-dashed border-white/10 rounded-lg flex items-center justify-center">
+            <span className="text-sm font-medium text-brand-ice/40">Drop leads here</span>
           </div>
         )}
       </div>

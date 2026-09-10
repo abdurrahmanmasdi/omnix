@@ -45,14 +45,14 @@ export default function ExperiencesSettingsPage() {
   return (
     <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col gap-6 px-6 py-10">
       <div className="space-y-3">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-brand-ice/60">
           Settings / Experiences
         </p>
         <div className="max-w-3xl space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
             Manage patient experiences
           </h1>
-          <p className="text-sm leading-6 text-slate-600">
+          <p className="text-sm leading-6 text-brand-ice/60">
             Add a new experience entry for the current organization. These
             stories can be reused across your marketing and clinic profile.
           </p>

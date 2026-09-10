@@ -131,15 +131,15 @@ export default function PipelineStagesPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center">
+          <h1 className="text-3xl font-black text-brand-ice tracking-tight flex items-center">
             PIPELINE STAGES
             <Badge variant="outline" className="ml-3 bg-indigo-600 text-white border-none px-2 py-0 h-5 text-[10px] font-black tracking-tighter">SETTINGS</Badge>
           </h1>
-          <p className="text-slate-500 font-medium mt-1">Define and reorder the columns of your sales Kanban board.</p>
+          <p className="text-brand-ice/60 font-medium mt-1">Define and reorder the columns of your sales Kanban board.</p>
         </div>
         <div className="flex items-center space-x-3">
           <Button
-            className="bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-200 h-11 rounded-xl font-bold transition-all active:scale-95"
+            className="bg-indigo-600 hover:bg-indigo-700 shadow-none shadow-indigo-200 h-11 rounded-xl font-bold transition-all active:scale-95"
             onClick={handleCreate}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -149,19 +149,19 @@ export default function PipelineStagesPage() {
       </div>
 
       {/* Reorder hint */}
-      <div className="flex items-center space-x-3 px-5 py-3 bg-indigo-50/60 border border-indigo-100 rounded-xl text-[11px] font-bold text-indigo-700">
+      <div className="flex items-center space-x-3 px-5 py-3 bg-brand-electric/10/60 border border-indigo-100 rounded-xl text-[11px] font-bold text-brand-cyan">
         <GripVertical className="h-4 w-4 text-indigo-400 shrink-0" />
         <span>Drag the handle on each row to reorder pipeline stages. Changes are saved instantly.</span>
       </div>
 
       {/* Table */}
-      <Card className="shadow-2xl shadow-slate-200/40 border-slate-100 overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl">
-        <CardHeader className="border-b border-slate-100 py-5 px-8 flex flex-row items-center justify-between bg-white/50">
-          <div className="flex items-center space-x-2 text-sm font-bold text-slate-700 uppercase tracking-widest">
+      <Card className="shadow-2xl shadow-none border-white/10 overflow-hidden rounded-2xl bg-transparent/80 backdrop-blur-xl">
+        <CardHeader className="border-b border-white/10 py-5 px-8 flex flex-row items-center justify-between bg-transparent/50">
+          <div className="flex items-center space-x-2 text-sm font-bold text-brand-ice/80 uppercase tracking-widest">
             <Layers className="h-5 w-5 text-indigo-500" />
             <span>Pipeline Flow</span>
           </div>
-          <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-200 shadow-inner font-black px-3 py-1">
+          <Badge className="bg-brand-deep text-brand-ice/60 hover:bg-slate-200 shadow-inner font-black px-3 py-1">
             {localStages.length} Stages
           </Badge>
         </CardHeader>
@@ -169,11 +169,11 @@ export default function PipelineStagesPage() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-100">
+                <TableRow className="bg-brand-navy/50 hover:bg-brand-navy/50 border-b border-white/10">
                   <TableHead className="w-12 px-4"></TableHead>
-                  <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-14 px-8">Stage Name</TableHead>
-                  <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-14">Order</TableHead>
-                  <TableHead className="text-right font-bold text-[11px] uppercase tracking-widest text-slate-500 h-14 pr-8">Actions</TableHead>
+                  <TableHead className="font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-14 px-8">Stage Name</TableHead>
+                  <TableHead className="font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-14">Order</TableHead>
+                  <TableHead className="text-right font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-14 pr-8">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -182,14 +182,14 @@ export default function PipelineStagesPage() {
                     <TableCell colSpan={4} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                        <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Loading Pipeline...</span>
+                        <span className="text-sm font-bold text-brand-ice/60 uppercase tracking-widest">Loading Pipeline...</span>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : localStages.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="h-48 text-center">
-                      <p className="text-sm font-medium text-slate-500">No pipeline stages configured yet.</p>
+                      <p className="text-sm font-medium text-brand-ice/60">No pipeline stages configured yet.</p>
                       <Button variant="link" onClick={handleCreate} className="text-indigo-600 font-bold mt-2">Create your first stage</Button>
                     </TableCell>
                   </TableRow>

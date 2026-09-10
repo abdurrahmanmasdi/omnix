@@ -206,7 +206,7 @@ export default function CreateOrganizationPage() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      className="shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-500/10"
                       onClick={() => remove(index)}
                     >
                       <Trash2 size={18} />

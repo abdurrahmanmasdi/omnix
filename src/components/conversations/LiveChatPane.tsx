@@ -112,20 +112,20 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
   };
 
   return (
-    <Card className="w-full flex flex-col h-full shadow-2xl border-l-0 rounded-l-none rounded-r-2xl border-slate-200 z-10 animate-in slide-in-from-right-16 duration-300">
+    <Card className="w-full flex flex-col h-full shadow-2xl border-l-0 rounded-l-none rounded-r-2xl border-white/10 z-10 animate-in slide-in-from-right-16 duration-300">
       {/* Chat Header */}
-      <div className="border-b px-6 py-4 bg-white rounded-tr-2xl flex justify-between items-center shadow-sm relative z-10">
+      <div className="border-b px-6 py-4 bg-transparent rounded-tr-2xl flex justify-between items-center shadow-none relative z-10">
         <div className="flex items-center space-x-3">
-          <Avatar className="h-10 w-10 border border-slate-100 shadow-sm">
-            <AvatarFallback className="bg-blue-50 text-blue-600 font-bold">
+          <Avatar className="h-10 w-10 border border-white/10 shadow-none">
+            <AvatarFallback className="bg-brand-electric/10 text-brand-cyan font-bold">
               <User size={18} />
             </AvatarFallback>
           </Avatar>
           <div>
-            <h3 className="font-bold text-slate-900 leading-none mb-1">
+            <h3 className="font-bold text-brand-ice leading-none mb-1">
               {activeConversationData?.lead?.name || activeConversationData?.lead?.phoneNumber || 'Active Chat'}
             </h3>
-            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
+            <p className="text-[10px] text-brand-ice/60 font-medium uppercase tracking-widest">
               ID: {activeConversationId.substring(0, 8)}
             </p>
           </div>
@@ -143,8 +143,8 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
               disabled={toggleAiMutation.isPending}
               className={`h-8 px-3 rounded-lg font-bold transition-all ${
                 !isAiPaused 
-                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-200' 
-                  : 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100'
+                  ? 'bg-brand-cyan/100 hover:bg-emerald-600 text-white shadow-none shadow-emerald-500/20' 
+                  : 'border-amber-500/20 text-amber-400 bg-amber-500/20 hover:bg-amber-500/20'
               }`}
             >
               {isAiPaused ? <Play size={12} className="mr-1.5" /> : <Pause size={12} className="mr-1.5" />}
@@ -154,7 +154,7 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           
           <div className="h-6 w-px bg-slate-200" />
           
-          <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors">
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-brand-ice/60 hover:text-brand-ice/80 rounded-full hover:bg-[#01081A] transition-colors">
             <X size={20} />
           </Button>
         </div>
@@ -162,20 +162,20 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
 
       {/* AI Paused Banner */}
       {isAiPaused && (
-        <div className="mx-4 mt-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/80 backdrop-blur-sm px-4 py-3 shadow-sm shrink-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100/50">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
+        <div className="mx-4 mt-4 flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/20/80 backdrop-blur-sm px-4 py-3 shadow-none shrink-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20/50">
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
           </div>
           <div className="flex-1">
             <p className="text-sm font-bold text-amber-900">AI Agent Paused</p>
-            <p className="text-xs font-medium text-amber-700">Human intervention required.</p>
+            <p className="text-xs font-medium text-amber-400">Human intervention required.</p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={handleToggleAi}
             disabled={toggleAiMutation.isPending}
-            className="h-8 border-amber-300 text-amber-700 hover:bg-amber-100 bg-white shadow-sm font-bold"
+            className="h-8 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 bg-transparent shadow-none font-bold"
           >
             <Play size={12} className="mr-1.5" />
             Resume
@@ -185,12 +185,12 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
 
       {/* Chat History */}
       <div
-        className="flex-1 overflow-y-auto p-6 bg-slate-50/50 relative"
+        className="flex-1 overflow-y-auto p-6 bg-[#051126]/50 relative"
         ref={scrollRef}
       >
         <div className="space-y-6">
           {activeMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400 opacity-50 pt-20">
+            <div className="flex flex-col items-center justify-center h-full text-brand-ice/60 opacity-50 pt-20">
               <MessageSquare size={48} className="mb-4" />
               <p className="text-sm font-medium">No messages yet.</p>
             </div>
@@ -207,24 +207,24 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
                   <div className={`flex items-end space-x-2 max-w-[85%] ${isUser ? "flex-row" : "flex-row-reverse space-x-reverse"}`}>
                     <div className="w-6 shrink-0 flex flex-col justify-end pb-1">
                       {showAvatar && (
-                        <Avatar className="h-6 w-6 shadow-sm border border-slate-100">
-                          <AvatarFallback className={isUser ? "bg-white text-slate-600 text-[10px]" : "bg-blue-600 text-white text-[10px]"}>
+                        <Avatar className="h-6 w-6 shadow-none border border-white/10">
+                          <AvatarFallback className={isUser ? "bg-transparent text-brand-ice/60 text-[10px]" : "bg-brand-electric text-white text-[10px]"}>
                             {isUser ? <User size={12} /> : <Bot size={12} />}
                           </AvatarFallback>
                         </Avatar>
                       )}
                     </div>
                     <div
-                      className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                      className={`rounded-2xl px-4 py-3 text-sm shadow-none ${
                         isUser
-                          ? "bg-white border border-slate-200 text-slate-800 rounded-bl-sm"
-                          : "bg-blue-600 text-white rounded-br-sm border border-blue-700"
+                          ? "bg-transparent border border-white/10 text-brand-ice/80 rounded-bl-sm"
+                          : "bg-brand-electric text-white rounded-br-sm border border-blue-700"
                       }`}
                     >
                       {msg.content}
                     </div>
                   </div>
-                  <span className={`text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest ${isUser ? "ml-10" : "mr-10"}`}>
+                  <span className={`text-[9px] font-bold text-brand-ice/60 mt-1 uppercase tracking-widest ${isUser ? "ml-10" : "mr-10"}`}>
                     {new Date(msg.createdAt || "").toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -238,18 +238,18 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
       </div>
 
       {/* Chat Input */}
-      <div className="p-4 bg-white border-t border-slate-100 rounded-br-2xl shadow-[0_-4px_20px_-15px_rgba(0,0,0,0.1)] relative z-10">
+      <div className="p-4 bg-transparent border-t border-white/10 rounded-br-2xl shadow-[0_-4px_20px_-15px_rgba(0,0,0,0.1)] relative z-10">
         <div className="flex space-x-2">
           <Input
             placeholder={isAiPaused ? "Type a manual reply..." : "Pause AI to type manually..."}
-            className={`flex-1 h-12 rounded-xl border-slate-200 focus-visible:ring-blue-500 ${!isAiPaused && 'bg-slate-50 opacity-70'}`}
+            className={`flex-1 h-12 rounded-xl border-white/10 focus-visible:ring-blue-500 ${!isAiPaused && 'bg-[#051126] opacity-70'}`}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={sendMessageMutation.isPending || !isAiPaused}
           />
           <Button
-            className="bg-blue-600 hover:bg-blue-700 h-12 px-6 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
+            className="bg-brand-electric hover:bg-brand-electric/80 h-12 px-6 rounded-xl font-bold shadow-lg shadow-brand-electric/20 transition-all active:scale-95"
             onClick={handleSendMessage}
             disabled={sendMessageMutation.isPending || !messageInput.trim() || !isAiPaused}
           >

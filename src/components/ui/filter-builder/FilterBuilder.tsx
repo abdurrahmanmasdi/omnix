@@ -88,7 +88,7 @@ export function FilterBuilder({
 
   return (
     <div className="flex flex-col h-full max-h-[500px]">
-      <div className="p-5 border-b flex items-center justify-between bg-slate-50/80 backdrop-blur-sm">
+      <div className="p-5 border-b flex items-center justify-between bg-[#051126]/80 backdrop-blur-sm">
         <div className="flex items-center space-x-2">
           <Filter className="h-4 w-4 text-blue-600" />
           <h4 className="font-bold text-xs uppercase tracking-widest text-slate-700">{title}</h4>
@@ -101,7 +101,7 @@ export function FilterBuilder({
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {conditions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center mb-3 border border-slate-100 shadow-inner">
+            <div className="h-12 w-12 rounded-2xl bg-[#051126] flex items-center justify-center mb-3 border border-white/5 shadow-inner">
               <Filter className="h-5 w-5 text-slate-300" />
             </div>
             <p className="text-sm font-bold text-slate-900 uppercase tracking-tight">Precision Filtering</p>
@@ -117,7 +117,7 @@ export function FilterBuilder({
                   value={condition.field}
                   onValueChange={(val) => updateCondition(index, { field: val })}
                 >
-                  <SelectTrigger className="w-[140px] h-10 text-[11px] font-bold rounded-xl border-slate-200">
+                  <SelectTrigger className="w-[140px] h-10 text-[11px] font-bold rounded-xl border-white/10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -134,7 +134,7 @@ export function FilterBuilder({
                   onValueChange={(val) => updateCondition(index, { operator: val as FilterOperator })}
                   disabled={currentField?.type === 'select'}
                 >
-                  <SelectTrigger className="w-[110px] h-10 text-[11px] font-black text-slate-400 rounded-xl border-slate-200">
+                  <SelectTrigger className="w-[110px] h-10 text-[11px] font-black text-slate-400 rounded-xl border-white/10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -152,7 +152,7 @@ export function FilterBuilder({
                       value={condition.value}
                       onValueChange={(val) => updateCondition(index, { value: val })}
                     >
-                      <SelectTrigger className="w-full h-10 text-[11px] font-bold rounded-xl border-slate-200 bg-slate-50 border-none shadow-inner">
+                      <SelectTrigger className="w-full h-10 text-[11px] font-bold rounded-xl border-white/10 bg-[#051126] border-none shadow-inner">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
@@ -167,7 +167,7 @@ export function FilterBuilder({
                     <Input
                       type={currentField?.type === 'number' ? 'number' : 'text'}
                       placeholder="Enter criteria..."
-                      className="h-10 text-[11px] font-bold rounded-xl border-slate-200 bg-slate-50 border-none shadow-inner"
+                      className="h-10 text-[11px] font-bold rounded-xl border-white/10 bg-[#051126] border-none shadow-inner"
                       value={condition.value}
                       onChange={(e) => updateCondition(index, { 
                         value: currentField?.type === 'number' ? Number(e.target.value) : e.target.value 
@@ -180,7 +180,7 @@ export function FilterBuilder({
                   variant="ghost"
                   size="icon"
                   onClick={() => removeCondition(index)}
-                  className="h-10 w-10 text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all rounded-xl"
+                  className="h-10 w-10 text-slate-300 hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all rounded-xl"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -190,12 +190,12 @@ export function FilterBuilder({
         )}
       </div>
 
-      <div className="p-5 border-t bg-slate-50 flex items-center justify-between">
-        <Button variant="outline" size="sm" onClick={addCondition} className="h-10 text-[10px] font-black uppercase tracking-widest border-slate-200 rounded-xl px-5">
+      <div className="p-5 border-t bg-[#051126] flex items-center justify-between">
+        <Button variant="outline" size="sm" onClick={addCondition} className="h-10 text-[10px] font-black uppercase tracking-widest border-white/10 rounded-xl px-5">
           <Plus className="mr-2 h-4 w-4" />
           Add Rule
         </Button>
-        <Button size="sm" onClick={applyFilters} className="h-10 text-[10px] font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-100 rounded-xl px-6">
+        <Button size="sm" onClick={applyFilters} className="h-10 text-[10px] font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 shadow-none shadow-blue-100 rounded-xl px-6">
           Execute Filter
         </Button>
       </div>

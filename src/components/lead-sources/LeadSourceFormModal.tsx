@@ -105,14 +105,14 @@ export function LeadSourceFormModal({ sourceId, isOpen, onClose, onSuccess }: Le
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[500px] flex flex-col p-0 border-none shadow-2xl rounded-2xl overflow-hidden">
-        <DialogHeader className="p-8 pb-6 bg-slate-50 border-b border-slate-100">
+        <DialogHeader className="p-8 pb-6 bg-[#051126] border-b border-white/5">
           <div className="flex items-center space-x-3 mb-2">
             <div className="h-10 w-10 rounded-xl bg-purple-600 flex items-center justify-center text-white shadow-lg shadow-purple-200">
               <Target size={20} />
             </div>
             <div>
               <DialogTitle className="text-2xl font-bold text-slate-900">{isEdit ? 'Edit Marketing Source' : 'New Marketing Source'}</DialogTitle>
-              <DialogDescription className="text-slate-500 font-medium">
+              <DialogDescription className="text-brand-ice/60 font-medium">
                 {isEdit ? 'Update details for this marketing attribution channel.' : 'Define a new channel where patient leads originate.'}
               </DialogDescription>
             </div>
@@ -127,20 +127,20 @@ export function LeadSourceFormModal({ sourceId, isOpen, onClose, onSuccess }: Le
           <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
             <div className="p-8 space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-xs font-bold uppercase tracking-widest text-slate-500">Source Name</Label>
+                <Label htmlFor="name" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Source Name</Label>
                 <Input 
                   id="name" 
                   {...register('name')} 
                   placeholder="e.g. TikTok Ads, Referral, Search SEO" 
-                  className="h-11 rounded-lg border-slate-200 focus:ring-purple-500/20" 
+                  className="h-11 rounded-lg border-white/10 focus:ring-purple-500/20" 
                 />
                 {errors.name && <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.name.message}</p>}
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-[#051126]">
                 <div className="space-y-0.5">
                   <Label className="text-sm font-bold text-slate-900">Active Status</Label>
-                  <p className="text-[10px] font-medium text-slate-500">Allow this source to be selected for new leads.</p>
+                  <p className="text-[10px] font-medium text-brand-ice/60">Allow this source to be selected for new leads.</p>
                 </div>
                 <Switch 
                   checked={isActiveValue}
@@ -149,14 +149,14 @@ export function LeadSourceFormModal({ sourceId, isOpen, onClose, onSuccess }: Le
               </div>
             </div>
 
-            <DialogFooter className="p-8 pt-6 border-t border-slate-100 bg-slate-50">
+            <DialogFooter className="p-8 pt-6 border-t border-white/5 bg-[#051126]">
               <div className="flex items-center justify-end w-full space-x-3">
-                <Button type="button" variant="outline" onClick={onClose} className="h-11 px-6 rounded-xl font-bold border-slate-200 shadow-sm">
+                <Button type="button" variant="outline" onClick={onClose} className="h-11 px-6 rounded-xl font-bold border-white/10 shadow-none">
                   Cancel
                 </Button>
                 <Button 
                   type="submit" 
-                  className="h-11 px-8 rounded-xl bg-purple-600 hover:bg-purple-700 shadow-xl shadow-purple-100 font-bold transition-all active:scale-95" 
+                  className="h-11 px-8 rounded-xl bg-purple-600 hover:bg-purple-700 shadow-none shadow-purple-100 font-bold transition-all active:scale-95" 
                   disabled={createMutation.isPending || updateMutation.isPending}
                 >
                   {(createMutation.isPending || updateMutation.isPending) ? (

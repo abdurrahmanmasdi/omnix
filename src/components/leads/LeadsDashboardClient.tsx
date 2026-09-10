@@ -179,7 +179,7 @@ export function LeadsDashboardClient() {
         onNewOnboarding={() => { setLeadToEdit(null); setIsFormModalOpen(true); }} 
       />
 
-      <Card className="shadow-2xl shadow-slate-200/40 border-slate-100 overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl">
+      <Card className="shadow-2xl shadow-black/40 border-white/5 overflow-hidden rounded-2xl bg-brand-navy/50 backdrop-blur-xl">
         <LeadsToolbar
           onSearchChange={handleSearchChange}
           onFiltersChange={handleFiltersChange}

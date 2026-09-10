@@ -50,17 +50,17 @@ export function DashboardShell({ children }: DashboardShellProps) {
   // Loading / auth guard
   if (!hasHydrated || !accessToken || !user?.hasCompletedOnboarding) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
+      <div className="flex h-screen items-center justify-center bg-brand-navy text-brand-ice">
         <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-          <p className="text-sm font-medium text-slate-500">Initializing secure session...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-brand-glow" />
+          <p className="text-sm font-medium text-brand-ice/60">Initializing secure session...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-brand-navy text-brand-ice selection:bg-brand-electric/30 font-inter">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header onLogout={handleLogout} />

@@ -105,23 +105,23 @@ export default function ConversationsPage() {
   }, [activeConversationId]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] w-full overflow-hidden bg-white">
+    <div className="flex flex-col h-[calc(100vh-64px)] w-full overflow-hidden bg-transparent">
       {/* Header */}
-      <div className="px-8 py-5 flex items-center justify-between border-b border-slate-100 shrink-0">
+      <div className="px-8 py-5 flex items-center justify-between border-b border-white/10 shrink-0">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center">
+          <h1 className="text-3xl font-black text-brand-ice tracking-tight flex items-center">
             LIVE INBOX
-            <Badge variant="outline" className="ml-3 bg-blue-600 text-white border-none px-2 py-0 h-5 text-[10px] font-black tracking-tighter shadow-sm shadow-blue-200">
+            <Badge variant="outline" className="ml-3 bg-brand-electric text-white border-none px-2 py-0 h-5 text-[10px] font-black tracking-tighter shadow-none shadow-brand-electric/20">
               BETA
             </Badge>
           </h1>
-          <p className="text-slate-500 font-medium mt-1 text-sm">
+          <p className="text-brand-ice/60 font-medium mt-1 text-sm">
             Manage your patient pipeline visually and take over AI conversations instantly.
           </p>
         </div>
-        <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+        <div className="flex items-center space-x-2 bg-[#051126] px-3 py-1.5 rounded-full border border-white/10 shadow-none">
           <div className={`h-2.5 w-2.5 rounded-full animate-pulse ${isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"}`} />
-          <span className="text-xs font-bold uppercase tracking-widest text-slate-600">
+          <span className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">
             {isConnected ? 'Real-time Active' : 'Connecting...'}
           </span>
         </div>
@@ -132,7 +132,7 @@ export default function ConversationsPage() {
         {/* Left: Full Width Kanban Board (Compresses when Chat opens) */}
         <div 
           className={`h-full transition-all duration-300 ease-in-out ${
-            activeConversationId ? 'w-[60%] border-r border-slate-200' : 'w-full'
+            activeConversationId ? 'w-[60%] border-r border-white/10' : 'w-full'
           }`}
         >
           <LiveKanbanBoard 
@@ -145,7 +145,7 @@ export default function ConversationsPage() {
 
         {/* Right: Chat Pane (Slides in pushing Kanban) */}
         {activeConversationId && (
-          <div className="w-[40%] h-full bg-slate-50 relative shrink-0">
+          <div className="w-[40%] h-full bg-[#051126] relative shrink-0">
             <LiveChatPane 
               activeConversationId={activeConversationId}
               activeConversationData={activeConversationData}

@@ -69,7 +69,7 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">Connect WhatsApp</DialogTitle>
-          <DialogDescription className="text-slate-500 font-medium">
+          <DialogDescription className="text-brand-ice/60 font-medium">
             Link your Meta developer app to start receiving and sending messages.
           </DialogDescription>
         </DialogHeader>
@@ -112,7 +112,7 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
             <Button
               type="button"
               variant="outline"
@@ -124,7 +124,7 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
             </Button>
             <Button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 font-bold h-11 px-6 rounded-xl shadow-xl shadow-blue-200 transition-all active:scale-95"
+              className="bg-blue-600 hover:bg-blue-700 font-bold h-11 px-6 rounded-xl shadow-none shadow-blue-200 transition-all active:scale-95"
               disabled={createChannelMutation.isPending}
             >
               {createChannelMutation.isPending ? (

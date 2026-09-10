@@ -145,15 +145,15 @@ export default function AiSettingsPage() {
 
   return (
     <div className="p-8 max-w-3xl mx-auto animate-in fade-in duration-500">
-      <Card className="shadow-2xl shadow-slate-200/40 border-slate-100 rounded-2xl bg-white/80 backdrop-blur-xl overflow-hidden">
-        <CardHeader className="bg-slate-50 border-b p-8 pb-6">
+      <Card className="shadow-2xl shadow-none border-white/10 rounded-2xl bg-transparent/80 backdrop-blur-xl overflow-hidden">
+        <CardHeader className="bg-brand-navy border-b p-8 pb-6">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+            <div className="h-10 w-10 rounded-xl bg-brand-electric flex items-center justify-center text-white shadow-lg shadow-brand-electric/20">
               <Bot size={20} />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-slate-900">AI Agent Configuration</CardTitle>
-              <CardDescription className="text-slate-500 font-medium">
+              <CardTitle className="text-2xl font-bold text-brand-ice">AI Agent Configuration</CardTitle>
+              <CardDescription className="text-brand-ice/60 font-medium">
                 Customize how your AI employee talks to patients.
               </CardDescription>
             </div>
@@ -163,22 +163,22 @@ export default function AiSettingsPage() {
         <CardContent className="p-8">
           {isFetching ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <p className="text-sm font-medium text-slate-500">Loading AI configuration...</p>
+              <Loader2 className="h-8 w-8 animate-spin text-brand-cyan" />
+              <p className="text-sm font-medium text-brand-ice/60">Loading AI configuration...</p>
             </div>
           ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="clinicName" className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                <Label htmlFor="clinicName" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">
                   Clinic Name
                 </Label>
                 <Input 
                   id="clinicName" 
                   {...register('clinicName')} 
                   placeholder="e.g. Smile Dental Clinic" 
-                  className="h-11 rounded-lg border-slate-200 focus:ring-blue-500/20" 
+                  className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20" 
                 />
                 {errors.clinicName && (
                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.clinicName.message}</p>
@@ -186,14 +186,14 @@ export default function AiSettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="agentName" className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                <Label htmlFor="agentName" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">
                   Agent Name
                 </Label>
                 <Input 
                   id="agentName" 
                   {...register('agentName')} 
                   placeholder="e.g. Sarah" 
-                  className="h-11 rounded-lg border-slate-200 focus:ring-blue-500/20" 
+                  className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20" 
                 />
                 {errors.agentName && (
                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.agentName.message}</p>
@@ -202,14 +202,14 @@ export default function AiSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tone" className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              <Label htmlFor="tone" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">
                 Agent Tone
               </Label>
               <Select 
                 value={toneValue} 
                 onValueChange={(val) => setValue('tone', val)}
               >
-                <SelectTrigger id="tone" className="h-11 rounded-lg border-slate-200">
+                <SelectTrigger id="tone" className="h-11 rounded-lg border-white/10">
                   <SelectValue placeholder="Select a tone" />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,7 +219,7 @@ export default function AiSettingsPage() {
                   <SelectItem value="Direct and clinical">Direct and clinical</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-slate-400 font-medium italic mt-1">
+              <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
                 This dictates the style of language the AI will use with patients.
               </p>
               {errors.tone && (
@@ -228,16 +228,16 @@ export default function AiSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="handoffMessage" className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              <Label htmlFor="handoffMessage" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">
                 Handoff Message
               </Label>
               <Input 
                 id="handoffMessage" 
                 {...register('handoffMessage')} 
                 placeholder="e.g. Let me transfer you to our human agent..." 
-                className="h-11 rounded-lg border-slate-200 focus:ring-blue-500/20" 
+                className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20" 
               />
-              <p className="text-[10px] text-slate-400 font-medium italic mt-1">
+              <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
                 The last message the AI will send before passing the chat to a human.
               </p>
               {errors.handoffMessage && (
@@ -246,16 +246,16 @@ export default function AiSettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="businessRules" className="text-xs font-bold uppercase tracking-widest text-slate-500">
+              <Label htmlFor="businessRules" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">
                 Business Rules
               </Label>
               <Textarea 
                 id="businessRules"
                 {...register('businessRules')} 
                 placeholder="e.g. If a patient asks about implants, require an X-ray before giving an exact price." 
-                className="min-h-[120px] rounded-lg border-slate-200 focus:ring-blue-500/20 resize-y"
+                className="min-h-[120px] rounded-lg border-white/10 focus:ring-blue-500/20 resize-y"
               />
-              <p className="text-[10px] text-slate-400 font-medium italic mt-1">
+              <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
                 Specific instructions, rules, or JSON data to guide the AI's decision-making.
               </p>
               {errors.businessRules && (
@@ -267,7 +267,7 @@ export default function AiSettingsPage() {
               <Button 
                 type="submit" 
                 disabled={mutation.isPending} 
-                className="h-11 px-8 rounded-lg bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-100 font-bold transition-all active:scale-95"
+                className="h-11 px-8 rounded-lg bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-blue-100 font-bold transition-all active:scale-95"
               >
                 {mutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

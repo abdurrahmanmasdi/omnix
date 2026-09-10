@@ -59,16 +59,16 @@ export default function ChannelsSettingsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center">
+          <h1 className="text-3xl font-black text-brand-ice tracking-tight flex items-center">
             CHANNELS & INTEGRATIONS
           </h1>
-          <p className="text-slate-500 font-medium mt-1">
+          <p className="text-brand-ice/60 font-medium mt-1">
             Connect your OmniDesk AI agent to external messaging platforms.
           </p>
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200 h-11 rounded-xl font-bold transition-all active:scale-95"
+          className="bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-brand-electric/20 h-11 rounded-xl font-bold transition-all active:scale-95"
         >
           <Plus className="mr-2 h-4 w-4" />
           Connect WhatsApp
@@ -78,21 +78,21 @@ export default function ChannelsSettingsPage() {
       {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-cyan" />
         </div>
       ) : channels.length === 0 ? (
-        <Card className="border-dashed border-2 bg-slate-50/50 shadow-none">
+        <Card className="border-dashed border-2 bg-brand-navy/50 shadow-none">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="h-16 w-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-inner">
+            <div className="h-16 w-16 bg-blue-100 text-brand-cyan rounded-2xl flex items-center justify-center mb-6 shadow-inner">
               <MessageCircle className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">No Channels Connected</h3>
-            <p className="text-slate-500 max-w-md font-medium mb-8">
+            <h3 className="text-xl font-bold text-brand-ice mb-2">No Channels Connected</h3>
+            <p className="text-brand-ice/60 max-w-md font-medium mb-8">
               Connect WhatsApp or other messaging platforms to allow your AI agent to communicate with leads instantly.
             </p>
             <Button
               onClick={() => setIsAddModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 font-bold h-11 px-8 rounded-xl shadow-xl shadow-blue-200 transition-all active:scale-95"
+              className="bg-brand-electric hover:bg-brand-electric/80 font-bold h-11 px-8 rounded-xl shadow-none shadow-brand-electric/20 transition-all active:scale-95"
             >
               <Plus className="mr-2 h-4 w-4" />
               Add First Channel
@@ -102,19 +102,19 @@ export default function ChannelsSettingsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {channels.map((channel: any) => (
-            <Card key={channel.id} className="relative overflow-hidden shadow-sm hover:shadow-md transition-shadow group border-slate-200">
+            <Card key={channel.id} className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                    <div className="h-10 w-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
                       <MessageCircle className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-900 leading-none mb-1">
+                      <h3 className="font-bold text-brand-ice leading-none mb-1">
                         {channel.provider}
                       </h3>
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] uppercase font-bold tracking-wider">
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-wider">
                         <CheckCircle2 className="h-3 w-3 mr-1" />
                         Active
                       </Badge>
@@ -122,14 +122,14 @@ export default function ChannelsSettingsPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3 mt-6 pt-6 border-t border-slate-100">
+                <div className="space-y-3 mt-6 pt-6 border-t border-white/10">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Account ID</p>
-                    <p className="font-medium text-slate-700 text-sm truncate">{channel.providerAccountId}</p>
+                    <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">Account ID</p>
+                    <p className="font-medium text-brand-ice/80 text-sm truncate">{channel.providerAccountId}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Connected On</p>
-                    <p className="font-medium text-slate-700 text-sm">{new Date(channel.createdAt).toLocaleDateString()}</p>
+                    <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">Connected On</p>
+                    <p className="font-medium text-brand-ice/80 text-sm">{new Date(channel.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
 
@@ -137,7 +137,7 @@ export default function ChannelsSettingsPage() {
                   <Button
                     variant="ghost"
                     onClick={() => setChannelToDelete(channel.id)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9 font-bold"
+                    className="text-red-400 hover:text-red-400 hover:bg-red-500/10 h-9 font-bold"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Disconnect
@@ -159,11 +159,11 @@ export default function ChannelsSettingsPage() {
       <Dialog open={!!channelToDelete} onOpenChange={(open) => !open && setChannelToDelete(null)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center text-red-600 font-bold text-xl">
+            <DialogTitle className="flex items-center text-red-400 font-bold text-xl">
               <AlertCircle className="mr-2 h-6 w-6" />
               Disconnect Channel
             </DialogTitle>
-            <DialogDescription className="text-slate-600 font-medium pt-2">
+            <DialogDescription className="text-brand-ice/60 font-medium pt-2">
               Are you sure you want to disconnect this channel? Your AI agent will no longer be able to send or receive messages through this provider. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>

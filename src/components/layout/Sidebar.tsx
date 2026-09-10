@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -88,20 +89,17 @@ export function Sidebar() {
   const isExactActive = (item: NavItem) => pathname === item.href;
 
   return (
-    <aside className="w-[260px] border-r border-slate-200/80 bg-white flex flex-col shrink-0">
+    <aside className="w-[260px] border-r border-white/5 bg-brand-navy flex flex-col shrink-0">
       {/* Brand */}
-      <div className="flex h-16 items-center px-6 border-b border-slate-200/80">
+      <div className="flex h-16 items-center px-6 border-b border-white/5">
         <div className="flex items-center gap-3 w-full">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-md shrink-0">
-            <Building2 size={18} className="text-white" />
-          </div>
-          <span className="text-[15px] font-bold text-slate-900 tracking-tight">OmniDesk</span>
+          <Image src="/full_logo.png" alt="OMNIX" width={140} height={40} className="object-contain" priority />
         </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 px-3 pt-3 pb-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-ice/40 px-3 pt-3 pb-2">
           Main Menu
         </p>
         {NAV_ITEMS.map((item) => {
@@ -109,8 +107,12 @@ export function Sidebar() {
             return (
               <div key={item.href}>
                 <Button
-                  variant={isActive(item) ? 'secondary' : 'ghost'}
-                  className="w-full justify-between h-10 rounded-xl text-[13px] font-semibold"
+                  variant="ghost"
+                  className={`w-full justify-between h-10 rounded-xl text-[13px] font-semibold transition-all ${
+                    isActive(item) 
+                      ? 'bg-brand-electric/10 text-brand-cyan hover:bg-brand-electric/20 hover:text-brand-glow' 
+                      : 'text-brand-ice/70 hover:bg-transparent/5 hover:text-brand-ice'
+                  }`}
                   onClick={() => setSettingsOpen((prev) => !prev)}
                 >
                   <span className="flex items-center">
@@ -129,13 +131,17 @@ export function Sidebar() {
                     settingsOpen ? 'max-h-96 opacity-100 mt-0.5' : 'max-h-0 opacity-0'
                   }`}
                 >
-                  <div className="ml-5 pl-3 border-l-2 border-slate-100 space-y-0.5 py-0.5">
+                  <div className="ml-5 pl-3 border-l-2 border-white/5 space-y-0.5 py-0.5">
                     {item.children.map((child) => (
                       <Link key={child.href} href={child.href}>
                         <Button
-                          variant={isExactActive(child) ? 'secondary' : 'ghost'}
+                          variant="ghost"
                           size="sm"
-                          className="w-full justify-start h-8 text-[12px] font-medium rounded-lg"
+                          className={`w-full justify-start h-8 text-[12px] font-medium rounded-lg transition-all ${
+                            isExactActive(child)
+                              ? 'bg-brand-electric/10 text-brand-cyan hover:bg-brand-electric/20 hover:text-brand-glow'
+                              : 'text-brand-ice/70 hover:bg-transparent/5 hover:text-brand-ice'
+                          }`}
                         >
                           {child.icon}
                           {child.label}
@@ -151,8 +157,12 @@ export function Sidebar() {
           return (
             <Link key={item.href} href={item.href}>
               <Button
-                variant={isActive(item) ? 'secondary' : 'ghost'}
-                className="w-full justify-start h-10 rounded-xl text-[13px] font-semibold"
+                variant="ghost"
+                className={`w-full justify-start h-10 rounded-xl text-[13px] font-semibold transition-all ${
+                  isActive(item)
+                    ? 'bg-brand-electric/10 text-brand-cyan hover:bg-brand-electric/20 hover:text-brand-glow'
+                    : 'text-brand-ice/70 hover:bg-transparent/5 hover:text-brand-ice'
+                }`}
               >
                 {item.icon}
                 {item.label}
@@ -163,16 +173,16 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-100">
+      <div className="p-4 border-t border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden shrink-0">
+          <div className="w-8 h-8 rounded-full bg-brand-deep/30 overflow-hidden shrink-0 border border-brand-electric/20">
             <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.firstName || 'user'}`} alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-sm font-semibold text-slate-700 truncate">
+            <span className="text-sm font-semibold text-brand-ice truncate">
               {user?.firstName} {user?.lastName}
             </span>
-            <p className="text-[11px] font-medium text-slate-600 mt-0.5">OmniDesk v2.0</p>
+            <p className="text-[11px] font-medium text-brand-ice/40 mt-0.5">OMNIX v2.0</p>
           </div>
         </div>
       </div>

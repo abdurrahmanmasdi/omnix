@@ -112,12 +112,12 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-white/10 bg-[#051126] p-6 shadow-none">
       <div className="mb-6 space-y-2">
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+        <h2 className="text-2xl font-semibold tracking-tight text-brand-ice">
           Add Experience
         </h2>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-brand-ice/60">
           Save a new patient experience for the selected organization.
         </p>
       </div>
@@ -199,18 +199,18 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
             disabled={isSubmitDisabled}
             required
             rows={6}
-            className="flex min-h-32 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-32 w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm shadow-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
         {successMessage && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 px-4 py-3 text-sm text-brand-cyan">
             {successMessage}
           </div>
         )}
 
         {errorMessage && (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
             {errorMessage}
           </div>
         )}

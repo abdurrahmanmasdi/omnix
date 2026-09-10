@@ -119,14 +119,14 @@ export default function DocumentsSettingsPage() {
   return (
     <div className="max-w-[1000px] mx-auto space-y-8 animate-in fade-in duration-500 p-8">
       <div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">AI Knowledge Base</h2>
-        <p className="text-slate-500 font-medium mt-1">Upload PDFs containing your pricing, doctor CVs, and FAQs to train your AI agent.</p>
+        <h2 className="text-3xl font-black text-brand-ice tracking-tight">AI Knowledge Base</h2>
+        <p className="text-brand-ice/60 font-medium mt-1">Upload PDFs containing your pricing, doctor CVs, and FAQs to train your AI agent.</p>
       </div>
 
       {/* Upload Zone */}
-      <Card className="shadow-xl shadow-slate-200/50 border-slate-100 rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-6">
-          <CardTitle className="flex items-center text-lg font-bold text-slate-800">
+      <Card className="shadow-none shadow-none border-white/10 rounded-2xl overflow-hidden">
+        <CardHeader className="bg-brand-navy/50 border-b border-white/10 pb-6">
+          <CardTitle className="flex items-center text-lg font-bold text-brand-ice/80">
             <UploadCloud className="mr-2 h-5 w-5 text-indigo-500" />
             Upload Document
           </CardTitle>
@@ -140,7 +140,7 @@ export default function DocumentsSettingsPage() {
             onClick={() => !uploadMutation.isPending && fileInputRef.current?.click()}
             className={`
               relative flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
-              ${isDragging ? 'border-indigo-500 bg-indigo-50/50 scale-[1.02]' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}
+              ${isDragging ? 'border-indigo-500 bg-brand-electric/10/50 scale-[1.02]' : 'border-white/10 hover:border-indigo-300 hover:bg-brand-navy'}
               ${uploadMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
             `}
           >
@@ -153,7 +153,7 @@ export default function DocumentsSettingsPage() {
               disabled={uploadMutation.isPending}
             />
             
-            <div className="h-16 w-16 bg-white shadow-sm border border-slate-100 rounded-2xl flex items-center justify-center text-indigo-500 mb-4 transition-transform group-hover:scale-110">
+            <div className="h-16 w-16 bg-transparent shadow-none border border-white/10 rounded-2xl flex items-center justify-center text-indigo-500 mb-4 transition-transform group-hover:scale-110">
               {uploadMutation.isPending ? (
                 <Loader2 className="h-8 w-8 animate-spin" />
               ) : (
@@ -164,14 +164,14 @@ export default function DocumentsSettingsPage() {
             {uploadMutation.isPending ? (
               <div className="text-center space-y-1">
                 <p className="text-sm font-bold text-indigo-600">Uploading & Vectorizing...</p>
-                <p className="text-xs font-medium text-slate-500">This may take a few moments</p>
+                <p className="text-xs font-medium text-brand-ice/60">This may take a few moments</p>
               </div>
             ) : (
               <div className="text-center space-y-1">
-                <p className="text-sm font-bold text-slate-700">
+                <p className="text-sm font-bold text-brand-ice/80">
                   <span className="text-indigo-600">Click to upload</span> or drag and drop
                 </p>
-                <p className="text-xs font-medium text-slate-500">PDF documents up to 10MB</p>
+                <p className="text-xs font-medium text-brand-ice/60">PDF documents up to 10MB</p>
               </div>
             )}
           </div>
@@ -179,14 +179,14 @@ export default function DocumentsSettingsPage() {
       </Card>
 
       {/* Documents Table */}
-      <Card className="shadow-xl shadow-slate-200/50 border-slate-100 rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-5">
+      <Card className="shadow-none shadow-none border-white/10 rounded-2xl overflow-hidden">
+        <CardHeader className="bg-brand-navy/50 border-b border-white/10 py-5">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center text-lg font-bold text-slate-800">
+            <CardTitle className="flex items-center text-lg font-bold text-brand-ice/80">
               <FileText className="mr-2 h-5 w-5 text-indigo-500" />
               Knowledge Base Documents
             </CardTitle>
-            <Badge className="bg-white text-slate-500 border-slate-200 shadow-sm font-black px-3 py-1">
+            <Badge className="bg-transparent text-brand-ice/60 border-white/10 shadow-none font-black px-3 py-1">
               {(documents as any[])?.length || 0} Files
             </Badge>
           </div>
@@ -194,11 +194,11 @@ export default function DocumentsSettingsPage() {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50/30 hover:bg-slate-50/30 border-b border-slate-100">
-                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12 pl-6">File Name</TableHead>
-                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12">Upload Date</TableHead>
-                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12">Status</TableHead>
-                <TableHead className="text-right font-bold text-[11px] uppercase tracking-widest text-slate-500 h-12 pr-6">Actions</TableHead>
+              <TableRow className="bg-brand-navy/30 hover:bg-brand-navy/30 border-b border-white/10">
+                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-12 pl-6">File Name</TableHead>
+                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-12">Upload Date</TableHead>
+                <TableHead className="font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-12">Status</TableHead>
+                <TableHead className="text-right font-bold text-[11px] uppercase tracking-widest text-brand-ice/60 h-12 pr-6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -207,30 +207,30 @@ export default function DocumentsSettingsPage() {
                   <TableCell colSpan={4} className="h-40 text-center">
                     <div className="flex flex-col items-center justify-center space-y-3">
                       <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading documents...</span>
+                      <span className="text-xs font-bold text-brand-ice/60 uppercase tracking-widest">Loading documents...</span>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (!documents || (documents as any[]).length === 0) ? (
                 <TableRow>
                   <TableCell colSpan={4} className="h-40 text-center">
-                    <p className="text-sm font-medium text-slate-500">No documents found.</p>
-                    <p className="text-xs text-slate-400 mt-1">Upload a PDF above to get started.</p>
+                    <p className="text-sm font-medium text-brand-ice/60">No documents found.</p>
+                    <p className="text-xs text-brand-ice/60 mt-1">Upload a PDF above to get started.</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 (documents as any[]).map((doc: any) => (
-                  <TableRow key={doc.id} className="hover:bg-slate-50/80 transition-colors">
+                  <TableRow key={doc.id} className="hover:bg-brand-navy/80 transition-colors">
                     <TableCell className="pl-6">
                       <div className="flex items-center space-x-3">
-                        <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-500">
+                        <div className="h-9 w-9 rounded-lg bg-brand-electric/10 flex items-center justify-center text-indigo-500">
                           <FileText size={18} />
                         </div>
-                        <span className="font-bold text-slate-800 text-sm">{doc.fileName}</span>
+                        <span className="font-bold text-brand-ice/80 text-sm">{doc.fileName}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm font-medium text-slate-500">
+                      <span className="text-sm font-medium text-brand-ice/60">
                         {new Date(doc.createdAt).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
@@ -240,19 +240,19 @@ export default function DocumentsSettingsPage() {
                     </TableCell>
                     <TableCell>
                       {doc.status === 'PROCESSED' && (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm font-bold text-[10px]">
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-none font-bold text-[10px]">
                           <CheckCircle2 className="w-3 h-3 mr-1" />
                           PROCESSED
                         </Badge>
                       )}
                       {doc.status === 'PENDING' && (
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 shadow-sm font-bold text-[10px]">
+                        <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/20 shadow-none font-bold text-[10px]">
                           <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                           PENDING
                         </Badge>
                       )}
                       {doc.status === 'ERROR' && (
-                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 shadow-sm font-bold text-[10px]">
+                        <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/20 shadow-none font-bold text-[10px]">
                           <AlertCircle className="w-3 h-3 mr-1" />
                           ERROR
                         </Badge>
@@ -263,7 +263,7 @@ export default function DocumentsSettingsPage() {
                         variant="ghost" 
                         size="icon" 
                         onClick={() => setDocumentToDelete(doc.id)}
-                        className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                        className="text-brand-ice/60 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
                       >
                         <Trash2 size={16} />
                       </Button>
@@ -279,29 +279,29 @@ export default function DocumentsSettingsPage() {
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!documentToDelete} onOpenChange={(open) => !open && setDocumentToDelete(null)}>
         <DialogContent className="sm:max-w-[400px] p-0 border-none shadow-2xl rounded-2xl overflow-hidden">
-          <DialogHeader className="p-6 bg-slate-50 border-b border-slate-100">
+          <DialogHeader className="p-6 bg-brand-navy border-b border-white/10">
             <div className="flex items-center space-x-3 mb-2">
-              <div className="h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+              <div className="h-10 w-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400">
                 <AlertCircle size={20} />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold text-slate-900">Delete Document</DialogTitle>
-                <DialogDescription className="text-slate-500 font-medium">This action cannot be undone.</DialogDescription>
+                <DialogTitle className="text-xl font-bold text-brand-ice">Delete Document</DialogTitle>
+                <DialogDescription className="text-brand-ice/60 font-medium">This action cannot be undone.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
           <div className="p-6">
-            <p className="text-sm font-medium text-slate-700">
+            <p className="text-sm font-medium text-brand-ice/80">
               Are you sure you want to delete this document? All associated AI training data and vectors will be permanently removed.
             </p>
           </div>
-          <DialogFooter className="p-6 pt-4 border-t border-slate-100 bg-slate-50">
+          <DialogFooter className="p-6 pt-4 border-t border-white/10 bg-brand-navy">
             <div className="flex items-center justify-end w-full space-x-3">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setDocumentToDelete(null)} 
-                className="h-10 px-4 rounded-xl font-bold border-slate-200"
+                className="h-10 px-4 rounded-xl font-bold border-white/10"
                 disabled={deleteMutation.isPending}
               >
                 Cancel
@@ -310,7 +310,7 @@ export default function DocumentsSettingsPage() {
                 type="button"
                 variant="destructive"
                 onClick={confirmDelete}
-                className="h-10 px-6 rounded-xl font-bold shadow-lg shadow-red-200 transition-all active:scale-95"
+                className="h-10 px-6 rounded-xl font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95"
                 disabled={deleteMutation.isPending}
               >
                 {deleteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
