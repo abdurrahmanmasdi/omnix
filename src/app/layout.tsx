@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
-import { Outfit } from 'next/font/google';
+import { Montserrat, Inter } from 'next/font/google';
 import './globals.css';
 import QueryProvider from '@/providers/query-provider';
-import { Toaster } from '@/components/ui/sonner'; // shadcn toast
+import { Toaster } from '@/components/ui/sonner';
 
-const outfit = Outfit({ subsets: ['latin'] });
+const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'OmniDesk CRM',
-  description: 'AI-Powered CRM for Modern Clinics',
+  title: 'OMNIX AI | Next-Gen AI Sales Agent',
+  description: 'AI-Powered CRM and RAG Platform',
 };
 
 export default function RootLayout({
@@ -17,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={outfit.className}>
+    <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
+      <body className={`${inter.className} bg-brand-navy text-brand-ice antialiased`}>
         <QueryProvider>
           {children}
           <Toaster />
