@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
   env: {
-    NEXT_PUBLIC_API_URL: "https://wpcrmfe-production.up.railway.app"
+    NEXT_PUBLIC_API_URL: "https://wpcrm-production-7a72.up.railway.app"
   }
 };
 
