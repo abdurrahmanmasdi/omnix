@@ -3,10 +3,10 @@ import { join } from 'path';
 const PROTO_ROOT = join(__dirname, '../proto');
 export const GRPC_CONFIG = {
   // Python Server (NestJS is the Client)
-  PYTHON_SERVER_URL: 'localhost:50051',
+  PYTHON_SERVER_URL: process.env.PYTHON_SERVER_URL || 'localhost:50051',
 
   // NestJS Server (Python is the Client)
-  NEST_SERVER_URL: 'localhost:50052',
+  NEST_SERVER_URL: process.env.NEST_SERVER_URL || 'localhost:50052',
 
   PACKAGES: {
     AGENT: 'agent',
