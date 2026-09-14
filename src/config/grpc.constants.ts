@@ -1,6 +1,6 @@
 import { join } from 'path';
 
-const PROTO_ROOT = join(process.cwd(), 'src/proto');
+const PROTO_ROOT = join(__dirname, '../proto');
 export const GRPC_CONFIG = {
   // Python Server (NestJS is the Client)
   PYTHON_SERVER_URL: 'localhost:50051',
