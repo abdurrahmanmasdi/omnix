@@ -43,7 +43,7 @@ export class AuthController {
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -69,7 +69,7 @@ export class AuthController {
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true, // Javascript cannot read this
       secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
-      sameSite: 'lax', // CSRF protection
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Support cross-domain cookies
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
     });
 
@@ -93,7 +93,7 @@ export class AuthController {
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     });
     return { message: 'Logged out successfully' };
   }
@@ -145,7 +145,7 @@ export class AuthController {
     res.cookie('refresh_token', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

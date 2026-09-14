@@ -12,8 +12,12 @@ async function bootstrap() {
   // Enable cookie parser
   app.use(cookieParser());
 
+  const frontendUrls = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((url) => url.trim().replace(/\/$/, ''))
+    : ['http://localhost:3001'];
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || ['http://localhost:3001'], // Read from env for production
+    origin: frontendUrls,
     credentials: true, // Required to allow cookies to pass through
   });
 
