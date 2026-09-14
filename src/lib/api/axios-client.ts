@@ -2,10 +2,12 @@ import axios, { AxiosRequestConfig } from "axios";
 import type { AxiosError } from "axios";
 import { useAuthStore } from "@/store/auth-store";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
 // 1. Create the central Axios instance
 export const axiosInstance = axios.create({
   // Point this to your NestJS backend URL
-  baseURL: "http://localhost:3000",
+  baseURL: API_URL,
   // Crucial for sending/receiving HttpOnly cookies (like our refresh_token)
   withCredentials: true,
 });
@@ -41,7 +43,7 @@ axiosInstance.interceptors.response.use(
       try {
         // 1. Call our refresh endpoint using standard axios (not our instance) to avoid loops
         const refreshResponse = await axios.post(
-          "http://localhost:3000/auth/refresh",
+          `${API_URL}/auth/refresh`,
           {},
           { withCredentials: true }, // Crucial: Sends the hidden refresh_token cookie
         );
