@@ -4,6 +4,7 @@ import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { join } from 'path';
 import { PrismaModule } from '../prisma/prisma.module';
+import { GRPC_CONFIG } from '../config/grpc.constants';
 
 // Note: If you created the grpc.constants.ts file earlier, you can use that here instead!
 @Module({
@@ -14,9 +15,9 @@ import { PrismaModule } from '../prisma/prisma.module';
         name: 'RAG_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          package: 'rag',
-          protoPath: join(__dirname, '../proto/rag.proto'),
-          url: 'localhost:50051', // Your Python server
+          package: GRPC_CONFIG.PACKAGES.RAG,
+          protoPath: GRPC_CONFIG.PROTO_PATHS.RAG,
+          url: GRPC_CONFIG.PYTHON_SERVER_URL,
         },
       },
     ]),

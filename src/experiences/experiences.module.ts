@@ -4,6 +4,7 @@ import { ExperiencesController } from './experiences.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';
+import { GRPC_CONFIG } from '../config/grpc.constants';
 
 @Module({
   imports: [
@@ -13,9 +14,9 @@ import { join } from 'path';
         name: 'RAG_PACKAGE',
         transport: Transport.GRPC,
         options: {
-          package: 'rag',
-          protoPath: join(__dirname, '../proto/rag.proto'),
-          url: 'localhost:50051', // Your Python server
+          package: GRPC_CONFIG.PACKAGES.RAG,
+          protoPath: GRPC_CONFIG.PROTO_PATHS.RAG,
+          url: GRPC_CONFIG.PYTHON_SERVER_URL,
         },
       },
     ]),

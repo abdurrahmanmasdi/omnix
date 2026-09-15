@@ -13,6 +13,7 @@ import { NotificationEmitterService } from '../notifications/notification-emitte
 import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 import { WhatsappMediaService } from './whatsapp-media.service';
+import { GRPC_CONFIG } from '../config/grpc.constants';
 
 @Module({
   imports: [
@@ -32,8 +33,8 @@ import { WhatsappMediaService } from './whatsapp-media.service';
         transport: Transport.GRPC,
         options: {
           package: 'agent', // Matches the 'package' in proto file
-          protoPath: join(__dirname, '../proto/agent.proto'),
-          url: 'localhost:50051', // Where Python is running
+          protoPath: GRPC_CONFIG.PROTO_PATHS.AGENT,
+          url: GRPC_CONFIG.PYTHON_SERVER_URL,
         },
       },
     ]),
