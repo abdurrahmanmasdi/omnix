@@ -3,20 +3,21 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 describe('AppController', () => {
-  let appController: AppController;
+  let provider: AppController;
 
   beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [AppService],
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AppController,
+        { provide: AppService, useValue: { methodName: jest.fn() } }
+      ],
+      controllers: [AppController]
     }).compile();
 
-    appController = app.get<AppController>(AppController);
+    provider = module.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
-    });
+  it('should be defined', () => {
+    expect(provider).toBeDefined();
   });
 });

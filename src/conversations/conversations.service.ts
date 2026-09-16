@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 

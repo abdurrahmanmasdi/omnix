@@ -1,18 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WebhooksController } from './webhooks.controller';
+import { ConfigService } from '@nestjs/config';
+import { WebhooksService } from './webhooks.service';
 
 describe('WebhooksController', () => {
-  let controller: WebhooksController;
+  let provider: WebhooksController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [WebhooksController],
+      providers: [
+        WebhooksController,
+        { provide: WebhooksService, useValue: { methodName: jest.fn() } },
+        { provide: ConfigService, useValue: { methodName: jest.fn() } }
+      ],
+      controllers: [WebhooksController]
     }).compile();
 
-    controller = module.get<WebhooksController>(WebhooksController);
+    provider = module.get<WebhooksController>(WebhooksController);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(provider).toBeDefined();
   });
 });

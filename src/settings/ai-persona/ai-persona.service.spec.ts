@@ -1,18 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiPersonaService } from './ai-persona.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 describe('AiPersonaService', () => {
-  let service: AiPersonaService;
+  let provider: AiPersonaService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AiPersonaService],
+      providers: [
+        AiPersonaService,
+        { provide: PrismaService, useValue: { methodName: jest.fn() } }
+      ],
+      controllers: []
     }).compile();
 
-    service = module.get<AiPersonaService>(AiPersonaService);
+    provider = module.get<AiPersonaService>(AiPersonaService);
   });
 
   it('should be defined', () => {
-    expect(service).toBeDefined();
+    expect(provider).toBeDefined();
   });
 });

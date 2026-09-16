@@ -226,8 +226,9 @@ export class LeadsService {
     };
 
     // Clean out undefined values to prevent overwriting existing data with null
-    Object.keys(updateData).forEach(
-      (key) => updateData[key] === undefined && delete updateData[key],
+    const cleanData = updateData as Record<string, unknown>;
+    Object.keys(cleanData).forEach(
+      (key) => cleanData[key] === undefined && delete cleanData[key],
     );
 
     return this.prisma.lead.update({

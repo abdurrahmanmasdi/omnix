@@ -1,18 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrganizationsController } from './organizations.controller';
+import { OrganizationsService } from './organizations.service';
+import { AuthService } from '../auth/auth.service';
 
 describe('OrganizationsController', () => {
-  let controller: OrganizationsController;
+  let provider: OrganizationsController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [OrganizationsController],
+      providers: [
+        OrganizationsController,
+        { provide: OrganizationsService, useValue: { methodName: jest.fn() } },
+        { provide: AuthService, useValue: { methodName: jest.fn() } }
+      ],
+      controllers: [OrganizationsController]
     }).compile();
 
-    controller = module.get<OrganizationsController>(OrganizationsController);
+    provider = module.get<OrganizationsController>(OrganizationsController);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(provider).toBeDefined();
   });
 });

@@ -1,18 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiPersonaController } from './ai-persona.controller';
+import { AiPersonaService } from './ai-persona.service';
 
 describe('AiPersonaController', () => {
-  let controller: AiPersonaController;
+  let provider: AiPersonaController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AiPersonaController],
+      providers: [
+        AiPersonaController,
+        { provide: AiPersonaService, useValue: { methodName: jest.fn() } }
+      ],
+      controllers: [AiPersonaController]
     }).compile();
 
-    controller = module.get<AiPersonaController>(AiPersonaController);
+    provider = module.get<AiPersonaController>(AiPersonaController);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(provider).toBeDefined();
   });
 });
