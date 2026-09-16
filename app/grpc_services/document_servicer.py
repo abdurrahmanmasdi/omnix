@@ -11,7 +11,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
         doc_id = getattr(request, 'documentationId', getattr(request, 'documentation_id', None))
         file_name = getattr(request, 'fileName', getattr(request, 'file_name', None))
-        file_path = getattr(request, 'filePath', getattr(request, 'file_path', None))
+        file_content = getattr(request, 'fileContent', getattr(request, 'file_content', None))
 
         print(f"📥 [gRPC] NestJS asked to ingest PDF: {file_name}")
         
@@ -23,7 +23,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
                 org_id=org_id,
                 documentation_id=doc_id,
                 file_name=file_name,
-                file_path=file_path
+                file_content=file_content
             )
             
             return rag_pb2.IngestResponse(success=True, chunksProcessed=chunks)

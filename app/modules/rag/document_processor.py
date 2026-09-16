@@ -13,10 +13,10 @@ class DocumentService:
         self.db = db_session
         self.client = AsyncOpenAI(api_key=api_key)
 
-    async def process_and_save_pdf(self, org_id: str, documentation_id: str, file_name: str, file_path: str) -> int:
-        print(f"📄 Reading PDF: {file_path}")
+    async def process_and_save_pdf(self, org_id: str, documentation_id: str, file_name: str, file_content: bytes) -> int:
+        print(f"📄 Reading PDF from memory: {file_name}")
         
-        doc = fitz.open(file_path)
+        doc = fitz.open(stream=file_content, filetype="pdf")
         full_text = "\n".join([page.get_text() for page in doc])
 
         # 🚀 Industry standard chunking

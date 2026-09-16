@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\trag.proto\x12\x03rag\"d\n\rIngestRequest\x12\x16\n\x0eorganizationId\x18\x01 \x01(\t\x12\x17\n\x0f\x64ocumentationId\x18\x02 \x01(\t\x12\x10\n\x08\x66ileName\x18\x03 \x01(\t\x12\x10\n\x08\x66ilePath\x18\x04 \x01(\t\":\n\x0eIngestResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x17\n\x0f\x63hunksProcessed\x18\x02 \x01(\x05\"9\n\rDeleteRequest\x12\x16\n\x0eorganizationId\x18\x01 \x01(\t\x12\x10\n\x08\x66ileName\x18\x02 \x01(\t\"8\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x15\n\rchunksDeleted\x18\x02 \x01(\x05\"H\n\x16\x45mbedExperienceRequest\x12\x15\n\rexperience_id\x18\x01 \x01(\t\x12\x17\n\x0forganization_id\x18\x02 \x01(\t\";\n\x17\x45mbedExperienceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd2\x01\n\x11\x44ocumentProcessor\x12\x36\n\tIngestPdf\x12\x12.rag.IngestRequest\x1a\x13.rag.IngestResponse\"\x00\x12\x37\n\nDeleteFile\x12\x12.rag.DeleteRequest\x1a\x13.rag.DeleteResponse\"\x00\x12L\n\x0f\x45mbedExperience\x12\x1b.rag.EmbedExperienceRequest\x1a\x1c.rag.EmbedExperienceResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\trag.proto\x12\x03rag\"g\n\rIngestRequest\x12\x16\n\x0eorganizationId\x18\x01 \x01(\t\x12\x17\n\x0f\x64ocumentationId\x18\x02 \x01(\t\x12\x10\n\x08\x66ileName\x18\x03 \x01(\t\x12\x13\n\x0b\x66ileContent\x18\x04 \x01(\x0c\":\n\x0eIngestResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x17\n\x0f\x63hunksProcessed\x18\x02 \x01(\x05\"9\n\rDeleteRequest\x12\x16\n\x0eorganizationId\x18\x01 \x01(\t\x12\x10\n\x08\x66ileName\x18\x02 \x01(\t\"8\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x15\n\rchunksDeleted\x18\x02 \x01(\x05\"H\n\x16\x45mbedExperienceRequest\x12\x15\n\rexperience_id\x18\x01 \x01(\t\x12\x17\n\x0forganization_id\x18\x02 \x01(\t\";\n\x17\x45mbedExperienceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd2\x01\n\x11\x44ocumentProcessor\x12\x36\n\tIngestPdf\x12\x12.rag.IngestRequest\x1a\x13.rag.IngestResponse\"\x00\x12\x37\n\nDeleteFile\x12\x12.rag.DeleteRequest\x1a\x13.rag.DeleteResponse\"\x00\x12L\n\x0f\x45mbedExperience\x12\x1b.rag.EmbedExperienceRequest\x1a\x1c.rag.EmbedExperienceResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,17 +32,17 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'rag_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_INGESTREQUEST']._serialized_start=18
-  _globals['_INGESTREQUEST']._serialized_end=118
-  _globals['_INGESTRESPONSE']._serialized_start=120
-  _globals['_INGESTRESPONSE']._serialized_end=178
-  _globals['_DELETEREQUEST']._serialized_start=180
-  _globals['_DELETEREQUEST']._serialized_end=237
-  _globals['_DELETERESPONSE']._serialized_start=239
-  _globals['_DELETERESPONSE']._serialized_end=295
-  _globals['_EMBEDEXPERIENCEREQUEST']._serialized_start=297
-  _globals['_EMBEDEXPERIENCEREQUEST']._serialized_end=369
-  _globals['_EMBEDEXPERIENCERESPONSE']._serialized_start=371
-  _globals['_EMBEDEXPERIENCERESPONSE']._serialized_end=430
-  _globals['_DOCUMENTPROCESSOR']._serialized_start=433
-  _globals['_DOCUMENTPROCESSOR']._serialized_end=643
+  _globals['_INGESTREQUEST']._serialized_end=121
+  _globals['_INGESTRESPONSE']._serialized_start=123
+  _globals['_INGESTRESPONSE']._serialized_end=181
+  _globals['_DELETEREQUEST']._serialized_start=183
+  _globals['_DELETEREQUEST']._serialized_end=240
+  _globals['_DELETERESPONSE']._serialized_start=242
+  _globals['_DELETERESPONSE']._serialized_end=298
+  _globals['_EMBEDEXPERIENCEREQUEST']._serialized_start=300
+  _globals['_EMBEDEXPERIENCEREQUEST']._serialized_end=372
+  _globals['_EMBEDEXPERIENCERESPONSE']._serialized_start=374
+  _globals['_EMBEDEXPERIENCERESPONSE']._serialized_end=433
+  _globals['_DOCUMENTPROCESSOR']._serialized_start=436
+  _globals['_DOCUMENTPROCESSOR']._serialized_end=646
 # @@protoc_insertion_point(module_scope)
