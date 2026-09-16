@@ -11,7 +11,7 @@ message IngestRequest {
   string organizationId = 1;
   string documentationId = 2; 
   string fileName = 3;
-  string filePath = 4; 
+  bytes fileContent = 4; 
 }
 
 message IngestResponse {
