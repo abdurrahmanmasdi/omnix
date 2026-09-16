@@ -34,3 +34,8 @@ class ConversationState(TypedDict):
     # Workflow Execution (التوجيه)
     current_stage: str | None        # أين نحن في مسار المبيعات؟ (مثال: QUALIFYING, PITCHING)
     pending_crm_actions: list[str]   # الإجراءات التي سيتم إرسالها لـ NestJS
+
+    # Compliance & Hallucination Prevention
+    is_compliant: bool
+    compliance_feedback: str | None
+    generation_attempts: int

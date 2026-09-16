@@ -27,6 +27,24 @@ def sales_router(state: ConversationState) -> str:
     # Fallback
     return "general_qa_node"
 
+
+def compliance_router(state: ConversationState) -> str:
+    if not state.get("is_compliant", True):
+        # Route back to the node that generated it. We can infer it from current_stage
+        stage = state.get("current_stage")
+        if stage == "OBJECTION_HANDLING":
+            return "objection_handler_node"
+        elif stage == "PITCHING":
+            return "value_pitch_node"
+        elif stage == "NURTURING":
+            return "general_qa_node"
+        else:
+            return "general_qa_node" # Fallback
+    
+    if state.get("needs_summarization"):
+        return "summarizer_node"
+    return END
+
 def after_sales_router(state: ConversationState) -> str:
     if state.get("needs_summarization"):
         return "summarizer_node"

@@ -4,7 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from app.modules.agent.state import ConversationState
 from app.modules.agent.prompts import (
     EXTRACTOR_SYSTEM_PROMPT, VISION_PROMPT, HANDOFF_PROMPT, 
-    OUT_OF_DOMAIN_PROMPT, SUMMARIZER_PROMPT
+    OUT_OF_DOMAIN_PROMPT, SUMMARIZER_PROMPT, COMPLIANCE_CHECKER_PROMPT
 )
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof, escalate_to_human
@@ -16,6 +16,11 @@ class ExtractionOutput(BaseModel):
     is_medical_image: bool = Field(description="True ONLY if the provided vision system description confirms it's a dental/medical image. False otherwise.")
     customer_intent: str | None = Field(description="Classify the main goal: 'inquiry', 'pricing', 'booking', 'general', or 'out_of_domain' if the user asks about something completely unrelated to dental/medical services.")
     active_objection: str | None = Field(description="ONLY classify as an objection if the user explicitly complains about high prices ('too expensive'), expresses intense fear, or distrusts the clinic. Explaining dental problems (like a missing tooth/empty space) or asking for prices are NOT objections. Default to 'none'.")
+
+
+class ComplianceOutput(BaseModel):
+    is_compliant: bool = Field(description="True if the response is safe and factual. False if it invents prices/procedures.")
+    feedback: str | None = Field(description="If is_compliant is false, explain what was hallucinated and how to fix it.")
 
 async def extract_and_classify(state: ConversationState) -> dict:
     messages = state.get("messages", [])
@@ -101,12 +106,25 @@ def _get_smart_llm():
     llm = LLMFactory.get_flagship_llm()
     return llm.bind_tools([search_clinic_knowledge, fetch_social_proof, escalate_to_human])
 
+from langchain_core.messages import AIMessage
 async def objection_handler_node(state: ConversationState):
+    attempts = state.get("generation_attempts", 0)
+    if not state.get("is_compliant", True) and attempts >= 2:
+        from app.modules.agent.tools import escalate_to_human
+        escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+        current_actions = state.get("pending_crm_actions", [])
+        new_actions = list(current_actions)
+        new_actions.append(escalation_msg)
+        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user has an objection (fear, price, trust). 
     Use the fetch_social_proof tool to find a relevant patient success story. Acknowledge their concern with deep empathy, present the social proof, and end with a gentle question to move forward. Max 3-4 sentences."""
     prompt += "\n" + HANDOFF_PROMPT
     
+    if not state.get("is_compliant", True) and state.get("compliance_feedback"):
+        prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
+
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     
     smart_writer_llm = _get_smart_llm()
@@ -169,13 +187,26 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
     prompt += """
 Keep your response under 3 sentences. Use a natural, friendly WhatsApp tone."""
 
+    if not state.get("is_compliant", True) and state.get("compliance_feedback"):
+        prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
+
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     flagship_llm = LLMFactory.get_flagship_llm()
     response = await flagship_llm.ainvoke(messages)
     
     return {"messages": [response], "current_stage": "QUALIFYING"}
 
+from langchain_core.messages import AIMessage
 async def value_pitch_node(state: ConversationState):
+    attempts = state.get("generation_attempts", 0)
+    if not state.get("is_compliant", True) and attempts >= 2:
+        from app.modules.agent.tools import escalate_to_human
+        escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+        current_actions = state.get("pending_crm_actions", [])
+        new_actions = list(current_actions)
+        new_actions.append(escalation_msg)
+        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is asking for pricing or service details.
     Use the search_clinic_knowledge tool to find real prices and info. NEVER invent prices. 
@@ -184,6 +215,9 @@ async def value_pitch_node(state: ConversationState):
     
     prompt += "\n" + HANDOFF_PROMPT
     
+    if not state.get("is_compliant", True) and state.get("compliance_feedback"):
+        prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
+
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     
     smart_writer_llm = _get_smart_llm()
@@ -233,7 +267,17 @@ async def out_of_domain_node(state: ConversationState):
     response = await flagship_llm.ainvoke(messages)
     return {"messages": [response], "current_stage": "OUT_OF_DOMAIN"}
 
+from langchain_core.messages import AIMessage
 async def general_qa_node(state: ConversationState):
+    attempts = state.get("generation_attempts", 0)
+    if not state.get("is_compliant", True) and attempts >= 2:
+        from app.modules.agent.tools import escalate_to_human
+        escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+        current_actions = state.get("pending_crm_actions", [])
+        new_actions = list(current_actions)
+        new_actions.append(escalation_msg)
+        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user is asking general questions about the clinic, doctors, location, or procedures.
     Use the search_clinic_knowledge tool to find accurate information. NEVER invent details. 
@@ -241,6 +285,9 @@ async def general_qa_node(state: ConversationState):
     
     prompt += "\n" + HANDOFF_PROMPT
     
+    if not state.get("is_compliant", True) and state.get("compliance_feedback"):
+        prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
+
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     
     smart_writer_llm = _get_smart_llm()
@@ -281,3 +328,26 @@ async def summarizer_node(state: ConversationState):
     new_actions.append(f"TOOL_ACTION:UPDATE_SUMMARY:{action_payload}")
     
     return {"pending_crm_actions": new_actions}
+
+async def compliance_checker_node(state: ConversationState):
+    # Only check if the last message is from the AI
+    messages = state.get("messages", [])
+    if not messages or getattr(messages[-1], "type", "") != "ai":
+        return {"is_compliant": True}
+
+    prompt = COMPLIANCE_CHECKER_PROMPT
+    checker_messages = [SystemMessage(content=prompt)] + list(messages)
+    
+    cheap_llm = LLMFactory.get_cheap_llm()
+    checker = cheap_llm.with_structured_output(ComplianceOutput)
+    response = await checker.ainvoke(checker_messages)
+    
+    if response.is_compliant:
+        return {"is_compliant": True, "compliance_feedback": None, "generation_attempts": 0}
+    else:
+        attempts = state.get("generation_attempts", 0) + 1
+        return {
+            "is_compliant": False, 
+            "compliance_feedback": response.feedback, 
+            "generation_attempts": attempts
+        }
