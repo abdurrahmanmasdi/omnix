@@ -1,6 +1,15 @@
+import logging
 import grpc
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+
+# ─── CONFIGURE STRUCTURED LOGGING ────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # Import generated Protobuf files
 import agent_pb2_grpc
@@ -22,11 +31,11 @@ async def lifespan(app: FastAPI):
     
     _grpc_server.add_insecure_port('[::]:50051')
     await _grpc_server.start()
-    print("🚀 gRPC Server running seamlessly on port 50051")
+    logger.info("gRPC Server running on port 50051")
     
     yield
     
-    print("🛑 Shutting down gRPC Server...")
+    logger.info("Shutting down gRPC Server...")
     await _grpc_server.stop(0)
 
 app = FastAPI(lifespan=lifespan, title="AI Sales Agent API")

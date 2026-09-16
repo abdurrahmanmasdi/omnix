@@ -1,6 +1,8 @@
 import json
 import base64
 import io
+import logging
+
 import agent_pb2
 import agent_pb2_grpc
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -8,6 +10,9 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
+
+logger = logging.getLogger(__name__)
+
 
 class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
     async def GenerateReply(self, request, context):
@@ -24,24 +29,13 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
 
         # Extract optional image from gRPC request
         image_base64 = getattr(request, 'imageBase64', getattr(request, 'image_base64', None))
-        if image_base64:
-            print(f"📸 [gRPC] Received Image Base64! Length: {len(image_base64)} characters.")
-            if len(image_base64) > 1000:
-                try:
-                    print("💾 [DEBUG] Attempting to save Base64 to disk...")
-                    image_data = base64.b64decode(image_base64)
-                    with open("debug_received_image.jpg", "wb") as f:
-                        f.write(image_data)
-                    print("✅ [DEBUG] Image saved successfully as 'debug_received_image.jpg'")
-                except Exception as e:
-                    print(f"❌ [DEBUG] Failed to save image: {e}")
-        else:
-            print("⚠️ [gRPC] NO IMAGE RECEIVED IN REQUEST!")
+        if image_base64 and len(image_base64) > 100:
+            logger.info("Received image for Conv %s (%d chars)", conv_id, len(image_base64))
 
         # Extract optional audio from gRPC request
         audio_base64 = getattr(request, 'audioBase64', getattr(request, 'audio_base64', None))
         if audio_base64:
-            print(f"🎙️ [gRPC] Received Audio Base64! Length: {len(audio_base64)} characters.")
+            logger.info("Received audio for Conv %s (%d chars)", conv_id, len(audio_base64))
             try:
                 audio_bytes = base64.b64decode(audio_base64)
                 audio_file = io.BytesIO(audio_bytes)
@@ -54,21 +48,20 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 )
                 
                 transcribed_text = transcription.text
-                print(f"✅ [WHISPER] Transcription success: {transcribed_text}")
+                logger.info("Audio transcription success for Conv %s", conv_id)
                 latest_msg = f"🎙️ [Voice Note Transcription]: {transcribed_text}"
             except Exception as e:
-                print(f"❌ [WHISPER ERROR]: {e}")
+                logger.error("Audio transcription failed for Conv %s: %s", conv_id, e)
                 latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
 
-        print(f"\n📥 [gRPC] NestJS asked to reply to Conv: {conv_id}")
-        print(f"💬 User said: {latest_msg}")
+        logger.info("GenerateReply called for Conv: %s", conv_id)
         
         try:
             # 1. Fetch Lead Info & Status from the database VIA ASYNC INFRASTRUCTURE
             res = await DatabaseService.get_conversation_lead_info(conv_id)
             
             if not res:
-                print(f"⚠️ [gRPC] Conversation {conv_id} not found in DB!")
+                logger.warning("Conversation %s not found in DB", conv_id)
                 return agent_pb2.AgentReply(replyText="System error: Conversation not found.")
 
             # res is a tuple-like object from SQLAlchemy execute
@@ -77,7 +70,6 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             is_name_collected = bool(getattr(res, 'lead_id', None) and getattr(res, 'firstName', None) and str(res.firstName).strip().lower() != "guest")
             has_medical_evidence = bool(getattr(res, 'lead_id', None) and getattr(res, 'status', None) in ["QUALIFIED", "READY_TO_BOOK", "HANDED_OFF", "WON"])
 
-            # Default state if lead doesn't exist yet
             state_data = {
                 "organization_id": org_id,
                 "clinic_name": clinic_name,
@@ -100,7 +92,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 "messages": []
             }
 
-            print(f"🔍 [State] Lead: {state_data['customer']['name']} | Status: {state_data['current_stage']} | ID: {state_data['lead_id']}")
+            logger.info("Lead: %s | Status: %s | ID: %s", 
+                        state_data['customer']['name'], state_data['current_stage'], state_data['lead_id'])
 
             if lead_summary:
                 state_data["messages"].append(SystemMessage(content=f"Previous Conversation Summary:\n{lead_summary}"))
@@ -173,7 +166,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                                 payload=parts[2]
                             ))
                     except Exception as te:
-                        print(f"⚠️ Error parsing virtual tool: {te}")
+                        logger.warning("Error parsing virtual tool: %s", te)
                         
             # Also extract from pending_crm_actions
             for action_str in final_state.get("pending_crm_actions", []):
@@ -186,7 +179,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                                 payload=json.dumps(action_obj)
                             ))
                     except Exception as te:
-                        print(f"⚠️ Error parsing JSON virtual tool from state: {te}")
+                        logger.warning("Error parsing JSON virtual tool from state: %s", te)
                 elif "TOOL_ACTION:" in action_str:
                     try:
                         parts = action_str.split(":", 2)
@@ -196,11 +189,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                                 payload=parts[2]
                             ))
                     except Exception as te:
-                        print(f"⚠️ Error parsing virtual tool from state: {te}")
+                        logger.warning("Error parsing virtual tool from state: %s", te)
 
             final_reply_to_send = "\n\n|||\n\n".join(reply_parts)
 
-            print(f"📤 Sending {len(reply_parts)} messages to WhatsApp.")
+            logger.info("Sending %d message(s) for Conv %s", len(reply_parts), conv_id)
             
             return agent_pb2.AgentReply(
                 replyText=final_reply_to_send,
@@ -209,5 +202,5 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             )
             
         except Exception as e:
-            print(f"❌ Error generating AI reply: {e}")
+            logger.error("Error generating AI reply for Conv %s: %s", conv_id, e, exc_info=True)
             return agent_pb2.AgentReply(replyText="I apologize, but I am experiencing a brief system update. Let me pass you to a human agent.")

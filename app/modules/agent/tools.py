@@ -1,11 +1,18 @@
+import json
+import logging
+
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
+from langchain_openai import OpenAIEmbeddings
+from sqlalchemy import text
+
 from app.core.database import SessionLocal
 from app.modules.rag.retriever import RAGRetriever
 from app.core.config import settings
-from langchain_openai import OpenAIEmbeddings
-from sqlalchemy import text
-import json
+from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+
+logger = logging.getLogger(__name__)
+
 
 # 🚀 Tool 1: The RAG Database Search
 @tool
@@ -15,14 +22,14 @@ async def search_clinic_knowledge(search_query: str, config: RunnableConfig) -> 
     Use this WHENEVER the patient asks a specific question about the clinic's services.
     """
     org_id = config["configurable"].get("organization_id")
-    print(f"🛠️ [TOOL] Searching Knowledge Base for: '{search_query}' (Org: {org_id})")
+    logger.info("[TOOL] Searching Knowledge Base for: '%s' (Org: %s)", search_query, org_id)
     db = SessionLocal()
     try:
         retriever = RAGRetriever(db_session=db, api_key=settings.OPENAI_API_KEY)
         context = await retriever.get_relevant_context(org_id, search_query)
         return context
     except Exception as e:
-        print(f"❌ Database search error: {e}")
+        logger.error("Knowledge base search error: %s", e)
         return "I'm sorry, I couldn't access the clinic records at this moment."
     finally:
         db.close()
@@ -61,7 +68,7 @@ async def create_lead(
         "priority": "COLD"
     }
     payload = {k: v for k, v in data.items() if v is not None}
-    print(f"🛠️ [VIRTUAL TOOL] Comprehensive Lead Creation: {payload}")
+    logger.info("[VIRTUAL TOOL] Lead Creation: %s", payload)
     return f"TOOL_ACTION:CREATE_LEAD:{json.dumps(payload)}"
 
 @tool
@@ -71,17 +78,16 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
     Use this when the patient shows hesitation, fear of pain, or doubts about the result.
     """
     org_id = config["configurable"].get("organization_id")
-    print(f"🛠️ [TOOL] Searching Social Proof for: '{user_objection}' (Org: {org_id})")
+    logger.info("[TOOL] Searching Social Proof for: '%s' (Org: %s)", user_objection, org_id)
     db = SessionLocal()
     try:
         embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-large", 
-            dimensions=3072,
+            model=EMBEDDING_MODEL, 
+            dimensions=EMBEDDING_DIMENSIONS,
             api_key=settings.OPENAI_API_KEY
         )
         query_vector = await embeddings.aembed_query(user_objection)
 
-        # 🚀 FIX: Query the exact columns defined in Prisma
         sql = text("""
             SELECT title, "storyText", "patientCountry", "procedureType", "beforeImageUrl", "afterImageUrl"
             FROM organization_experiences
@@ -113,7 +119,7 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
         return proof
 
     except Exception as e:
-        print(f"❌ Social proof tool error: {e}")
+        logger.error("Social proof tool error: %s", e)
         return "Our clinic has a 98% satisfaction rate and thousands of happy patients."
     finally:
         db.close()
@@ -131,7 +137,7 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
     org_id = config["configurable"].get("organization_id")
     conv_id = config["configurable"].get("conversation_id")
 
-    print(f"🛠️ [TOOL] Escalating Conv: {conv_id} to Human. Reason: {reason}")
+    logger.info("[TOOL] Escalating Conv: %s to Human. Reason: %s", conv_id, reason)
 
     db = SessionLocal()
     try:
@@ -158,11 +164,10 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
             "reason": reason
         }
 
-        print(f"📤 [VIRTUAL] Returning handoff action for NestJS to execute.")
         return json.dumps(action)
 
     except Exception as e:
-        print(f"❌ Escalation error: {e}")
+        logger.error("Escalation error: %s", e)
         return "Failed to escalate."
     finally:
         db.close()
@@ -191,7 +196,7 @@ async def update_patient_profile(
         data["serviceInterested"] = service_interested
         
     if data:
-        print(f"🛠️ [VIRTUAL TOOL] Update Patient Profile: {data}")
+        logger.info("[VIRTUAL TOOL] Update Patient Profile: %s", data)
         return f"TOOL_ACTION:UPDATE_LEAD:{json.dumps(data)}"
     
     return "No valid CRM fields provided to update."

@@ -1,11 +1,15 @@
-from openai import AsyncOpenAI
-import fitz  # PyMuPDF
+import logging
 import uuid
+
+import fitz  # PyMuPDF
+from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 from sqlalchemy import delete
 from app.core.database import OrganizationKnowledge
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.core.config import settings
+from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService:
@@ -14,15 +18,14 @@ class DocumentService:
         self.client = AsyncOpenAI(api_key=api_key)
 
     async def process_and_save_pdf(self, org_id: str, documentation_id: str, file_name: str, file_content: bytes) -> int:
-        print(f"📄 Reading PDF from memory: {file_name}")
+        logger.info("Processing PDF: %s", file_name)
         
         doc = fitz.open(stream=file_content, filetype="pdf")
         full_text = "\n".join([page.get_text() for page in doc])
 
-        # 🚀 Industry standard chunking
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,   # Roughly 150-250 words per chunk
-            chunk_overlap=150, # 150 characters of overlap to maintain context between chunks
+            chunk_size=1000,
+            chunk_overlap=150,
             length_function=len,
             is_separator_regex=False,
         )
@@ -31,11 +34,10 @@ class DocumentService:
         chunks_saved = 0
 
         for chunk_text in raw_chunks:
-            # 🚀 Using OpenAI's Flagship Embedding Model (3072 dims)
             response = await self.client.embeddings.create(
-                model="text-embedding-3-large",
+                model=EMBEDDING_MODEL,
                 input=chunk_text,
-                dimensions=3072
+                dimensions=EMBEDDING_DIMENSIONS
             )
             
             embedding_vector = response.data[0].embedding
@@ -53,13 +55,12 @@ class DocumentService:
             chunks_saved += 1
 
         self.db.commit()
-        print(f"✅ Saved {chunks_saved} highly optimized vectorized chunks for {file_name}")
+        logger.info("Saved %d vectorized chunks for %s", chunks_saved, file_name)
         return chunks_saved
     
     async def delete_file_knowledge(self, org_id: str, file_name: str) -> int:
-        print(f"🗑️ Deleting knowledge vectors for {file_name}")
+        logger.info("Deleting knowledge vectors for %s", file_name)
         
-        # Delete all chunks matching the org_id and file_name
         stmt = delete(OrganizationKnowledge).where(
             OrganizationKnowledge.organizationId == org_id,
             OrganizationKnowledge.file_name == file_name
@@ -69,5 +70,5 @@ class DocumentService:
         self.db.commit()
         
         deleted_count = result.rowcount
-        print(f"✅ Deleted {deleted_count} vector chunks for {file_name}.")
+        logger.info("Deleted %d vector chunks for %s", deleted_count, file_name)
         return deleted_count

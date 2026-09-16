@@ -1,3 +1,5 @@
+import logging
+
 import grpc
 import rag_pb2
 import rag_pb2_grpc
@@ -6,6 +8,9 @@ from app.modules.rag.experience_processor import ExperienceProcessor
 from app.core.database import SessionLocal
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
+
 class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
     async def IngestPdf(self, request, context):
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
@@ -13,7 +18,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         file_name = getattr(request, 'fileName', getattr(request, 'file_name', None))
         file_content = getattr(request, 'fileContent', getattr(request, 'file_content', None))
 
-        print(f"📥 [gRPC] NestJS asked to ingest PDF: {file_name}")
+        logger.info("IngestPdf called for: %s", file_name)
         
         db = SessionLocal()
         try:
@@ -28,7 +33,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
             
             return rag_pb2.IngestResponse(success=True, chunksProcessed=chunks)
         except Exception as e:
-            print(f"❌ Error processing PDF: {e}")
+            logger.error("Error processing PDF %s: %s", file_name, e, exc_info=True)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return rag_pb2.IngestResponse(success=False, chunksProcessed=0)
@@ -54,7 +59,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
             )
 
     async def DeleteFile(self, request, context):
-        print(f"📥 [gRPC] NestJS asked to delete vectors for: {request.fileName}")
+        logger.info("DeleteFile called for: %s", request.fileName)
         
         db = SessionLocal()
         try:
@@ -65,7 +70,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
             )
             return rag_pb2.DeleteResponse(success=True, chunksDeleted=deleted_count)
         except Exception as e:
-            print(f"❌ Error deleting vectors: {e}")
+            logger.error("Error deleting vectors for %s: %s", request.fileName, e, exc_info=True)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
             return rag_pb2.DeleteResponse(success=False, chunksDeleted=0)
