@@ -18,7 +18,20 @@ VISION_PROMPT = "You are a pure vision model. Do NOT answer the user. Do NOT pro
 OUT_OF_DOMAIN_PROMPT = """Act as a professional medical sales consultant. The user just asked a question that is completely outside the scope of our dental/medical clinic (e.g., tech support, general knowledge, pets, etc).
 Politely and warmly apologize, state that you can only assist with clinic-related inquiries or bookings, and ask if they need help with their dental care."""
 
-SUMMARIZER_PROMPT = "Summarize the key medical requirements, objections, and user traits from this conversation history. Keep it concise."
+SUMMARIZER_PROMPT = """Summarize the key medical requirements, objections, and user traits from this conversation history. 
+Keep it concise.
+AT THE VERY END of your summary, you MUST append a Lead Score assessment exactly in this format:
+[LEAD SCORE: X/100]
+[TEMPERATURE: COLD|WARM|HOT]
+
+Scoring logic:
+- Start at 10.
+- +30 if they provided a medical image or detailed their medical issue.
+- +20 if they asked about pricing or booking.
+- +20 if they are highly responsive and positive.
+- -20 if they are angry, highly skeptical, or unresponsive.
+- COLD: 0-30, WARM: 31-70, HOT: 71-100.
+"""
 
 COMPLIANCE_CHECKER_PROMPT = """You are a strict Compliance & Fact-Checker for a medical sales AI agent.
 Your job is to read the agent's proposed response and compare it against the retrieved facts (from tools).

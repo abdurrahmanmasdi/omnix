@@ -4,7 +4,7 @@ from app.core.config import settings
 
 # ─── CENTRALIZED MODEL CONSTANTS ────────────────────────
 # Change these to swap models across the entire service.
-FLAGSHIP_MODEL = "gpt-5.6-terra"
+FLAGSHIP_MODEL = "gpt-5.6-luna"
 EXTRACTOR_MODEL = "gpt-5.6-terra"
 CHEAP_MODEL = "gpt-5.6-luna"
 EMBEDDING_MODEL = "text-embedding-3-large"

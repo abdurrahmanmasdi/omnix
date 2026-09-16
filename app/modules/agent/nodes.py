@@ -7,7 +7,7 @@ from app.modules.agent.prompts import (
     OUT_OF_DOMAIN_PROMPT, SUMMARIZER_PROMPT, COMPLIANCE_CHECKER_PROMPT
 )
 from app.infrastructure.llm_factory import LLMFactory
-from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof, escalate_to_human
+from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof, fetch_battlecard, escalate_to_human
 
 # 2. Define Structured Output Schema
 class ExtractionOutput(BaseModel):
@@ -104,7 +104,7 @@ async def extract_and_classify(state: ConversationState) -> dict:
 
 def _get_smart_llm():
     llm = LLMFactory.get_flagship_llm()
-    return llm.bind_tools([search_clinic_knowledge, fetch_social_proof, escalate_to_human])
+    return llm.bind_tools([search_clinic_knowledge, fetch_social_proof, fetch_battlecard, escalate_to_human])
 
 from langchain_core.messages import AIMessage
 async def objection_handler_node(state: ConversationState):
@@ -118,8 +118,10 @@ async def objection_handler_node(state: ConversationState):
         safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
-    prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user has an objection (fear, price, trust). 
-    Use the fetch_social_proof tool to find a relevant patient success story. Acknowledge their concern with deep empathy, present the social proof, and end with a gentle question to move forward. Max 3-4 sentences."""
+    prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user has an objection (fear, price, trust, or competitor comparison). 
+    If they mention a competitor or object to the price, you MUST use the fetch_battlecard tool defensively to find our approved rebuttal. 
+    Otherwise, use the fetch_social_proof tool to find a relevant patient success story. 
+    Acknowledge their concern with deep empathy, present the proof/rebuttal, and end with a gentle question to move forward. Max 3-4 sentences."""
     prompt += "\n" + HANDOFF_PROMPT
     
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
@@ -137,6 +139,8 @@ async def objection_handler_node(state: ConversationState):
         for tool_call in response.tool_calls:
             if tool_call["name"] == "fetch_social_proof":
                 tool_result = await fetch_social_proof.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
+            elif tool_call["name"] == "fetch_battlecard":
+                tool_result = await fetch_battlecard.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
             elif tool_call["name"] == "search_clinic_knowledge":
                 tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
             elif tool_call["name"] == "escalate_to_human":

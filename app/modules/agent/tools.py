@@ -125,6 +125,50 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
         db.close()
 
 @tool
+async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
+    """
+    Fetches real competitor battlecards and approved rebuttals when the patient mentions a competitor or specific objection.
+    Use this when the patient compares us to another clinic (e.g. 'Clinic X is cheaper' or 'Why are you more expensive?').
+    """
+    org_id = config["configurable"].get("organization_id")
+    logger.info("[TOOL] Searching Battlecards for: '%s' (Org: %s)", user_objection, org_id)
+    db = SessionLocal()
+    try:
+        embeddings = OpenAIEmbeddings(
+            model=EMBEDDING_MODEL, 
+            dimensions=EMBEDDING_DIMENSIONS,
+            api_key=settings.OPENAI_API_KEY
+        )
+        query_vector = await embeddings.aembed_query(user_objection)
+
+        sql = text("""
+            SELECT "competitorName", "objectionType", "rebuttalText"
+            FROM organization_battlecards
+            WHERE "organizationId" = :org_id
+            ORDER BY embedding <=> :vector
+            LIMIT 1
+        """)
+        
+        result = db.execute(sql, {"org_id": org_id, "vector": str(query_vector)}).fetchone()
+        
+        if not result:
+            return "Our clinic provides premium quality and guaranteed results that set us apart from standard options."
+
+        proof = f"""
+        COMPETITOR BATTLECARD FOUND:
+        Competitor / Context: {result.competitorName}
+        Objection Type: {result.objectionType}
+        Suggested Rebuttal: {result.rebuttalText}
+        """
+        return proof
+
+    except Exception as e:
+        logger.error("Battlecard tool error: %s", e)
+        return "We focus on premium care and long-term results rather than competing purely on price."
+    finally:
+        db.close()
+
+@tool
 async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
     """
     Escalates the conversation to a human agent.
@@ -201,4 +245,4 @@ async def update_patient_profile(
     
     return "No valid CRM fields provided to update."
 
-tools_list = [search_clinic_knowledge, fetch_social_proof, create_lead, escalate_to_human, update_patient_profile]
+tools_list = [search_clinic_knowledge, fetch_social_proof, fetch_battlecard, create_lead, escalate_to_human, update_patient_profile]
