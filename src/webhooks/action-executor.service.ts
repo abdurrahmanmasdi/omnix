@@ -5,6 +5,7 @@ import { LeadStatus, Priority, NotificationType } from '@prisma/client';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
+import { FollowUpService } from '../follow-ups/follow-up.service';
 
 /** Statuses that trigger an automatic CRM sync */
 const CRM_SYNC_STATUSES: LeadStatus[] = [
@@ -21,6 +22,7 @@ export class ActionExecutorService {
     private readonly notificationEmitter: NotificationEmitterService,
     private readonly eventsGateway: EventsGateway,
     private readonly crmIntegration: CrmIntegrationService,
+    private readonly followUpService: FollowUpService,
   ) {}
 
   /**
@@ -102,6 +104,15 @@ export class ActionExecutorService {
           organizationId,
           conversationId,
           payload,
+        );
+        break;
+
+      case 'SCHEDULE_FOLLOW_UP':
+        await this.followUpService.scheduleAiFollowUp(
+          organizationId,
+          conversationId,
+          new Date(payload.scheduledAt),
+          payload.context,
         );
         break;
 

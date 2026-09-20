@@ -11,6 +11,8 @@ export interface AgentRequest {
   audioBase64?: string;
   totalMessageCount?: number;
   leadSummary?: string;
+  isFollowUp?: boolean;
+  followUpContext?: string;
 }
 
 export interface ToolAction {

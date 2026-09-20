@@ -1,13 +1,23 @@
-import { Controller, Post, Body, UseGuards, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Patch,
+  Body,
+  UseGuards,
+  Res,
+  ForbiddenException,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiResponse,
 } from '@nestjs/swagger';
+import axios from 'axios';
 import type { Response } from 'express';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateCrmTokenDto } from './dto/update-crm-token.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
@@ -70,5 +80,83 @@ export class OrganizationsController {
       organizationId: workspace.organizationId,
       access_token: newTokens.accessToken,
     };
+  }
+
+  @Patch('crm-token')
+  @ApiOperation({ summary: 'Update the HubSpot CRM access token for the current organization' })
+  @ApiResponse({
+    status: 200,
+    description: 'CRM token updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        organizationId: { type: 'string' },
+      },
+    },
+  })
+  async updateCrmToken(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateCrmTokenDto,
+  ) {
+    if (!user.organizationId) {
+      throw new ForbiddenException('User is not associated with an organization');
+    }
+
+    const organization = await this.orgService.updateCrmToken(
+      user.organizationId,
+      dto.crmAccessToken,
+    );
+
+    return {
+      message: 'CRM token updated successfully',
+      organizationId: organization.id,
+    };
+  }
+
+  @Post('crm-token/test')
+  @ApiOperation({ summary: 'Smoke-test the stored HubSpot CRM access token' })
+  @ApiResponse({
+    status: 200,
+    description: 'CRM token is valid',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        hubSpotAppId: { type: 'number' },
+        hubSpotPortalId: { type: 'number' },
+      },
+    },
+  })
+  async testCrmToken(@CurrentUser() user: AuthenticatedUser) {
+    if (!user.organizationId) {
+      throw new ForbiddenException('User is not associated with an organization');
+    }
+
+    const organization = await this.orgService.findById(user.organizationId);
+    if (!organization?.crmAccessToken) {
+      throw new ForbiddenException('No HubSpot token configured for this organization');
+    }
+
+    try {
+      const { data } = await axios.get(
+        'https://api.hubapi.com/integrations/v1/me',
+        {
+          headers: {
+            Authorization: `Bearer ${organization.crmAccessToken}`,
+          },
+        },
+      );
+
+      return {
+        message: 'HubSpot token is valid',
+        hubSpotAppId: data.app_id,
+        hubSpotPortalId: data.portal_id,
+      };
+    } catch (error: any) {
+      const message =
+        error.response?.data?.message || error.message || 'HubSpot token test failed';
+      throw new ForbiddenException(message);
+    }
   }
 }

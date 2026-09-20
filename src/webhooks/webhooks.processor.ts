@@ -13,6 +13,7 @@ import parsePhoneNumberFromString from 'libphonenumber-js';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { NotificationType } from '@prisma/client';
 import { WhatsappMediaService } from './whatsapp-media.service';
+import { FollowUpService } from '../follow-ups/follow-up.service';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
@@ -25,6 +26,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly whatsappService: WhatsappService,
     private readonly whatsappMediaService: WhatsappMediaService,
     private readonly eventsGateway: EventsGateway,
+    private readonly followUpService: FollowUpService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {
@@ -245,6 +247,8 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 organization.id,
                 wpMessage,
               );
+
+              await this.followUpService.cancelPendingFollowUps(conversation.id);
 
               this.logger.log(
                 `Saved new message from ${customerPhone} for organization ${organization.name}`,

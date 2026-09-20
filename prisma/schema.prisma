@@ -73,6 +73,8 @@ model Organization {
   experiences          OrganizationExperience[]
   notifications       Notification[]
   channels            Channel[]
+  Battlecard            OrganizationBattlecard[]
+  scheduledFollowUps    ScheduledFollowUp[]
 
   @@map("organizations")
 }
@@ -325,6 +327,7 @@ model Conversation {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages       Message[]
   assignedAgent User?        @relation("ConversationAgent", fields: [assignedAgentId], references: [id])
+  scheduledFollowUps ScheduledFollowUp[]
 
   @@unique([organizationId, externalContactId])
   @@map("conversations")
@@ -412,6 +415,26 @@ model OrganizationExperience {
   @@map("organization_experiences")
 }
 
+model OrganizationBattlecard {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  
+  competitorName  String
+  objectionType   String   // e.g., "PRICE", "QUALITY", "FEAR", "LOCATION"
+  rebuttalText    String   @db.Text
+  
+  // The Vector Search Embedding (Gemini 3072 dimensions)
+  embedding       Unsupported("vector(3072)")? 
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("organization_battlecards")
+}
+
 enum NotificationType {
   LEAD_ASSIGNED
   LEAD_HANDED_OFF
@@ -483,4 +506,39 @@ model Channel {
 
   @@unique([provider, providerAccountId])
   @@map("channels")
+}
+
+enum FollowUpType {
+  AUTO_NO_REPLY
+  AI_SCHEDULED
+}
+
+enum FollowUpStatus {
+  PENDING
+  SENT
+  CANCELLED
+}
+
+model ScheduledFollowUp {
+  id               String          @id @default(uuid()) @db.Uuid
+  conversationId   String          @db.Uuid
+  organizationId   String          @db.Uuid
+  type             FollowUpType
+  status           FollowUpStatus  @default(PENDING)
+  attempt          Int             @default(1)
+  scheduledAt      DateTime
+  bullJobId        String?
+  aiContext        String?         @db.Text
+  sentAt           DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  createdAt        DateTime        @default(now())
+
+  conversation     Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, status])
+  @@index([organizationId])
+  @@index([scheduledAt, status])
+  @@map("scheduled_follow_ups")
 }

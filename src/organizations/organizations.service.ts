@@ -59,4 +59,17 @@ export class OrganizationsService {
       return { organizationId: org.id, roleId: role.id };
     });
   }
+
+  async updateCrmToken(organizationId: string, crmAccessToken: string) {
+    return this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { crmAccessToken },
+    });
+  }
+
+  async findById(organizationId: string) {
+    return this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+  }
 }

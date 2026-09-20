@@ -15,6 +15,9 @@ import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration
 import { WhatsappMediaService } from './whatsapp-media.service';
 import { GRPC_CONFIG } from '../config/grpc.constants';
 
+import { FollowUpService } from '../follow-ups/follow-up.service';
+import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
+
 @Module({
   imports: [
     HttpModule,
@@ -26,6 +29,9 @@ import { GRPC_CONFIG } from '../config/grpc.constants';
     }),
     BullModule.registerQueue({
       name: 'ai-reply',
+    }),
+    BullModule.registerQueue({
+      name: 'follow-up',
     }),
     ClientsModule.register([
       {
@@ -44,11 +50,13 @@ import { GRPC_CONFIG } from '../config/grpc.constants';
     WebhooksService,
     WebhooksProcessor,
     AiReplyProcessor,
+    FollowUpService,
+    FollowUpProcessor,
     WhatsappService,
     WhatsappMediaService,
     ActionExecutorService,
     NotificationEmitterService,
   ],
-  exports: [WhatsappService, ActionExecutorService],
+  exports: [WhatsappService, ActionExecutorService, FollowUpService],
 })
 export class WebhooksModule {}

@@ -9,6 +9,7 @@ import type { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import type { SalesAgentService } from './interfaces/agent.interface';
 import { ActionExecutorService } from './action-executor.service';
+import { FollowUpService } from '../follow-ups/follow-up.service';
 
 @Processor('ai-reply') // 🚀 Listens to the delay queue
 export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
@@ -20,6 +21,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     private readonly whatsappService: WhatsappService,
     private readonly eventsGateway: EventsGateway,
     private readonly actionExecutor: ActionExecutorService,
+    private readonly followUpService: FollowUpService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
   ) {
     super();
@@ -221,6 +223,9 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
         // 5. Broadcast the AI message to the frontend UI
         this.eventsGateway.broadcastNewMessage(organization.id, aiMessage);
+
+        // 6. Schedule auto follow-ups
+        await this.followUpService.scheduleAutoFollowUps(conversationId, organization.id);
       } catch (error) {
         this.logger.error(`Failed to generate or send AI reply: ${error}`);
         throw error;
