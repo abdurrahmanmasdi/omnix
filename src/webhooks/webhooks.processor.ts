@@ -14,6 +14,8 @@ import { NotificationEmitterService } from '../notifications/notification-emitte
 import { NotificationType } from '@prisma/client';
 import { WhatsappMediaService } from './whatsapp-media.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
+import { AuditService } from '../audit/audit.service';
+import { CredentialsService } from '../credentials/credentials.service';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
@@ -27,6 +29,8 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly whatsappMediaService: WhatsappMediaService,
     private readonly eventsGateway: EventsGateway,
     private readonly followUpService: FollowUpService,
+    private readonly auditService: AuditService,
+    private readonly credentials: CredentialsService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {
@@ -64,12 +68,11 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
             if (!value.messages || value.messages.length === 0) continue;
 
             // Find the channel and its organization
-            const channel = await this.prisma.channel.findUnique({
+            const channel = await this.prisma.channel.findFirst({
               where: {
-                provider_providerAccountId: {
-                  provider: 'WHATSAPP_CLOUD_API',
-                  providerAccountId: receivingPhoneNumberId,
-                },
+                provider: 'WHATSAPP_CLOUD_API',
+                providerAccountId: receivingPhoneNumberId,
+                status: 'ACTIVE',
               },
               include: { organization: true },
             });
@@ -81,6 +84,12 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 `No organization found for Meta Account ID: ${receivingPhoneNumberId}. Dropping message.`,
               );
               continue;
+            }
+
+            let accessTokenForMedia: string | undefined;
+            if (channel?.credentialId) {
+              const activeCred = await this.credentials.readActive(organization.id, channel.credentialId);
+              accessTokenForMedia = activeCred.accessToken;
             }
 
             // Process each incoming message
@@ -95,19 +104,19 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 messageContent = message.text.body;
               } else if (message.type === 'image' && message.image?.id) {
                 messageContent = '[Image message]';
-                if (channel.accessToken) {
+                if (accessTokenForMedia) {
                   imageBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
                     message.image.id,
-                    channel.accessToken
+                    accessTokenForMedia
                   );
                 }
               } else if ((message.type === 'audio' && message.audio?.id) || (message.type === 'voice' && message.voice?.id)) {
                 const audioId = message.audio?.id || message.voice?.id;
                 messageContent = '[Audio message]';
-                if (channel.accessToken && audioId) {
+                if (accessTokenForMedia && audioId) {
                   audioBase64 = await this.whatsappMediaService.downloadMediaAsBase64(
                     audioId,
-                    channel.accessToken
+                    accessTokenForMedia
                   );
                 }
               }
@@ -279,6 +288,13 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                   }),
                   this.prisma.conversation.update({ where: { id: conversation.id }, data: { aiPaused: true } }),
                 ]);
+                await this.auditService.record({
+                  organizationId: organization.id,
+                  action: 'consent.opt_out',
+                  targetId: conversation.leadId ?? undefined,
+                  actor: 'webhook:whatsapp',
+                  metadata: { sourceMessageId: metaMessageId, reason: messageContent },
+                });
                 const pendingReply = await this.aiReplyQueue.getJob(`reply-${conversation.id}`);
                 if (pendingReply) await pendingReply.remove();
                 this.logger.log(`Recorded opt-out for tenant ${organization.id}, contact ${customerPhone}.`);

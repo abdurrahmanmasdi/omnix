@@ -95,7 +95,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         where: { organizationId: organization.id, provider: 'WHATSAPP_CLOUD_API', status: 'ACTIVE' },
       });
 
-      if (!channel || !channel.accessToken || !channel.providerAccountId) {
+      if (!channel || !channel.credentialId || !channel.providerAccountId) {
         this.logger.warn(`No active WhatsApp channel for org ${organization.id}`);
         return;
       }
@@ -146,12 +146,13 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         let metaMessageId: string | undefined = undefined;
 
         if (mediaUrl) {
-          const mediaResponse = await this.whatsappService.sendImageMessage(
+          const mediaResponse = await this.whatsappService.sendMediaMessage(
+            channel.credentialId,
+            organization.id,
             conversation.externalContactId!,
-            channel.accessToken,
-            channel.providerAccountId,
             mediaUrl,
             replyText || undefined,
+            channel.providerAccountId,
           );
           metaMessageId = mediaResponse?.messages?.[0]?.id;
         } else if (replyText) {
@@ -159,10 +160,11 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
           for (let i = 0; i < messages.length; i++) {
             const message = messages[i];
             const metaResponse = await this.whatsappService.sendTextMessage(
+              channel.credentialId,
+              organization.id,
               conversation.externalContactId!,
-              channel.accessToken,
-              channel.providerAccountId,
               message,
+              channel.providerAccountId,
             );
             metaMessageId = metaResponse?.messages?.[0]?.id;
             if (i < messages.length - 1) {

@@ -7,6 +7,7 @@ import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
 import { WebhooksProcessor } from './webhooks.processor';
 import { WhatsappService } from './whatsapp.service';
+import { InstagramService } from './instagram.service';
 import { EventsModule } from '../events/events.module';
 import { AiReplyProcessor } from './ai-reply.processor';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
@@ -14,15 +15,19 @@ import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 import { WhatsappMediaService } from './whatsapp-media.service';
 import { GRPC_CONFIG } from '../config/grpc.constants';
+import { CredentialsModule } from '../credentials/credentials.module';
 
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
     HttpModule,
     EventsModule,
     CrmIntegrationModule,
+    AuditModule,
+    CredentialsModule,
     // Register the specific queue we will push messages to
     BullModule.registerQueue({
       name: 'whatsapp-messages',
@@ -56,10 +61,11 @@ import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
     FollowUpService,
     FollowUpProcessor,
     WhatsappService,
+    InstagramService,
     WhatsappMediaService,
     ActionExecutorService,
     NotificationEmitterService,
   ],
-  exports: [WhatsappService, ActionExecutorService, FollowUpService],
+  exports: [WhatsappService, InstagramService, ActionExecutorService, FollowUpService],
 })
 export class WebhooksModule {}

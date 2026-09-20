@@ -10,6 +10,7 @@ import { lastValueFrom } from 'rxjs';
 import type { SalesAgentService } from './interfaces/agent.interface';
 import { ActionExecutorService } from './action-executor.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
+import { AuditService } from '../audit/audit.service';
 
 @Processor('ai-reply') // 🚀 Listens to the delay queue
 export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
@@ -35,6 +36,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     private readonly eventsGateway: EventsGateway,
     private readonly actionExecutor: ActionExecutorService,
     private readonly followUpService: FollowUpService,
+    private readonly auditService: AuditService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
   ) {
     super();
@@ -114,7 +116,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         // accidentally mark a conversation as disclosed. The flag changes only after
         // Meta acknowledges successful delivery.
         let disclosureText: string | undefined;
-        if (!conversation.aiDisclosureSent) {
+        if (!conversation.aiDisclosureSent && channel?.credentialId) {
           disclosureText = this.buildDisclosure(
             organization.aiPersona?.aiDisclosureText,
             conversation.lead?.firstName,
@@ -122,10 +124,11 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             organization.aiPersona?.clinicName,
           );
           const disclosureResponse = await this.whatsappService.sendTextMessage(
+            channel.credentialId,
+            organizationId,
             customerPhone,
-            channel!.accessToken,
-            channel!.providerAccountId,
             disclosureText,
+            channel.providerAccountId,
           );
           if (!disclosureResponse?.messages?.[0]?.id) {
             throw new Error('AI disclosure was not acknowledged by WhatsApp');
@@ -134,20 +137,26 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             where: { id: conversationId },
             data: { aiDisclosureSent: true },
           });
+          await this.auditService.record({
+            organizationId: conversation.organizationId,
+            action: 'ai.disclosure_sent',
+            targetId: conversation.id,
+            actor: 'ai',
+            metadata: { messageId: disclosureResponse.messages[0].id },
+          });
         }
         // 🚀 NEW: Simulate Typing Indicator on WhatsApp
         if (
           latestMetaMessageId &&
-          channel?.accessToken &&
-          channel?.providerAccountId
+          channel?.credentialId
         ) {
           try {
             await this.whatsappService.sendTypingIndicator(
-              channel.accessToken,
-              channel.providerAccountId,
+              channel.credentialId,
+              organizationId,
               latestMetaMessageId,
             );
-          } catch (e) {
+          } catch (e: any) {
             this.logger.warn(
               `Typing indicator failed (likely API version mismatch or expired msg): ${e.message}`,
             );
@@ -193,17 +202,18 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         // 2. Handle Multimodal Reply
         let metaMessageId: string | undefined = undefined;
 
-        if (mediaUrl) {
+        if (mediaUrl && channel?.credentialId) {
           // If there's media, we send the image first
-          const mediaResponse = await this.whatsappService.sendImageMessage(
+          const mediaResponse = await this.whatsappService.sendMediaMessage(
+            channel.credentialId,
+            organizationId,
             customerPhone,
-            channel!.accessToken,
-            channel!.providerAccountId,
             mediaUrl,
             replyText || undefined, // Use replyText as caption if it's short/not split
+            channel.providerAccountId,
           );
           metaMessageId = mediaResponse?.messages?.[0]?.id;
-        } else if (replyText) {
+        } else if (replyText && channel?.credentialId) {
           // Split the reply into multiple bubbles if the separator is present
           const messages = replyText
             .split('|||')
@@ -215,10 +225,11 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
             // Send to Meta
             const metaResponse = await this.whatsappService.sendTextMessage(
+              channel.credentialId,
+              organizationId,
               customerPhone,
-              channel!.accessToken,
-              channel!.providerAccountId,
               message,
+              channel.providerAccountId,
             );
 
             // We use the ID of the last message in the sequence for our DB record

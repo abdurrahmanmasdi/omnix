@@ -1,34 +1,31 @@
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, throwError, timer } from 'rxjs';
 import { catchError, retry, timeout } from 'rxjs/operators';
 import { IChannelProvider } from '../core/interfaces/channel-provider.interface';
 import { CredentialsService } from '../credentials/credentials.service';
 
 export interface MetaMessageResponse {
-  messaging_product: string;
-  contacts: { input: string; wa_id: string }[];
-  messages: { id: string }[];
+  recipient_id: string;
+  message_id: string;
 }
 
 @Injectable()
-export class WhatsappService implements IChannelProvider {
-  private readonly logger = new Logger(WhatsappService.name);
+export class InstagramService implements IChannelProvider {
+  private readonly logger = new Logger(InstagramService.name);
   private readonly apiUrl = 'https://graph.facebook.com/v25.0';
 
   constructor(
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
     private readonly credentials: CredentialsService,
   ) {}
 
   async verifyCredentials(credentialId: string, organizationId: string): Promise<boolean> {
     try {
-      const { accessToken, phoneNumberId } = await this.credentials.readActive(organizationId, credentialId);
-      if (!accessToken || !phoneNumberId) return false;
+      const { accessToken, instagramAccountId } = await this.credentials.readActive(organizationId, credentialId);
+      if (!accessToken || !instagramAccountId) return false;
 
-      const url = `${this.apiUrl}/${phoneNumberId}`;
+      const url = `${this.apiUrl}/${instagramAccountId}`;
       await firstValueFrom(
         this.httpService.get(url, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -52,25 +49,19 @@ export class WhatsappService implements IChannelProvider {
   }
 
   async disconnect(credentialId: string, organizationId: string): Promise<void> {
-    await this.credentials.revoke(organizationId, credentialId, 'Disconnected via WhatsApp Provider');
+    await this.credentials.revoke(organizationId, credentialId, 'Disconnected via Instagram Provider');
   }
 
   async sendTextMessage(
     credentialId: string,
     organizationId: string,
-    toPhoneNumber: string,
+    toRecipientId: string,
     message: string,
     providerAccountId?: string,
   ): Promise<MetaMessageResponse> {
     const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: toPhoneNumber,
-      type: 'text',
-      text: {
-        preview_url: false,
-        body: message,
-      },
+      recipient: { id: toRecipientId },
+      message: { text: message },
     };
     return this.postToMeta(credentialId, organizationId, payload, providerAccountId);
   }
@@ -78,38 +69,21 @@ export class WhatsappService implements IChannelProvider {
   async sendMediaMessage(
     credentialId: string,
     organizationId: string,
-    toPhoneNumber: string,
+    toRecipientId: string,
     mediaUrl: string,
     caption?: string,
     providerAccountId?: string,
   ): Promise<MetaMessageResponse> {
     const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: toPhoneNumber,
-      type: 'image',
-      image: {
-        link: mediaUrl,
-        ...(caption && { caption }),
+      recipient: { id: toRecipientId },
+      message: {
+        attachment: {
+          type: 'image',
+          payload: { url: mediaUrl, is_reusable: true }
+        }
       },
     };
     return this.postToMeta(credentialId, organizationId, payload, providerAccountId);
-  }
-
-  async sendTypingIndicator(
-    credentialId: string,
-    organizationId: string,
-    messageId: string,
-  ): Promise<any> {
-    const payload = {
-      messaging_product: 'whatsapp',
-      status: 'read',
-      message_id: messageId,
-      typing_indicator: {
-        type: 'text',
-      },
-    };
-    return this.postToMeta(credentialId, organizationId, payload);
   }
 
   private async postToMeta(
@@ -118,15 +92,15 @@ export class WhatsappService implements IChannelProvider {
     payload: any,
     providerAccountIdOverride?: string,
   ): Promise<MetaMessageResponse> {
-    const { accessToken, phoneNumberId } = await this.credentials.readActive(organizationId, credentialId);
+    const { accessToken, instagramAccountId } = await this.credentials.readActive(organizationId, credentialId);
     
-    const activePhoneNumberId = providerAccountIdOverride || phoneNumberId;
-    if (!activePhoneNumberId || !accessToken) {
-      this.logger.error('Missing WhatsApp credentials for this organization.');
-      throw new InternalServerErrorException('Missing WhatsApp credentials');
+    const activeAccountId = providerAccountIdOverride || instagramAccountId;
+    if (!activeAccountId || !accessToken) {
+      this.logger.error('Missing Instagram credentials for this organization.');
+      throw new InternalServerErrorException('Missing Instagram credentials');
     }
 
-    const url = `${this.apiUrl}/${activePhoneNumberId}/messages`;
+    const url = `${this.apiUrl}/${activeAccountId}/messages`;
 
     try {
       const response = await firstValueFrom(
@@ -140,20 +114,19 @@ export class WhatsappService implements IChannelProvider {
           retry({
             count: 3,
             delay: (error, retryCount) => {
-              if (error.response?.status === 401) throw error; // Don't retry auth errors
-              return timer(Math.pow(2, retryCount) * 500); // Exponential backoff: 1s, 2s, 4s
+              if (error.response?.status === 401) throw error; 
+              return timer(Math.pow(2, retryCount) * 500); 
             }
           }),
           catchError((error) => throwError(() => error))
         )
       );
 
-      this.logger.log(`Successfully sent ${payload.type} message to ${payload.to}`);
+      this.logger.log(`Successfully sent message to ${payload.recipient.id}`);
       return response.data as MetaMessageResponse;
     } catch (error: any) {
-      this.logger.error(`Failed to send WhatsApp message: ${error?.response?.data?.error?.message || error.message}`);
+      this.logger.error(`Failed to send Instagram message: ${error?.response?.data?.error?.message || error.message}`);
       
-      // If it's an auth error (401), record verification failure
       if (error?.response?.status === 401) {
         await this.credentials.recordVerification(organizationId, credentialId, false, 'Authentication failed during message send');
       }

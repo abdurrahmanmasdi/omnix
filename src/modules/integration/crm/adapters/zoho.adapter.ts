@@ -5,15 +5,14 @@ import { firstValueFrom, throwError, timer } from 'rxjs';
 import { catchError, retry, timeout } from 'rxjs/operators';
 import type { CrmAdapter } from '../crm-adapter.interface';
 import { CrmIntegrationService } from '../crm-integration.service';
-import { CredentialsService } from '../../../../credentials/credentials.service';
 import { ICrmProvider } from '../../../../core/interfaces/crm-provider.interface';
+import { CredentialsService } from '../../../../credentials/credentials.service';
 import { PrismaService } from '../../../../prisma/prisma.service';
 
-const HUBSPOT_API_BASE = 'https://api.hubapi.com';
-
 @Injectable()
-export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
-  private readonly logger = new Logger(HubspotAdapter.name);
+export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
+  private readonly logger = new Logger(ZohoAdapter.name);
+  private readonly apiUrl = 'https://www.zohoapis.com/crm/v6';
 
   constructor(
     private readonly crmIntegrationService: CrmIntegrationService,
@@ -23,7 +22,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.crmIntegrationService.registerAdapter(ExternalCrmType.HUB_SPOT, this);
+    this.crmIntegrationService.registerAdapter(ExternalCrmType.ZOHO, this);
   }
 
   // --- ICrmProvider Contract ---
@@ -33,10 +32,10 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
       const { accessToken } = await this.credentials.readActive(organizationId, credentialId);
       if (!accessToken) return false;
 
-      const url = `${HUBSPOT_API_BASE}/crm/v3/objects/contacts?limit=1`;
+      const url = `${this.apiUrl}/Leads?page=1&per_page=1`;
       await firstValueFrom(
         this.httpService.get(url, {
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
         }).pipe(
           timeout(5000),
           retry({ count: 2, delay: 1000 }),
@@ -57,11 +56,10 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
   }
 
   async disconnect(credentialId: string, organizationId: string): Promise<void> {
-    await this.credentials.revoke(organizationId, credentialId, 'Disconnected via HubSpot Adapter');
+    await this.credentials.revoke(organizationId, credentialId, 'Disconnected via Zoho Adapter');
   }
 
   async syncLead(credentialId: string, organizationId: string, leadData: any): Promise<any> {
-    // This satisfies ICrmProvider but we keep using CrmAdapter methods for the actual sync sequence
     const contactId = await this.syncContact(leadData, credentialId);
     const dealId = await this.syncDeal(contactId, leadData, credentialId);
     return { externalContactId: contactId, externalDealId: dealId };
@@ -69,13 +67,13 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
 
   async fetchContact(credentialId: string, organizationId: string, externalContactId: string): Promise<any> {
     const { accessToken } = await this.credentials.readActive(organizationId, credentialId);
-    if (!accessToken) throw new InternalServerErrorException('Missing HubSpot credentials');
+    if (!accessToken) throw new InternalServerErrorException('Missing Zoho credentials');
 
-    const url = `${HUBSPOT_API_BASE}/crm/v3/objects/contacts/${externalContactId}`;
+    const url = `${this.apiUrl}/Leads/${externalContactId}`;
     try {
       const response = await firstValueFrom(
         this.httpService.get(url, {
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
         }).pipe(
           timeout(5000),
           retry({ count: 2, delay: 1000 }),
@@ -84,7 +82,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
       );
       return response.data;
     } catch (error: any) {
-      this.logger.error(`Failed to fetch contact from HubSpot: ${error?.response?.data?.message || error.message}`);
+      this.logger.error(`Failed to fetch contact from Zoho: ${error?.response?.data?.message || error.message}`);
       throw error;
     }
   }
@@ -92,67 +90,39 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
   // --- CrmAdapter Contract ---
 
   async syncContact(lead: any, overrideCredentialId?: string): Promise<string> {
-    // Determine credential ID based on organization's connected channel or override
     const credentialId = overrideCredentialId || await this.getCredentialIdForOrg(lead.organizationId);
     const { accessToken } = await this.credentials.readActive(lead.organizationId, credentialId);
 
-    const properties = {
-      firstname: lead.firstName || '',
-      lastname: lead.lastName || '',
-      phone: lead.phoneNumber || '',
-      email: lead.email || '',
-      country: lead.country || '',
+    const payload = {
+      data: [{
+        First_Name: lead.firstName || '',
+        Last_Name: lead.lastName || 'Unknown',
+        Email: lead.email || '',
+        Phone: lead.phoneNumber || '',
+      }]
     };
 
     try {
       const { data } = await firstValueFrom(
-        this.httpService.post(`${HUBSPOT_API_BASE}/crm/v3/objects/contacts`, { properties }, {
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        this.httpService.post(`${this.apiUrl}/Contacts`, payload, {
+          headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, 'Content-Type': 'application/json' },
         }).pipe(
           timeout(8000),
-          retry({ count: 2, delay: (e, retryCount) => (e.response?.status === 409 || e.response?.status === 401) ? throwError(() => e) : timer(1000 * retryCount) }),
+          retry({ count: 2, delay: (e, retryCount) => (e.response?.status === 401) ? throwError(() => e) : timer(1000 * retryCount) }),
           catchError((error) => throwError(() => error))
         )
       );
 
-      this.logger.log(`Created HubSpot contact: ${data.id} for Org: ${lead.organizationId}`);
-      return data.id;
+      const contactId = data.data?.[0]?.details?.id;
+      this.logger.log(`Created Zoho contact: ${contactId} for Org: ${lead.organizationId}`);
+      return contactId;
     } catch (error: any) {
-      if (error.response?.status === 409) {
-        return this.handleExistingContact(accessToken, error, properties);
-      }
       if (error.response?.status === 401) {
         await this.credentials.recordVerification(lead.organizationId, credentialId, false, 'Auth failed in syncContact');
       }
-      this.logger.error(`HubSpot syncContact failed: ${error.response?.data?.message || error.message}`);
+      this.logger.error(`Zoho syncContact failed: ${error.response?.data?.message || error.message}`);
       throw error;
     }
-  }
-
-  private async handleExistingContact(
-    accessToken: string,
-    error: any,
-    properties: Record<string, string>,
-  ): Promise<string> {
-    const existingId = error.response?.data?.message?.match(/Existing ID:\s*(\d+)/)?.[1];
-    if (!existingId) {
-      this.logger.warn('Contact conflict detected but could not extract existing ID. Re-throwing.');
-      throw error;
-    }
-
-    this.logger.log(`Contact already exists in HubSpot (ID: ${existingId}). Updating...`);
-
-    await firstValueFrom(
-      this.httpService.patch(`${HUBSPOT_API_BASE}/crm/v3/objects/contacts/${existingId}`, { properties }, {
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      }).pipe(
-        timeout(8000),
-        retry({ count: 2, delay: 1000 }),
-        catchError((e) => throwError(() => e))
-      )
-    );
-
-    return existingId;
   }
 
   async syncDeal(contactId: string, lead: any, overrideCredentialId?: string): Promise<string> {
@@ -160,24 +130,20 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
     const { accessToken } = await this.credentials.readActive(lead.organizationId, credentialId);
 
     const dealName = `${lead.firstName || 'Lead'} ${lead.lastName || ''} – ${lead.status || 'NEW'}`.trim();
-    const properties: Record<string, any> = {
-      dealname: dealName,
-      dealstage: this.mapLeadStatusToHubSpotStage(lead.status),
-      pipeline: 'default',
+    
+    const payload = {
+      data: [{
+        Deal_Name: dealName,
+        Stage: this.mapLeadStatusToZohoStage(lead.status),
+        Contact_Name: { id: contactId },
+        Amount: lead.estimatedValue || 0,
+      }]
     };
-
-    if (lead.estimatedValue) properties.amount = String(lead.estimatedValue);
 
     try {
       const { data } = await firstValueFrom(
-        this.httpService.post(`${HUBSPOT_API_BASE}/crm/v3/objects/deals`, {
-          properties,
-          associations: [{
-            to: { id: contactId },
-            types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 }],
-          }],
-        }, {
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        this.httpService.post(`${this.apiUrl}/Deals`, payload, {
+          headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, 'Content-Type': 'application/json' },
         }).pipe(
           timeout(8000),
           retry({ count: 2, delay: (e, retryCount) => e.response?.status === 401 ? throwError(() => e) : timer(1000 * retryCount) }),
@@ -185,42 +151,42 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         )
       );
 
-      this.logger.log(`Created HubSpot deal: ${data.id} for Org: ${lead.organizationId}`);
-      return data.id;
+      const dealId = data.data?.[0]?.details?.id;
+      this.logger.log(`Created Zoho deal: ${dealId} for Org: ${lead.organizationId}`);
+      return dealId;
     } catch (error: any) {
       if (error.response?.status === 401) {
         await this.credentials.recordVerification(lead.organizationId, credentialId, false, 'Auth failed in syncDeal');
       }
-      this.logger.error(`HubSpot syncDeal failed: ${error.response?.data?.message || error.message}`);
+      this.logger.error(`Zoho syncDeal failed: ${error.response?.data?.message || error.message}`);
       throw error;
     }
   }
 
-  // Helper to find the correct credential since CrmAdapter methods don't pass it currently
   private async getCredentialIdForOrg(organizationId: string): Promise<string> {
     const cred = await this.prisma.credential.findFirst({
       where: {
         organizationId,
-        provider: 'HUBSPOT',
+        provider: 'ZOHO',
         status: 'ACTIVE'
       }
     });
     if (!cred) {
-      throw new InternalServerErrorException(`No active HubSpot credential found for organization ${organizationId}`);
+      throw new InternalServerErrorException(`No active Zoho credential found for organization ${organizationId}`);
     }
     return cred.id;
   }
 
-  private mapLeadStatusToHubSpotStage(status?: string): string {
+  private mapLeadStatusToZohoStage(status?: string): string {
     const stageMap: Record<string, string> = {
-      NEW: 'appointmentscheduled',
-      QUALIFYING: 'qualifiedtobuy',
-      QUALIFIED: 'qualifiedtobuy',
-      READY_TO_BOOK: 'presentationscheduled',
-      READY_TO_PAY: 'contractsent',
-      WON: 'closedwon',
-      LOST: 'closedlost',
+      NEW: 'Qualification',
+      QUALIFYING: 'Needs Analysis',
+      QUALIFIED: 'Value Proposition',
+      READY_TO_BOOK: 'Identify Decision Makers',
+      READY_TO_PAY: 'Proposal/Price Quote',
+      WON: 'Closed Won',
+      LOST: 'Closed Lost',
     };
-    return stageMap[status || 'NEW'] || 'appointmentscheduled';
+    return stageMap[status || 'NEW'] || 'Qualification';
   }
 }

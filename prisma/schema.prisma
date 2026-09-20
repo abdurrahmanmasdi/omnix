@@ -56,7 +56,7 @@ model Organization {
   // Meta / WhatsApp API Credentials
   metaAccountId String?  @unique
 
-  // External CRM Credentials
+  // Deprecated legacy field. New integrations use Credential records.
   crmAccessToken        String?
   crmSyncEnabled        Boolean  @default(false)
 
@@ -78,6 +78,7 @@ model Organization {
   scheduledFollowUps    ScheduledFollowUp[]
   auditLogs             AuditLog[]
   crmSyncLogs           CrmSyncLog[]
+  credentials           Credential[]
 
   @@map("organizations")
 }
@@ -519,6 +520,7 @@ model CrmSyncLog {
 
 enum ChannelProvider {
   WHATSAPP_CLOUD_API
+  INSTAGRAM_GRAPH_API
 }
 
 enum ChannelStatus {
@@ -532,16 +534,52 @@ model Channel {
   organizationId    String          @db.Uuid
   provider          ChannelProvider
   providerAccountId String
-  accessToken       String
+  // Legacy plaintext value. New connections must use credentialId.
+  accessToken       String?
+  credentialId      String?         @db.Uuid
   status            ChannelStatus   @default(ACTIVE)
   metadata          Json?           // Additional provider-specific configurations
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
   organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential        Credential?     @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
-  @@unique([provider, providerAccountId])
+  @@unique([organizationId, provider, providerAccountId])
   @@map("channels")
+}
+
+enum CredentialProvider {
+  WHATSAPP_CLOUD_API
+  INSTAGRAM_GRAPH_API
+  HUBSPOT
+  ZOHO
+}
+
+enum CredentialStatus {
+  ACTIVE
+  ROTATED
+  REVOKED
+  ERROR
+}
+
+model Credential {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  provider         CredentialProvider
+  encryptedPayload String
+  keyVersion       Int                @default(1)
+  status           CredentialStatus   @default(ACTIVE)
+  lastVerifiedAt   DateTime?
+  lastError        String?
+  expiresAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channels         Channel[]
+
+  @@index([organizationId, provider, status])
+  @@map("credentials")
 }
 
 enum FollowUpType {

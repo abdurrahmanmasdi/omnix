@@ -93,7 +93,7 @@ export class ConversationsService {
       },
     });
 
-    if (!channel) {
+    if (!channel || !channel.credentialId) {
       throw new BadRequestException(
         'Organization WhatsApp credentials missing',
       );
@@ -101,10 +101,11 @@ export class ConversationsService {
 
     // 2. Send the message to Meta
     const metaResponse = await this.whatsappService.sendTextMessage(
+      channel.credentialId,
+      organizationId,
       lead?.phoneNumber || '', // Assuming the lead table holds the phone number!
-      channel.accessToken,
-      channel.providerAccountId,
       content,
+      channel.providerAccountId,
     );
 
     // 3. Save it to our database (Marked as AGENT_TEXT)

@@ -10,6 +10,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { FollowUpService } from '../follow-ups/follow-up.service';
+import { AuditService } from '../audit/audit.service';
 
 describe('WebhooksProcessor', () => {
   let processor: WebhooksProcessor;
@@ -63,6 +64,7 @@ describe('WebhooksProcessor', () => {
         { provide: WhatsappMediaService, useValue: { downloadMediaAsBase64: jest.fn() } },
         { provide: EventsGateway, useValue: { server: { to: jest.fn().mockReturnThis(), emit: jest.fn() }, broadcastNewMessage: jest.fn() } },
         { provide: FollowUpService, useValue: { cancelPendingFollowUps: jest.fn() } },
+        { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
         { provide: getQueueToken('ai-reply'), useValue: mockAiReplyQueue },
       ],

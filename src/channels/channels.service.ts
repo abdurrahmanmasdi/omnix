@@ -2,36 +2,53 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { WhatsappService } from '../webhooks/whatsapp.service';
+import { InstagramService } from '../webhooks/instagram.service';
+import { CredentialsService } from '../credentials/credentials.service';
+import { CredentialProvider } from '@prisma/client';
 
 @Injectable()
 export class ChannelsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsappService: WhatsappService,
+    private readonly instagramService: InstagramService,
+    private readonly credentials: CredentialsService,
   ) {}
 
   async createChannel(organizationId: string, dto: CreateChannelDto) {
-    // Verify credentials with Meta API before saving
-    if (dto.provider === 'WHATSAPP_CLOUD_API') {
-      const isValid = await this.whatsappService.verifyCredentials(
-        dto.accessToken,
-        dto.providerAccountId,
-      );
+    try {
+      // Create credential first (status defaults to ACTIVE)
+      const credential = await this.credentials.create(organizationId, dto.provider as CredentialProvider, { 
+        accessToken: dto.accessToken,
+        ...(dto.provider === 'WHATSAPP_CLOUD_API' ? { phoneNumberId: dto.providerAccountId } : {}),
+        ...(dto.provider === 'INSTAGRAM_GRAPH_API' ? { instagramAccountId: dto.providerAccountId } : {}),
+      });
+
+      // Verify credentials with Provider API before creating channel
+      let isValid = false;
+      if (dto.provider === 'WHATSAPP_CLOUD_API') {
+        isValid = await this.whatsappService.verifyCredentials(credential.id, organizationId);
+      } else if (dto.provider === 'INSTAGRAM_GRAPH_API') {
+        isValid = await this.instagramService.verifyCredentials(credential.id, organizationId);
+      } else {
+        // Unknown provider, assume valid or reject. Rejecting to be safe.
+        throw new BadRequestException('Unsupported channel provider');
+      }
 
       if (!isValid) {
+        // Clean up invalid credential
+        await this.credentials.revoke(organizationId, credential.id, 'Initial verification failed');
         throw new BadRequestException(
-          'Invalid WhatsApp credentials. The Meta Graph API rejected the token or Phone Number ID.',
+          `Invalid ${dto.provider} credentials. The API rejected the token or Account ID.`,
         );
       }
-    }
 
-    try {
       return await this.prisma.channel.create({
         data: {
           organizationId,
           provider: dto.provider,
           providerAccountId: dto.providerAccountId,
-          accessToken: dto.accessToken,
+          credentialId: credential.id,
           status: 'ACTIVE',
         },
       });
@@ -48,6 +65,7 @@ export class ChannelsService {
   async getChannels(organizationId: string) {
     return this.prisma.channel.findMany({
       where: { organizationId },
+      select: { id: true, provider: true, providerAccountId: true, status: true, credentialId: true, createdAt: true, updatedAt: true },
     });
   }
 
@@ -60,8 +78,19 @@ export class ChannelsService {
       throw new NotFoundException('Channel not found');
     }
 
-    return this.prisma.channel.delete({
+    if (channel.credentialId) {
+      if (channel.provider === 'WHATSAPP_CLOUD_API') {
+        await this.whatsappService.disconnect(channel.credentialId, organizationId);
+      } else if (channel.provider === 'INSTAGRAM_GRAPH_API') {
+        await this.instagramService.disconnect(channel.credentialId, organizationId);
+      } else {
+        await this.credentials.revoke(organizationId, channel.credentialId, 'Channel disconnected by operator');
+      }
+    }
+    
+    return this.prisma.channel.update({
       where: { id },
+      data: { status: 'DISCONNECTED' },
     });
   }
 }

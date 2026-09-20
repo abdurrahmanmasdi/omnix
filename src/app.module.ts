@@ -19,6 +19,8 @@ import { ExperiencesModule } from './experiences/experiences.module';
 import { AiPersonaModule } from './settings/ai-persona/ai-persona.module';
 import { ChannelsModule } from './channels/channels.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AuditModule } from './audit/audit.module';
+import { CredentialsModule } from './credentials/credentials.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AiPersonaModule,
     ChannelsModule,
     AnalyticsModule,
+    AuditModule,
+    CredentialsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

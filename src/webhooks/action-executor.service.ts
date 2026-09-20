@@ -350,8 +350,20 @@ export class ActionExecutorService {
       include: { lead: true },
     });
 
-    if (!conversation?.leadId) {
-      this.logger.error(`Cannot HANDOFF_TO_HUMAN: No lead linked to Conv ${conversationId}`);
+    if (!conversation) {
+      this.logger.error(`Cannot HANDOFF_TO_HUMAN: Conversation ${conversationId} was not found`);
+      return;
+    }
+
+    // A missing lead must not leave an unsafe conversation AI-active.  Pause
+    // first; a human can subsequently attach/qualify the lead from the inbox.
+    if (!conversation.leadId) {
+      const updatedConversation = await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { aiPaused: true },
+      });
+      this.logger.warn(`Paused leadless Conv ${conversationId} for human review: ${reason}`);
+      this.eventsGateway.broadcastConversationUpdate(organizationId, updatedConversation);
       return;
     }
 
