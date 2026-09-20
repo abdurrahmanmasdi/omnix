@@ -10,8 +10,20 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
+from app.modules.safety.policy import DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE
 
 logger = logging.getLogger(__name__)
+
+
+def _blocked_reply(reason: str):
+    """Return the only safe reply and an explicit NestJS handoff action."""
+    return agent_pb2.AgentReply(
+        replyText=SAFE_HANDOFF_MESSAGE,
+        actions=[agent_pb2.ToolAction(
+            type="HANDOFF_TO_HUMAN",
+            payload=json.dumps({"reason": f"Deterministic delivery policy blocked: {reason}"}),
+        )],
+    )
 
 
 class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
@@ -57,6 +69,10 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
 
         logger.info("GenerateReply called for Conv: %s", conv_id)
+        input_decision = DeliverySafetyPolicy.check_input(latest_msg or "")
+        if not input_decision.allowed:
+            logger.warning("Blocked unsafe input for Conv %s: %s", conv_id, input_decision.reason)
+            return _blocked_reply(input_decision.reason or "unsafe_input")
         
         try:
             # 1. Fetch Lead Info & Status from the database VIA ASYNC INFRASTRUCTURE
@@ -149,6 +165,10 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             # 5. Extract Final Content & Media
             ai_reply_msg = final_state["messages"][-1]
             ai_reply_text = ai_reply_msg.content
+            output_decision = DeliverySafetyPolicy.check_output(ai_reply_text)
+            if not output_decision.allowed:
+                logger.warning("Blocked unsafe generated output for Conv %s: %s", conv_id, output_decision.reason)
+                return _blocked_reply(output_decision.reason or "unsafe_output")
             
             reply_parts = [p.strip() for p in ai_reply_text.split("|||") if p.strip()]
             

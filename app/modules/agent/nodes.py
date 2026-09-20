@@ -303,7 +303,7 @@ async def closing_node(state: ConversationState):
 
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is ready to book or showing high intent. 
-    Create a sense of urgency (e.g., 'Dr. [Name] has only 2 slots left this week' or 'We have a special discount ending tomorrow'). 
+    Never invent urgency, availability, a discount, a price, a medical outcome, or a guarantee.
     Ask them explicitly for their preferred day and time for the consultation. 
     Keep it under 3 sentences, conversational (WhatsApp style), and extremely warm."""
     
