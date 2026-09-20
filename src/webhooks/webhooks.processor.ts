@@ -195,23 +195,30 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                         orderBy: { orderIndex: 'asc' },
                       });
 
-                    // 4. Create the Enriched Lead!
-                    lead = await this.prisma.lead.create({
-                      data: {
+                    // 4. Create or Get the Enriched Lead using atomic upsert
+                    lead = await tx.lead.upsert({
+                      where: {
+                        organizationId_phoneNumber: {
+                          organizationId: organization.id,
+                          phoneNumber: customerPhone,
+                        }
+                      },
+                      update: {}, // Do not override existing if it was concurrently created
+                      create: {
                         organizationId: organization.id,
                         phoneNumber: customerPhone,
                         firstName:
                           value.contacts?.[0]?.profile?.name || 'Unknown',
                         lastName: '',
                         country: countryCode,
-                        timezone: 'Unknown', // Timezone requires a heavy library, country is usually enough
-                        primaryLanguage: 'Unknown', // AI will figure this out
-                        currency: defaultCurrency, // 🚀 EUR or USD based on phone prefix
+                        timezone: 'Unknown',
+                        primaryLanguage: 'Unknown',
+                        currency: defaultCurrency,
                         status: 'NEW',
-                        priority: 'COLD', // 🚀 STRICTLY COLD BY DEFAULT
-                        pipelineStageId: defaultPipeline?.id || null, // 🚀 Put them in Stage 0
+                        priority: 'COLD',
+                        pipelineStageId: defaultPipeline?.id || null,
                         socialLinks: {
-                          whatsapp: `https://wa.me/${customerPhone}`, // 🚀 Add WP link
+                          whatsapp: `https://wa.me/${customerPhone}`,
                         },
                       },
                     });

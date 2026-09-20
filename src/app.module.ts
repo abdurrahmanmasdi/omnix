@@ -22,11 +22,17 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AuditModule } from './audit/audit.module';
 import { CredentialsModule } from './credentials/credentials.module';
 
+import { OutboxModule } from './core/outbox/outbox.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { LoggerModule } from './core/logger/logger.module';
+import { MetricsModule } from './core/metrics/metrics.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -36,6 +42,8 @@ import { CredentialsModule } from './credentials/credentials.module';
       }),
       inject: [ConfigService],
     }),
+    LoggerModule,
+    MetricsModule,
     WebhooksModule,
     AuthModule,
     PrismaModule,
@@ -53,6 +61,7 @@ import { CredentialsModule } from './credentials/credentials.module';
     AnalyticsModule,
     AuditModule,
     CredentialsModule,
+    OutboxModule,
   ],
   controllers: [AppController],
   providers: [AppService],

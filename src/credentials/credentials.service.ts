@@ -6,15 +6,29 @@ import { PrismaService } from '../prisma/prisma.service';
 
 type SecretPayload = Record<string, string>;
 
+import { AuditService } from '../audit/audit.service';
+
 @Injectable()
 export class CredentialsService {
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(organizationId: string, provider: CredentialProvider, payload: SecretPayload) {
-    return this.prisma.credential.create({
+    const cred = await this.prisma.credential.create({
       data: { organizationId, provider, encryptedPayload: this.encrypt(payload) },
       select: { id: true, provider: true, status: true, createdAt: true },
     });
+    await this.audit.record({
+      organizationId,
+      action: 'credential.create',
+      targetId: cred.id,
+      actor: 'system',
+      metadata: { provider },
+    });
+    return cred;
   }
 
   async readActive(organizationId: string, id: string): Promise<SecretPayload> {
@@ -28,14 +42,28 @@ export class CredentialsService {
   async rotate(organizationId: string, id: string, payload: SecretPayload) {
     const current = await this.prisma.credential.findFirst({ where: { id, organizationId, status: CredentialStatus.ACTIVE } });
     if (!current) throw new NotFoundException('Active credential not found');
-    await this.prisma.$transaction([
+    const [_, newCred] = await this.prisma.$transaction([
       this.prisma.credential.update({ where: { id }, data: { status: CredentialStatus.ROTATED } }),
       this.prisma.credential.create({ data: { organizationId, provider: current.provider, encryptedPayload: this.encrypt(payload) } }),
     ]);
+    await this.audit.record({
+      organizationId,
+      action: 'credential.rotate',
+      targetId: current.id,
+      actor: 'system',
+      metadata: { newCredentialId: newCred.id },
+    });
   }
 
   async revoke(organizationId: string, id: string, reason = 'Disconnected by operator') {
     await this.prisma.credential.updateMany({ where: { id, organizationId }, data: { status: CredentialStatus.REVOKED, lastError: reason } });
+    await this.audit.record({
+      organizationId,
+      action: 'credential.revoke',
+      targetId: id,
+      actor: 'system',
+      metadata: { reason },
+    });
   }
 
   async recordVerification(organizationId: string, id: string, valid: boolean, error?: string) {
@@ -55,8 +83,22 @@ export class CredentialsService {
         where: { id },
         data: { status: CredentialStatus.ACTIVE, lastError: null },
       });
+      await this.audit.record({
+        organizationId,
+        action: 'credential.operator_recovery',
+        targetId: id,
+        actor: 'operator',
+        metadata: { action: 'CLEAR_ERROR' },
+      });
     } else if (action === 'FORCE_ROTATE' && newPayload) {
       await this.rotate(organizationId, id, newPayload);
+      await this.audit.record({
+        organizationId,
+        action: 'credential.operator_recovery',
+        targetId: id,
+        actor: 'operator',
+        metadata: { action: 'FORCE_ROTATE' },
+      });
     }
   }
 

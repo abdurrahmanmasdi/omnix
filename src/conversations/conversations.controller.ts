@@ -15,6 +15,8 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
@@ -22,12 +24,13 @@ import { SendMessageDto } from './dto/send-message.dto';
 
 @ApiTags('Conversations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('conversations')
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
   @Get()
+  @RequirePermissions('view_conversations')
   @ApiOperation({ summary: 'Get a list of conversations for the organization' })
   @ApiResponse({
     status: 200,
@@ -78,6 +81,7 @@ export class ConversationsController {
   }
 
   @Get(':id/messages')
+  @RequirePermissions('view_conversations')
   @ApiOperation({
     summary: 'Get paginated messages for a specific conversation',
   })
@@ -115,6 +119,7 @@ export class ConversationsController {
   }
 
   @Post(':id/messages')
+  @RequirePermissions('reply_conversations')
   @ApiOperation({ summary: 'Send a manual message to a conversation' })
   @ApiResponse({
     status: 201,
@@ -137,6 +142,7 @@ export class ConversationsController {
   }
 
   @Patch(':id/toggle-ai')
+  @RequirePermissions('manage_conversations')
   @ApiOperation({
     summary: 'Toggle the AI auto-reply state for a conversation',
   })

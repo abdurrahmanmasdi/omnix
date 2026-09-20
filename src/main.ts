@@ -5,11 +5,15 @@ import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { GRPC_CONFIG } from './config/grpc.constants';
+import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
   // Preserve the exact bytes Meta signed. JSON parsing changes whitespace/key
   // ordering, so verification must never be performed against @Body().
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, { rawBody: true, bufferLogs: true });
+
+  // Use Pino as the default logger
+  app.useLogger(app.get(Logger));
 
   // Enable cookie parser
   app.use(cookieParser());
