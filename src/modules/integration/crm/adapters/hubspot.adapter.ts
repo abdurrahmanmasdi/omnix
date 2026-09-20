@@ -38,10 +38,10 @@ export class HubspotAdapter implements CrmAdapter, OnModuleInit {
 
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { crmAccessToken: true, name: true },
+      select: { crmAccessToken: true, crmSyncEnabled: true, name: true },
     });
 
-    if (!organization?.crmAccessToken) {
+    if (!organization?.crmAccessToken || !organization.crmSyncEnabled) {
       const msg = `HubSpot sync skipped: Organization ${organizationId} (${organization?.name || 'Unknown'}) has not connected HubSpot (missing crmAccessToken).`;
       this.logger.warn(msg);
       throw new Error(msg);
@@ -188,4 +188,3 @@ export class HubspotAdapter implements CrmAdapter, OnModuleInit {
     return stageMap[status || 'NEW'] || 'appointmentscheduled';
   }
 }
-

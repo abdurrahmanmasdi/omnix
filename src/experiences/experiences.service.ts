@@ -86,6 +86,7 @@ export class ExperiencesService implements OnModuleInit {
           storyText: dto.storyText.trim(),
           beforeImageUrl: dto.beforeImageUrl?.trim() || null,
           afterImageUrl: dto.afterImageUrl?.trim() || null,
+          consentObtained: dto.consentObtained ?? false,
         },
       });
 
@@ -241,6 +242,9 @@ export class ExperiencesService implements OnModuleInit {
           beforeImageUrl: dto.beforeImageUrl.trim(),
         }),
         ...(dto.afterImageUrl && { afterImageUrl: dto.afterImageUrl.trim() }),
+        ...(dto.consentObtained !== undefined && {
+          consentObtained: dto.consentObtained,
+        }),
       },
     });
 

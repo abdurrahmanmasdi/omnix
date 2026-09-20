@@ -16,6 +16,19 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(AiReplyProcessor.name);
   private salesAgentService: SalesAgentService | undefined;
 
+  private buildDisclosure(
+    template: string | null | undefined,
+    firstName: string | null | undefined,
+    agentName: string | null | undefined,
+    clinicName: string | null | undefined,
+  ): string {
+    const fallback = "Hi {{firstName}}! 👋 I'm {{agentName}}, the digital assistant for {{clinicName}}. I'm an AI, not a doctor, but I'm here to help you with info about our services, pricing, and booking. If you ever need a human medical coordinator, just say 'human' and I'll connect you right away. How can I help you today?";
+    return (template || fallback)
+      .replaceAll('{{firstName}}', firstName || 'there')
+      .replaceAll('{{agentName}}', agentName || 'Assistant')
+      .replaceAll('{{clinicName}}', clinicName || 'OmniDesk Clinic');
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsappService: WhatsappService,
@@ -84,6 +97,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         );
         return;
       }
+      if (!conversation) return;
 
       // 🚀 NEW: Get total message count for python summarization
       const totalMessageCount = await this.prisma.message.count({
@@ -96,6 +110,31 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       const leadSummary = (conversation as any)?.lead?.summary || '';
 
       try {
+        // The disclosure is its own delivered message so an AI service failure cannot
+        // accidentally mark a conversation as disclosed. The flag changes only after
+        // Meta acknowledges successful delivery.
+        let disclosureText: string | undefined;
+        if (!conversation.aiDisclosureSent) {
+          disclosureText = this.buildDisclosure(
+            organization.aiPersona?.aiDisclosureText,
+            conversation.lead?.firstName,
+            organization.aiPersona?.agentName,
+            organization.aiPersona?.clinicName,
+          );
+          const disclosureResponse = await this.whatsappService.sendTextMessage(
+            customerPhone,
+            channel!.accessToken,
+            channel!.providerAccountId,
+            disclosureText,
+          );
+          if (!disclosureResponse?.messages?.[0]?.id) {
+            throw new Error('AI disclosure was not acknowledged by WhatsApp');
+          }
+          await this.prisma.conversation.update({
+            where: { id: conversationId },
+            data: { aiDisclosureSent: true },
+          });
+        }
         // 🚀 NEW: Simulate Typing Indicator on WhatsApp
         if (
           latestMetaMessageId &&
@@ -207,7 +246,9 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           data: {
             conversationId: conversationId,
             content:
-              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
+              [disclosureText, replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]')]
+                .filter(Boolean)
+                .join('|||'),
             mediaUrl: mediaUrl || null,
             metaMessageId: metaMessageId ?? null,
             type: 'AI_TEXT',

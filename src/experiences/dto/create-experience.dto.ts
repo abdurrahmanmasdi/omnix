@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsNotEmpty,
   IsUrl,
+  IsBoolean,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -39,4 +40,8 @@ export class CreateExperienceDto {
   @IsString({ message: 'After image URL must be a string' })
   @IsUrl({}, { message: 'After image URL must be a valid URL' })
   afterImageUrl?: string;
+
+  @IsOptional()
+  @IsBoolean({ message: 'Consent confirmation must be true or false' })
+  consentObtained?: boolean;
 }

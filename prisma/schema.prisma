@@ -58,6 +58,7 @@ model Organization {
 
   // External CRM Credentials
   crmAccessToken        String?
+  crmSyncEnabled        Boolean  @default(false)
 
 
   // Relationships
@@ -75,6 +76,8 @@ model Organization {
   channels            Channel[]
   Battlecard            OrganizationBattlecard[]
   scheduledFollowUps    ScheduledFollowUp[]
+  auditLogs             AuditLog[]
+  crmSyncLogs           CrmSyncLog[]
 
   @@map("organizations")
 }
@@ -321,6 +324,7 @@ model Conversation {
   deletedAt     DateTime?
   leadId       String?       @unique @db.Uuid
   aiPaused       Boolean   @default(false)
+  aiDisclosureSent Boolean @default(false)
   assignedAgentId   String?       @db.Uuid
 
   lead           Lead?        @relation("LeadConversation", fields: [leadId], references: [id])
@@ -402,6 +406,7 @@ model OrganizationExperience {
   // Visual proof! The AI can send these links directly in the WhatsApp chat
   beforeImageUrl  String?
   afterImageUrl   String?
+  consentObtained Boolean  @default(false)
   
   // 🚀 The Vector Search Embedding (Gemini 3072 dimensions)
   embedding       Unsupported("vector(3072)")? 
@@ -470,12 +475,40 @@ model AiPersona {
   tone            String       @default("Professional and empathetic")
   businessRules   Json?
   handoffMessage  String       @default("I will transfer you to our medical coordinator.")
+  aiDisclosureText String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("ai_personas")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  actor          String   @default("system")
+  action         String
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+model CrmSyncLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @db.Uuid
+  leadId            String   @db.Uuid
+  externalContactId String?
+  fieldsHash        String
+  syncedAt          DateTime @default(now())
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, leadId])
+  @@map("crm_sync_logs")
 }
 // ------------------------------------------------------
 // Channels (Omnichannel Architecture)

@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsBoolean, IsString, IsOptional } from 'class-validator';
 
 export class UpdateExperienceDto {
   @IsString()
@@ -24,4 +24,8 @@ export class UpdateExperienceDto {
   @IsString()
   @IsOptional()
   afterImageUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  consentObtained?: boolean;
 }
