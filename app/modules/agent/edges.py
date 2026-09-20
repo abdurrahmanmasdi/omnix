@@ -38,6 +38,10 @@ def compliance_router(state: ConversationState) -> str:
             return "value_pitch_node"
         elif stage == "NURTURING":
             return "general_qa_node"
+        elif stage == "QUALIFYING":
+            return "qualification_node"
+        elif stage == "CLOSING":
+            return "closing_node"
         else:
             return "general_qa_node" # Fallback
     

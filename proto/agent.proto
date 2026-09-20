@@ -24,6 +24,8 @@ message AgentRequest {
   string audioBase64 = 8;
   int32 totalMessageCount = 9;
   string leadSummary = 10;
+  bool isFollowUp = 11;
+  string followUpContext = 12;
 }
 
 // What Python sends back to NestJS

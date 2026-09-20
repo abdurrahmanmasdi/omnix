@@ -25,6 +25,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         business_rules = getattr(request, 'businessRulesJson', getattr(request, 'business_rules_json', '{}'))
         total_count = getattr(request, 'totalMessageCount', getattr(request, 'total_message_count', 0))
         lead_summary = getattr(request, 'leadSummary', getattr(request, 'lead_summary', ''))
+        is_follow_up = getattr(request, 'isFollowUp', getattr(request, 'is_follow_up', False))
+        follow_up_context = getattr(request, 'followUpContext', getattr(request, 'follow_up_context', ''))
         needs_summarization = total_count > 0 and (total_count % 10 == 0)
 
         # Extract optional image from gRPC request
@@ -97,6 +99,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
 
             if lead_summary:
                 state_data["messages"].append(SystemMessage(content=f"Previous Conversation Summary:\n{lead_summary}"))
+
+            if is_follow_up:
+                state_data["messages"].append(SystemMessage(content=f"SYSTEM INSTRUCTION: This is a proactive follow-up. The customer has not responded in a while, or this is a scheduled follow-up. Generate a warm, non-pushy follow-up message based on this context: {follow_up_context}"))
 
             # 2. Fetch the last 120 messages VIA ASYNC INFRASTRUCTURE
             history = await DatabaseService.get_conversation_history(conv_id, limit=120)

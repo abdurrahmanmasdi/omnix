@@ -159,6 +159,16 @@ async def objection_handler_node(state: ConversationState):
     return {"messages": new_messages, "current_stage": "OBJECTION_HANDLING"}
 
 async def qualification_node(state: ConversationState):
+    attempts = state.get("generation_attempts", 0)
+    if not state.get("is_compliant", True) and attempts >= 2:
+        from app.modules.agent.tools import escalate_to_human
+        escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+        current_actions = state.get("pending_crm_actions", [])
+        new_actions = list(current_actions)
+        new_actions.append(escalation_msg)
+        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
+
     customer = state.get("customer", {})
     clinic_name = state.get("clinic_name", "our clinic")
     
@@ -180,25 +190,54 @@ CRITICAL SALES RULE (Acknowledge -> Answer -> Pivot):
 3. Finally, PIVOT gracefully by asking a conversational question to gather missing info.
 
 The patient is currently missing: {missing_str}.
-DO NOT aggressively demand an OPG X-ray in every message. Build trust first. If they are just asking general questions, answer them nicely and casually mention that a photo of their teeth would help give a precise quote.
-"""
+DO NOT aggressively demand an OPG X-ray in every message. Build trust first. If they are just asking general questions, answer them nicely and casually mention that a photo of their teeth would help give a precise quote."""
+
+    prompt += "\n" + HANDOFF_PROMPT
+
     if visual_analysis:
         prompt += f"""
 IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{visual_analysis}".
 - If the analysis confirms it IS a valid dental photo or X-ray, warmly THANK THEM for the clear image, and ONLY ask for the remaining missing info ({missing_str}).
 - If the analysis shows an irrelevant object (like a laptop/dark frame), humorously point it out and ask for the teeth photo.
 """
-    prompt += """
-Keep your response under 3 sentences. Use a natural, friendly WhatsApp tone."""
+    prompt += """\nKeep your response under 3 sentences. Use a natural, friendly WhatsApp tone."""
 
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
-    flagship_llm = LLMFactory.get_flagship_llm()
-    response = await flagship_llm.ainvoke(messages)
+    smart_writer_llm = _get_smart_llm()
+    response = await smart_writer_llm.ainvoke(messages)
     
-    return {"messages": [response], "current_stage": "QUALIFYING"}
+    new_messages = [response]
+    
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        messages.append(response)
+        for tool_call in response.tool_calls:
+            if tool_call["name"] == "search_clinic_knowledge":
+                from app.modules.agent.tools import search_clinic_knowledge
+                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
+            elif tool_call["name"] == "fetch_social_proof":
+                from app.modules.agent.tools import fetch_social_proof
+                tool_result = await fetch_social_proof.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
+            elif tool_call["name"] == "fetch_battlecard":
+                from app.modules.agent.tools import fetch_battlecard
+                tool_result = await fetch_battlecard.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
+            elif tool_call["name"] == "escalate_to_human":
+                from app.modules.agent.tools import escalate_to_human
+                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+            else:
+                tool_result = "Error: Tool not found."
+                
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+            messages.append(tool_msg)
+            new_messages.append(tool_msg)
+                
+        flagship_llm = LLMFactory.get_flagship_llm()
+        final_response = await flagship_llm.ainvoke(messages)
+        new_messages.append(final_response)
+        
+    return {"messages": new_messages, "current_stage": "QUALIFYING"}
 
 from langchain_core.messages import AIMessage
 async def value_pitch_node(state: ConversationState):
@@ -252,17 +291,54 @@ async def value_pitch_node(state: ConversationState):
     return {"messages": new_messages, "current_stage": "PITCHING"}
 
 async def closing_node(state: ConversationState):
+    attempts = state.get("generation_attempts", 0)
+    if not state.get("is_compliant", True) and attempts >= 2:
+        from app.modules.agent.tools import escalate_to_human
+        escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+        current_actions = state.get("pending_crm_actions", [])
+        new_actions = list(current_actions)
+        new_actions.append(escalation_msg)
+        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
+
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is ready to book or showing high intent. 
     Create a sense of urgency (e.g., 'Dr. [Name] has only 2 slots left this week' or 'We have a special discount ending tomorrow'). 
     Ask them explicitly for their preferred day and time for the consultation. 
     Keep it under 3 sentences, conversational (WhatsApp style), and extremely warm."""
     
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
-    flagship_llm = LLMFactory.get_flagship_llm()
-    response = await flagship_llm.ainvoke(messages)
+    prompt += "\n" + HANDOFF_PROMPT
+
+    if not state.get("is_compliant", True) and state.get("compliance_feedback"):
+        prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
     
-    return {"messages": [response], "current_stage": "CLOSING"}
+    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    smart_writer_llm = _get_smart_llm()
+    response = await smart_writer_llm.ainvoke(messages)
+    
+    new_messages = [response]
+    
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        messages.append(response)
+        for tool_call in response.tool_calls:
+            if tool_call["name"] == "search_clinic_knowledge":
+                from app.modules.agent.tools import search_clinic_knowledge
+                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
+            elif tool_call["name"] == "escalate_to_human":
+                from app.modules.agent.tools import escalate_to_human
+                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
+            else:
+                tool_result = "Error: Tool not found."
+                
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
+            messages.append(tool_msg)
+            new_messages.append(tool_msg)
+                
+        flagship_llm = LLMFactory.get_flagship_llm()
+        final_response = await flagship_llm.ainvoke(messages)
+        new_messages.append(final_response)
+        
+    return {"messages": new_messages, "current_stage": "CLOSING"}
 
 async def out_of_domain_node(state: ConversationState):
     prompt = OUT_OF_DOMAIN_PROMPT

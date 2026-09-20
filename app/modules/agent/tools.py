@@ -145,6 +145,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
             SELECT "competitorName", "objectionType", "rebuttalText"
             FROM organization_battlecards
             WHERE "organizationId" = :org_id
+              AND embedding IS NOT NULL
             ORDER BY embedding <=> :vector
             LIMIT 1
         """)
@@ -208,7 +209,7 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
             "reason": reason
         }
 
-        return json.dumps(action)
+        return f"TOOL_ACTION:HANDOFF_TO_HUMAN:{json.dumps(action)}"
 
     except Exception as e:
         logger.error("Escalation error: %s", e)
@@ -245,4 +246,25 @@ async def update_patient_profile(
     
     return "No valid CRM fields provided to update."
 
-tools_list = [search_clinic_knowledge, fetch_social_proof, fetch_battlecard, create_lead, escalate_to_human, update_patient_profile]
+@tool
+async def schedule_follow_up(
+    scheduled_at: str,
+    context: str = "General follow-up",
+) -> str:
+    """
+    Schedules a follow-up message at a specific date and time.
+    Use this when the customer says things like "call me tomorrow",
+    "let me think about it", or agrees to a specific callback time.
+    
+    Args:
+        scheduled_at: ISO 8601 datetime string (e.g., "2026-09-18T17:00:00+03:00")
+        context: Brief note about what to follow up about
+    """
+    payload = {
+        "scheduledAt": scheduled_at,
+        "context": context,
+    }
+    logger.info("[VIRTUAL TOOL] Schedule Follow Up: %s at %s", context, scheduled_at)
+    return f"TOOL_ACTION:SCHEDULE_FOLLOW_UP:{json.dumps(payload)}"
+
+tools_list = [search_clinic_knowledge, fetch_social_proof, fetch_battlecard, create_lead, escalate_to_human, update_patient_profile, schedule_follow_up]

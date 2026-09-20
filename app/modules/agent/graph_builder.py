@@ -24,11 +24,12 @@ def build_graph():
     builder.add_edge(START, "extract_and_classify")
     builder.add_conditional_edges("extract_and_classify", sales_router)
 
-    # All sales nodes conditionally route to summarizer if needed
-    for node in ["qualification_node", "closing_node", "out_of_domain_node"]:
+    # Out of domain bypasses compliance check
+    for node in ["out_of_domain_node"]:
         builder.add_conditional_edges(node, after_sales_router)
         
-    for node in ["objection_handler_node", "value_pitch_node", "general_qa_node"]:
+    # All other AI response nodes must go through the compliance checker
+    for node in ["qualification_node", "closing_node", "objection_handler_node", "value_pitch_node", "general_qa_node"]:
         builder.add_edge(node, "compliance_checker_node")
         
     builder.add_conditional_edges("compliance_checker_node", compliance_router)
