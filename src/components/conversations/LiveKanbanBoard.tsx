@@ -39,6 +39,9 @@ interface Lead {
   status?: string;
   pipelineStageId?: string;
   conversationId?: string;
+  conversation?: {
+    id: string;
+  };
   createdAt: string;
   [key: string]: unknown;
 }
@@ -77,14 +80,17 @@ function LeadCard({
   ...props 
 }: SortableLeadCardProps & { isOverlay?: boolean, style?: React.CSSProperties, ref?: React.Ref<HTMLDivElement> }) {
   const isHandedOff = lead.status === 'HANDED_OFF';
+  // The leads endpoint nests the relation as `conversation: { id }`. Keep the
+  // legacy field as a fallback for clients that still provide it directly.
+  const conversationId = lead.conversation?.id ?? lead.conversationId;
   
   return (
     <div 
       ref={ref}
       style={style}
       onClick={() => {
-        if (lead.conversationId) {
-          onSelectConversation(lead.conversationId);
+        if (conversationId) {
+          onSelectConversation(conversationId);
         }
       }}
       className={`bg-transparent border rounded-lg p-3 shadow-none flex flex-col gap-2 cursor-grab active:cursor-grabbing transition-colors 
@@ -101,7 +107,7 @@ function LeadCard({
               Handed Off
             </Badge>
           )}
-          {lead.conversationId && (
+          {conversationId && (
             <MessageSquare className={`h-4 w-4 ${isActiveConversation ? 'text-brand-cyan' : 'text-brand-ice/40'}`} />
           )}
         </div>
@@ -126,7 +132,7 @@ function LeadCard({
         <span className="text-[10px] text-brand-ice/60 font-medium">
           {new Date(lead.createdAt).toLocaleDateString()}
         </span>
-        {!lead.conversationId && (
+        {!conversationId && (
           <span className="text-[10px] text-brand-ice/60 italic">No Chat</span>
         )}
       </div>
@@ -366,7 +372,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
             <LeadCard 
               lead={activeLead} 
               isOverlay 
-              isActiveConversation={activeLead.conversationId === activeConversationId}
+              isActiveConversation={(activeLead.conversation?.id ?? activeLead.conversationId) === activeConversationId}
               onSelectConversation={onSelectConversation}
             />
           ) : null}
@@ -417,7 +423,7 @@ function KanbanColumn({ stage, leads, activeConversationId, onSelectConversation
             <SortableLeadCard 
               key={lead.id} 
               lead={lead} 
-              isActiveConversation={lead.conversationId === activeConversationId}
+              isActiveConversation={(lead.conversation?.id ?? lead.conversationId) === activeConversationId}
               onSelectConversation={onSelectConversation}
             />
           ))}
