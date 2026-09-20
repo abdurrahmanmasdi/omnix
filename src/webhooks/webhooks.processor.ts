@@ -38,6 +38,13 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
       this.client.getService<SalesAgentService>('SalesAgent');
   }
 
+  // Normalized, whole-message commands. Keep this intentionally conservative:
+  // ordinary uses of words such as “stop by tomorrow” must not suppress consent.
+  private isOptOut(text: string): boolean {
+    const normalized = text.trim().toLocaleLowerCase();
+    return /^(stop|unsubscribe|cancel|end|quit|opt[ -]?out|no messages|no more messages|nicht mehr|abmelden|stopp|iptal|mesaj gönderme|mesaj gonderme|artık mesaj|artik mesaj|parar|basta|detener|cancelar)$/iu.test(normalized);
+  }
+
   async process(job: Job<WhatsAppWebhookPayload>): Promise<any> {
     // Run the whole webhook worker as a "System" so it can access the database freely
     return tenantStorage.run({ isSystemBypass: true }, async () => {
@@ -229,19 +236,30 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 this.logger.warn(
                   `Duplicate webhook detected for Message ID: ${metaMessageId}. Terminating execution.`,
                 );
-                return; // Exit the job cleanly without throwing an error
+                continue; // A batch can contain other, non-duplicate messages.
               }
 
               // 2. Save the incoming message
-              const wpMessage = await this.prisma.message.create({
-                data: {
-                  conversationId: conversation.id,
-                  metaMessageId: metaMessageId,
-                  content: messageContent,
-                  type: 'LEAD_TEXT',
-                  handledBy: 'HUMAN', // AI will pick this up next!
-                },
-              });
+              let wpMessage;
+              try {
+                // metaMessageId is unique in the database. This catch closes the
+                // check/create race between simultaneous BullMQ workers.
+                wpMessage = await this.prisma.message.create({
+                  data: {
+                    conversationId: conversation.id,
+                    metaMessageId: metaMessageId,
+                    content: messageContent,
+                    type: 'LEAD_TEXT',
+                    handledBy: 'HUMAN',
+                  },
+                });
+              } catch (error: any) {
+                if (error?.code === 'P2002') {
+                  this.logger.warn(`Duplicate inbound message ${metaMessageId} rejected atomically.`);
+                  continue;
+                }
+                throw error;
+              }
 
               this.eventsGateway.broadcastNewMessage(
                 organization.id,
@@ -249,6 +267,32 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               );
 
               await this.followUpService.cancelPendingFollowUps(conversation.id);
+
+              if (this.isOptOut(messageContent)) {
+                // Consent is stored on the tenant-owned lead, not globally by
+                // phone number. This prevents one tenant's STOP from affecting
+                // another tenant that happens to know the same contact.
+                await this.prisma.$transaction([
+                  (this.prisma.lead as any).updateMany({
+                    where: { organizationId: organization.id, phoneNumber: customerPhone, deletedAt: null },
+                    data: { optedOutAt: new Date(), optOutReason: messageContent },
+                  }),
+                  this.prisma.conversation.update({ where: { id: conversation.id }, data: { aiPaused: true } }),
+                ]);
+                const pendingReply = await this.aiReplyQueue.getJob(`reply-${conversation.id}`);
+                if (pendingReply) await pendingReply.remove();
+                this.logger.log(`Recorded opt-out for tenant ${organization.id}, contact ${customerPhone}.`);
+                continue;
+              }
+
+              const leadConsent = await (this.prisma.lead as any).findFirst({
+                where: { organizationId: organization.id, phoneNumber: customerPhone, deletedAt: null },
+                select: { optedOutAt: true },
+              });
+              if (leadConsent?.optedOutAt) {
+                this.logger.log(`Outbound automation suppressed for opted-out contact ${customerPhone}.`);
+                continue;
+              }
 
               this.logger.log(
                 `Saved new message from ${customerPhone} for organization ${organization.name}`,

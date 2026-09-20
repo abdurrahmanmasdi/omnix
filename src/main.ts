@@ -7,7 +7,9 @@ import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { GRPC_CONFIG } from './config/grpc.constants';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Preserve the exact bytes Meta signed. JSON parsing changes whitespace/key
+  // ordering, so verification must never be performed against @Body().
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // Enable cookie parser
   app.use(cookieParser());

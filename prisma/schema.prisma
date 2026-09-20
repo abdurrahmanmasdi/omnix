@@ -243,6 +243,8 @@ model Lead {
   currency              Currency         @default(USD)
   expectedServiceDate DateTime?
   nextFollowUpAt     DateTime?
+  optedOutAt         DateTime?
+  optOutReason       String?
   externalCrmType    ExternalCrmType  @default(NONE)
   externalContactId  String?
   externalDealId     String?
@@ -256,6 +258,7 @@ model Lead {
   conversation          Conversation?    @relation("LeadConversation")
 
   @@index([organizationId])
+  @@index([organizationId, phoneNumber])
   @@index([pipelineStageId])
   @@index([assignedAgentId])
   @@index([sourceId])

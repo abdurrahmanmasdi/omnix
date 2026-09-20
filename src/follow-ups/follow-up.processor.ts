@@ -50,11 +50,11 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
       const conversation = followUp.conversation;
       const organization = followUp.organization;
 
-      if (conversation.aiPaused) {
-        this.logger.log(`Conversation ${conversation.id} is paused. Cancelling follow-up.`);
+      if (conversation.aiPaused || (conversation as any).lead?.optedOutAt) {
+        this.logger.log(`Conversation ${conversation.id} is paused or opted out. Cancelling follow-up.`);
         await this.prisma.scheduledFollowUp.update({
           where: { id: followUp.id },
-          data: { status: FollowUpStatus.CANCELLED, cancelReason: 'AI Paused' },
+          data: { status: FollowUpStatus.CANCELLED, cancelReason: (conversation as any).lead?.optedOutAt ? 'Consent withdrawn' : 'AI Paused' },
         });
         return;
       }

@@ -91,9 +91,9 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         include: { lead: true },
       });
 
-      if (conversation?.aiPaused) {
+      if (conversation?.aiPaused || (conversation as any)?.lead?.optedOutAt) {
         this.logger.log(
-          `AI was paused during the debounce window. Skipping AI reply.`,
+          `AI is paused or consent is withdrawn during the debounce window. Skipping AI reply.`,
         );
         return;
       }

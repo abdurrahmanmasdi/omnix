@@ -7,7 +7,10 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  Headers,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { WebhooksService } from './webhooks.service';
 import type { WhatsAppWebhookPayload } from './interfaces/whatsapp.interface';
@@ -38,10 +41,19 @@ export class WebhooksController {
   // 2. Receiving Messages (POST)
   @Post('whatsapp')
   @HttpCode(HttpStatus.OK) // ALWAYS return 200 OK immediately!
-  async receiveMessage(@Body() payload: WhatsAppWebhookPayload) {
+  async receiveMessage(
+    @Body() payload: WhatsAppWebhookPayload,
+    @Headers('x-hub-signature-256') signature: string | undefined,
+    @Req() request: Request & { rawBody?: Buffer },
+  ) {
+    const rawBody = request.rawBody;
+    if (!rawBody || !this.webhooksService.isValidMetaSignature(rawBody, signature)) {
+      throw new UnauthorizedException('Invalid Meta webhook signature');
+    }
     // Check if it's a valid WhatsApp API payload
     if (payload.object === 'whatsapp_business_account') {
-      // Fire and forget: send to queue without waiting for DB or AI processing
+      // Queue only authenticated payloads. Queue-level de-duplication means a
+      // Meta retry cannot create a second worker for the same delivery.
       await this.webhooksService.queueIncomingMessage(payload);
     }
 

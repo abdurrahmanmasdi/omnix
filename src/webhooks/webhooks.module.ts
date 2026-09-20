@@ -26,12 +26,15 @@ import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
     // Register the specific queue we will push messages to
     BullModule.registerQueue({
       name: 'whatsapp-messages',
+      defaultJobOptions: { attempts: 5, backoff: { type: 'exponential', delay: 2000 }, removeOnFail: false },
     }),
     BullModule.registerQueue({
       name: 'ai-reply',
+      defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 2000 }, removeOnFail: false },
     }),
     BullModule.registerQueue({
       name: 'follow-up',
+      defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnFail: false },
     }),
     ClientsModule.register([
       {
