@@ -24,6 +24,7 @@ type ExperienceRecord = {
   storyText?: string;
   beforeImageUrl?: string;
   afterImageUrl?: string;
+  consentObtained?: boolean;
 };
 
 type ExperienceFormValues = {
@@ -33,6 +34,7 @@ type ExperienceFormValues = {
   storyText: string;
   beforeImageUrl: string;
   afterImageUrl: string;
+  consentObtained: boolean;
 };
 
 const emptyFormValues: ExperienceFormValues = {
@@ -42,6 +44,7 @@ const emptyFormValues: ExperienceFormValues = {
   storyText: "",
   beforeImageUrl: "",
   afterImageUrl: "",
+  consentObtained: false,
 };
 
 function normalizeExperiences(data: unknown): ExperienceRecord[] {
@@ -77,6 +80,11 @@ export default function ExperiencesTable() {
   const experiences = useMemo(
     () => normalizeExperiences(experiencesQuery.data),
     [experiencesQuery.data],
+  );
+  const experiencesMissingImageConsent = experiences.filter(
+    (experience) =>
+      (experience.beforeImageUrl || experience.afterImageUrl) &&
+      !experience.consentObtained,
   );
 
   const openCreateModal = () => {
@@ -144,6 +152,13 @@ export default function ExperiencesTable() {
         </div>
         <Button onClick={openCreateModal}>Add New</Button>
       </div>
+
+      {experiencesMissingImageConsent.length > 0 && (
+        <div className="border-b border-amber-400/30 bg-amber-400/10 px-6 py-3 text-sm text-amber-100">
+          {experiencesMissingImageConsent.length} experience
+          {experiencesMissingImageConsent.length === 1 ? " has" : "s have"} patient images without recorded media consent. Do not use or share these images until consent is documented.
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -286,6 +301,7 @@ function ExperienceFormModal({
       storyText: initialValues?.storyText || "",
       beforeImageUrl: initialValues?.beforeImageUrl || "",
       afterImageUrl: initialValues?.afterImageUrl || "",
+      consentObtained: initialValues?.consentObtained ?? false,
     });
   }, [initialValues, isOpen, reset]);
 
@@ -334,6 +350,7 @@ function ExperienceFormModal({
       procedureType: values.procedureType.trim() || undefined,
       beforeImageUrl: values.beforeImageUrl.trim() || undefined,
       afterImageUrl: values.afterImageUrl.trim() || undefined,
+      consentObtained: values.consentObtained,
     };
 
     if (mode === "edit" && experienceId) {
@@ -451,6 +468,18 @@ function ExperienceFormModal({
               />
             </div>
           </div>
+
+          <label className="flex items-start gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4"
+              {...register("consentObtained")}
+              disabled={isSaving}
+            />
+            <span>
+              I confirm the clinic has documented media consent for every patient image attached to this experience.
+            </span>
+          </label>
 
           <div className="space-y-2">
             <Label htmlFor="experience-story">The Story</Label>

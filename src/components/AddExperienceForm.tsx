@@ -19,6 +19,7 @@ type ExperienceFormState = {
   storyText: string;
   beforeImageUrl: string;
   afterImageUrl: string;
+  consentObtained: boolean;
 };
 
 const initialFormState: ExperienceFormState = {
@@ -28,6 +29,7 @@ const initialFormState: ExperienceFormState = {
   storyText: "",
   beforeImageUrl: "",
   afterImageUrl: "",
+  consentObtained: false,
 };
 
 export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
@@ -42,10 +44,14 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
     event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = event.target;
+    const isCheckbox =
+      event.target instanceof HTMLInputElement && event.target.type === "checkbox";
+    const checked =
+      event.target instanceof HTMLInputElement ? event.target.checked : false;
 
     setForm((current) => ({
       ...current,
-      [name]: value,
+      [name]: isCheckbox ? checked : value,
     }));
 
     if (successMessage) {
@@ -69,6 +75,7 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
       procedureType: form.procedureType || undefined,
       beforeImageUrl: form.beforeImageUrl || undefined,
       afterImageUrl: form.afterImageUrl || undefined,
+      consentObtained: form.consentObtained,
     };
 
     createExperienceMutation.mutate(
@@ -187,6 +194,20 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
             />
           </div>
         </div>
+
+        <label className="flex items-start gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+          <input
+            name="consentObtained"
+            type="checkbox"
+            checked={form.consentObtained}
+            onChange={handleChange}
+            disabled={isSubmitDisabled}
+            className="mt-1 h-4 w-4"
+          />
+          <span>
+            I confirm the clinic has documented media consent for every patient image attached to this experience.
+          </span>
+        </label>
 
         <div className="space-y-2">
           <Label htmlFor="storyText">The Story</Label>
