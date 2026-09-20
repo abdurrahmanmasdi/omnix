@@ -47,7 +47,7 @@ export default function LoginPage() {
           toast.success('Welcome back!');
           
           // The backend sends us { access_token, user }
-          const { access_token, user } = response as any;
+          const { access_token, user } = response as unknown as { access_token: string; user: { hasCompletedOnboarding: boolean, id: string, organizationId: string } };
           
           useAuthStore.getState().setAuth(access_token, user);
           
@@ -58,9 +58,10 @@ export default function LoginPage() {
             router.push('/onboarding/create-organization');
           }
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
           // Extract the error message from our NestJS backend
-          const message = error.response?.data?.message || 'Invalid email or password';
+          const err = error as { response?: { data?: { message?: string } } };
+          const message = err.response?.data?.message || 'Invalid email or password';
           toast.error(message);
         },
       }
@@ -123,7 +124,7 @@ export default function LoginPage() {
             {loginMutation.isPending ? 'Logging in...' : 'Log in'}
           </Button>
           <div className="text-center text-sm text-slate-500">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/signup" className="text-blue-600 hover:underline font-medium">
               Sign up
             </Link>

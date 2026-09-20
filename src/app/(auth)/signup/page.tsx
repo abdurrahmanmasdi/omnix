@@ -41,13 +41,14 @@ export default function SignupPage() {
     signupMutation.mutate(
       { data },
       {
-        onSuccess: (response: any) => {
+        onSuccess: (response: unknown) => {
+          const res = response as unknown as { access_token?: string; user?: { hasCompletedOnboarding: boolean, id: string, organizationId: string } };
           // If the backend returns an access_token, log them in automatically
-          if (response?.access_token && response?.user) {
+          if (res?.access_token && res?.user) {
             toast.success('Account created successfully!');
-            useAuthStore.getState().setAuth(response.access_token, response.user);
+            useAuthStore.getState().setAuth(res.access_token, res.user);
             
-            if (response.user.hasCompletedOnboarding) {
+            if (res.user.hasCompletedOnboarding) {
               router.push('/dashboard');
             } else {
               router.push('/onboarding/create-organization');
@@ -58,8 +59,9 @@ export default function SignupPage() {
             router.push('/login');
           }
         },
-        onError: (error: any) => {
-          const message = error.response?.data?.message || 'Failed to create account';
+        onError: (error: unknown) => {
+          const err = error as { response?: { data?: { message?: string | string[] } } };
+          const message = err.response?.data?.message || 'Failed to create account';
           toast.error(
             Array.isArray(message) ? message[0] : message
           );

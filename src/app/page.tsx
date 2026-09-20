@@ -1,7 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bot, MessageSquare, Shield, Zap, Database, ArrowRight, RefreshCw } from 'lucide-react';
+import { Bot, MessageSquare, Shield, Database, ArrowRight, RefreshCw } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -135,9 +135,9 @@ export default function LandingPage() {
               </div>
               <div className="space-y-4 font-mono text-sm">
                 <div className="text-brand-ice/40"># Simulating semantic search...</div>
-                <div className="text-brand-cyan">await RAG.search("Dental Implant Pricing 2026")</div>
+                <div className="text-brand-cyan">await RAG.search(&quot;Dental Implant Pricing 2026&quot;)</div>
                 <div className="bg-brand-navy p-4 rounded-xl border border-white/5 text-brand-ice">
-                  <span className="text-brand-glow font-bold">Match (98.4%):</span> "Full arch implants start at $12,000 with a lifetime warranty. Dr. Smith handles all cases."
+                  <span className="text-brand-glow font-bold">Match (98.4%):</span> &quot;Full arch implants start at $12,000 with a lifetime warranty. Dr. Smith handles all cases.&quot;
                 </div>
                 <div className="text-brand-violet font-semibold animate-pulse">Action: Injecting context to LangGraph...</div>
               </div>
@@ -164,7 +164,7 @@ export default function LandingPage() {
                     <div className="flex gap-4">
                         <div className="w-8 h-8 rounded-full bg-brand-electric/20 shrink-0" />
                         <div className="bg-brand-navy border border-white/5 p-4 rounded-2xl rounded-tl-sm text-brand-ice/90 max-w-[80%]">
-                            Hi! I'm interested in veneers but I'm worried about the cost.
+                            Hi! I&apos;m interested in veneers but I&apos;m worried about the cost.
                         </div>
                     </div>
                     <div className="flex gap-4 flex-row-reverse">

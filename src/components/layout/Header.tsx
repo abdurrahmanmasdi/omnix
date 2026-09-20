@@ -69,7 +69,6 @@ export function Header({ onLogout }: HeaderProps) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const breadcrumbs = useBreadcrumbs();
-  const pageTitle = breadcrumbs[breadcrumbs.length - 1]?.label || 'Dashboard';
 
   return (
     <header className="h-16 border-b border-white/5 bg-brand-navy/50 backdrop-blur-xl flex items-center justify-between px-8 shrink-0">

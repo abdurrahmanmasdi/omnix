@@ -38,7 +38,7 @@ export default function CreateOrganizationPage() {
   const user = useAuthStore((state) => state.user);
 
   const form = useForm<CreateOrganizationFormData>({
-    resolver: zodResolver(createOrganizationSchema) as any,
+    resolver: zodResolver(createOrganizationSchema) as never,
     defaultValues: { 
       name: "", 
       slug: "", 
@@ -53,6 +53,7 @@ export default function CreateOrganizationPage() {
     name: "businessRules",
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const name = form.watch("name");
   const isSlugDirty = form.formState.dirtyFields.slug;
 
@@ -83,7 +84,7 @@ export default function CreateOrganizationPage() {
     };
 
     createOrgMutation.mutate(
-      { data: payload as any },
+      { data: payload as never },
       {
         onSuccess: (response) => {
           toast.success("Workspace created successfully!");
@@ -99,9 +100,10 @@ export default function CreateOrganizationPage() {
           // Welcome to the CRM!
           router.push("/dashboard");
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
+          const err = error as { response?: { data?: { message?: string } } };
           toast.error(
-            error.response?.data?.message || "Failed to create workspace",
+            err.response?.data?.message || "Failed to create workspace",
           );
         },
       },
@@ -121,7 +123,7 @@ export default function CreateOrganizationPage() {
         <CardHeader>
           <CardTitle>Name your Workspace</CardTitle>
           <CardDescription>
-            Let's set up your clinic's AI Sales Agent and CRM environment.
+            Let&apos;s set up your clinic&apos;s AI Sales Agent and CRM environment.
           </CardDescription>
         </CardHeader>
 

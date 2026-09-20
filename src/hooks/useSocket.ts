@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth-store';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000"
 
 // ─── Payload Types (re-exported for consumers) ─────────
 export interface LiveMessagePayload {
@@ -39,7 +39,7 @@ export interface ConversationUpdatePayload {
 // ─── Singleton Socket Manager ───────────────────────────
 let globalSocket: Socket | null = null;
 let connected = false;
-let listeners = new Set<() => void>();
+const listeners = new Set<() => void>();
 
 /** Notify all subscribers that connection status changed */
 function emitChange() {
@@ -113,18 +113,21 @@ let refCount = 0;
 export function useSocket(): { socket: Socket | null; isConnected: boolean } {
   const accessToken = useAuthStore((s) => s.accessToken);
   const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
 
-    const socket = getOrCreateSocket(accessToken);
-    socketRef.current = socket;
+    const newSocket = getOrCreateSocket(accessToken);
+    socketRef.current = newSocket;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSocket(newSocket);
     refCount++;
 
     return () => {
       refCount--;
       if (refCount <= 0) {
-        socket.disconnect();
+        newSocket.disconnect();
         globalSocket = null;
         connected = false;
         refCount = 0;
@@ -143,5 +146,5 @@ export function useSocket(): { socket: Socket | null; isConnected: boolean } {
     () => false // SSR snapshot
   );
 
-  return { socket: socketRef.current, isConnected };
+  return { socket, isConnected };
 }

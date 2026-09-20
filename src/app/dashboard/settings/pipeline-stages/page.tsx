@@ -56,9 +56,10 @@ export default function PipelineStagesPage() {
   // Sync server data to local state
   useEffect(() => {
     if (data) {
-      const d = data as any;
+      const d = data as { items?: PipelineStage[]; data?: PipelineStage[] } | PipelineStage[];
       const arr = Array.isArray(d) ? d : d?.items || d?.data || [];
       const sorted = [...arr].sort((a: PipelineStage, b: PipelineStage) => a.orderIndex - b.orderIndex);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalStages(sorted);
     }
   }, [data]);

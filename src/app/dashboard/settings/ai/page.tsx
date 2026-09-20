@@ -59,7 +59,7 @@ export default function AiSettingsPage() {
   const { data: persona, isLoading: isFetching } = useAiPersonaControllerGetPersona({
     query: {
       // 404 is expected for new organizations that haven't configured a persona yet
-      retry: (failureCount, error: any) => {
+      retry: (failureCount, error: { response?: { status?: number } }) => {
         if (error?.response?.status === 404) return false;
         return failureCount < 3;
       },
@@ -87,7 +87,7 @@ export default function AiSettingsPage() {
   // Sync fetched data into the form
   useEffect(() => {
     if (persona) {
-      const p = persona as any;
+      const p = persona as { clinicName?: string; agentName?: string; tone?: string; handoffMessage?: string; businessRules?: string | Record<string, unknown> };
       let rulesText = "";
       if (typeof p.businessRules === 'string') {
         rulesText = p.businessRules;
@@ -105,6 +105,7 @@ export default function AiSettingsPage() {
     }
   }, [persona, reset]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const toneValue = watch("tone");
 
   // --- Orval-generated POST mutation hook ---
@@ -256,7 +257,7 @@ export default function AiSettingsPage() {
                 className="min-h-[120px] rounded-lg border-white/10 focus:ring-blue-500/20 resize-y"
               />
               <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
-                Specific instructions, rules, or JSON data to guide the AI's decision-making.
+                Specific instructions, rules, or JSON data to guide the AI&apos;s decision-making.
               </p>
               {errors.businessRules && (
                 <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.businessRules.message}</p>

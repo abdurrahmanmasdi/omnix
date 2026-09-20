@@ -61,9 +61,30 @@ const PRIORITY_COLORS: Record<string, string> = {
   COLD: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
 };
 
+interface Lead {
+  id: string;
+  firstName: string;
+  lastName: string;
+  country: string;
+  phoneNumber: string;
+  status: string;
+  priority: string;
+  estimatedValue: number;
+  currency?: string;
+  sourceId?: string;
+  conversation?: { id: string };
+  [key: string]: unknown;
+}
+
+interface Source {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 interface LeadsTableProps {
-  leads: any[];
-  sources: any[];
+  leads: Lead[];
+  sources: Source[];
   isLoading: boolean;
   sortBy: { field: string; direction: 'asc' | 'desc' };
   onSortChange: (field: string) => void;
@@ -78,7 +99,6 @@ export function LeadsTable({
   leads,
   sources,
   isLoading,
-  sortBy,
   onSortChange,
   onEdit,
   onDelete,
@@ -155,7 +175,7 @@ export function LeadsTable({
             </TableRow>
           ) : (
             leads.map((lead) => {
-              const source = sources.find((s: any) => s.id === lead.sourceId);
+              const source = sources.find((s) => s.id === lead.sourceId);
               return (
                 <TableRow 
                   key={lead.id} 

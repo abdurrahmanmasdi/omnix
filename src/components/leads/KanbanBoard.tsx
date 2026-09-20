@@ -31,8 +31,26 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 // --- Types ---
-type Lead = any; // Assuming `leads` passed in is an array of `any` from Orval's paginated response
-type Stage = any;
+interface Lead {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  email?: string;
+  status?: string;
+  pipelineStageId?: string;
+  conversationId?: string;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+interface Stage {
+  id: string;
+  name: string;
+  icon?: string;
+  orderIndex?: number;
+  [key: string]: unknown;
+}
 
 interface KanbanBoardProps {
   leads: Lead[];
@@ -114,7 +132,7 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
   );
 }
 
-const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>(({ lead, onViewProfile, onOpenConversation }, ref) => {
+const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>(({ lead, onViewProfile, onOpenConversation }) => {
   const {
     attributes,
     listeners,
@@ -165,11 +183,12 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
   // Sync local state when fresh leads come from props
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalLeads(leads);
   }, [leads]);
 
   const stages = useMemo(() => {
-    const d = stagesData as any;
+    const d = stagesData as unknown as { items?: Stage[] } | Stage[];
     if (Array.isArray(d)) return d;
     if (d?.items) return d.items;
     return [];
@@ -274,15 +293,18 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
     if (newStageId && originalStageId !== newStageId) {
       // Optimistically update React Query Cache
-      queryClient.setQueryData([`/leads`], (oldData: any) => {
+      queryClient.setQueryData([`/leads`], (oldData: unknown) => {
         if (!oldData) return oldData;
         const processItems = (items: Lead[]) => items.map(item => 
           item.id === activeLeadId ? { ...item, pipelineStageId: newStageId } : item
         );
 
         if (Array.isArray(oldData)) return processItems(oldData);
-        if (oldData.items) return { ...oldData, items: processItems(oldData.items) };
-        if (oldData.data) return { ...oldData, data: processItems(oldData.data) };
+        if (typeof oldData === 'object' && oldData !== null) {
+          const d = oldData as { items?: Lead[], data?: Lead[] };
+          if (d.items) return { ...d, items: processItems(d.items) };
+          if (d.data) return { ...d, data: processItems(d.data) };
+        }
         return oldData;
       });
 

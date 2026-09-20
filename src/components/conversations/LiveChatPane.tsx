@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   useConversationsControllerGetMessages,
@@ -11,6 +11,7 @@ import type {
   ConversationsControllerGetMessages200Item,
   ConversationsControllerGetConversations200Item,
 } from '@/lib/api/model';
+import Image from 'next/image';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -36,28 +37,14 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
     { query: { enabled: !!activeConversationId } }
   );
 
-  const [activeMessages, setActiveMessages] = useState<ConversationsControllerGetMessages200Item[]>([]);
-
-  // Sync historical messages
-  useEffect(() => {
-    if (historicalMessages && historicalMessages.length > 0) {
-      setActiveMessages([...historicalMessages].reverse());
-    } else {
-      setActiveMessages([]);
-    }
-  }, [historicalMessages]);
-
-  // Combine historical with new live messages
-  useEffect(() => {
-    if (liveMessages.length > 0) {
-      setActiveMessages((prev) => {
-        const newMessages = liveMessages.filter(
-          (liveMsg) => !prev.some((prevMsg) => prevMsg.id === liveMsg.id)
-        );
-        return [...prev, ...newMessages];
-      });
-    }
-  }, [liveMessages]);
+  // Combine historical and live messages safely
+  const activeMessages: ConversationsControllerGetMessages200Item[] = useMemo(() => {
+    const hist = historicalMessages && historicalMessages.length > 0 ? [...historicalMessages].reverse() : [];
+    const newMsgs = liveMessages.filter(
+      (liveMsg) => !hist.some((prevMsg) => prevMsg.id === liveMsg.id)
+    );
+    return [...hist, ...newMsgs];
+  }, [historicalMessages, liveMessages]);
 
   // Auto-scroll
   useEffect(() => {
@@ -123,7 +110,9 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           </Avatar>
           <div>
             <h3 className="font-bold text-brand-ice leading-none mb-1">
-              {activeConversationData?.lead?.name || activeConversationData?.lead?.phoneNumber || 'Active Chat'}
+              {activeConversationData?.lead?.name 
+                ? activeConversationData.lead.name.trim() 
+                : activeConversationData?.lead?.phoneNumber || 'Active Chat'}
             </h3>
             <p className="text-[10px] text-brand-ice/60 font-medium uppercase tracking-widest">
               ID: {activeConversationId.substring(0, 8)}
@@ -196,7 +185,11 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
             </div>
           ) : (
             activeMessages.map((msg, idx) => {
-              const isUser = msg.type === "LEAD_TEXT";
+              const isUser = msg.type?.startsWith("LEAD_");
+              const isSystemOrTool = msg.type === "SYSTEM_PROMPT" || msg.type === "TOOL_CALL" || msg.type === "TOOL_RESULT";
+              
+              if (isSystemOrTool) return null; // Hide internal agent thinking from the UI
+              
               const showAvatar = idx === activeMessages.length - 1 || activeMessages[idx + 1]?.type !== msg.type;
               
               return (
@@ -221,6 +214,16 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
                           : "bg-brand-electric text-white rounded-br-sm border border-blue-700"
                       }`}
                     >
+                      {(msg as ConversationsControllerGetMessages200Item & { mediaUrl?: string }).mediaUrl && (
+                        <Image 
+                          src={(msg as ConversationsControllerGetMessages200Item & { mediaUrl?: string }).mediaUrl!} 
+                          alt="Media" 
+                          width={320} 
+                          height={320}
+                          unoptimized
+                          className="max-w-xs rounded-lg mb-2" 
+                        />
+                      )}
                       {msg.content}
                     </div>
                   </div>

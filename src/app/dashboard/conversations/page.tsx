@@ -8,6 +8,7 @@ import { useLeadsControllerFindAll } from "@/lib/api/generated/leads/leads";
 import { useConversationsControllerGetConversations } from "@/lib/api/generated/conversations/conversations";
 import type {
   ConversationsControllerGetMessages200Item,
+  ConversationsControllerGetConversations200Item,
 } from "@/lib/api/model";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -22,21 +23,21 @@ export default function ConversationsPage() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   // 1. Fetch ALL leads for the Kanban Board (we use limit 100 for now to get a board view)
-  const { data: paginatedLeads, isLoading: leadsLoading, refetch: refetchLeads } = useLeadsControllerFindAll({ 
+  const { data: paginatedLeads, isLoading: leadsLoading } = useLeadsControllerFindAll({ 
     page: 1, 
     limit: 100 
   });
   
   const leads = Array.isArray(paginatedLeads) 
     ? paginatedLeads 
-    : (paginatedLeads as any)?.items || (paginatedLeads as any)?.data || [];
+    : (((paginatedLeads as Record<string, unknown>)?.items ?? (paginatedLeads as Record<string, unknown>)?.data ?? []) as unknown[]);
 
   // We also need conversation data to get `aiPaused` state. We can fetch conversations and map them.
   const { data: conversations, refetch: refetchConversations } =
     useConversationsControllerGetConversations({ page: "1", limit: "100" });
 
-  const activeConversationData = (conversations as any[])?.find(
-    (c: any) => c.id === activeConversationId
+  const activeConversationData = (conversations as ConversationsControllerGetConversations200Item[])?.find(
+    (c: ConversationsControllerGetConversations200Item) => c.id === activeConversationId
   );
 
   // 3. Local state for incoming live messages to pass down to the chat pane
@@ -47,11 +48,11 @@ export default function ConversationsPage() {
     if (!socket) return;
 
     // --- Message Listener ---
-    const handleNewMessage = (data: LiveMessagePayload | any) => {
+    const handleNewMessage = (data: LiveMessagePayload) => {
       refetchConversations(); // refresh sidebar/conversations
 
-      const actualMessage = data.message ? data.message : data;
-      const convId = data.conversationId || actualMessage.conversationId;
+      const actualMessage = (data.message ? data.message : data) as ConversationsControllerGetMessages200Item;
+      const convId = data.conversationId || (actualMessage as Record<string, unknown>).conversationId;
 
       if (actualMessage && actualMessage.content) {
         // Pass it to local state so LiveChatPane can append it
@@ -101,6 +102,7 @@ export default function ConversationsPage() {
 
   // Clear live messages when switching conversations so they don't bleed over
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLiveMessages([]);
   }, [activeConversationId]);
 

@@ -35,7 +35,7 @@ export default function LeadSourcesPage() {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const sources = Array.isArray(data) ? data : ((data as any)?.items || []);
+  const sources = Array.isArray(data) ? data : ((data as { items?: unknown[] })?.items || []);
 
   const handleEdit = (id: string) => {
     setSelectedSourceId(id);
@@ -118,7 +118,7 @@ export default function LeadSourcesPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sources.map((source: any) => (
+                  sources.map((source: { id: string; name: string; isActive?: boolean }) => (
                     <TableRow 
                       key={source.id} 
                       className="group hover:bg-brand-navy/80 transition-all border-l-4 border-l-transparent hover:border-l-purple-600"

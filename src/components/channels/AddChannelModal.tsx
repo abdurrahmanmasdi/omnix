@@ -34,7 +34,7 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
     reset,
     formState: { errors },
   } = useForm<CreateChannelInput>({
-    resolver: zodResolver(createChannelSchema) as any,
+    resolver: zodResolver(createChannelSchema) as never,
     defaultValues: {
       provider: 'WHATSAPP_CLOUD_API',
       providerAccountId: '',
@@ -52,11 +52,12 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
           reset();
           onOpenChange(false);
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
           // Catch 400 bad request or other errors
           console.error(error);
+          const err = error as { response?: { data?: { message?: string } } };
           toast.error(
-            error?.response?.data?.message || 
+            err?.response?.data?.message || 
             'Invalid token or Meta API rejected the connection.'
           );
         },

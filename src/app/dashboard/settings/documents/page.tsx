@@ -53,7 +53,7 @@ export default function DocumentsSettingsPage() {
     setIsDragging(false);
   }, []);
 
-  const validateAndUpload = (file: File) => {
+  const validateAndUpload = useCallback((file: File) => {
     if (file.type !== 'application/pdf') {
       toast.error('Only PDF files are supported.');
       return;
@@ -66,7 +66,7 @@ export default function DocumentsSettingsPage() {
     }
 
     uploadMutation.mutate(
-      { data: { file: file as any } },
+      { data: { file: file as unknown as Blob } },
       {
         onSuccess: () => {
           toast.success('Document uploaded successfully. Processing started.');
@@ -77,7 +77,7 @@ export default function DocumentsSettingsPage() {
         }
       }
     );
-  };
+  }, [uploadMutation, refetch]);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -88,7 +88,7 @@ export default function DocumentsSettingsPage() {
       validateAndUpload(e.dataTransfer.files[0]);
       e.dataTransfer.clearData();
     }
-  }, []); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validateAndUpload]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -187,7 +187,7 @@ export default function DocumentsSettingsPage() {
               Knowledge Base Documents
             </CardTitle>
             <Badge className="bg-transparent text-brand-ice/60 border-white/10 shadow-none font-black px-3 py-1">
-              {(documents as any[])?.length || 0} Files
+              {(documents as unknown[])?.length || 0} Files
             </Badge>
           </div>
         </CardHeader>
@@ -211,7 +211,7 @@ export default function DocumentsSettingsPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : (!documents || (documents as any[]).length === 0) ? (
+              ) : (!documents || (documents as unknown[]).length === 0) ? (
                 <TableRow>
                   <TableCell colSpan={4} className="h-40 text-center">
                     <p className="text-sm font-medium text-brand-ice/60">No documents found.</p>
@@ -219,7 +219,7 @@ export default function DocumentsSettingsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                (documents as any[]).map((doc: any) => (
+                (documents as { id: string; fileName: string; createdAt: string; status: string }[]).map((doc) => (
                   <TableRow key={doc.id} className="hover:bg-brand-navy/80 transition-colors">
                     <TableCell className="pl-6">
                       <div className="flex items-center space-x-3">

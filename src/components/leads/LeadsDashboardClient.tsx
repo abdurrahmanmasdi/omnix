@@ -29,7 +29,9 @@ export function LeadsDashboardClient() {
   // We use a ref so the callback identity never changes, breaking the
   // render-loop that occurs when searchParams triggers a new useCallback.
   const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
+  useEffect(() => {
+    searchParamsRef.current = searchParams;
+  });
 
   const updateUrl = useCallback((updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParamsRef.current.toString());
@@ -126,24 +128,29 @@ export function LeadsDashboardClient() {
 
   const { data: sourcesData } = useLeadSourcesControllerFindAll();
   const sources = useMemo(() => {
-    const d = sourcesData as any;
-    if (Array.isArray(d)) return d;
-    if (d?.items) return d.items;
-    return [];
+    const d = sourcesData as unknown as { items?: unknown[] } | unknown[];
+    if (Array.isArray(d)) return d as { id: string; name: string }[];
+    if (d?.items && Array.isArray(d.items)) return d.items as { id: string; name: string }[];
+    return [] as { id: string; name: string }[];
   }, [sourcesData]);
 
   const deleteMutation = useLeadsControllerRemove();
 
-  const paginatedLeads = data as any;
+  const paginatedLeads = data as unknown as { items?: unknown[], data?: unknown[], total?: number, totalPages?: number, meta?: { totalItems?: number, totalPages?: number } } | unknown[];
   const leads = useMemo(() => {
-    if (Array.isArray(paginatedLeads)) return paginatedLeads;
-    if (paginatedLeads?.items) return paginatedLeads.items;
-    if (paginatedLeads?.data) return paginatedLeads.data;
-    return [];
+    let result: unknown[] = [];
+    if (Array.isArray(paginatedLeads)) {
+      result = paginatedLeads;
+    } else if (paginatedLeads && typeof paginatedLeads === 'object') {
+      if ('items' in paginatedLeads && Array.isArray(paginatedLeads.items)) result = paginatedLeads.items;
+      else if ('data' in paginatedLeads && Array.isArray(paginatedLeads.data)) result = paginatedLeads.data;
+    }
+    return result as { id: string; [key: string]: unknown }[];
   }, [paginatedLeads]);
 
-  const totalLeads = paginatedLeads?.total || paginatedLeads?.meta?.totalItems || leads.length;
-  const totalPages = paginatedLeads?.totalPages || paginatedLeads?.meta?.totalPages || 1;
+  const plObj = paginatedLeads as { total?: number, totalPages?: number, meta?: { totalItems?: number, totalPages?: number } };
+  const totalLeads = plObj?.total || plObj?.meta?.totalItems || leads.length;
+  const totalPages = plObj?.totalPages || plObj?.meta?.totalPages || 1;
 
   // ─── Row-level actions ────────────────────────────────────
   const handleEdit = useCallback((id: string) => {
@@ -192,7 +199,8 @@ export function LeadsDashboardClient() {
 
         <CardContent className="p-0">
           <LeadsTable
-            leads={leads}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            leads={leads as any}
             sources={sources}
             isLoading={isLoading}
             sortBy={sortBy}

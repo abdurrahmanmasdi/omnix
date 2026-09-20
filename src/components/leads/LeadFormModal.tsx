@@ -28,7 +28,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Save, Link as LinkIcon, Info, Target, Globe, Phone, UserPlus, Mail } from 'lucide-react';
 import { FaInstagram, FaFacebookF } from "react-icons/fa";
-import { FaXTwitter } from "react-icons/fa6";
 
 import { toast } from 'sonner';
 import { CreateLeadDtoPriority } from '@/lib/api/model/createLeadDtoPriority';
@@ -55,7 +54,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
   });
   
   const sources = useMemo(() => {
-    const data = sourcesData as any;
+    const data = sourcesData as unknown as { items?: unknown[] } | unknown[];
     if (Array.isArray(data)) return data;
     if (data?.items) return data.items;
     return [];
@@ -66,15 +65,10 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     query: { enabled: isOpen }
   });
   const stages = useMemo(() => {
-    const d = stagesData as any;
+    const d = stagesData as unknown as { items?: unknown[], data?: unknown[] } | unknown[];
     const arr = Array.isArray(d) ? d : d?.items || d?.data || [];
-    return [...arr].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+    return [...(arr as { orderIndex?: number, name: string, id: string }[])].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
   }, [stagesData]);
-
-  // Default status: first pipeline stage name (or fallback)
-  const defaultStatus = useMemo(() => {
-    return stages.length > 0 ? stages[0].name : 'NEW';
-  }, [stages]);
 
   // 2. Mutations
   const createMutation = useLeadsControllerCreate();
@@ -86,7 +80,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     reset,
     setValue,
     watch,
-    formState: { errors, isDirty },
+    formState: { errors },
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
@@ -105,6 +99,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     }
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const statusValue = watch('status');
   const priorityValue = watch('priority');
   const currencyValue = watch('currency');
@@ -113,26 +108,26 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
   // Sync form with existing lead
   useEffect(() => {
     if (existingLead && isEdit) {
-      const data = existingLead as any;
+      const data = existingLead as unknown as Record<string, unknown>;
       reset({
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phoneNumber: data.phoneNumber,
-        country: data.country,
-        email: data.email || '',
-        status: data.status,
-        priority: data.priority,
-        currency: data.currency || CreateLeadDtoCurrency.USD,
-        estimatedValue: data.estimatedValue || 0,
-        timezone: data.timezone || 'UTC',
-        primaryLanguage: data.primaryLanguage || 'en',
-        expectedServiceDate: data.expectedServiceDate || '',
-        sourceId: data.sourceId || 'none',
+        firstName: data.firstName as string | undefined,
+        lastName: data.lastName as string | undefined,
+        phoneNumber: data.phoneNumber as string | undefined,
+        country: data.country as string | undefined,
+        email: (data.email as string | undefined) || '',
+        status: (data.status as string) || 'NEW',
+        priority: (data.priority as CreateLeadDtoPriority) || CreateLeadDtoPriority.WARM,
+        currency: (data.currency as CreateLeadDtoCurrency) || CreateLeadDtoCurrency.USD,
+        estimatedValue: (data.estimatedValue as number | undefined) || 0,
+        timezone: (data.timezone as string | undefined) || 'UTC',
+        primaryLanguage: (data.primaryLanguage as string | undefined) || 'en',
+        expectedServiceDate: (data.expectedServiceDate as string | undefined) || '',
+        sourceId: (data.sourceId as string | undefined) || 'none',
         socialLinks: {
-          instagram: data.socialLinks?.instagram || '',
-          tiktok: data.socialLinks?.tiktok || '',
-          facebook: data.socialLinks?.facebook || '',
-          twitter: data.socialLinks?.twitter || '',
+          instagram: (data.socialLinks as Record<string, string>)?.instagram || '',
+          tiktok: (data.socialLinks as Record<string, string>)?.tiktok || '',
+          facebook: (data.socialLinks as Record<string, string>)?.facebook || '',
+          twitter: (data.socialLinks as Record<string, string>)?.twitter || '',
         }
       });
     } else if (!isEdit && isOpen) {
@@ -168,7 +163,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     
     if (isEdit && leadId) {
       updateMutation.mutate(
-        { id: leadId, data: payload as any },
+        { id: leadId, data: payload as unknown as Parameters<typeof updateMutation.mutate>[0]['data'] },
         {
           onSuccess: () => {
             toast.success('Lead updated successfully');
@@ -180,7 +175,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
       );
     } else {
       createMutation.mutate(
-        { data: payload as any },
+        { data: payload as unknown as NonNullable<Parameters<typeof createMutation.mutate>[0]>['data'] },
         {
           onSuccess: () => {
             toast.success('Lead created successfully');
@@ -305,7 +300,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none" className="font-medium">Direct Entry / Referral</SelectItem>
-                        {sources.map((s: any) => (
+                        {(sources as { id: string, name: string }[]).map((s) => (
                           <SelectItem key={s.id} value={s.id} className="font-medium">{s.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -316,12 +311,12 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                   <div className="grid grid-cols-2 gap-6 pt-2">
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Lifecycle Status</Label>
-                      <Select value={statusValue} onValueChange={(val) => setValue('status', val as any)}>
+                      <Select value={statusValue} onValueChange={(val) => setValue('status', val as LeadFormData['status'])}>
                         <SelectTrigger className="h-11 rounded-lg border-white/10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {stages.map((stage: any) => (
+                          {stages.map((stage: { id: string, name: string }) => (
                             <SelectItem key={stage.id} value={stage.name}>{stage.name}</SelectItem>
                           ))}
                         </SelectContent>

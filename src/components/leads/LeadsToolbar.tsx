@@ -37,7 +37,9 @@ export function LeadsToolbar({
 
   // Use a ref for the callback so the debounce effect only depends on `search`
   const onSearchChangeRef = useRef(onSearchChange);
-  onSearchChangeRef.current = onSearchChange;
+  useEffect(() => {
+    onSearchChangeRef.current = onSearchChange;
+  });
 
   // Track whether this is the first render to skip the initial fire
   const isFirstRender = useRef(true);

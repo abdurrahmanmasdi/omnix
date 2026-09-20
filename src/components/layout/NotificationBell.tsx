@@ -119,7 +119,7 @@ export function NotificationBell() {
           const audio = new Audio('/sounds/ping.mp3');
           audio.volume = 0.5;
           audio.play().catch(() => { /* silent failure if not interacted */ });
-        } catch (e) {}
+        } catch {}
       } else {
         // Fire a system-wide toast
         toast.info(payload.title, {

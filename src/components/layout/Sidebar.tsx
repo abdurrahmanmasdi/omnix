@@ -14,9 +14,7 @@ import {
   Settings,
   ChevronDown,
   Target,
-  FileText,
   Briefcase,
-  Building2,
   Plug,
 } from 'lucide-react';
 
@@ -63,6 +61,7 @@ const NAV_ITEMS: NavItem[] = [
       { href: '/dashboard/settings/pipeline-stages', label: 'Pipeline Stages', icon: <Layers className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/pipeline-stages' },
       { href: '/dashboard/settings/experiences', label: 'Experiences', icon: <Briefcase className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/experiences' },
       { href: '/dashboard/settings/channels', label: 'Channels', icon: <Plug className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/channels' },
+      { href: '/dashboard/settings/integrations', label: 'Integrations', icon: <Plug className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/integrations' },
       {
         href: '/dashboard/settings/documents',
         label: 'Documents',
@@ -175,8 +174,8 @@ export function Sidebar() {
       {/* Footer */}
       <div className="p-4 border-t border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-brand-deep/30 overflow-hidden shrink-0 border border-brand-electric/20">
-            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.firstName || 'user'}`} alt="Avatar" className="w-full h-full object-cover" />
+          <div className="w-8 h-8 rounded-full bg-brand-deep/30 overflow-hidden shrink-0 border border-brand-electric/20 relative">
+            <Image src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.firstName || 'user'}`} alt="Avatar" fill className="object-cover" unoptimized />
           </div>
           <div className="flex flex-col flex-1 min-w-0">
             <span className="text-sm font-semibold text-brand-ice truncate">

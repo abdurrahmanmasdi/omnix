@@ -30,8 +30,27 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 // --- Types ---
-type Lead = any; 
-type Stage = any;
+interface Lead {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  email?: string;
+  status?: string;
+  pipelineStageId?: string;
+  conversationId?: string;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+interface Stage {
+  id: string;
+  name: string;
+  icon?: string;
+  isVirtual?: boolean;
+  orderIndex?: number;
+  [key: string]: unknown;
+}
 
 interface LiveKanbanBoardProps {
   leads: Lead[];
@@ -115,7 +134,7 @@ function LeadCard({
   );
 }
 
-const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>(({ lead, isActiveConversation, onSelectConversation }, ref) => {
+const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>(({ lead, isActiveConversation, onSelectConversation }) => {
   const {
     attributes,
     listeners,
@@ -161,13 +180,14 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
   const [localLeads, setLocalLeads] = useState<Lead[]>(leads);
 
   React.useEffect(() => {
-    setLocalLeads(leads);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocalLeads(prev => prev === leads ? prev : leads);
   }, [leads]);
 
   const stages = useMemo(() => {
-    const d = stagesData as any;
+    const d = stagesData as unknown as Stage[] | { items?: Stage[] };
     if (Array.isArray(d)) return d;
-    if (d?.items) return d.items;
+    if (d && 'items' in d && Array.isArray(d.items)) return d.items;
     return [];
   }, [stagesData]);
 
@@ -191,7 +211,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
 
   const columns = useMemo(() => {
     const cols: Record<string, Lead[]> = {};
-    extendedStages.forEach((stage: Stage | any) => {
+    extendedStages.forEach((stage: Stage) => {
       cols[stage.id] = [];
     });
     localLeads.forEach((lead) => {
@@ -272,15 +292,16 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
 
     if (newStageId && originalStageId !== newStageId) {
       // Optimistically update React Query Cache for ALL `/leads` queries
-      queryClient.setQueriesData({ queryKey: [`/leads`] }, (oldData: any) => {
+      queryClient.setQueriesData({ queryKey: [`/leads`] }, (oldData: unknown) => {
         if (!oldData) return oldData;
         const processItems = (items: Lead[]) => items.map(item => 
           item.id === activeLeadId ? { ...item, pipelineStageId: newStageId } : item
         );
 
+        const oldDataRecord = oldData as Record<string, unknown>;
         if (Array.isArray(oldData)) return processItems(oldData);
-        if (oldData.items) return { ...oldData, items: processItems(oldData.items) };
-        if (oldData.data) return { ...oldData, data: processItems(oldData.data) };
+        if (oldDataRecord.items) return { ...oldDataRecord, items: processItems(oldDataRecord.items as Lead[]) };
+        if (oldDataRecord.data) return { ...oldDataRecord, data: processItems(oldDataRecord.data as Lead[]) };
         return oldData;
       });
 
@@ -328,7 +349,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        {extendedStages.map((stage: Stage | any) => (
+        {extendedStages.map((stage: Stage) => (
           <KanbanColumn 
             key={stage.id} 
             stage={stage} 

@@ -31,9 +31,9 @@ export default function ChannelsSettingsPage() {
   const { data: channelsData, isLoading } = useChannelsControllerGetChannels();
   const deleteChannelMutation = useChannelsControllerDeleteChannel();
 
-  const channels = Array.isArray(channelsData) 
+  const channels = (Array.isArray(channelsData) 
     ? channelsData 
-    : (channelsData as any)?.data || (channelsData as any)?.items || [];
+    : (channelsData as unknown as { data?: unknown[]; items?: unknown[] })?.data || (channelsData as unknown as { data?: unknown[]; items?: unknown[] })?.items || []) as { id: string; provider: string; providerAccountId: string; createdAt: string }[];
 
   const handleDelete = () => {
     if (!channelToDelete) return;
@@ -101,7 +101,7 @@ export default function ChannelsSettingsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {channels.map((channel: any) => (
+          {channels.map((channel: { id: string; provider: string; providerAccountId: string; createdAt: string }) => (
             <Card key={channel.id} className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
               <CardContent className="p-6">

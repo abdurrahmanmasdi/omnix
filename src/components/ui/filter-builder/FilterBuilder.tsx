@@ -149,7 +149,7 @@ export function FilterBuilder({
                 <div className="flex-1 min-w-[120px]">
                   {currentField?.type === 'select' ? (
                     <Select
-                      value={condition.value}
+                      value={condition.value as string}
                       onValueChange={(val) => updateCondition(index, { value: val })}
                     >
                       <SelectTrigger className="w-full h-10 text-[11px] font-bold rounded-xl border-white/10 bg-[#051126] border-none shadow-inner">
@@ -168,7 +168,7 @@ export function FilterBuilder({
                       type={currentField?.type === 'number' ? 'number' : 'text'}
                       placeholder="Enter criteria..."
                       className="h-10 text-[11px] font-bold rounded-xl border-white/10 bg-[#051126] border-none shadow-inner"
-                      value={condition.value}
+                      value={condition.value as string | number}
                       onChange={(e) => updateCondition(index, { 
                         value: currentField?.type === 'number' ? Number(e.target.value) : e.target.value 
                       })}

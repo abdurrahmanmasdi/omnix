@@ -57,13 +57,14 @@ export function LeadSourceFormModal({ sourceId, isOpen, onClose, onSuccess }: Le
     }
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const isActiveValue = watch('isActive');
 
   useEffect(() => {
     if (existingSource && isEdit) {
-      const data = existingSource as any;
+      const data = existingSource as { name?: string; isActive?: boolean };
       reset({
-        name: data.name,
+        name: data.name || '',
         isActive: data.isActive !== undefined ? data.isActive : true,
       });
     } else if (!isEdit && isOpen) {

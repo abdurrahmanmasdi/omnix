@@ -6,8 +6,6 @@ import { useLeadSourcesControllerFindAll } from '@/lib/api/generated/lead-source
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
-  SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -65,6 +63,38 @@ const PRIORITY_COLORS: Record<string, string> = {
   [CreateLeadDtoPriority.COLD]: 'bg-brand-electric/100/10 text-brand-cyan border-blue-500/20',
 };
 
+interface LeadDetail {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  email?: string;
+  status?: string;
+  priority?: string;
+  currency?: string;
+  estimatedValue?: number;
+  country?: string;
+  timezone?: string;
+  expectedServiceDate?: string;
+  primaryLanguage?: string;
+  assignedAgentId?: string;
+  sourceId?: string;
+  updatedAt: string;
+  socialLinks?: {
+    instagram?: string;
+    tiktok?: string;
+    facebook?: string;
+    twitter?: string;
+  };
+  [key: string]: unknown;
+}
+
+interface SourceDetail {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState('profile');
 
@@ -79,9 +109,9 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
     query: { enabled: !!leadId }
   });
 
-  const lead = leadData as any;
+  const lead = leadData as unknown as LeadDetail;
   const sources = useMemo(() => {
-    const data = sourcesData as any;
+    const data = sourcesData as unknown as { items?: SourceDetail[] } | SourceDetail[];
     if (Array.isArray(data)) return data;
     if (data?.items) return data.items;
     return [];
@@ -89,9 +119,9 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
 
   const sourceName = useMemo(() => {
     if (!lead?.sourceId) return 'Direct / Referral';
-    const source = sources.find((s: any) => s.id === lead.sourceId);
+    const source = sources.find((s: SourceDetail) => s.id === lead.sourceId);
     return source?.name || 'Unknown Source';
-  }, [lead?.sourceId, sources]);
+  }, [lead, sources]);
 
   // 3. Mutations
   const deleteMutation = useLeadsControllerRemove();
@@ -127,7 +157,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
     } catch {
       return 'just now';
     }
-  }, [lead?.updatedAt]);
+  }, [lead]);
 
   return (
     <Sheet open={!!leadId} onOpenChange={(open) => !open && onClose()}>
@@ -153,10 +183,10 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                       {lead.status === CreateLeadDtoStatus.WON && <ShieldCheck className="ml-2 h-5 w-5 text-brand-cyan" />}
                     </h2>
                     <div className="flex items-center mt-1.5 space-x-2">
-                      <Badge variant="outline" className={`${STATUS_COLORS[lead.status]} border px-2 py-0.5 text-[10px] font-bold tracking-wider`}>
+                      <Badge variant="outline" className={`${STATUS_COLORS[(lead.status || 'NEW') as keyof typeof STATUS_COLORS]} border px-2 py-0.5 text-[10px] font-bold tracking-wider`}>
                         {lead.status}
                       </Badge>
-                      <Badge variant="outline" className={`${PRIORITY_COLORS[lead.priority]} border px-2 py-0.5 text-[10px] font-bold tracking-wider`}>
+                      <Badge variant="outline" className={`${PRIORITY_COLORS[(lead.priority || 'MEDIUM') as keyof typeof PRIORITY_COLORS]} border px-2 py-0.5 text-[10px] font-bold tracking-wider`}>
                         {lead.priority}
                       </Badge>
                       <span className="text-[10px] text-brand-ice/60 font-black uppercase tracking-tighter ml-1">#LD-{lead.id.substring(0,8).toUpperCase()}</span>
@@ -257,7 +287,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-y-6 gap-x-8 bg-brand-navy/50 p-8 rounded-3xl border border-white/10 shadow-inner">
-                          <DataRow icon={<Globe size={14} />} label="Country of Residence" value={lead.country} />
+                          <DataRow icon={<Globe size={14} />} label="Country of Residence" value={lead.country || ''} />
                           <DataRow icon={<Clock size={14} />} label="Operational Timezone" value={lead.timezone || 'UTC+0'} />
                           <DataRow icon={<Calendar size={14} />} label="Expected Arrival" value={lead.expectedServiceDate || 'Not scheduled'} />
                           <DataRow icon={<Globe size={14} />} label="Primary Language" value={lead.primaryLanguage?.toUpperCase() || 'EN'} />
@@ -308,7 +338,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                             </div>
                           </div>
                           <p className="text-sm text-brand-ice/80 leading-relaxed font-medium">
-                            Patient is concerned about the recovery time for a full-arch dental implant. I provided the "7-day recovery protocol" PDF and mentioned our 5-year clinical guarantee. The lead is now in `READY_TO_PAY` status.
+                            Patient is concerned about the recovery time for a full-arch dental implant. I provided the &quot;7-day recovery protocol&quot; PDF and mentioned our 5-year clinical guarantee. The lead is now in `READY_TO_PAY` status.
                           </p>
                         </div>
                       </div>

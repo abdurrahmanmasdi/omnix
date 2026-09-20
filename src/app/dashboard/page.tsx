@@ -28,7 +28,7 @@ export default function DashboardPage() {
     }
   });
 
-  const summary = (data as any) || {
+  const summary = (data as { totalLeads: number; activeConversations: number; needsAttention: number; aiConversionRate: number; recentActivity: { id: string; status: string; firstName?: string; lastName?: string; phoneNumber?: string; pipelineStage?: { name: string }; updatedAt: string }[] }) || {
     totalLeads: 0,
     activeConversations: 0,
     needsAttention: 0,
@@ -153,7 +153,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {summary.recentActivity.map((activity: any) => {
+              {summary.recentActivity.map((activity: { id: string; status: string; firstName?: string; lastName?: string; phoneNumber?: string; pipelineStage?: { name: string }; updatedAt: string }) => {
                 // Determine AI status UI mapping
                 const isHandedOff = activity.status === 'HANDED_OFF';
                 
