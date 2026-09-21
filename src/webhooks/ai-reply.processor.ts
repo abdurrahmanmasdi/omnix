@@ -187,11 +187,14 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
         // 1. Execute Virtual Tool Actions (CRM Updates)
         if (actions && actions.length > 0) {
-          await this.actionExecutor.executeActions(
+          const actionResult = await this.actionExecutor.executeActions(
             organization.id,
             conversationId,
             actions,
           );
+          if (actionResult.failed > 0) {
+            throw new Error(`Critical action execution failure (${actionResult.failed} failed), aborting reply delivery to prevent inconsistency`);
+          }
         }
 
         if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {

@@ -131,7 +131,10 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         const { replyText, mediaUrl, actions } = aiResponse;
 
         if (actions && actions.length > 0) {
-          await this.actionExecutor.executeActions(organization.id, conversation.id, actions);
+          const actionResult = await this.actionExecutor.executeActions(organization.id, conversation.id, actions);
+          if (actionResult.failed > 0) {
+            throw new Error(`Critical action execution failure (${actionResult.failed} failed), aborting follow-up delivery to prevent inconsistency`);
+          }
         }
 
         if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
