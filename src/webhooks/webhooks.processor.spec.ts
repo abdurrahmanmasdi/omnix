@@ -11,6 +11,7 @@ import { Job } from 'bullmq';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
+import { CredentialsService } from '../credentials/credentials.service';
 
 describe('WebhooksProcessor', () => {
   let processor: WebhooksProcessor;
@@ -22,6 +23,7 @@ describe('WebhooksProcessor', () => {
     const mockPrismaService = {
       channel: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       message: {
         findFirst: jest.fn(),
@@ -31,10 +33,13 @@ describe('WebhooksProcessor', () => {
       conversation: {
         findFirst: jest.fn(),
         create: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
       },
       lead: {
         findFirst: jest.fn(),
         create: jest.fn(),
+        upsert: jest.fn(),
       },
       pipelineStage: {
         findFirst: jest.fn(),
@@ -65,6 +70,7 @@ describe('WebhooksProcessor', () => {
         { provide: EventsGateway, useValue: { server: { to: jest.fn().mockReturnThis(), emit: jest.fn() }, broadcastNewMessage: jest.fn() } },
         { provide: FollowUpService, useValue: { cancelPendingFollowUps: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
+        { provide: CredentialsService, useValue: { readActive: jest.fn() } },
         { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
         { provide: getQueueToken('ai-reply'), useValue: mockAiReplyQueue },
       ],
@@ -110,11 +116,11 @@ describe('WebhooksProcessor', () => {
     });
 
     await processor.process(job);
-    expect(prisma.channel.findUnique).not.toHaveBeenCalled();
+    expect(prisma.channel.findFirst).not.toHaveBeenCalled();
   });
 
   it('should drop message if organization is not found for the receiving phone number', async () => {
-    prisma.channel.findUnique.mockResolvedValue(null as any);
+    prisma.channel.findFirst.mockResolvedValue(null as any);
 
     const job = createMockJob({
       entry: [
@@ -132,13 +138,13 @@ describe('WebhooksProcessor', () => {
     });
 
     await processor.process(job);
-    expect(prisma.channel.findUnique).toHaveBeenCalled();
+    expect(prisma.channel.findFirst).toHaveBeenCalled();
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
   });
 
   it('should create lead and conversation if they do not exist', async () => {
     // 1. Channel exists with org
-    prisma.channel.findUnique.mockResolvedValue({
+    prisma.channel.findFirst.mockResolvedValue({
       id: 'chan-1',
       organizationId: 'org-1',
       organization: { id: 'org-1' },
@@ -156,7 +162,7 @@ describe('WebhooksProcessor', () => {
 
     // 5. Mock creations
     const newLead = { id: 'lead-1', organizationId: 'org-1' };
-    prisma.lead.create.mockResolvedValue(newLead as any);
+    prisma.lead.upsert.mockResolvedValue(newLead as any);
 
     const newConversation = { id: 'conv-1', leadId: 'lead-1', organizationId: 'org-1' };
     prisma.conversation.create.mockResolvedValue(newConversation as any);
@@ -181,7 +187,7 @@ describe('WebhooksProcessor', () => {
 
     await processor.process(job);
 
-    expect(prisma.lead.create).toHaveBeenCalled(); // Should auto-create lead
+    expect(prisma.lead.upsert).toHaveBeenCalled(); // Should auto-create lead
     expect(prisma.conversation.create).toHaveBeenCalled(); // Should auto-create conversation
     expect(prisma.message.create).toHaveBeenCalled(); // Should save the user's message
     expect(aiReplyQueue.add).toHaveBeenCalledWith(
@@ -200,7 +206,7 @@ describe('WebhooksProcessor', () => {
 
   it('should skip duplicate messages (idempotency check)', async () => {
     // 1. Channel exists
-    prisma.channel.findUnique.mockResolvedValue({
+    prisma.channel.findFirst.mockResolvedValue({
       id: 'chan-1',
       organization: { id: 'org-1' },
     } as any);
