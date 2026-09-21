@@ -9,6 +9,12 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import type { JwtPayload } from '../../auth/jwt.strategy';
+import {
+  toPublicMessageDto,
+  toPublicLeadDto,
+  toPublicConversationDto,
+  toPublicNotificationDto,
+} from '../dto/public-events.dto';
 
 // 🚀 Configure CORS to match your Next.js frontend
 @WebSocketGateway({
@@ -51,7 +57,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       } else {
         throw new Error('User has no organization');
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Socket connection rejected: ${error.message}`);
       client.disconnect(); // Kick them out if authentication fails
     }
@@ -63,13 +69,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // 🚀 This is the public method our WebhookProcessor will call!
   broadcastNewMessage(organizationId: string, messageData: any) {
-    // Emits specifically to the organization's room
-    this.server.to(organizationId).emit('onNewMessage', messageData);
+    const safeDto = toPublicMessageDto(messageData);
+    this.server.to(organizationId).emit('onNewMessage', safeDto);
   }
 
   // 🚀 Broadcast CRM state changes (lead updates, pipeline moves)
   broadcastLeadUpdate(organizationId: string, leadData: any) {
-    this.server.to(organizationId).emit('onLeadUpdate', leadData);
+    const safeDto = toPublicLeadDto(leadData);
+    this.server.to(organizationId).emit('onLeadUpdate', safeDto);
   }
 
   // 🚀 Broadcast conversation state changes (AI paused/resumed)
@@ -77,8 +84,17 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     organizationId: string,
     conversationData: any,
   ) {
+    const safeDto = toPublicConversationDto(conversationData);
     this.server
       .to(organizationId)
-      .emit('onConversationUpdate', conversationData);
+      .emit('onConversationUpdate', safeDto);
+  }
+
+  // 🚀 Broadcast notifications targeted to specific users
+  broadcastNotification(userId: string, notificationData: any) {
+    const safeDto = toPublicNotificationDto(notificationData);
+    this.server
+      .to(`user_${userId}`)
+      .emit('new_notification', safeDto);
   }
 }

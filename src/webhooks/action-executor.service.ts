@@ -146,7 +146,6 @@ export class ActionExecutorService {
     const updatedLead = await this.prisma.lead.update({
       where: { id: conversation.leadId },
       data: updateData,
-      include: { organization: true },
     });
 
     this.eventsGateway.broadcastLeadUpdate(conversation.organizationId, updatedLead);
@@ -270,7 +269,6 @@ export class ActionExecutorService {
       this.prisma.lead.update({
         where: { id: conversation.leadId },
         data: { status: LeadStatus.HANDED_OFF },
-        include: { organization: true },
       }),
     ]);
 

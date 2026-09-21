@@ -38,10 +38,8 @@ export class NotificationEmitterService {
     });
 
     // 2. Emit via WebSocket in Real-Time
-    // The eventsGateway should emit only to the specific user's socket room
-    this.eventsGateway.server
-      .to(`user_${data.userId}`)
-      .emit('new_notification', notification);
+    // The eventsGateway will map it to a strict DTO and emit to the user's room
+    this.eventsGateway.broadcastNotification(data.userId, notification);
 
     return notification;
   }

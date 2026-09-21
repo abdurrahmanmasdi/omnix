@@ -144,7 +144,6 @@ describe('ActionExecutorService', () => {
       expect(prismaService.lead.update).toHaveBeenCalledWith({
         where: { id: 'lead-1' },
         data: { status: LeadStatus.QUALIFYING },
-        include: { organization: true },
       });
     });
 

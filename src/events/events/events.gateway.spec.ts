@@ -4,22 +4,149 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 
 describe('EventsGateway', () => {
-  let provider: EventsGateway;
+  let gateway: EventsGateway;
+  let mockEmit: jest.Mock;
+  let mockTo: jest.Mock;
 
   beforeEach(async () => {
+    mockEmit = jest.fn();
+    mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EventsGateway,
-        { provide: JwtService, useValue: { methodName: jest.fn() } },
-        { provide: ConfigService, useValue: { methodName: jest.fn() } }
+        { provide: JwtService, useValue: { verify: jest.fn() } },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
-      controllers: []
     }).compile();
 
-    provider = module.get<EventsGateway>(EventsGateway);
+    gateway = module.get<EventsGateway>(EventsGateway);
+    // Mock the WebSocket server
+    gateway.server = { to: mockTo } as any;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
-    expect(provider).toBeDefined();
+    expect(gateway).toBeDefined();
+  });
+
+  describe('Adversarial DTO Mapping', () => {
+    it('strips organization relations and tokens from lead broadcasts', () => {
+      const maliciousLead = {
+        id: 'lead-123',
+        organizationId: 'org-456',
+        firstName: 'John',
+        lastName: 'Doe',
+        phoneNumber: '+1234567890',
+        country: 'US',
+        timezone: 'UTC',
+        primaryLanguage: 'en',
+        status: 'NEW',
+        priority: 'HOT',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+        // Adversarial injected payload
+        organization: {
+          id: 'org-456',
+          hubspotToken: 'SECRET_HUBSPOT_TOKEN_XYZ', // Should be stripped
+          stripeKey: 'sk_test_123', // Should be stripped
+        },
+        passwordHash: 'bcrypt_hash_here', // Should be stripped
+        socialLinks: { secretNote: 'hide this' }, // Not in DTO
+      };
+
+      gateway.broadcastLeadUpdate('org-456', maliciousLead);
+
+      expect(mockTo).toHaveBeenCalledWith('org-456');
+      expect(mockEmit).toHaveBeenCalledWith('onLeadUpdate', expect.any(Object));
+
+      const emittedDto = mockEmit.mock.calls[0][1];
+      
+      // Ensure safe fields exist
+      expect(emittedDto.id).toBe('lead-123');
+      expect(emittedDto.firstName).toBe('John');
+      expect(emittedDto.createdAt).toBe('2026-01-01T00:00:00.000Z');
+      
+      // Ensure dangerous fields DO NOT exist
+      expect(emittedDto).not.toHaveProperty('organization');
+      expect(emittedDto).not.toHaveProperty('passwordHash');
+      expect(emittedDto).not.toHaveProperty('socialLinks');
+      
+      // Ensure the object spread wasn't used by checking Object.keys
+      const allowedKeys = [
+        'id', 'organizationId', 'assignedAgentId', 'firstName', 'lastName',
+        'email', 'phoneNumber', 'country', 'timezone', 'primaryLanguage',
+        'status', 'priority', 'summary', 'createdAt', 'updatedAt'
+      ];
+      expect(Object.keys(emittedDto).every(key => allowedKeys.includes(key))).toBe(true);
+    });
+
+    it('strips metadata and relations from message broadcasts', () => {
+      const maliciousMessage = {
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        content: 'Hello',
+        type: 'USER_TEXT',
+        handledBy: 'AI',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+        // Adversarial
+        metadata: { openaiKey: 'sk-123' },
+        sender: { passwordHash: 'secret' },
+        conversation: { internalStatus: 'foo' }
+      };
+
+      gateway.broadcastNewMessage('org-456', maliciousMessage);
+      
+      const emittedDto = mockEmit.mock.calls[0][1];
+      expect(emittedDto).not.toHaveProperty('metadata');
+      expect(emittedDto).not.toHaveProperty('sender');
+      expect(emittedDto).not.toHaveProperty('conversation');
+    });
+
+    it('strips unnecessary relations from conversation broadcasts', () => {
+      const maliciousConversation = {
+        id: 'conv-1',
+        organizationId: 'org-456',
+        status: 'ACTIVE',
+        aiPaused: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // Adversarial
+        organization: { adminEmail: 'admin@org.com' },
+        messages: [{ content: 'secret content' }],
+      };
+
+      gateway.broadcastConversationUpdate('org-456', maliciousConversation);
+      
+      const emittedDto = mockEmit.mock.calls[0][1];
+      expect(emittedDto).not.toHaveProperty('organization');
+      expect(emittedDto).not.toHaveProperty('messages');
+    });
+
+    it('strips internal fields from notification broadcasts', () => {
+      const maliciousNotification = {
+        id: 'notif-1',
+        organizationId: 'org-1',
+        userId: 'user-1',
+        type: 'LEAD_HANDED_OFF',
+        title: 'Title',
+        body: 'Body',
+        isRead: false,
+        createdAt: new Date(),
+        // Adversarial
+        user: { password: 'pwd' },
+        internalRoutingId: '12345'
+      };
+
+      gateway.broadcastNotification('user-1', maliciousNotification);
+
+      const emittedDto = mockEmit.mock.calls[0][1];
+      expect(emittedDto).not.toHaveProperty('user');
+      expect(emittedDto).not.toHaveProperty('internalRoutingId');
+    });
   });
 });
