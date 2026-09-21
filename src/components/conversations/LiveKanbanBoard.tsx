@@ -80,8 +80,9 @@ function LeadCard({
   ...props 
 }: SortableLeadCardProps & { isOverlay?: boolean, style?: React.CSSProperties, ref?: React.Ref<HTMLDivElement> }) {
   const isHandedOff = lead.status === 'HANDED_OFF';
-  // The leads endpoint nests the relation as `conversation: { id }`. Keep the
-  // legacy field as a fallback for clients that still provide it directly.
+  // Note: The UI queries the leads endpoint which nests `conversation: { id }`
+  // since the frontend type SortableLeadCardProps may have it nested.
+  // Actually, we don't have to touch it if it's related to the REST API, not sockets.
   const conversationId = lead.conversation?.id ?? lead.conversationId;
   
   return (

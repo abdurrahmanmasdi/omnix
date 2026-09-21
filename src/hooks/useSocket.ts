@@ -9,31 +9,45 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000"
 
 // ─── Payload Types (re-exported for consumers) ─────────
 export interface LiveMessagePayload {
+  id: string;
   conversationId: string;
-  phoneNumber: string;
-  message: {
-    id: string;
-    content: string;
-    metaMessageId: string | null;
-    type: string;
-    handledBy: string;
-    createdAt: string;
-  };
+  senderId: string | null;
+  content: string;
+  mediaUrl: string | null;
+  type: string;
+  handledBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LeadUpdatePayload {
-  leadId: string;
-  status?: string;
-  priority?: string;
-  pipelineStageId?: string;
-  updatedFields: string[];
+  id: string;
+  organizationId: string;
+  assignedAgentId: string | null;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phoneNumber: string;
+  country: string;
+  timezone: string;
+  primaryLanguage: string;
+  status: string;
+  priority: string;
+  summary: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ConversationUpdatePayload {
-  conversationId: string;
+  id: string;
+  organizationId: string;
+  externalContactId: string | null;
+  status: string;
+  leadId: string | null;
   aiPaused: boolean;
-  reason?: string;
-  handoffTriggeredBy?: 'AI' | 'USER';
+  assignedAgentId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Singleton Socket Manager ───────────────────────────

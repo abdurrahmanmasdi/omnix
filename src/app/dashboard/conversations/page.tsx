@@ -51,15 +51,23 @@ export default function ConversationsPage() {
     const handleNewMessage = (data: LiveMessagePayload) => {
       refetchConversations(); // refresh sidebar/conversations
 
-      const actualMessage = (data.message ? data.message : data) as ConversationsControllerGetMessages200Item;
-      const convId = data.conversationId || (actualMessage as Record<string, unknown>).conversationId;
-
-      if (actualMessage && actualMessage.content) {
+      if (data && data.content) {
         // Pass it to local state so LiveChatPane can append it
-        if (convId === activeConversationId) {
+        if (data.conversationId === activeConversationId) {
           setLiveMessages((prev) => {
-            if (prev.some((m) => m.id === actualMessage.id)) return prev;
-            return [...prev, actualMessage];
+            if (prev.some((m) => m.id === data.id)) return prev;
+            
+            // Cast to expected type since schema has differences but we only need these fields
+            const newMsg = {
+              id: data.id,
+              content: data.content,
+              createdAt: data.createdAt,
+              handledBy: data.handledBy as "AI" | "HUMAN",
+              type: data.type as "USER_TEXT" | "SYSTEM_TEXT" | "AI_TEXT",
+              mediaUrl: data.mediaUrl || undefined
+            } as ConversationsControllerGetMessages200Item;
+            
+            return [...prev, newMsg];
           });
         }
       }
@@ -71,7 +79,7 @@ export default function ConversationsPage() {
       
       if (data.aiPaused) {
         toast.warning('AI has been paused', {
-          description: data.reason || 'A human agent needs to step in for this conversation.',
+          description: 'A human agent needs to step in for this conversation.',
           duration: 8000,
         });
       } else {
@@ -84,7 +92,7 @@ export default function ConversationsPage() {
 
     // --- Lead Update (Stage Changed) Listener ---
     const handleLeadUpdate = (data: LeadUpdatePayload) => {
-      console.log('[Socket] onLeadUpdate received in Orchestrator:', data.leadId, data.updatedFields);
+      console.log('[Socket] onLeadUpdate received in Orchestrator:', data.id);
       // Invalidate leads so the Kanban board physically moves the card if the stage changed on the backend
       queryClient.invalidateQueries({ queryKey: [`/leads`] });
     };

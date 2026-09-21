@@ -111,7 +111,7 @@ export function LeadsDashboardClient() {
     if (!socket) return;
 
     const handleLeadUpdate = (data: LeadUpdatePayload) => {
-      console.log('[Socket] onLeadUpdate received:', data.leadId, data.updatedFields);
+      console.log('[Socket] onLeadUpdate received:', data.id);
 
       // Invalidate all leads queries (list, individual, any filtered view)
       queryClient.invalidateQueries({ queryKey: [`/leads`] });
