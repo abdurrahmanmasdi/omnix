@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { axiosInstance } from '@/lib/api/axios-client';
+import { resetSession } from '@/lib/session-manager';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { Loader2 } from 'lucide-react';
@@ -14,7 +15,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const router = useRouter();
-  const { accessToken, user, logout } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const [hasHydrated, setHasHydrated] = useState(false);
 
   // Wait for Zustand to hydrate from localStorage
@@ -42,10 +43,10 @@ export function DashboardShell({ children }: DashboardShellProps) {
     } catch (e) {
       console.error('Logout failed on server', e);
     } finally {
-      logout();
-      router.push('/login');
+      // Always clear patient data, even if server logout failed/timed out
+      await resetSession();
     }
-  }, [logout, router]);
+  }, []);
 
   // Loading / auth guard
   if (!hasHydrated || !accessToken || !user?.hasCompletedOnboarding) {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenantQueryKey } from "@/hooks/useTenantQueryKey";
 import type { CreateExperienceDto, UpdateExperienceDto } from "@/lib/api/model";
 import {
   getExperiencesControllerGetExperiencesQueryKey,
@@ -67,6 +68,7 @@ function normalizeExperiences(data: unknown): ExperienceRecord[] {
 
 export default function ExperiencesTable() {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const organizationId = useAuthStore((state) => state.user?.organizationId);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExperience, setEditingExperience] =
@@ -104,7 +106,7 @@ export default function ExperiencesTable() {
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({
-      queryKey: getExperiencesControllerGetExperiencesQueryKey(),
+      queryKey: scopeKey(getExperiencesControllerGetExperiencesQueryKey()),
     });
   };
 

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { 
   DndContext, 
   DragOverlay, 
@@ -172,6 +173,7 @@ SortableLeadCard.displayName = 'SortableLeadCard';
 
 export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversation }: KanbanBoardProps) {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const { data: stagesData, isLoading: stagesLoading } = usePipelineStagesControllerFindAll();
   const updateStageMutation = useLeadsControllerUpdateStage();
 
@@ -293,7 +295,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
     if (newStageId && originalStageId !== newStageId) {
       // Optimistically update React Query Cache
-      queryClient.setQueryData([`/leads`], (oldData: unknown) => {
+      queryClient.setQueryData(scopeKey(['/leads']), (oldData: unknown) => {
         if (!oldData) return oldData;
         const processItems = (items: Lead[]) => items.map(item => 
           item.id === activeLeadId ? { ...item, pipelineStageId: newStageId } : item
@@ -320,7 +322,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
           toast.error('Failed to update lead stage');
           // Revert local state and query cache on error
           setLocalLeads(leads);
-          queryClient.invalidateQueries({ queryKey: [`/leads`] });
+          queryClient.invalidateQueries({ queryKey: scopeKey(['/leads']) });
         }
       });
     }

@@ -11,6 +11,7 @@ import {
   type CreateOrganizationFormData,
 } from "@/lib/validations/organization";
 import { useAuthStore } from "@/store/auth-store";
+import { installSession } from "@/lib/session-manager";
 import { useOrganizationsControllerCreateOrganization } from "@/lib/api/generated/organizations/organizations";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ import {
 
 export default function CreateOrganizationPage() {
   const router = useRouter();
-  const setAuth = useAuthStore((state) => state.setAuth);
   const user = useAuthStore((state) => state.user);
 
   const form = useForm<CreateOrganizationFormData>({
@@ -90,7 +90,7 @@ export default function CreateOrganizationPage() {
           toast.success("Workspace created successfully!");
 
           if (user) {
-            setAuth(response.access_token, {
+            installSession(response.access_token, {
               ...user,
               organizationId: response.organizationId,
               hasCompletedOnboarding: true,

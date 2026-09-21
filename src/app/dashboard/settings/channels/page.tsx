@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { Plus, Trash2, CheckCircle2, MessageCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ import { AddChannelModal } from '@/components/channels/AddChannelModal';
 
 export default function ChannelsSettingsPage() {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
 
@@ -43,7 +45,7 @@ export default function ChannelsSettingsPage() {
       {
         onSuccess: () => {
           toast.success('Channel disconnected successfully');
-          queryClient.invalidateQueries({ queryKey: [`/channels`] });
+          queryClient.invalidateQueries({ queryKey: scopeKey([`/channels`]) });
           setChannelToDelete(null);
         },
         onError: () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenantQueryKey } from "@/hooks/useTenantQueryKey";
 import { useSocket, LiveMessagePayload } from "@/hooks/useSocket";
 import type { ConversationUpdatePayload, LeadUpdatePayload } from "@/hooks/useSocket";
 import { useLeadsControllerFindAll } from "@/lib/api/generated/leads/leads";
@@ -18,6 +19,7 @@ import { LiveChatPane } from "@/components/conversations/LiveChatPane";
 
 export default function ConversationsPage() {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const { socket, isConnected } = useSocket();
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export default function ConversationsPage() {
 
     // --- Conversation Update (AI Paused) Listener ---
     const handleConversationUpdate = (data: ConversationUpdatePayload) => {
-      queryClient.invalidateQueries({ queryKey: [`/conversations`] });
+      queryClient.invalidateQueries({ queryKey: scopeKey(['/conversations']) });
       
       if (data.aiPaused) {
         toast.warning('AI has been paused', {
@@ -94,7 +96,7 @@ export default function ConversationsPage() {
     const handleLeadUpdate = (data: LeadUpdatePayload) => {
       console.log('[Socket] onLeadUpdate received in Orchestrator:', data.id);
       // Invalidate leads so the Kanban board physically moves the card if the stage changed on the backend
-      queryClient.invalidateQueries({ queryKey: [`/leads`] });
+      queryClient.invalidateQueries({ queryKey: scopeKey(['/leads']) });
     };
 
     socket.on("onNewMessage", handleNewMessage);
@@ -106,7 +108,7 @@ export default function ConversationsPage() {
       socket.off('onConversationUpdate', handleConversationUpdate);
       socket.off('onLeadUpdate', handleLeadUpdate);
     };
-  }, [socket, activeConversationId, queryClient, refetchConversations]);
+  }, [socket, activeConversationId, queryClient, refetchConversations, scopeKey]);
 
   // Clear live messages when switching conversations so they don't bleed over
   useEffect(() => {

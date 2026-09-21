@@ -20,7 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useAuthStore } from '@/store/auth-store';
+import { installSession } from '@/lib/session-manager';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -46,7 +46,7 @@ export default function SignupPage() {
           // If the backend returns an access_token, log them in automatically
           if (res?.access_token && res?.user) {
             toast.success('Account created successfully!');
-            useAuthStore.getState().setAuth(res.access_token, res.user);
+            installSession(res.access_token, res.user);
             
             if (res.user.hasCompletedOnboarding) {
               router.push('/dashboard');

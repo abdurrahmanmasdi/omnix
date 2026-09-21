@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useAuthStore } from '@/store/auth-store';
+import { installSession } from '@/lib/session-manager';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,7 +49,7 @@ export default function LoginPage() {
           // The backend sends us { access_token, user }
           const { access_token, user } = response as unknown as { access_token: string; user: { hasCompletedOnboarding: boolean, id: string, organizationId: string } };
           
-          useAuthStore.getState().setAuth(access_token, user);
+          installSession(access_token, user);
           
           // Route based on whether they have an organization yet!
           if (user.hasCompletedOnboarding) {

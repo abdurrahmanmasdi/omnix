@@ -3,6 +3,7 @@
 import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { useSocket } from '@/hooks/useSocket';
 import {
   useNotificationsControllerGetNotifications,
@@ -78,6 +79,7 @@ function timeAgo(dateStr?: string): string {
 export function NotificationBell() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const { socket } = useSocket();
 
   // ─── Orval-generated hooks ────────────────────────────
@@ -100,13 +102,13 @@ export function NotificationBell() {
     const handler = (payload: { title: string; body: string; type?: string }) => {
       // Optimistically increment unread count
       queryClient.setQueryData<number>(
-        getNotificationsControllerGetUnreadCountQueryKey(),
+        scopeKey(getNotificationsControllerGetUnreadCountQueryKey()),
         (old) => (old ?? 0) + 1
       );
 
       // Invalidate the list to fetch the new item
       queryClient.invalidateQueries({
-        queryKey: getNotificationsControllerGetNotificationsQueryKey(),
+        queryKey: scopeKey(getNotificationsControllerGetNotificationsQueryKey()),
       });
 
       if (payload.type === 'LEAD_HANDED_OFF') {
@@ -133,7 +135,7 @@ export function NotificationBell() {
     return () => {
       socket.off('new_notification', handler);
     };
-  }, [socket, queryClient]);
+  }, [socket, queryClient, scopeKey]);
 
   // ─── Click → Mark Read + Route ────────────────────────
   const handleClickNotification = useCallback(
@@ -144,10 +146,10 @@ export function NotificationBell() {
           {
             onSuccess: () => {
               queryClient.invalidateQueries({
-                queryKey: getNotificationsControllerGetNotificationsQueryKey(),
+                queryKey: scopeKey(getNotificationsControllerGetNotificationsQueryKey()),
               });
               queryClient.invalidateQueries({
-                queryKey: getNotificationsControllerGetUnreadCountQueryKey(),
+                queryKey: scopeKey(getNotificationsControllerGetUnreadCountQueryKey()),
               });
             },
           }
@@ -156,19 +158,22 @@ export function NotificationBell() {
       const route = getNotificationRoute(notification);
       if (route) router.push(route);
     },
-    [markOneMutation, router, queryClient]
+    [markOneMutation, router, queryClient, scopeKey]
   );
 
   const handleMarkAllRead = useCallback(() => {
     markAllMutation.mutate(undefined, {
       onSuccess: () => {
         queryClient.invalidateQueries({
-          queryKey: getNotificationsControllerGetNotificationsQueryKey(),
+          queryKey: scopeKey(getNotificationsControllerGetNotificationsQueryKey()),
         });
-        queryClient.setQueryData(getNotificationsControllerGetUnreadCountQueryKey(), 0);
+        queryClient.setQueryData(
+          scopeKey(getNotificationsControllerGetUnreadCountQueryKey()),
+          0
+        );
       },
     });
-  }, [markAllMutation, queryClient]);
+  }, [markAllMutation, queryClient, scopeKey]);
 
   const count = typeof unreadCount === 'number' ? unreadCount : 0;
 

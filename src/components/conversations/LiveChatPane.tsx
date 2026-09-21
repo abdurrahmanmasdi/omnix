@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { 
   useConversationsControllerGetMessages,
   useConversationsControllerSendMessage,
@@ -28,6 +29,7 @@ interface LiveChatPaneProps {
 
 export function LiveChatPane({ activeConversationId, activeConversationData, onClose, liveMessages }: LiveChatPaneProps) {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const scrollRef = useRef<HTMLDivElement>(null);
   
   // Historical messages
@@ -92,7 +94,7 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
         onSuccess: () => {
           // The socket `onConversationUpdate` will catch this and update global state,
           // but we can invalidate just in case
-          queryClient.invalidateQueries({ queryKey: [`/conversations`] });
+          queryClient.invalidateQueries({ queryKey: scopeKey(['/conversations']) });
         }
       }
     );

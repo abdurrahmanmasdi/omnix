@@ -1,7 +1,18 @@
-import axios, { AxiosRequestConfig } from "axios";
-import type { AxiosError } from "axios";
-import { useAuthStore } from "@/store/auth-store";
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import type { AxiosError } from 'axios';
+import { useAuthStore } from '@/store/auth-store';
+import { getSessionGeneration } from '@/lib/session-scope';
+import { installSession, resetSession } from '@/lib/session-manager';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Extend Axios config to carry session generation (internal, not sent as a header)
+declare module 'axios' {
+  interface InternalAxiosRequestConfig {
+    __sessionGeneration?: number;
+    _retry?: boolean;
+  }
+}
 
 // 1. Create the central Axios instance
 export const axiosInstance = axios.create({
@@ -11,10 +22,15 @@ export const axiosInstance = axios.create({
   withCredentials: true,
 });
 
-// 2. Add Global Interceptors (You can expand this later!)
-axiosInstance.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken;
+// 2. Request Interceptor
+// Stamps each request with the current session generation and attaches
+// the Bearer token if available. Does NOT reject tokenless requests —
+// login and signup use this same instance.
+axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  // Stamp session generation so the response interceptor can detect stale responses
+  config.__sessionGeneration = getSessionGeneration();
 
+  const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -22,12 +38,18 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
+// 3. Response Interceptor
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Reject responses from a prior session generation
+    const requestGeneration = (response.config as InternalAxiosRequestConfig).__sessionGeneration;
+    if (requestGeneration !== undefined && requestGeneration !== getSessionGeneration()) {
+      throw new axios.CanceledError('Stale session response');
+    }
+    return response;
+  },
   async (error: AxiosError) => {
-    const originalRequest = error.config as AxiosRequestConfig & {
-      _retry?: boolean;
-    };
+    const originalRequest = error.config as InternalAxiosRequestConfig;
 
     // If the error is 401 (Unauthorized) and we haven't retried yet...
     if (
@@ -49,23 +71,21 @@ axiosInstance.interceptors.response.use(
 
         const { access_token, user } = refreshResponse.data;
 
-        // 2. Update Zustand globally!
-        useAuthStore.getState().setAuth(access_token, user);
+        // 2. Route through centralised session manager
+        installSession(access_token, user);
 
-        // 3. Update the failed request with the brand new token
+        // 3. Update the failed request with the brand new token and generation
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
         }
+        originalRequest.__sessionGeneration = getSessionGeneration();
 
         // 4. Retry the exact request that just failed!
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         // If the refresh fails (e.g., refresh token expired after 7 days)
-        console.error("Session completely expired. Logging out.");
-        useAuthStore.getState().logout();
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = "/login"; // Force them to the login screen
-        }
+        console.error('Session completely expired. Logging out.');
+        resetSession();
         return Promise.reject(refreshError);
       }
     }
@@ -73,7 +93,7 @@ axiosInstance.interceptors.response.use(
   },
 );
 
-// 3. The custom fetcher function that Orval will use to wrap all requests
+// 4. The custom fetcher function that Orval will use to wrap all requests
 export const customFetch = async <T>(
   config: AxiosRequestConfig,
   options?: AxiosRequestConfig,

@@ -3,6 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { toast } from 'sonner';
 import { Loader2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ interface AddChannelModalProps {
 
 export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const createChannelMutation = useChannelsControllerCreateChannel();
 
   const {
@@ -48,7 +50,7 @@ export function AddChannelModal({ isOpen, onOpenChange }: AddChannelModalProps) 
       {
         onSuccess: () => {
           toast.success('WhatsApp Channel connected successfully!');
-          queryClient.invalidateQueries({ queryKey: [`/channels`] });
+          queryClient.invalidateQueries({ queryKey: scopeKey([`/channels`]) });
           reset();
           onOpenChange(false);
         },

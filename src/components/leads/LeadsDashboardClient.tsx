@@ -8,6 +8,7 @@ import { buildSearchFilter, combineFilters, FilterCondition } from '@/lib/utils/
 import { useSocket } from '@/hooks/useSocket';
 import type { LeadUpdatePayload } from '@/hooks/useSocket';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { LeadDetailDrawer } from './LeadDetailDrawer';
 import { LeadFormModal } from './LeadFormModal';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +24,7 @@ export function LeadsDashboardClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
   const { socket } = useSocket();
 
   // ─── Stable URL update helper ─────────────────────────────
@@ -114,17 +116,17 @@ export function LeadsDashboardClient() {
       console.log('[Socket] onLeadUpdate received:', data.id);
 
       // Invalidate all leads queries (list, individual, any filtered view)
-      queryClient.invalidateQueries({ queryKey: [`/leads`] });
+      queryClient.invalidateQueries({ queryKey: scopeKey(['/leads']) });
 
       // Invalidate pipeline stages since lead stage assignments may have changed
-      queryClient.invalidateQueries({ queryKey: [`/pipeline-stages`] });
+      queryClient.invalidateQueries({ queryKey: scopeKey(['/pipeline-stages']) });
     };
 
     socket.on('onLeadUpdate', handleLeadUpdate);
     return () => {
       socket.off('onLeadUpdate', handleLeadUpdate);
     };
-  }, [socket, queryClient]);
+  }, [socket, queryClient, scopeKey]);
 
   const { data: sourcesData } = useLeadSourcesControllerFindAll();
   const sources = useMemo(() => {

@@ -7,6 +7,7 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { Loader2, Save, Bot } from 'lucide-react';
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenantQueryKey } from "@/hooks/useTenantQueryKey";
 
 import {
   useAiPersonaControllerGetPersona,
@@ -54,6 +55,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function AiSettingsPage() {
   const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
 
   // --- Orval-generated GET hook ---
   const { data: persona, isLoading: isFetching } = useAiPersonaControllerGetPersona({
@@ -112,7 +114,7 @@ export default function AiSettingsPage() {
   const mutation = useAiPersonaControllerUpsertPersona({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getAiPersonaControllerGetPersonaQueryKey() });
+        queryClient.invalidateQueries({ queryKey: scopeKey(getAiPersonaControllerGetPersonaQueryKey()) });
         toast.success("AI Configuration saved!");
       },
       onError: (error) => {
