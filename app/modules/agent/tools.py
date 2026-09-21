@@ -69,7 +69,10 @@ async def create_lead(
     }
     payload = {k: v for k, v in data.items() if v is not None}
     logger.info("[VIRTUAL TOOL] Lead Creation: %s", payload)
-    return f"TOOL_ACTION:CREATE_LEAD:{json.dumps(payload)}"
+    return json.dumps({
+        "action": "CREATE_LEAD",
+        "payload": payload
+    })
 
 @tool
 async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str:
@@ -205,11 +208,12 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
         # Build virtual action for NestJS to execute
         action = {
             "action": "HANDOFF_TO_HUMAN",
-            "lead_id": lead_id,
-            "reason": reason
+            "payload": {
+                "lead_id": lead_id,
+                "reason": reason
+            }
         }
-
-        return f"TOOL_ACTION:HANDOFF_TO_HUMAN:{json.dumps(action)}"
+        return json.dumps(action)
 
     except Exception as e:
         logger.error("Escalation error: %s", e)
@@ -242,7 +246,10 @@ async def update_patient_profile(
         
     if data:
         logger.info("[VIRTUAL TOOL] Update Patient Profile: %s", data)
-        return f"TOOL_ACTION:UPDATE_LEAD:{json.dumps(data)}"
+        return json.dumps({
+            "action": "UPDATE_LEAD",
+            "payload": data
+        })
     
     return "No valid CRM fields provided to update."
 
@@ -265,6 +272,9 @@ async def schedule_follow_up(
         "context": context,
     }
     logger.info("[VIRTUAL TOOL] Schedule Follow Up: %s at %s", context, scheduled_at)
-    return f"TOOL_ACTION:SCHEDULE_FOLLOW_UP:{json.dumps(payload)}"
+    return json.dumps({
+        "action": "SCHEDULE_FOLLOW_UP",
+        "payload": payload
+    })
 
 tools_list = [search_clinic_knowledge, fetch_social_proof, fetch_battlecard, create_lead, escalate_to_human, update_patient_profile, schedule_follow_up]

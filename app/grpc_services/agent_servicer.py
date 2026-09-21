@@ -152,11 +152,13 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
 
             # Lead Creation Hook
             if state_data["customer"]["name"] != "Guest" and not state_data["lead_id"]:
-                create_lead_payload = json.dumps({
-                    "firstName": first_name, 
-                    "phoneNumber": getattr(res, 'externalContactId', None)
-                })
-                state_data["pending_crm_actions"].append(f'TOOL_ACTION:CREATE_LEAD:{create_lead_payload}')
+                state_data["pending_crm_actions"].append(json.dumps({
+                    "action": "CREATE_LEAD",
+                    "payload": {
+                        "firstName": first_name, 
+                        "phoneNumber": getattr(res, 'externalContactId', None)
+                    }
+                }))
                 
             # 4. RUN THE LANGGRAPH AGENT
             config = {"configurable": {"organization_id": org_id}}
@@ -179,42 +181,45 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 if urls:
                     media_url = urls[0]
             
-            # 6. Extract Tool Actions for NestJS
+            # 6. Extract Tool Actions for NestJS (Only from structured accumulator)
+            from pydantic import BaseModel, ValidationError
+            from enum import Enum
+            from typing import Any
+
+            class ActionType(str, Enum):
+                CREATE_LEAD = "CREATE_LEAD"
+                UPDATE_LEAD = "UPDATE_LEAD"
+                UPDATE_SUMMARY = "UPDATE_SUMMARY"
+                HANDOFF_TO_HUMAN = "HANDOFF_TO_HUMAN"
+                SCHEDULE_FOLLOW_UP = "SCHEDULE_FOLLOW_UP"
+
+            class StructuredAction(BaseModel):
+                action: ActionType
+                payload: dict[str, Any]
+
             tool_actions = []
-            for msg in final_state["messages"]:
-                if hasattr(msg, "content") and "TOOL_ACTION:" in str(msg.content):
-                    try:
-                        parts = msg.content.split(":", 2)
-                        if len(parts) == 3:
-                            tool_actions.append(agent_pb2.ToolAction(
-                                type=parts[1],
-                                payload=parts[2]
-                            ))
-                    except Exception as te:
-                        logger.warning("Error parsing virtual tool: %s", te)
-                        
-            # Also extract from pending_crm_actions
+            
             for action_str in final_state.get("pending_crm_actions", []):
-                if action_str.startswith("{"):
-                    try:
-                        action_obj = json.loads(action_str)
-                        if "action" in action_obj:
-                            tool_actions.append(agent_pb2.ToolAction(
-                                type=action_obj["action"],
-                                payload=json.dumps(action_obj)
-                            ))
-                    except Exception as te:
-                        logger.warning("Error parsing JSON virtual tool from state: %s", te)
-                elif "TOOL_ACTION:" in action_str:
-                    try:
-                        parts = action_str.split(":", 2)
-                        if len(parts) == 3:
-                            tool_actions.append(agent_pb2.ToolAction(
-                                type=parts[1],
-                                payload=parts[2]
-                            ))
-                    except Exception as te:
-                        logger.warning("Error parsing virtual tool from state: %s", te)
+                try:
+                    action_obj = json.loads(action_str)
+                    structured_action = StructuredAction(**action_obj)
+                    tool_actions.append(agent_pb2.ToolAction(
+                        type=structured_action.action.value,
+                        payload=json.dumps(structured_action.payload)
+                    ))
+                except (ValidationError, ValueError, TypeError) as e:
+                    action_type_safe = "UNKNOWN"
+                    if isinstance(action_str, str) and '"action"' in action_str:
+                        try:
+                            # Try to just extract the action name safely
+                            action_type_safe = json.loads(action_str).get("action", "UNKNOWN")
+                            if not isinstance(action_type_safe, str):
+                                action_type_safe = "UNKNOWN"
+                        except Exception:
+                            pass
+                    logger.warning("Rejected invalid action type '%s' in Conv %s", action_type_safe, conv_id)
+                except Exception:
+                    logger.warning("Error parsing action from state in Conv %s", conv_id)
 
             final_reply_to_send = "\n\n|||\n\n".join(reply_parts)
 
