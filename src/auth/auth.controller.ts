@@ -1,3 +1,4 @@
+import { getRefreshCookieOptions, REFRESH_COOKIE_NAME } from "./cookie.helper";
 import {
   Controller,
   Post,
@@ -40,12 +41,7 @@ export class AuthController {
     const { accessToken, refreshToken, user } =
       await this.authService.signup(signupDto);
 
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
 
     return { access_token: accessToken, user };
   }
@@ -66,12 +62,7 @@ export class AuthController {
       await this.authService.login(loginDto);
 
     // Set the Refresh Token as an HttpOnly, Secure cookie
-    res.cookie('refresh_token', refreshToken, {
-      httpOnly: true, // Javascript cannot read this
-      secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Support cross-domain cookies
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-    });
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
 
     // Send the Access Token in the JSON body so the frontend can store it in memory
     return {
@@ -90,11 +81,7 @@ export class AuthController {
   })
   logout(@Res({ passthrough: true }) res: Response) {
     // This physically commands the browser to delete the HttpOnly cookie
-    res.clearCookie('refresh_token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    });
+    res.clearCookie(REFRESH_COOKIE_NAME, getRefreshCookieOptions(true));
     return { message: 'Logged out successfully' };
   }
 
@@ -125,7 +112,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const refreshToken = req.cookies['refresh_token'] as string | undefined;
+    const refreshToken = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
 
     if (!refreshToken) {
       // If they have no cookie, they must log in again
@@ -142,12 +129,7 @@ export class AuthController {
     } = await this.authService.refreshTokens(refreshToken);
 
     // Rotate the refresh token for maximum security
-    res.cookie('refresh_token', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie(REFRESH_COOKIE_NAME, newRefreshToken, getRefreshCookieOptions());
 
     return { access_token: accessToken, user };
   }

@@ -19,21 +19,23 @@ import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCrmTokenDto } from './dto/update-crm-token.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtUserGuard } from '../auth/guards/jwt-user.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { getRefreshCookieOptions, REFRESH_COOKIE_NAME } from '../auth/cookie.helper';
 
 @ApiTags('Organizations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard) // 🛡️ Bouncer active: Must be logged in!
 @Controller('organizations')
 export class OrganizationsController {
   constructor(
     private readonly orgService: OrganizationsService,
-    private readonly authService: AuthService, // Inject Auth to issue new tokens
+    private readonly authService: AuthService,
   ) {}
 
   @Post()
+  @UseGuards(JwtUserGuard) // 🛡️ User must be logged in, but organization is NOT required
   @ApiOperation({ summary: 'Create a new organization and get updated tokens' })
   @ApiResponse({
     status: 201,
@@ -49,7 +51,7 @@ export class OrganizationsController {
     },
   })
   async createOrganization(
-    @CurrentUser() user: AuthenticatedUser, // 🚀 Perfectly typed!
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateOrganizationDto,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -57,23 +59,17 @@ export class OrganizationsController {
     const workspace = await this.orgService.createWorkspace(user.id, dto);
 
     // 2. Generate brand new tokens with the new organizationId and roleId
-    // Note: We use the existing generateTokens method from AuthService!
     const newTokens = this.authService.generateTokens(
       user.id,
       user.email,
       workspace.organizationId,
       workspace.roleId,
-      user.firstName || '', // Depending on your jwt strategy payload
+      user.firstName || '',
       user.lastName || '',
     );
 
-    // 3. Set the new Refresh Token cookie
-    res.cookie('refresh_token', newTokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // 3. Set the new Refresh Token cookie using shared helper
+    res.cookie(REFRESH_COOKIE_NAME, newTokens.refreshToken, getRefreshCookieOptions());
 
     return {
       message: 'Workspace created successfully',
@@ -83,6 +79,8 @@ export class OrganizationsController {
   }
 
   @Patch('crm-token')
+  @UseGuards(JwtAuthGuard) // 🛡️ Must have active organization membership
+
   @ApiOperation({ summary: 'Update the HubSpot CRM access token for the current organization' })
   @ApiResponse({
     status: 200,
@@ -115,6 +113,7 @@ export class OrganizationsController {
   }
 
   @Post('crm-token/test')
+  @UseGuards(JwtAuthGuard) // 🛡️ Must have active organization membership
   @ApiOperation({ summary: 'Smoke-test the stored HubSpot CRM access token' })
   @ApiResponse({
     status: 200,

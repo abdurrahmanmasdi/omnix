@@ -1,3 +1,4 @@
+import { provisionRolePermissions } from "../src/auth/permission.provisioning";
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -31,23 +32,7 @@ async function main() {
     },
   });
 
-  const privacyPermissions = [
-    ['leads:read:pii', 'View unmasked lead contact and social data'],
-    ['leads:read:messages', 'View lead conversation history'],
-    ['leads:export', 'Export lead data'],
-    ['settings:crm:sync', 'Configure and enable CRM synchronization'],
-  ];
-  await prisma.permission.createMany({
-    data: privacyPermissions.map(([action, description]) => ({ action, description })),
-    skipDuplicates: true,
-  });
-  const permissions = await prisma.permission.findMany({
-    where: { action: { in: privacyPermissions.map(([action]) => action) } },
-  });
-  await prisma.rolePermission.createMany({
-    data: permissions.map((permission) => ({ roleId: role.id, permissionId: permission.id })),
-    skipDuplicates: true,
-  });
+  await provisionRolePermissions(prisma, role.id);
 
   // 3. Create a User with a securely hashed password
   const hashedPassword = await bcrypt.hash('password123', 10);

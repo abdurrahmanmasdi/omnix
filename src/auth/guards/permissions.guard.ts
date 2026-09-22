@@ -22,7 +22,7 @@ export class PermissionsGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    const organizationId = request.headers['x-organization-id'] || request.user?.organizationId;
+    const organizationId = user?.organizationId;
 
     if (!user || !organizationId) {
       throw new ForbiddenException('Missing user or organization context for permissions check');

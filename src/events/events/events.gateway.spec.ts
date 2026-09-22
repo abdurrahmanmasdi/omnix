@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EventsGateway } from './events.gateway';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { PermissionService } from '../../auth/permission.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 describe('EventsGateway', () => {
   let gateway: EventsGateway;
@@ -17,16 +19,19 @@ describe('EventsGateway', () => {
         EventsGateway,
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: PermissionService, useValue: { has: jest.fn().mockResolvedValue(true) } },
+        { provide: PrismaService, useValue: { organizationMembership: { findFirst: jest.fn().mockResolvedValue({ id: 'test' }) } } },
       ],
     }).compile();
 
     gateway = module.get<EventsGateway>(EventsGateway);
     // Mock the WebSocket server
-    gateway.server = { to: mockTo } as any;
+    gateway.server = { to: mockTo, disconnectSockets: jest.fn() } as any;
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    gateway.onModuleDestroy();
   });
 
   it('should be defined', () => {
