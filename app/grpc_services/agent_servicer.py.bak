@@ -30,7 +30,6 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
     async def GenerateReply(self, request, context):
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
         conv_id = getattr(request, 'conversationId', getattr(request, 'conversation_id', None))
-        latest_msg = getattr(request, 'latestMessage', getattr(request, 'latest_message', None))
         
         clinic_name = getattr(request, 'clinicName', getattr(request, 'clinic_name', 'our clinic'))
         agent_tone = getattr(request, 'agentTone', getattr(request, 'agent_tone', 'Professional and empathetic'))
@@ -41,32 +40,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         follow_up_context = getattr(request, 'followUpContext', getattr(request, 'follow_up_context', ''))
         needs_summarization = total_count > 0 and (total_count % 10 == 0)
 
-        # Extract optional image from gRPC request
-        image_base64 = getattr(request, 'imageBase64', getattr(request, 'image_base64', None))
-        if image_base64 and len(image_base64) > 100:
-            logger.info("Received image for Conv %s (%d chars)", conv_id, len(image_base64))
 
-        # Extract optional audio from gRPC request
-        audio_base64 = getattr(request, 'audioBase64', getattr(request, 'audio_base64', None))
-        if audio_base64:
-            logger.info("Received audio for Conv %s (%d chars)", conv_id, len(audio_base64))
-            try:
-                audio_bytes = base64.b64decode(audio_base64)
-                audio_file = io.BytesIO(audio_bytes)
-                audio_file.name = "audio.ogg"
-                
-                openai_client = LLMFactory.get_async_openai_client()
-                transcription = await openai_client.audio.transcriptions.create(
-                    model="gpt-4o-mini-transcribe", 
-                    file=audio_file
-                )
-                
-                transcribed_text = transcription.text
-                logger.info("Audio transcription success for Conv %s", conv_id)
-                latest_msg = f"🎙️ [Voice Note Transcription]: {transcribed_text}"
-            except Exception as e:
-                logger.error("Audio transcription failed for Conv %s: %s", conv_id, e)
-                latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
 
         logger.info("GenerateReply called for Conv: %s", conv_id)
         
@@ -124,7 +98,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 elif msg.type == 'AI_TEXT':
                     state_data["messages"].append(AIMessage(content=msg.content))
             
-            # 3. Add the brand new messages
+            # 3. Add the brand new messages from WhatsApp
             new_message_ids = list(request.newMessageIds)
             new_messages = await DatabaseService.get_messages_by_ids(new_message_ids, conv_id)
             
@@ -144,10 +118,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             # 3.5 Run Deterministic Input Policy Checks BEFORE graph invocation
             if combined_new_text:
                 from app.modules.safety.policy import DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE
-                import json
                 input_decision = DeliverySafetyPolicy.check_input(combined_new_text)
                 if not input_decision.allowed:
-                    logger.warning("Blocked unsafe input for Conv %s: %s", conv_id, input_decision.reason)
+                    logger.warning(f"Blocked unsafe input for Conv {conv_id}: {input_decision.reason}")
                     return agent_pb2.AgentReply(
                         replyText=SAFE_HANDOFF_MESSAGE,
                         actions=[agent_pb2.ToolAction(
@@ -239,11 +212,4 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
         except Exception as e:
             logger.error("Error generating AI reply for Conv %s: %s", conv_id, e, exc_info=True)
-            import json
-            return agent_pb2.AgentReply(
-                replyText="I apologize, but I am experiencing a brief system update. Let me pass you to a human agent.",
-                actions=[agent_pb2.ToolAction(
-                    type="HANDOFF_TO_HUMAN",
-                    payload=json.dumps({"reason": "system_exception"})
-                )]
-            )
+            return agent_pb2.AgentReply(replyText="I apologize, but I am experiencing a brief system update. Let me pass you to a human agent.")

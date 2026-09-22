@@ -22,6 +22,19 @@ class DatabaseService:
                 return db.execute(query, {"conv_id": conv_id}).fetchone()
         return await asyncio.to_thread(_fetch)
 
+
+    @staticmethod
+    async def get_messages_by_ids(message_ids: list[str], conv_id: str):
+        if not message_ids:
+            return []
+        def _fetch():
+            with SessionLocal() as db:
+                return db.execute(
+                    text('SELECT id, content, type, "mediaUrl", "createdAt" FROM messages WHERE id = ANY(:message_ids) AND "conversationId" = :conv_id ORDER BY "createdAt" ASC'),
+                    {"message_ids": message_ids, "conv_id": conv_id}
+                ).fetchall()
+        return await asyncio.to_thread(_fetch)
+
     @staticmethod
     async def get_conversation_history(conv_id: str, limit: int = 120):
         def _fetch():

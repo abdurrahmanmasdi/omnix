@@ -1,6 +1,48 @@
 import json
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+
+async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions):
+    from langchain_core.messages import ToolMessage
+    import json
+    from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof, fetch_battlecard, escalate_to_human
+
+    for tool_call in getattr(response, "tool_calls", []):
+        tool_name = tool_call.get("name")
+        tool_args = tool_call.get("args", {})
+        tool_id = tool_call.get("id")
+        
+        config = {"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}}
+        
+        if tool_name == "search_clinic_knowledge":
+            tool_result = await search_clinic_knowledge.ainvoke(tool_args, config=config)
+        elif tool_name == "fetch_social_proof":
+            tool_result = await fetch_social_proof.ainvoke(tool_args, config=config)
+        elif tool_name == "fetch_battlecard":
+            tool_result = await fetch_battlecard.ainvoke(tool_args, config=config)
+        elif tool_name == "escalate_to_human":
+            tool_result = await escalate_to_human.ainvoke(tool_args, config=config)
+        else:
+            tool_result = {"error": f"Unknown tool: {tool_name}"}
+
+        # Preserve structured LangChain tool results
+        if isinstance(tool_result, ToolMessage):
+            tool_msg = tool_result
+        else:
+            tool_msg = ToolMessage(tool_call_id=tool_id, content=json.dumps(tool_result) if isinstance(tool_result, dict) else str(tool_result), name=tool_name)
+            
+        messages.append(tool_msg)
+        new_messages.append(tool_msg)
+        
+        try:
+            parsed = json.loads(tool_msg.content)
+            if isinstance(parsed, dict) and "action" in parsed:
+                new_pending_actions.append(tool_msg.content)
+        except Exception:
+            pass
+
+    return messages, new_messages, new_pending_actions
+
 from app.modules.agent.state import ConversationState
 from app.modules.agent.prompts import (
     EXTRACTOR_SYSTEM_PROMPT, VISION_PROMPT, HANDOFF_PROMPT, 

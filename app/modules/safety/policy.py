@@ -36,7 +36,7 @@ class DeliverySafetyPolicy:
     OUTPUT_PATTERNS = {
         "guarantee": r"\b(?:guarantee(?:d)?|risk[- ]free|100%|always successful|permanent results?)\b",
         "fabricated_urgency_or_discount": r"\b(?:only \d+ slots?|slots? left|ending (?:today|tomorrow|soon)|limited[- ]time|special discount|discount ends?|act now|last chance)\b",
-        "medical_diagnosis_or_treatment": r"\b(?:you (?:have|need|should)|diagnos(?:e|is)|prescri(?:be|ption)|dosage|take \d|infection|medication)\b",
+        "medical_diagnosis_or_treatment": r"\b(?:diagnos(?:e|is)|prescri(?:be|ption)|dosage|take \d|infection|medication|you have (?:cancer|diabetes|disease|a condition|an infection)|you need (?:surgery|treatment|antibiotics|medicine)|you should (?:take|stop|avoid|rest))\b",
         "pii_or_secret_exfiltration": r"(?:data:image|base64|-----BEGIN|\b(?:api[_ -]?key|authorization|bearer token|password)\b)",
     }
 
