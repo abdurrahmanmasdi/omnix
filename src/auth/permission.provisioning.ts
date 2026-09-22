@@ -1,16 +1,17 @@
 import { Prisma } from '@prisma/client';
-import { PERMISSIONS_CATALOG } from './permissions.catalog';
+import { PERMISSIONS_CATALOG, ROLE_PERMISSIONS } from './permissions.catalog';
 
 /**
- * Provisions the canonical permission catalog and grants all of them to the specified role.
- * Safe to call idempotently inside a transaction.
+ * Provisions the canonical permission catalog and default roles (Super Admin, Manager, Agent)
+ * for an organization. Safe to call idempotently inside a transaction.
+ * Returns the created roles mapped by name.
  */
-export async function provisionRolePermissions(
+export async function provisionOrganizationRolesAndPermissions(
   tx: Omit<
     Prisma.TransactionClient,
     '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
   >,
-  roleId: string,
+  organizationId: string,
 ) {
   // 1. Create any missing permissions in the database
   await tx.permission.createMany({
@@ -21,24 +22,56 @@ export async function provisionRolePermissions(
     skipDuplicates: true,
   });
 
-  // 2. Fetch their IDs (createMany does not return IDs)
   const actions = PERMISSIONS_CATALOG.map((p) => p.action);
   const permissions = await tx.permission.findMany({
     where: { action: { in: actions } },
     select: { id: true, action: true },
   });
 
-  // Verify we actually found all of them
-  if (permissions.length !== actions.length) {
-    throw new Error('Failed to retrieve all provisioned permissions from the database');
+  const permissionIdMap = new Map(permissions.map(p => [p.action, p.id]));
+
+  // 2. Create the standard roles
+  const roles = await Promise.all(
+    Object.keys(ROLE_PERMISSIONS).map(async (roleName) => {
+      // Find or create role
+      let role = await tx.role.findFirst({
+        where: { organizationId, name: roleName },
+      });
+      if (!role) {
+        role = await tx.role.create({
+          data: {
+            name: roleName,
+            is_system: true,
+            organizationId,
+          },
+        });
+      }
+      return role;
+    })
+  );
+
+  const roleMap = new Map(roles.map(r => [r.name, r]));
+
+  // 3. Grant permissions to each role
+  const rolePermissionsData = [];
+  for (const [roleName, actions] of Object.entries(ROLE_PERMISSIONS)) {
+    const role = roleMap.get(roleName);
+    if (!role) continue;
+    for (const action of actions) {
+      const permissionId = permissionIdMap.get(action);
+      if (permissionId) {
+        rolePermissionsData.push({
+          roleId: role.id,
+          permissionId,
+        });
+      }
+    }
   }
 
-  // 3. Grant them all to the role
   await tx.rolePermission.createMany({
-    data: permissions.map((p) => ({
-      roleId,
-      permissionId: p.id,
-    })),
+    data: rolePermissionsData,
     skipDuplicates: true,
   });
+
+  return roleMap;
 }

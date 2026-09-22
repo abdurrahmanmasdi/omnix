@@ -4,6 +4,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionService } from '../auth/permission.service';
+import { ForbiddenException } from '@nestjs/common';
 import {
   QueryBuilderService,
   QueryBuilderConfig,
@@ -34,6 +36,7 @@ export class LeadsService {
     private readonly prisma: PrismaService,
     private readonly queryBuilder: QueryBuilderService,
     private readonly eventsGateway: EventsGateway,
+    private readonly permissionService: PermissionService,
   ) {}
 
   async create(organizationId: string, dto: CreateLeadDto) {
@@ -78,7 +81,7 @@ export class LeadsService {
     userId: string,
     filters: FindLeadsQueryDto,
   ) {
-    const canReadAllLeads = true; // Replace with your RBAC check
+    const canReadAllLeads = await this.permissionService.has(userId, organizationId, 'leads:read:all');
 
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit =
@@ -166,6 +169,22 @@ export class LeadsService {
     });
 
     if (!lead) throw new NotFoundException('Lead not found');
+
+    const canReadAllLeads = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    if (!canReadAllLeads && lead.assignedAgentId !== userId) {
+      throw new ForbiddenException('You do not have permission to access this lead');
+    }
+
+    // PII shaping
+    const canReadPii = await this.permissionService.has(userId, organizationId, 'leads:read:pii');
+    if (!canReadPii) {
+      if (lead.phoneNumber) lead.phoneNumber = lead.phoneNumber.replace(/\d(?=\d{4})/g, '*');
+      if (lead.email) {
+        const [local, domain] = lead.email.split('@');
+        if (domain) lead.email = `${local.substring(0, 2)}***@${domain}`;
+      }
+    }
+
     return lead;
   }
 

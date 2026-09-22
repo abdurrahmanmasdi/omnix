@@ -48,58 +48,70 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     this.revalidationInterval = setInterval(() => this.revalidateConnections(), 30000);
   }
 
-  async handleConnection(client: Socket) {
-    try {
-      const token = client.handshake.auth?.token as string | undefined;
-      if (!token) throw new Error('No token provided');
 
-      // Verify token signature and expiry
-      const payload: JwtPayload = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      });
+  afterInit(server: Server) {
+    server.use(async (socket, next) => {
+      try {
+        const token = socket.handshake.auth?.token as string | undefined;
+        if (!token) throw new Error('No token provided');
 
-      const { organizationId, sub: userId, roleId, exp } = payload as JwtPayload & { exp: number };
-      if (!organizationId || !userId || !roleId) {
-        throw new Error('User has no organization context');
-      }
+        // Verify token signature and expiry
+        const payload: JwtPayload = this.jwtService.verify(token, {
+          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        });
 
-      // Authorize membership and permissions inside the Tenant Context
-      await tenantStorage.run({ organizationId }, async () => {
-        const membership = await this.prisma.organizationMembership.findFirst({
-          where: {
+        const { organizationId, sub: userId, roleId, exp } = payload as JwtPayload & { exp: number };
+        if (!organizationId || !userId || !roleId) {
+          throw new Error('User has no organization context');
+        }
+
+        // Authorize membership and permissions inside the Tenant Context
+        await tenantStorage.run({ organizationId }, async () => {
+          const membership = await this.prisma.organizationMembership.findFirst({
+            where: {
+              userId,
+              organizationId,
+              roleId,
+              status: 'ACTIVE',
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
+
+          if (!membership) {
+            throw new Error('Invalid or inactive organization membership');
+          }
+
+          const hasPermission = await this.permissionService.has(userId, organizationId, 'view_conversations');
+          if (!hasPermission) {
+            throw new Error('Missing view_conversations permission');
+          }
+
+          // Store verified data on the client object
+          socket.data = {
             userId,
             organizationId,
             roleId,
-            status: 'ACTIVE',
-            deletedAt: null,
-          },
-          select: { id: true },
+            membershipId: membership.id,
+            tokenExp: exp,
+          };
         });
+        
+        next();
+      } catch (error: any) {
+        this.logger.error(`Socket handshake rejected: ${error.message}`);
+        next(new Error('UnauthorizedException'));
+      }
+    });
+  }
 
-        if (!membership) {
-          throw new Error('Invalid or inactive organization membership');
-        }
-
-        const hasPermission = await this.permissionService.has(userId, organizationId, 'view_conversations');
-        if (!hasPermission) {
-          throw new Error('Missing view_conversations permission');
-        }
-
-        // Store verified data on the client object for future revalidation
-        client.data = {
-          userId,
-          organizationId,
-          roleId,
-          membershipId: membership.id,
-          tokenExp: exp,
-        };
-
-        await client.join(organizationId);
-        await client.join(`user_${userId}`);
-        this.logger.log(`Client ${client.id} joined org ${organizationId}`);
-      });
-    } catch (error: any) {
-      this.logger.error(`Socket connection rejected: ${error.message}`);
+  async handleConnection(client: Socket) {
+    const { userId, organizationId } = client.data;
+    if (userId && organizationId) {
+      await client.join(organizationId);
+      await client.join(`user_${userId}`);
+      this.logger.log(`Client ${client.id} joined org ${organizationId}`);
+    } else {
       client.disconnect(true);
     }
   }

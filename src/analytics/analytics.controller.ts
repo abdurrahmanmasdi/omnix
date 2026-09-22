@@ -8,15 +8,18 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsSummaryDto } from './dto/analytics-summary.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Analytics')
 @Controller('analytics')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  @RequirePermissions('analytics:view')
   @Get('summary')
   @ApiOperation({ summary: 'Get aggregated analytics for the dashboard' })
   @ApiResponse({

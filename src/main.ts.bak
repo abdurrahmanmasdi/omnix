@@ -13,7 +13,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true, bufferLogs: true });
 
   // Use Pino as the default logger
-  app.enableShutdownHooks();
   app.useLogger(app.get(Logger));
 
   // Enable cookie parser

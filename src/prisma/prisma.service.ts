@@ -40,6 +40,7 @@ export class PrismaService
       adapter: new PrismaPg(pool),
     });
 
+    const self = this;
     const extended = this.$extends({
       query: {
         $allModels: {
@@ -101,7 +102,31 @@ export class PrismaService
             const typedQuery = query as (
               queryArgs: Record<string, unknown>,
             ) => Promise<unknown>;
-            return typedQuery(typedArgs);
+            const result = await typedQuery(typedArgs);
+            
+            if (model === 'Lead' && (operation === 'update' || operation === 'updateMany')) {
+              const data = (typedArgs.data as Record<string, unknown>) ?? {};
+              if (data.deletedAt !== undefined && data.deletedAt !== null) {
+                const leadIds: string[] = [];
+                if (operation === 'update' && result && typeof result === 'object' && 'id' in result) {
+                  leadIds.push((result as any).id as string);
+                }
+
+                if (leadIds.length > 0) {
+                  // Run bypass to prevent recursive interception issues
+                  await self.conversation.updateMany({
+                    where: { leadId: { in: leadIds }, organizationId },
+                    data: { deletedAt: data.deletedAt as Date }
+                  });
+                  await (self as any).scheduledFollowUp.updateMany({
+                    where: { leadId: { in: leadIds }, organizationId },
+                    data: { deletedAt: data.deletedAt as Date }
+                  });
+                }
+              }
+            }
+
+            return result;
           },
         },
       },

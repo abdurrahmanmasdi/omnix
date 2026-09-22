@@ -19,6 +19,8 @@ import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCrmTokenDto } from './dto/update-crm-token.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { JwtUserGuard } from '../auth/guards/jwt-user.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
@@ -59,7 +61,7 @@ export class OrganizationsController {
     const workspace = await this.orgService.createWorkspace(user.id, dto);
 
     // 2. Generate brand new tokens with the new organizationId and roleId
-    const newTokens = this.authService.generateTokens(
+    const newTokens = await this.authService.generateTokens(
       user.id,
       user.email,
       workspace.organizationId,
@@ -79,8 +81,8 @@ export class OrganizationsController {
   }
 
   @Patch('crm-token')
-  @UseGuards(JwtAuthGuard) // 🛡️ Must have active organization membership
-
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('settings:crm:sync')
   @ApiOperation({ summary: 'Update the HubSpot CRM access token for the current organization' })
   @ApiResponse({
     status: 200,
@@ -113,7 +115,8 @@ export class OrganizationsController {
   }
 
   @Post('crm-token/test')
-  @UseGuards(JwtAuthGuard) // 🛡️ Must have active organization membership
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('settings:crm:sync')
   @ApiOperation({ summary: 'Smoke-test the stored HubSpot CRM access token' })
   @ApiResponse({
     status: 200,

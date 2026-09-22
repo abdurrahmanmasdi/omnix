@@ -19,16 +19,19 @@ import {
 } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
+  @RequirePermissions('notifications:view')
   @Get()
   @ApiOperation({ summary: 'Get the authenticated user notifications' })
   @ApiQuery({
@@ -113,6 +116,7 @@ export class NotificationsController {
     );
   }
 
+  @RequirePermissions('notifications:view')
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification count' })
   @ApiResponse({
@@ -134,6 +138,7 @@ export class NotificationsController {
     );
   }
 
+  @RequirePermissions('notifications:manage')
   @Patch(':id/read')
   @ApiOperation({ summary: 'Mark a notification as read' })
   @ApiParam({
@@ -166,6 +171,7 @@ export class NotificationsController {
     );
   }
 
+  @RequirePermissions('notifications:manage')
   @Patch('read-all')
   @ApiOperation({ summary: 'Mark all unread notifications as read' })
   @ApiResponse({

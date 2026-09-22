@@ -23,7 +23,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     agentName: string | null | undefined,
     clinicName: string | null | undefined,
   ): string {
-    const fallback = "Hi {{firstName}}! 👋 I'm {{agentName}}, the digital assistant for {{clinicName}}. I'm an AI, not a doctor, but I'm here to help you with info about our services, pricing, and booking. If you ever need a human medical coordinator, just say 'human' and I'll connect you right away. How can I help you today?";
+    const fallback =
+      "Hi {{firstName}}! 👋 I'm {{agentName}}, the digital assistant for {{clinicName}}. I'm an AI, not a doctor, but I'm here to help you with info about our services, pricing, and booking. If you ever need a human medical coordinator, just say 'human' and I'll connect you right away. How can I help you today?";
     return (template || fallback)
       .replaceAll('{{firstName}}', firstName || 'there')
       .replaceAll('{{agentName}}', agentName || 'Assistant')
@@ -52,31 +53,25 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       organizationId: string;
       conversationId: string;
       customerPhone: string;
-      latestMetaMessageId?: string;
-      imageBase64?: string;
-      audioBase64?: string;
+      newMessageIds: string[];
     }>,
   ): Promise<any> {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
-      const {
-        organizationId,
-        conversationId,
-        customerPhone,
-        latestMetaMessageId,
-        imageBase64,
-        audioBase64,
-      } = job.data;
+      const { organizationId, conversationId, customerPhone, newMessageIds } =
+        job.data;
 
-      this.logger.log(
-        `⏳ 7 seconds passed with no new messages. Sending Conv ${conversationId} to AI...`,
-      );
-
+      // Ensure the organization exists and has a valid AI persona
       const organization = await this.prisma.organization.findUnique({
         where: { id: organizationId },
         include: { aiPersona: true },
       });
 
-      if (!organization) return;
+      if (!organization || !organization.aiPersona) {
+        this.logger.warn(
+          `Organization ${organizationId} or AI persona missing. Skipping reply.`,
+        );
+        return;
+      }
 
       // 🚀 NEW: Get active WhatsApp channel
       const channel = await this.prisma.channel.findFirst({
@@ -145,17 +140,22 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             metadata: { messageId: disclosureResponse.messages[0].id },
           });
         }
+
         // 🚀 NEW: Simulate Typing Indicator on WhatsApp
-        if (
-          latestMetaMessageId &&
-          channel?.credentialId
-        ) {
+        if (channel?.credentialId && newMessageIds.length > 0) {
           try {
-            await this.whatsappService.sendTypingIndicator(
-              channel.credentialId,
-              organizationId,
-              latestMetaMessageId,
-            );
+            // Find the meta message ID from the last message in the batch
+            const lastMsg = await this.prisma.message.findUnique({
+              where: { id: newMessageIds[newMessageIds.length - 1] },
+              select: { metaMessageId: true },
+            });
+            if (lastMsg?.metaMessageId) {
+              await this.whatsappService.sendTypingIndicator(
+                channel.credentialId,
+                organizationId,
+                lastMsg.metaMessageId,
+              );
+            }
           } catch (e: any) {
             this.logger.warn(
               `Typing indicator failed (likely API version mismatch or expired msg): ${e.message}`,
@@ -164,20 +164,19 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         }
 
         const persona = organization.aiPersona;
-        const businessRulesJson = persona?.businessRules ? JSON.stringify(persona.businessRules) : '{}';
+        const businessRulesJson = persona?.businessRules
+          ? JSON.stringify(persona.businessRules)
+          : '{}';
 
         // THE MAGIC BRIDGE: Call Python over gRPC!
         const aiResponse = await lastValueFrom(
           this.salesAgentService!.generateReply({
             organizationId: organization.id,
             conversationId: conversationId,
-            latestMessage:
-              '[User finished typing multi-part message. Please respond to the context above.]',
+            newMessageIds: newMessageIds,
             clinicName: persona?.clinicName || 'OmniDesk Clinic',
             agentTone: persona?.tone || 'Professional and empathetic',
             businessRulesJson: businessRulesJson,
-            imageBase64: imageBase64,
-            audioBase64: audioBase64,
             totalMessageCount: totalMessageCount,
             leadSummary: leadSummary,
           }),
@@ -193,32 +192,61 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             actions,
           );
           if (actionResult.failed > 0) {
-            throw new Error(`Critical action execution failure (${actionResult.failed} failed), aborting reply delivery to prevent inconsistency`);
+            throw new Error(
+              `Critical action execution failure (${actionResult.failed} failed), aborting reply delivery to prevent inconsistency`,
+            );
           }
         }
 
         if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
-          this.logger.log('AI requested to sleep. Aborting WhatsApp message delivery.');
+          this.logger.log(
+            'AI requested to sleep. Aborting WhatsApp message delivery.',
+          );
           return; // Stop execution here, do not send anything to WhatsApp
         }
 
         // 2. Handle Multimodal Reply
         let metaMessageId: string | undefined = undefined;
 
-        if (mediaUrl && channel?.credentialId) {
+        let safeMediaUrl = mediaUrl;
+        let safeReplyText = replyText;
+
+        if (safeMediaUrl) {
+          // T12: Final outbound check
+          const revoked = await this.prisma.organizationExperience.findFirst({
+            where: {
+              organizationId: organizationId,
+              consentObtained: false,
+              OR: [
+                { beforeImageUrl: safeMediaUrl },
+                { afterImageUrl: safeMediaUrl },
+              ],
+            },
+          });
+          if (revoked) {
+            this.logger.warn(
+              `Blocked outbound transmission of revoked media URL: ${safeMediaUrl}`,
+            );
+            safeMediaUrl = undefined;
+            safeReplyText =
+              '[Media removed due to privacy rules] ' + (safeReplyText || '');
+          }
+        }
+
+        if (safeMediaUrl && channel?.credentialId) {
           // If there's media, we send the image first
           const mediaResponse = await this.whatsappService.sendMediaMessage(
             channel.credentialId,
             organizationId,
             customerPhone,
-            mediaUrl,
-            replyText || undefined, // Use replyText as caption if it's short/not split
+            safeMediaUrl,
+            safeReplyText || undefined, // Use replyText as caption if it's short/not split
             channel.providerAccountId,
           );
           metaMessageId = mediaResponse?.messages?.[0]?.id;
-        } else if (replyText && channel?.credentialId) {
+        } else if (safeReplyText && channel?.credentialId) {
           // Split the reply into multiple bubbles if the separator is present
-          const messages = replyText
+          const messages = safeReplyText
             .split('|||')
             .map((m) => m.trim())
             .filter((m) => m.length > 0);
@@ -259,11 +287,13 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         const aiMessage = await this.prisma.message.create({
           data: {
             conversationId: conversationId,
-            content:
-              [disclosureText, replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]')]
-                .filter(Boolean)
-                .join('|||'),
-            mediaUrl: mediaUrl || null,
+            content: [
+              disclosureText,
+              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
+            ]
+              .filter(Boolean)
+              .join('|||'),
+            mediaUrl: safeMediaUrl || null,
             metaMessageId: metaMessageId ?? null,
             type: 'AI_TEXT',
             handledBy: 'AI',
@@ -280,7 +310,10 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         this.eventsGateway.broadcastNewMessage(organization.id, aiMessage);
 
         // 6. Schedule auto follow-ups
-        await this.followUpService.scheduleAutoFollowUps(conversationId, organization.id);
+        await this.followUpService.scheduleAutoFollowUps(
+          conversationId,
+          organization.id,
+        );
       } catch (error) {
         this.logger.error(`Failed to generate or send AI reply: ${error}`);
         throw error;

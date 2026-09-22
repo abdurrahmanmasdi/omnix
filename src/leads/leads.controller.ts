@@ -28,19 +28,23 @@ import {
   UpdateLeadDto,
   UpdateLeadStageDto,
 } from './dtos/lead.dto';
+import { LeadResponseDto, LeadsPaginatedResponseDto } from './dtos/lead-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Leads')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('leads')
 export class LeadsController {
   constructor(private readonly leadsService: LeadsService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions('leads:manage')
   @ApiOperation({ summary: 'Create a new lead' })
   @ApiBody({ type: CreateLeadDto })
   @ApiResponse({
@@ -124,6 +128,7 @@ export class LeadsController {
   }
 
   @Get()
+  @RequirePermissions('leads:view')
   @ApiOperation({
     summary: 'Get leads with dynamic filtering and sorting',
     description:
@@ -160,39 +165,7 @@ export class LeadsController {
   @ApiResponse({
     status: 200,
     description: 'Leads retrieved successfully with pagination metadata',
-    schema: {
-      example: {
-        data: [
-          {
-            id: 'lead-uuid',
-            firstName: 'John',
-            lastName: 'Doe',
-            phoneNumber: '+905551234567',
-            email: 'john@example.com',
-            country: 'Turkey',
-            status: 'NEW',
-            priority: 'WARM',
-            organizationId: 'org-uuid',
-            assignedAgent: {
-              id: 'agent-uuid',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              email: 'jane@example.com',
-            },
-            conversation: {
-              id: 'conv-uuid',
-              status: 'ACTIVE',
-            },
-          },
-        ],
-        meta: {
-          page: 1,
-          limit: 20,
-          total: 150,
-          totalPages: 8,
-        },
-      },
-    },
+    type: LeadsPaginatedResponseDto
   })
   @ApiResponse({
     status: 401,
@@ -212,6 +185,7 @@ export class LeadsController {
   }
 
   @Get(':id')
+  @RequirePermissions('leads:view')
   @ApiOperation({ summary: 'Get a specific lead by ID' })
   @ApiParam({
     name: 'id',
@@ -271,6 +245,7 @@ export class LeadsController {
   }
 
   @Patch(':id/stage')
+  @RequirePermissions('leads:manage')
   @ApiOperation({ summary: 'Update the pipeline stage and optionally the status of a lead' })
   @ApiParam({
     name: 'id',
@@ -309,6 +284,7 @@ export class LeadsController {
   }
 
   @Patch(':id')
+  @RequirePermissions('leads:manage')
   @ApiOperation({ summary: 'Update a specific lead' })
   @ApiParam({
     name: 'id',
@@ -358,6 +334,7 @@ export class LeadsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions('leads:manage')
   @ApiOperation({ summary: 'Soft delete a lead' })
   @ApiParam({
     name: 'id',

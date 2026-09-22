@@ -75,6 +75,7 @@ export class ConversationsController {
     }
     return this.conversationsService.getConversations(
       user.organizationId,
+      user.id,
       parseInt(page, 10),
       parseInt(limit, 10),
     );
@@ -112,6 +113,7 @@ export class ConversationsController {
     }
     return this.conversationsService.getMessages(
       user.organizationId,
+      user.id,
       conversationId,
       parseInt(page, 10),
       parseInt(limit, 10),
@@ -136,6 +138,7 @@ export class ConversationsController {
     }
     return this.conversationsService.sendManualMessage(
       user.organizationId,
+      user.id,
       conversationId,
       dto.content,
     );
@@ -166,6 +169,7 @@ export class ConversationsController {
     }
     return this.conversationsService.toggleAiState(
       user.organizationId,
+      user.id,
       conversationId,
     );
   }

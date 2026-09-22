@@ -25,15 +25,18 @@ import { extname } from 'path';
 import { DocumentsService } from './documents.service';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Documents')
 @Controller('documents')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
+  @RequirePermissions('documents:view')
   @Get()
   @ApiOperation({
     summary: 'Get all knowledge base documents for the organization',
@@ -46,6 +49,7 @@ export class DocumentsController {
     return this.documentsService.getDocuments(user.organizationId);
   }
 
+  @RequirePermissions('documents:manage')
   @Post('upload')
   @ApiOperation({ summary: 'Upload a new PDF to train the AI' })
   @ApiConsumes('multipart/form-data') // Tells Swagger it's a file upload
@@ -81,6 +85,7 @@ export class DocumentsController {
     return this.documentsService.uploadDocument(user.organizationId, file);
   }
 
+  @RequirePermissions('documents:manage')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a document and its associated vectors' })
   @ApiResponse({ status: 200, description: 'Document deleted successfully' })

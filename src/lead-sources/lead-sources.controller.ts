@@ -23,16 +23,19 @@ import { LeadSourcesService } from './lead-sources.service';
 import { CreateLeadSourceDto } from './dtos/create-lead-source.dto';
 import { UpdateLeadSourceDto } from './dtos/update-lead-source.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Lead Sources')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('lead-sources')
 export class LeadSourcesController {
   constructor(private readonly leadSourcesService: LeadSourcesService) {}
 
+  @RequirePermissions('pipeline:manage')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new lead source' })
@@ -73,6 +76,7 @@ export class LeadSourcesController {
     return this.leadSourcesService.create(user.organizationId, dto);
   }
 
+  @RequirePermissions('pipeline:view')
   @Get()
   @ApiOperation({
     summary: 'Get all lead sources for organization',
@@ -118,6 +122,7 @@ export class LeadSourcesController {
     return this.leadSourcesService.findAll(user.organizationId);
   }
 
+  @RequirePermissions('pipeline:view')
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific lead source by ID' })
   @ApiParam({
@@ -162,6 +167,7 @@ export class LeadSourcesController {
     return this.leadSourcesService.findOne(user.organizationId, id);
   }
 
+  @RequirePermissions('pipeline:manage')
   @Patch(':id')
   @ApiOperation({ summary: 'Update a specific lead source' })
   @ApiParam({
@@ -208,6 +214,7 @@ export class LeadSourcesController {
     return this.leadSourcesService.update(user.organizationId, id, dto);
   }
 
+  @RequirePermissions('pipeline:manage')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Soft delete a lead source' })

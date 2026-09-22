@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 export interface AgentRequest {
   organizationId: string;
   conversationId: string;
-  latestMessage: string;
+  newMessageIds: string[];
   clinicName?: string;
   agentTone?: string;
   businessRulesJson?: string;

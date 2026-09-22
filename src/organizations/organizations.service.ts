@@ -2,7 +2,7 @@ import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { tenantStorage } from '../core/tenant/tenant.context';
-import { provisionRolePermissions } from '../auth/permission.provisioning';
+import { provisionOrganizationRolesAndPermissions } from '../auth/permission.provisioning';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -51,30 +51,24 @@ export class OrganizationsService {
               },
             });
 
-            // Create the Default "Super Admin" Role
-            const role = await tx.role.create({
-              data: {
-                name: 'Super Admin',
-                is_system: true,
-                organizationId: org.id,
-              },
-            });
+            // Provision standard roles and permissions for the organization
+            const roleMap = await provisionOrganizationRolesAndPermissions(tx, org.id);
+            const superAdminRole = roleMap.get('Super Admin');
 
-            // Provision the permission catalog and grant all to the role
-            await provisionRolePermissions(tx, role.id);
+            if (!superAdminRole) throw new Error('Super Admin role not created');
 
             // Attach the User to the Organization as a Manager/Super Admin
             await tx.organizationMembership.create({
               data: {
                 userId: userId,
                 organizationId: org.id,
-                roleId: role.id,
+                roleId: superAdminRole.id,
                 status: 'ACTIVE',
                 agentTier: 'MANAGER',
               },
             });
 
-            return { organizationId: org.id, roleId: role.id };
+            return { organizationId: org.id, roleId: superAdminRole.id };
           },
           {
             isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

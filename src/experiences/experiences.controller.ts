@@ -27,18 +27,21 @@ import { ExperiencesService } from './experiences.service';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Experiences')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('experiences')
 export class ExperiencesController {
   private readonly logger = new Logger(ExperiencesController.name);
 
   constructor(private readonly experiencesService: ExperiencesService) {}
 
+  @RequirePermissions('experiences:manage')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -144,6 +147,7 @@ export class ExperiencesController {
     }
   }
 
+  @RequirePermissions('experiences:view')
   @Get()
   @ApiOperation({
     summary: 'Get all experiences for the authenticated organization',
@@ -226,6 +230,7 @@ export class ExperiencesController {
     }
   }
 
+  @RequirePermissions('experiences:view')
   @Get(':id')
   @ApiOperation({
     summary: 'Get a specific experience by ID',
@@ -286,6 +291,7 @@ export class ExperiencesController {
     return this.experiencesService.getExperienceById(user.organizationId, id);
   }
 
+  @RequirePermissions('experiences:manage')
   @Patch(':id')
   @ApiOperation({
     summary: 'Update an existing experience',
@@ -364,6 +370,7 @@ export class ExperiencesController {
     }
   }
 
+  @RequirePermissions('experiences:manage')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

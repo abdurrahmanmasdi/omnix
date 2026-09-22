@@ -6,6 +6,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
+import { PermissionService } from '../auth/permission.service';
+import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class ConversationsService {
@@ -13,17 +15,24 @@ export class ConversationsService {
     private readonly prisma: PrismaService,
     private readonly whatsappService: WhatsappService,
     private readonly eventsGateway: EventsGateway,
+    private readonly permissionService: PermissionService,
   ) {}
 
   async getConversations(
     organizationId: string,
+    userId: string,
     page: number = 1,
     limit: number = 20,
   ) {
+    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    const dynamicWhere: any = { organizationId };
+    if (!canReadAll) {
+      dynamicWhere.lead = { assignedAgentId: userId };
+    }
     const skip = (page - 1) * limit;
 
     const conversations = await this.prisma.conversation.findMany({
-      where: { organizationId },
+      where: dynamicWhere,
       orderBy: { updatedAt: 'desc' }, // Newest active conversations first
       take: limit,
       skip,
@@ -42,6 +51,7 @@ export class ConversationsService {
 
   async getMessages(
     organizationId: string,
+    userId: string,
     conversationId: string,
     page: number = 1,
     limit: number = 50,
@@ -51,10 +61,15 @@ export class ConversationsService {
     // Verify the conversation actually belongs to this organization
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
+      include: { lead: true }
     });
 
     if (!conversation || conversation.organizationId !== organizationId) {
-      throw new Error('Conversation not found');
+      throw new NotFoundException('Conversation not found');
+    }
+    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    if (!canReadAll && conversation.lead?.assignedAgentId !== userId) {
+      throw new ForbiddenException('You do not have permission to access this conversation');
     }
 
     const messages = await this.prisma.message.findMany({
@@ -69,6 +84,7 @@ export class ConversationsService {
 
   async sendManualMessage(
     organizationId: string,
+    userId: string,
     conversationId: string,
     content: string,
   ) {
@@ -80,6 +96,10 @@ export class ConversationsService {
 
     if (!conversation || conversation.organizationId !== organizationId) {
       throw new NotFoundException('Conversation not found');
+    }
+    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    if (!canReadAll && conversation.lead?.assignedAgentId !== userId) {
+      throw new ForbiddenException('You do not have permission to access this conversation');
     }
 
     const { organization, lead } = conversation;
@@ -131,13 +151,18 @@ export class ConversationsService {
     return newMessage;
   }
 
-  async toggleAiState(organizationId: string, conversationId: string) {
+  async toggleAiState(organizationId: string, userId: string, conversationId: string) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
+      include: { lead: true }
     });
 
     if (!conversation || conversation.organizationId !== organizationId) {
       throw new NotFoundException('Conversation not found');
+    }
+    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    if (!canReadAll && conversation.lead?.assignedAgentId !== userId) {
+      throw new ForbiddenException('You do not have permission to access this conversation');
     }
 
     const updatedConversation = await this.prisma.conversation.update({

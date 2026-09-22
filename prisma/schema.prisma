@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"] // Enable extensions
 }
 
@@ -10,7 +10,7 @@ generator client {
 // }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
   extensions = [vector] // Tell Prisma to use pgvector
 }
 
@@ -38,86 +38,85 @@ enum MembershipStatus {
 }
 
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deleted_at           DateTime?
-  industry_category    String?
-  logo_url             String?
-  public_email         String?
-  public_phone         String?
-  tax_number           String?
-  tax_office           String?
-  website_url          String?
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String
+  slug              String
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deleted_at        DateTime?
+  industry_category String?
+  logo_url          String?
+  public_email      String?
+  public_phone      String?
+  tax_number        String?
+  tax_office        String?
+  website_url       String?
 
   // Meta / WhatsApp API Credentials
-  metaAccountId String?  @unique
+  metaAccountId String? @unique
 
   // Deprecated legacy field. New integrations use Credential records.
-  crmAccessToken        String?
-  crmSyncEnabled        Boolean  @default(false)
-
+  crmAccessToken String?
+  crmSyncEnabled Boolean @default(false)
 
   // Relationships
-  conversations Conversation[]
-  aiPersona            AiPersona?
-  leadSources          LeadSource[]
-  knowledgeBase OrganizationKnowledge[]
-  memberships          OrganizationMembership[]
-  roles                Role[]
-  pipelineStages PipelineStage[]
-  leads                Lead[]
-  documentations       OrganizationDocumentation[]
-  experiences          OrganizationExperience[]
-  notifications       Notification[]
-  channels            Channel[]
-  Battlecard            OrganizationBattlecard[]
-  scheduledFollowUps    ScheduledFollowUp[]
-  auditLogs             AuditLog[]
-  crmSyncLogs           CrmSyncLog[]
-  credentials           Credential[]
+  conversations      Conversation[]
+  aiPersona          AiPersona?
+  leadSources        LeadSource[]
+  knowledgeBase      OrganizationKnowledge[]
+  memberships        OrganizationMembership[]
+  roles              Role[]
+  pipelineStages     PipelineStage[]
+  leads              Lead[]
+  documentations     OrganizationDocumentation[]
+  experiences        OrganizationExperience[]
+  notifications      Notification[]
+  channels           Channel[]
+  Battlecard         OrganizationBattlecard[]
+  scheduledFollowUps ScheduledFollowUp[]
+  auditLogs          AuditLog[]
+  crmSyncLogs        CrmSyncLog[]
+  credentials        Credential[]
 
   @@map("organizations")
 }
 
 model User {
-  id                      String                   @id @default(uuid()) @db.Uuid
-  email                   String
-  password_hash           String
-  firstName              String
-  lastName               String
-  avatarUrl              String?
-  phoneNumber            String?
-  whatsappNumber         String?
-  spokenLanguages        String[]                 @default([])
-  createdAt              DateTime                 @default(now())
-  deletedAt              DateTime?
-  isEmailVerified       Boolean                  @default(false)
-  assignedConversations   Conversation[]           @relation("ConversationAgent")
-  sentMessages            Message[]                @relation("SentMessages")
-  memberships             OrganizationMembership[]
-  assignedLeads           Lead[]
-  notifications           Notification[]
-
+  id                    String                   @id @default(uuid()) @db.Uuid
+  email                 String                   @unique
+  password_hash         String
+  firstName             String
+  lastName              String
+  avatarUrl             String?
+  phoneNumber           String?
+  whatsappNumber        String?
+  spokenLanguages       String[]                 @default([])
+  createdAt             DateTime                 @default(now())
+  deletedAt             DateTime?
+  status                UserStatus               @default(PENDING)
+  assignedConversations Conversation[]           @relation("ConversationAgent")
+  sentMessages          Message[]                @relation("SentMessages")
+  memberships           OrganizationMembership[]
+  assignedLeads         Lead[]
+  notifications         Notification[]
+  sessions              Session[]
 
   @@map("users")
 }
 
 model OrganizationMembership {
-  id                  String             @id @default(uuid()) @db.Uuid
-  userId             String             @db.Uuid
-  organizationId     String             @db.Uuid
-  roleId             String             @db.Uuid
-  jobTitle           String?
-  agentTier          AgentTier          @default(STANDARD)
-  availabilityStatus AvailabilityStatus @default(ACTIVE)
+  id                  String                         @id @default(uuid()) @db.Uuid
+  userId              String                         @db.Uuid
+  organizationId      String                         @db.Uuid
+  roleId              String                         @db.Uuid
+  jobTitle            String?
+  agentTier           AgentTier                      @default(STANDARD)
+  availabilityStatus  AvailabilityStatus             @default(ACTIVE)
   status              MembershipStatus               @default(PENDING)
   permissionOverrides MembershipPermissionOverride[]
-  createdAt          DateTime                       @default(now())
-  deletedAt          DateTime?
+  createdAt           DateTime                       @default(now())
+  deletedAt           DateTime?
   organization        Organization                   @relation(fields: [organizationId], references: [id])
   role                Role                           @relation(fields: [roleId], references: [id])
   user                User                           @relation(fields: [userId], references: [id])
@@ -130,12 +129,12 @@ model OrganizationMembership {
 }
 
 model MembershipPermissionOverride {
-  id            String                 @id @default(uuid()) @db.Uuid
+  id           String                 @id @default(uuid()) @db.Uuid
   membershipId String                 @db.Uuid
   permissionId String                 @db.Uuid
-  is_granted    Boolean
-  membership    OrganizationMembership @relation(fields: [membershipId], references: [id])
-  permission    Permission             @relation(fields: [permissionId], references: [id])
+  is_granted   Boolean
+  membership   OrganizationMembership @relation(fields: [membershipId], references: [id])
+  permission   Permission             @relation(fields: [permissionId], references: [id])
 
   @@unique([membershipId, permissionId])
   @@index([membershipId])
@@ -155,13 +154,13 @@ model Permission {
 
 model Role {
   id                String                   @id @default(uuid()) @db.Uuid
-  organizationId   String?                  @db.Uuid
+  organizationId    String?                  @db.Uuid
   name              String
   name_translations Json?
   is_system         Boolean                  @default(false)
   slug              String?
-  createdAt        DateTime                 @default(now())
-  deletedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+  deletedAt         DateTime?
   memberships       OrganizationMembership[]
   rolePermissions   RolePermission[]
   organization      Organization?            @relation(fields: [organizationId], references: [id])
@@ -173,8 +172,8 @@ model Role {
 model RolePermission {
   roleId       String     @db.Uuid
   permissionId String     @db.Uuid
-  permission    Permission @relation(fields: [permissionId], references: [id])
-  role          Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
 
   @@id([roleId, permissionId])
   @@index([roleId])
@@ -196,7 +195,7 @@ enum Priority {
 }
 
 enum LeadStatus {
-  NEW 
+  NEW
   QUALIFYING // AI is actively talking to them
   QUALIFIED
   READY_TO_BOOK // AI triggered booking tool (needs confirmation)
@@ -221,45 +220,49 @@ enum ExternalCrmType {
 }
 
 model Lead {
-  id                    String           @id @default(uuid()) @db.Uuid
-  organizationId       String           @db.Uuid
-  pipelineStageId     String?          @db.Uuid
-  assignedAgentId     String?          @db.Uuid
-  sourceId             String?          @db.Uuid
-  firstName            String
-  lastName             String
-  nativeName           String?
-  gender                Gender           @default(UNKNOWN)
-  email                 String?
-  phoneNumber          String
-  country               String
-  timezone              String
-  primaryLanguage      String
-  preferredLanguage    String?
-  socialLinks          Json?
-  summary               String?          @db.Text
-  status                LeadStatus       @default(NEW)
-  priority              Priority         @default(WARM)
-  estimatedValue       Decimal?
-  currency              Currency         @default(USD)
+  id                  String          @id @default(uuid()) @db.Uuid
+  organizationId      String          @db.Uuid
+  pipelineStageId     String?         @db.Uuid
+  assignedAgentId     String?         @db.Uuid
+  sourceId            String?         @db.Uuid
+  firstName           String
+  lastName            String
+  nativeName          String?
+  gender              Gender          @default(UNKNOWN)
+  email               String?
+  phoneNumber         String
+  country             String
+  timezone            String
+  primaryLanguage     String
+  preferredLanguage   String?
+  socialLinks         Json?
+  summary             String?         @db.Text
+  status              LeadStatus      @default(NEW)
+  priority            Priority        @default(WARM)
+  estimatedValue      Decimal?
+  currency            Currency        @default(USD)
   expectedServiceDate DateTime?
-  nextFollowUpAt     DateTime?
-  optedOutAt         DateTime?
-  optOutReason       String?
-  externalCrmType    ExternalCrmType  @default(NONE)
-  externalContactId  String?
-  externalDealId     String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  deletedAt            DateTime?
-  assignedAgent        User?            @relation(fields: [assignedAgentId], references: [id])
-  organization          Organization     @relation(fields: [organizationId], references: [id])
-  source                LeadSource?      @relation(fields: [sourceId], references: [id])
-  pipelineStage        PipelineStage?   @relation(fields: [pipelineStageId], references: [id])
-  conversation          Conversation?    @relation("LeadConversation")
+  nextFollowUpAt      DateTime?
+  optedOutAt          DateTime?
+  optOutReason        String?
+  mediaConsentGranted     Boolean         @default(false)
+  mediaConsentGrantedAt   DateTime?
+  mediaConsentSource      String?
+  mediaConsentWithdrawnAt DateTime?
+  externalCrmType     ExternalCrmType @default(NONE)
+  externalContactId   String?
+  externalDealId      String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  deletedAt           DateTime?
+  assignedAgent       User?           @relation(fields: [assignedAgentId], references: [id])
+  organization        Organization    @relation(fields: [organizationId], references: [id])
+  source              LeadSource?     @relation(fields: [sourceId], references: [id])
+  pipelineStage       PipelineStage?  @relation(fields: [pipelineStageId], references: [id])
+  conversation        Conversation?   @relation("LeadConversation")
 
-  @@index([organizationId])
   @@unique([organizationId, phoneNumber])
+  @@index([organizationId])
   @@index([pipelineStageId])
   @@index([assignedAgentId])
   @@index([sourceId])
@@ -269,31 +272,31 @@ model Lead {
 }
 
 model LeadSource {
-  id              String       @id @default(uuid()) @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
-  name            String
+  name           String
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   deletedAt      DateTime?
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  leads           Lead[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  leads          Lead[]
 
   @@index([organizationId])
   @@map("lead_sources")
 }
 
 model PipelineStage {
-  id              String       @id @default(uuid()) @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
-  name            String
+  name           String
   orderIndex     Int
   mappedStatus   LeadStatus?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   deletedAt      DateTime?
-  leads           Lead[]
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  leads          Lead[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
   @@map("pipeline_stages")
@@ -318,23 +321,24 @@ enum MessageType {
   TOOL_CALL
   TOOL_RESULT
 }
-model Conversation {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  externalContactId String?
-  status         String       @default("ACTIVE") // ACTIVE, CLOSED, ESCALATED
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  deletedAt     DateTime?
-  leadId       String?       @unique @db.Uuid
-  aiPaused       Boolean   @default(false)
-  aiDisclosureSent Boolean @default(false)
-  assignedAgentId   String?       @db.Uuid
 
-  lead           Lead?        @relation("LeadConversation", fields: [leadId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  messages       Message[]
-  assignedAgent User?        @relation("ConversationAgent", fields: [assignedAgentId], references: [id])
+model Conversation {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @db.Uuid
+  externalContactId String?
+  status            String    @default("ACTIVE") // ACTIVE, CLOSED, ESCALATED
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  leadId            String?   @unique @db.Uuid
+  aiPaused          Boolean   @default(false)
+  aiDisclosureSent  Boolean   @default(false)
+  assignedAgentId   String?   @db.Uuid
+
+  lead               Lead?               @relation("LeadConversation", fields: [leadId], references: [id])
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages           Message[]
+  assignedAgent      User?               @relation("ConversationAgent", fields: [assignedAgentId], references: [id])
   scheduledFollowUps ScheduledFollowUp[]
 
   @@unique([organizationId, externalContactId])
@@ -342,21 +346,21 @@ model Conversation {
 }
 
 model Message {
-  id             String       @id @default(uuid())
-  conversationId String       @db.Uuid     
-  senderId       String?      @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
+  id             String        @id @default(uuid())
+  conversationId String        @db.Uuid
+  senderId       String?       @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
   content        String
   mediaUrl       String? // For Voice Notes, Images, etc.
-  type            MessageType  @default(USER_TEXT)
-  metadata        Json? // To store Tool Call JSON, execution times, token counts
+  type           MessageType   @default(USER_TEXT)
+  metadata       Json? // To store Tool Call JSON, execution times, token counts
   handledBy      ActiveHandler @default(AI) // Determines if AI or Human
-  metaMessageId  String?      @unique // WhatsApp's specific message ID
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  metaMessageId  String?       @unique // WhatsApp's specific message ID
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
 
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender          User?        @relation("SentMessages", fields: [senderId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?        @relation("SentMessages", fields: [senderId], references: [id])
 
   @@map("messages")
 }
@@ -365,30 +369,30 @@ model OrganizationDocumentation {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @db.Uuid
   fileName       String
-  filePath       String   // Local path like "/uploads/prices.pdf"
+  filePath       String // Local path like "/uploads/prices.pdf"
   status         String   @default("PENDING") // PENDING, PROCESSED, ERROR
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  knowledge      OrganizationKnowledge[] // Link to the vector chunks
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledge    OrganizationKnowledge[] // Link to the vector chunks
 
   @@index([organizationId])
   @@map("organization_documentations")
 }
 
 model OrganizationKnowledge {
-  id              String                      @id @default(uuid()) @db.Uuid
-  organizationId String                      @db.Uuid
-  documentationId String?                     @db.Uuid // Add this!
+  id              String                       @id @default(uuid()) @db.Uuid
+  organizationId  String                       @db.Uuid
+  documentationId String?                      @db.Uuid // Add this!
   file_name       String
-  content         String                      @db.Text
+  content         String                       @db.Text
   embedding       Unsupported("vector(3072)")? // 3072 is standard for Gemini embeddings
-  createdAt      DateTime                    @default(now())
-  updatedAt      DateTime                    @updatedAt
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  documentation   OrganizationDocumentation? @relation(fields: [documentationId], references: [id], onDelete: Cascade)
+  organization  Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentation OrganizationDocumentation? @relation(fields: [documentationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([documentationId])
@@ -396,49 +400,49 @@ model OrganizationKnowledge {
 }
 
 model OrganizationExperience {
-  id              String   @id @default(uuid()) @db.Uuid
-  organizationId  String   @db.Uuid
-  
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+
   // Metadata to help the AI find the perfect match
-  title           String   // e.g., "FUE Hair Transplant - 4000 Grafts"
-  patientCountry  String?  // e.g., "Germany", "UK" (Crucial for building local trust)
-  procedureType   String?  // e.g., "Hair Transplant", "Dental Implants"
-  
+  title          String // e.g., "FUE Hair Transplant - 4000 Grafts"
+  patientCountry String? // e.g., "Germany", "UK" (Crucial for building local trust)
+  procedureType  String? // e.g., "Hair Transplant", "Dental Implants"
+
   // The actual story (The AI will read this and summarize it for the patient)
-  storyText       String   @db.Text 
-  
+  storyText String @db.Text
+
   // Visual proof! The AI can send these links directly in the WhatsApp chat
   beforeImageUrl  String?
   afterImageUrl   String?
-  consentObtained Boolean  @default(false)
-  
+  consentObtained Boolean @default(false)
+
   // 🚀 The Vector Search Embedding (Gemini 3072 dimensions)
-  embedding       Unsupported("vector(3072)")? 
+  embedding Unsupported("vector(3072)")?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@map("organization_experiences")
 }
 
 model OrganizationBattlecard {
-  id              String   @id @default(uuid()) @db.Uuid
-  organizationId  String   @db.Uuid
-  
-  competitorName  String
-  objectionType   String   // e.g., "PRICE", "QUALITY", "FEAR", "LOCATION"
-  rebuttalText    String   @db.Text
-  
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+
+  competitorName String
+  objectionType  String // e.g., "PRICE", "QUALITY", "FEAR", "LOCATION"
+  rebuttalText   String @db.Text
+
   // The Vector Search Embedding (Gemini 3072 dimensions)
-  embedding       Unsupported("vector(3072)")? 
+  embedding Unsupported("vector(3072)")?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@map("organization_battlecards")
@@ -452,19 +456,19 @@ enum NotificationType {
 }
 
 model Notification {
-  id              String           @id @default(uuid()) @db.Uuid
-  organizationId  String           @db.Uuid
-  userId          String           @db.Uuid // The recipient
-  type            NotificationType
-  title           String           // e.g., "Lead Ready for Transfer"
-  body            String           @db.Text // e.g., "The AI handed off Abdulrahman. Needs a human."
-  isRead          Boolean          @default(false)
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid // The recipient
+  type           NotificationType
+  title          String // e.g., "Lead Ready for Transfer"
+  body           String           @db.Text // e.g., "The AI handed off Abdulrahman. Needs a human."
+  isRead         Boolean          @default(false)
   // Polymorphic relations (Tells the frontend where to navigate when clicked)
-  referenceId     String?          @db.Uuid // e.g., The Lead ID
-  referenceType   String?          // e.g., "LEAD", "CONVERSATION"
-  createdAt       DateTime         @default(now())
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  referenceId    String?          @db.Uuid // e.g., The Lead ID
+  referenceType  String? // e.g., "LEAD", "CONVERSATION"
+  createdAt      DateTime         @default(now())
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, userId])
   @@index([userId, isRead]) // Super fast querying for "Unread count" badge
@@ -472,30 +476,30 @@ model Notification {
 }
 
 model AiPersona {
-  id              String       @id @default(uuid()) @db.Uuid
-  organizationId  String       @unique @db.Uuid
-  agentName       String       @default("Assistant")
-  clinicName      String
-  tone            String       @default("Professional and empathetic")
-  businessRules   Json?
-  handoffMessage  String       @default("I will transfer you to our medical coordinator.")
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @unique @db.Uuid
+  agentName        String   @default("Assistant")
+  clinicName       String
+  tone             String   @default("Professional and empathetic")
+  businessRules    Json?
+  handoffMessage   String   @default("I will transfer you to our medical coordinator.")
   aiDisclosureText String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("ai_personas")
 }
 
 model AuditLog {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @db.Uuid
-  actor          String   @default("system")
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  actor          String       @default("system")
   action         String
   targetId       String?
   metadata       Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
@@ -503,17 +507,18 @@ model AuditLog {
 }
 
 model CrmSyncLog {
-  id                String   @id @default(uuid()) @db.Uuid
-  organizationId    String   @db.Uuid
-  leadId            String   @db.Uuid
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
+  leadId            String       @db.Uuid
   externalContactId String?
   fieldsHash        String
-  syncedAt          DateTime @default(now())
+  syncedAt          DateTime     @default(now())
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, leadId])
   @@map("crm_sync_logs")
 }
+
 // ------------------------------------------------------
 // Channels (Omnichannel Architecture)
 // ------------------------------------------------------
@@ -538,12 +543,12 @@ model Channel {
   accessToken       String?
   credentialId      String?         @db.Uuid
   status            ChannelStatus   @default(ACTIVE)
-  metadata          Json?           // Additional provider-specific configurations
+  metadata          Json? // Additional provider-specific configurations
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  credential        Credential?     @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential   Credential?  @relation(fields: [credentialId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, provider, providerAccountId])
   @@map("channels")
@@ -594,22 +599,22 @@ enum FollowUpStatus {
 }
 
 model ScheduledFollowUp {
-  id               String          @id @default(uuid()) @db.Uuid
-  conversationId   String          @db.Uuid
-  organizationId   String          @db.Uuid
-  type             FollowUpType
-  status           FollowUpStatus  @default(PENDING)
-  attempt          Int             @default(1)
-  scheduledAt      DateTime
-  bullJobId        String?
-  aiContext        String?         @db.Text
-  sentAt           DateTime?
-  cancelledAt      DateTime?
-  cancelReason     String?
-  createdAt        DateTime        @default(now())
+  id             String         @id @default(uuid()) @db.Uuid
+  conversationId String         @db.Uuid
+  organizationId String         @db.Uuid
+  type           FollowUpType
+  status         FollowUpStatus @default(PENDING)
+  attempt        Int            @default(1)
+  scheduledAt    DateTime
+  bullJobId      String?
+  aiContext      String?        @db.Text
+  sentAt         DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+  createdAt      DateTime       @default(now())
 
-  conversation     Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, status])
   @@index([organizationId])
@@ -631,3 +636,26 @@ model OutboxEvent {
   @@map("outbox_events")
 }
 
+model Session {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String
+  familyId       String
+  expiresAt      DateTime
+  isRevoked      Boolean   @default(false)
+  revokedAt      DateTime?
+  revokedReason  String?
+  deviceMetadata Json?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("sessions")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}

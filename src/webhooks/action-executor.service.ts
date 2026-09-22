@@ -6,6 +6,7 @@ import { NotificationEmitterService } from '../notifications/notification-emitte
 import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
+import { AuditService } from '../audit/audit.service';
 
 /** Statuses that trigger an automatic CRM sync */
 const CRM_SYNC_STATUSES: LeadStatus[] = [
@@ -35,6 +36,7 @@ export class ActionExecutorService {
     private readonly eventsGateway: EventsGateway,
     private readonly crmIntegration: CrmIntegrationService,
     private readonly followUpService: FollowUpService,
+    private readonly auditService: AuditService,
   ) {}
 
   async executeActions(
@@ -252,43 +254,64 @@ export class ActionExecutorService {
   private async handleHandoffToHuman(conversation: any, payload: any) {
     const reason = typeof payload.reason === 'string' ? payload.reason : 'User requested human intervention';
 
-    if (!conversation.leadId) {
-      const updatedConversation = await this.prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { aiPaused: true },
-      });
-      this.eventsGateway.broadcastConversationUpdate(conversation.organizationId, updatedConversation);
+    // Idempotency: if already paused, skip re-pausing and re-notifying, but consider it successful.
+    if (conversation.aiPaused) {
+      this.logger.log(`Handoff already processed for Conv: ${conversation.id}. Ignoring duplicate.`);
       return;
     }
 
-    const [updatedConversation, updatedLead] = await this.prisma.$transaction([
-      this.prisma.conversation.update({
+    const leadId = conversation.leadId;
+    const organizationId = conversation.organizationId;
+
+    const [updatedConversation, updatedLead] = await this.prisma.$transaction(async (tx) => {
+      const conv = await tx.conversation.update({
         where: { id: conversation.id },
         data: { aiPaused: true },
-      }),
-      this.prisma.lead.update({
-        where: { id: conversation.leadId },
-        data: { status: LeadStatus.HANDED_OFF },
-      }),
-    ]);
+      });
+
+      let lead = null;
+      if (leadId) {
+        lead = await tx.lead.update({
+          where: { id: leadId },
+          data: { status: 'HANDED_OFF' }, // LeadStatus.HANDED_OFF
+        });
+      }
+      return [conv, lead];
+    });
 
     const memberships = await this.prisma.organizationMembership.findMany({
-      where: { organizationId: conversation.organizationId },
+      where: { organizationId: organizationId },
     });
-    for (const membership of memberships) {
-      await this.notificationEmitter.send({
-        organizationId: conversation.organizationId,
-        userId: membership.userId,
-        type: NotificationType.LEAD_HANDED_OFF,
-        title: 'Human Intervention Required',
-        body: `Lead requires human attention: ${reason}`,
-        referenceId: updatedLead.id,
-        referenceType: 'LEAD',
+
+    if (memberships.length === 0) {
+      // T10: If no staff member exists, create an operational alert/audit record; do not report a completed staff notification.
+      this.logger.warn(`No staff found for Handoff in Org ${organizationId}`);
+      await this.auditService.record({
+        organizationId: organizationId,
+        action: 'ai.handoff_failed_no_staff',
+        targetId: conversation.id,
+        actor: 'ai',
+        metadata: { reason },
       });
+    } else {
+      // Ensure at least one eligible staff notification is persisted
+      for (const membership of memberships) {
+        await this.notificationEmitter.send({
+          organizationId: organizationId,
+          userId: membership.userId,
+          type: 'LEAD_HANDED_OFF', // NotificationType.LEAD_HANDED_OFF
+          title: 'Human Intervention Required',
+          body: `Requires human attention: ${reason}`,
+          referenceId: updatedLead ? updatedLead.id : updatedConversation.id,
+          referenceType: updatedLead ? 'LEAD' : 'CONVERSATION',
+        });
+      }
     }
 
-    this.eventsGateway.broadcastLeadUpdate(conversation.organizationId, updatedLead);
-    this.eventsGateway.broadcastConversationUpdate(conversation.organizationId, updatedConversation);
+    if (updatedLead) {
+      this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead);
+    }
+    this.eventsGateway.broadcastConversationUpdate(organizationId, updatedConversation);
   }
 
   private async handleUpdateSummary(conversation: any, payload: any) {
@@ -328,6 +351,20 @@ export class ActionExecutorService {
         throw new Error(`Invalid priority: ${payload.priority}`);
       }
       updateData.priority = payload.priority as Priority;
+    }
+
+    if (payload.mediaConsentGranted !== undefined) {
+      if (typeof payload.mediaConsentGranted !== 'boolean') {
+        throw new Error(`Invalid type for mediaConsentGranted, expected boolean`);
+      }
+      updateData.mediaConsentGranted = payload.mediaConsentGranted;
+      updateData.mediaConsentSource = 'ai_agent_tool';
+      if (payload.mediaConsentGranted) {
+        updateData.mediaConsentGrantedAt = new Date();
+        updateData.mediaConsentWithdrawnAt = null;
+      } else {
+        updateData.mediaConsentWithdrawnAt = new Date();
+      }
     }
 
     // Only allow specific string fields

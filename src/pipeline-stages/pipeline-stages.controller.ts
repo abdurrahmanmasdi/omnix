@@ -26,16 +26,19 @@ import {
   BulkReorderStagesDto,
 } from './dtos/pipeline-stage.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Pipeline Stages')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('pipeline-stages')
 export class PipelineStagesController {
   constructor(private readonly pipelineStagesService: PipelineStagesService) {}
 
+  @RequirePermissions('pipeline:manage')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new pipeline stage (Kanban column)' })
@@ -76,6 +79,7 @@ export class PipelineStagesController {
     return this.pipelineStagesService.create(user.organizationId, dto);
   }
 
+  @RequirePermissions('pipeline:view')
   @Get()
   @ApiOperation({
     summary: 'Get all pipeline stages ordered by index',
@@ -130,6 +134,7 @@ export class PipelineStagesController {
     return this.pipelineStagesService.findAll(user.organizationId);
   }
 
+  @RequirePermissions('pipeline:view')
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific pipeline stage' })
   @ApiParam({
@@ -174,6 +179,7 @@ export class PipelineStagesController {
     return this.pipelineStagesService.findOne(user.organizationId, id);
   }
 
+  @RequirePermissions('pipeline:manage')
   @Patch('reorder')
   @ApiOperation({
     summary: 'Bulk reorder pipeline stages (Drag & Drop)',
@@ -228,6 +234,7 @@ export class PipelineStagesController {
     return this.pipelineStagesService.reorder(user.organizationId, dto);
   }
 
+  @RequirePermissions('pipeline:manage')
   @Patch(':id')
   @ApiOperation({ summary: 'Update a pipeline stage name or index' })
   @ApiParam({
@@ -274,6 +281,7 @@ export class PipelineStagesController {
     return this.pipelineStagesService.update(user.organizationId, id, dto);
   }
 
+  @RequirePermissions('pipeline:manage')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Soft delete a pipeline stage' })

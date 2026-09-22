@@ -56,10 +56,11 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   async login(
     @Body() loginDto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const { accessToken, refreshToken, user } =
-      await this.authService.login(loginDto);
+      await this.authService.login(loginDto, req.headers['user-agent'], req.ip);
 
     // Set the Refresh Token as an HttpOnly, Secure cookie
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
@@ -79,7 +80,11 @@ export class AuthController {
     description: 'Logged out successfully',
     schema: { type: 'object', properties: { message: { type: 'string' } } },
   })
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
     // This physically commands the browser to delete the HttpOnly cookie
     res.clearCookie(REFRESH_COOKIE_NAME, getRefreshCookieOptions(true));
     return { message: 'Logged out successfully' };
@@ -126,7 +131,7 @@ export class AuthController {
       accessToken,
       refreshToken: newRefreshToken,
       user,
-    } = await this.authService.refreshTokens(refreshToken);
+    } = await this.authService.refreshTokens(refreshToken, req.headers['user-agent'], req.ip);
 
     // Rotate the refresh token for maximum security
     res.cookie(REFRESH_COOKIE_NAME, newRefreshToken, getRefreshCookieOptions());
