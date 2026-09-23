@@ -72,7 +72,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         
         try:
             # 1. Fetch Lead Info & Status from the database VIA ASYNC INFRASTRUCTURE
-            res = await DatabaseService.get_conversation_lead_info(conv_id)
+            res = await DatabaseService.get_conversation_lead_info(conv_id, org_id)
             
             if not res:
                 logger.warning("Conversation %s not found in DB", conv_id)
@@ -108,8 +108,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 "messages": []
             }
 
-            logger.info("Lead: %s | Status: %s | ID: %s", 
-                        state_data['customer']['name'], state_data['current_stage'], state_data['lead_id'])
+            logger.info("Lead: [REDACTED] | Status: %s | ID: %s", 
+                        state_data['current_stage'], state_data['lead_id'])
 
             if lead_summary:
                 state_data["messages"].append(SystemMessage(content=f"Previous Conversation Summary:\n{lead_summary}"))
@@ -118,7 +118,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 state_data["messages"].append(SystemMessage(content=f"SYSTEM INSTRUCTION: This is a proactive follow-up. The customer has not responded in a while, or this is a scheduled follow-up. Generate a warm, non-pushy follow-up message based on this context: {follow_up_context}"))
 
             # 2. Fetch the last 120 messages VIA ASYNC INFRASTRUCTURE
-            history = await DatabaseService.get_conversation_history(conv_id, limit=120)
+            history = await DatabaseService.get_conversation_history(conv_id, org_id, limit=120)
             
             for msg in history:
                 if msg.type in ['USER_TEXT', 'LEAD_TEXT']:
@@ -128,7 +128,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
             # 3. Add the brand new messages
             new_message_ids = list(request.newMessageIds)
-            new_messages = await DatabaseService.get_messages_by_ids(new_message_ids, conv_id)
+            new_messages = await DatabaseService.get_messages_by_ids(new_message_ids, conv_id, org_id)
             
             combined_new_text = ""
             for msg in new_messages:

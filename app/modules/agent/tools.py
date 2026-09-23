@@ -68,7 +68,7 @@ async def create_lead(
         "priority": "COLD"
     }
     payload = {k: v for k, v in data.items() if v is not None}
-    logger.info("[VIRTUAL TOOL] Lead Creation: %s", payload)
+    logger.info("[VIRTUAL TOOL] Lead Creation (redacted)")
     return json.dumps({
         "action": "CREATE_LEAD",
         "payload": payload
@@ -194,9 +194,9 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
             SELECT l.id, l."assignedAgentId", l."firstName"
             FROM conversations c
             LEFT JOIN leads l ON c."leadId" = l.id
-            WHERE c.id = :conv_id
+            WHERE c.id = :conv_id AND c."organizationId" = :org_id
         """)
-        result = db.execute(query, {"conv_id": conv_id}).fetchone()
+        result = db.execute(query, {"conv_id": conv_id, "org_id": org_id}).fetchone()
 
         if not result or not result[0]:
             return "Error: Could not find associated lead to escalate."
@@ -245,7 +245,7 @@ async def update_patient_profile(
         data["serviceInterested"] = service_interested
         
     if data:
-        logger.info("[VIRTUAL TOOL] Update Patient Profile: %s", data)
+        logger.info("[VIRTUAL TOOL] Update Patient Profile (redacted)")
         return json.dumps({
             "action": "UPDATE_LEAD",
             "payload": data
