@@ -56,6 +56,9 @@ export class CredentialsService {
       where: { id, organizationId, status: CredentialStatus.ACTIVE },
     });
     if (!current) throw new NotFoundException('Active credential not found');
+
+    const newCredId = require('crypto').randomUUID();
+
     const [_, newCred] = await this.prisma.$transaction([
       this.prisma.credential.update({
         where: { id },
@@ -63,10 +66,16 @@ export class CredentialsService {
       }),
       this.prisma.credential.create({
         data: {
+          id: newCredId,
           organizationId,
           provider: current.provider,
           encryptedPayload: this.encrypt(payload),
         },
+      }),
+      // T23: Make credential rotation update every live reference atomically
+      this.prisma.channel.updateMany({
+        where: { credentialId: id, organizationId },
+        data: { credentialId: newCredId },
       }),
     ]);
     await this.audit.record({
