@@ -9,9 +9,9 @@ describe('AnalyticsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalyticsService,
-        { provide: PrismaService, useValue: { methodName: jest.fn() } }
+        { provide: PrismaService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: []
+      controllers: [],
     }).compile();
 
     provider = module.get<AnalyticsService>(AnalyticsService);

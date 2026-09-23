@@ -1,4 +1,4 @@
-import { provisionRolePermissions } from "../src/auth/permission.provisioning";
+import { provisionOrganizationRolesAndPermissions } from "../src/auth/permission.provisioning";
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -23,16 +23,9 @@ async function main() {
     },
   });
 
-  // 2. Create an Admin Role for this Organization
-  const role = await prisma.role.create({
-    data: {
-      name: 'Super Admin',
-      is_system: true,
-      organizationId: org.id,
-    },
-  });
-
-  await provisionRolePermissions(prisma, role.id);
+  // 2. Provision Roles and Permissions for this Organization
+  const roleMap = await provisionOrganizationRolesAndPermissions(prisma, org.id);
+  const role = roleMap.get('Super Admin')!;
 
   // 3. Create a User with a securely hashed password
   const hashedPassword = await bcrypt.hash('password123', 10);
@@ -42,7 +35,7 @@ async function main() {
       password_hash: hashedPassword,
       firstName: 'Ahmed',
       lastName: 'Founder',
-      isEmailVerified: true,
+      
     },
   });
 

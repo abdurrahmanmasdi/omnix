@@ -1,4 +1,4 @@
-import { getRefreshCookieOptions, REFRESH_COOKIE_NAME } from "./cookie.helper";
+import { getRefreshCookieOptions, REFRESH_COOKIE_NAME } from './cookie.helper';
 import {
   Controller,
   Post,
@@ -59,8 +59,11 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, refreshToken, user } =
-      await this.authService.login(loginDto, req.headers['user-agent'], req.ip);
+    const { accessToken, refreshToken, user } = await this.authService.login(
+      loginDto,
+      req.headers['user-agent'],
+      req.ip,
+    );
 
     // Set the Refresh Token as an HttpOnly, Secure cookie
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
@@ -131,7 +134,11 @@ export class AuthController {
       accessToken,
       refreshToken: newRefreshToken,
       user,
-    } = await this.authService.refreshTokens(refreshToken, req.headers['user-agent'], req.ip);
+    } = await this.authService.refreshTokens(
+      refreshToken,
+      req.headers['user-agent'],
+      req.ip,
+    );
 
     // Rotate the refresh token for maximum security
     res.cookie(REFRESH_COOKIE_NAME, newRefreshToken, getRefreshCookieOptions());

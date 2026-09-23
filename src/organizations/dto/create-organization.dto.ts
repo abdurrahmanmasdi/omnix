@@ -23,7 +23,9 @@ export class CreateOrganizationDto {
   agentTone?: string;
 
   @ApiPropertyOptional({
-    example: { rules: ['Must ask for patient age', 'Never promise specific results'] },
+    example: {
+      rules: ['Must ask for patient age', 'Never promise specific results'],
+    },
     description: 'JSON payload containing business rules for the AI',
   })
   @IsOptional()

@@ -3,7 +3,12 @@ import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
-import { FollowUpStatus, FollowUpType, NotificationType, LeadStatus } from '@prisma/client';
+import {
+  FollowUpStatus,
+  FollowUpType,
+  NotificationType,
+  LeadStatus,
+} from '@prisma/client';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import type { ClientGrpc } from '@nestjs/microservices';
@@ -11,6 +16,7 @@ import { lastValueFrom } from 'rxjs';
 import type { SalesAgentService } from '../webhooks/interfaces/agent.interface';
 import { ActionExecutorService } from '../webhooks/action-executor.service';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
+import { DeliveryAuthService } from '../webhooks/delivery-auth.service';
 
 @Processor('follow-up')
 export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
@@ -30,17 +36,21 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
   }
 
   onModuleInit() {
-    this.salesAgentService = this.client.getService<SalesAgentService>('SalesAgent');
+    this.salesAgentService =
+      this.client.getService<SalesAgentService>('SalesAgent');
   }
 
-  
-  private async recordCancellation(conversationId: string, organizationId: string, reason: string) {
+  private async recordCancellation(
+    conversationId: string,
+    organizationId: string,
+    reason: string,
+  ) {
     const sysMsg = await this.prisma.message.create({
       data: {
         conversationId,
         content: `[SYSTEM: Follow-up Cancelled] ${reason}`,
-        type: 'SYSTEM',
-        handledBy: 'SYSTEM',
+        type: 'SYSTEM' as any,
+        handledBy: 'SYSTEM' as any,
       },
     });
     this.eventsGateway.broadcastNewMessage(organizationId, sysMsg);
@@ -50,14 +60,19 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
       const followUp = await this.prisma.scheduledFollowUp.findUnique({
         where: { id: job.data.followUpId },
-        include: { conversation: { include: { lead: true } }, organization: { include: { aiPersona: true } } },
+        include: {
+          conversation: { include: { lead: true, channel: true } },
+          organization: { include: { aiPersona: true } },
+        },
       });
 
       if (!followUp) return;
 
       // Ensure it's still pending
       if (followUp.status !== FollowUpStatus.PENDING) {
-        this.logger.log(`Follow-up ${followUp.id} is ${followUp.status}, skipping.`);
+        this.logger.log(
+          `Follow-up ${followUp.id} is ${followUp.status}, skipping.`,
+        );
         return;
       }
 
@@ -65,18 +80,30 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
       const organization = followUp.organization;
 
       if (conversation.aiPaused || (conversation as any).lead?.optedOutAt) {
-        this.logger.log(`Conversation ${conversation.id} is paused or opted out. Cancelling follow-up.`);
+        this.logger.log(
+          `Conversation ${conversation.id} is paused or opted out. Cancelling follow-up.`,
+        );
         await this.prisma.scheduledFollowUp.update({
           where: { id: followUp.id },
-          data: { status: FollowUpStatus.CANCELLED, cancelReason: (conversation as any).lead?.optedOutAt ? 'Consent withdrawn' : 'AI Paused' },
+          data: {
+            status: FollowUpStatus.CANCELLED,
+            cancelReason: (conversation as any).lead?.optedOutAt
+              ? 'Consent withdrawn'
+              : 'AI Paused',
+          },
         });
         return;
       }
 
       // If attempt 2 (24h) and no response, notify humans instead of sending a message
-      if (followUp.type === FollowUpType.AUTO_NO_REPLY && followUp.attempt >= 2) {
-        this.logger.log(`Auto follow-up attempt ${followUp.attempt} for Conv ${conversation.id}. Notifying human.`);
-        
+      if (
+        followUp.type === FollowUpType.AUTO_NO_REPLY &&
+        followUp.attempt >= 2
+      ) {
+        this.logger.log(
+          `Auto follow-up attempt ${followUp.attempt} for Conv ${conversation.id}. Notifying human.`,
+        );
+
         await this.prisma.scheduledFollowUp.update({
           where: { id: followUp.id },
           data: { status: FollowUpStatus.SENT, sentAt: new Date() }, // Mark as sent/handled
@@ -85,9 +112,11 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         // Notify human agent
         const lead = conversation.lead;
         if (lead) {
-          const memberships = await this.prisma.organizationMembership.findMany({
-            where: { organizationId: organization.id },
-          });
+          const memberships = await this.prisma.organizationMembership.findMany(
+            {
+              where: { organizationId: organization.id },
+            },
+          );
 
           for (const membership of memberships) {
             await this.notificationEmitter.send({
@@ -105,12 +134,21 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
       }
 
       // Otherwise, we get the AI to generate a follow-up
-      const channel = await this.prisma.channel.findFirst({
-        where: { organizationId: organization.id, provider: 'WHATSAPP_CLOUD_API', status: 'ACTIVE' },
-      });
-
-      if (!channel || !channel.credentialId || !channel.providerAccountId) {
-        this.logger.warn(`No active WhatsApp channel for org ${organization.id}`);
+      const channel = conversation.channel;
+      if (
+        !channel ||
+        channel.status !== 'ACTIVE' ||
+        !channel.credentialId ||
+        !channel.providerAccountId
+      ) {
+        this.logger.warn(
+          `Delivery aborted: Bound channel is missing or inactive for conversation ${conversation.id}`,
+        );
+        await this.recordCancellation(
+          conversation.id,
+          organization.id,
+          'Follow-up aborted because the bound WhatsApp channel is missing or inactive.',
+        );
         return;
       }
 
@@ -120,11 +158,14 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
       const leadSummary = (conversation as any)?.lead?.summary || '';
 
       const persona = organization.aiPersona;
-      const businessRulesJson = persona?.businessRules ? JSON.stringify(persona.businessRules) : '{}';
-      
-      let contextMsg = followUp.type === FollowUpType.AUTO_NO_REPLY 
-        ? "This is an automatic follow-up. The customer hasn't replied." 
-        : `This is a scheduled follow-up. Context: ${followUp.aiContext || 'Follow up'}`;
+      const businessRulesJson = persona?.businessRules
+        ? JSON.stringify(persona.businessRules)
+        : '{}';
+
+      const contextMsg =
+        followUp.type === FollowUpType.AUTO_NO_REPLY
+          ? "This is an automatic follow-up. The customer hasn't replied."
+          : `This is a scheduled follow-up. Context: ${followUp.aiContext || 'Follow up'}`;
 
       try {
         const aiResponse = await lastValueFrom(
@@ -145,9 +186,15 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         const { replyText, mediaUrl, actions } = aiResponse;
 
         if (actions && actions.length > 0) {
-          const actionResult = await this.actionExecutor.executeActions(organization.id, conversation.id, actions);
+          const actionResult = await this.actionExecutor.executeActions(
+            organization.id,
+            conversation.id,
+            actions,
+          );
           if (actionResult.failed > 0) {
-            throw new Error(`Critical action execution failure (${actionResult.failed} failed), aborting follow-up delivery to prevent inconsistency`);
+            throw new Error(
+              `Critical action execution failure (${actionResult.failed} failed), aborting follow-up delivery to prevent inconsistency`,
+            );
           }
         }
 
@@ -155,19 +202,39 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
           this.logger.log('AI requested to skip follow-up. Cancelling.');
           await this.prisma.scheduledFollowUp.update({
             where: { id: followUp.id },
-            data: { status: FollowUpStatus.CANCELLED, cancelReason: 'AI chose not to reply' },
+            data: {
+              status: FollowUpStatus.CANCELLED,
+              cancelReason: 'AI chose not to reply',
+            },
           });
           return;
         }
 
         let metaMessageId: string | undefined = undefined;
 
+        await this.prisma.message.update({
+          where: { idempotencyKey: `followUp-${followUp.id}` },
+          data: {
+            content:
+              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
+            mediaUrl: mediaUrl || null,
+          },
+        });
+
         if (mediaUrl) {
-          
-          const authOk = await this.deliveryAuth.authorizeDelivery(organization.id, conversation.id);
+          const authOk = await this.deliveryAuth.authorizeDelivery(
+            organization.id,
+            conversation.id,
+          );
           if (!authOk) {
-            this.logger.warn(`Follow-up delivery aborted for media (Org: ${organization.id}, Conv: ${conversation.id})`);
-            await this.recordCancellation(conversation.id, organization.id, 'Follow-up aborted prior to media send due to authorization failure.');
+            this.logger.warn(
+              `Follow-up delivery aborted for media (Org: ${organization.id}, Conv: ${conversation.id})`,
+            );
+            await this.recordCancellation(
+              conversation.id,
+              organization.id,
+              'Follow-up aborted prior to media send due to authorization failure.',
+            );
             return;
           }
           const mediaResponse = await this.whatsappService.sendMediaMessage(
@@ -180,14 +247,26 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
           );
           metaMessageId = mediaResponse?.messages?.[0]?.id;
         } else if (replyText) {
-          const messages = replyText.split('|||').map((m) => m.trim()).filter((m) => m.length > 0);
+          const messages = replyText
+            .split('|||')
+            .map((m) => m.trim())
+            .filter((m) => m.length > 0);
           for (let i = 0; i < messages.length; i++) {
             const message = messages[i];
-            
-            const authOk = await this.deliveryAuth.authorizeDelivery(organization.id, conversation.id);
+
+            const authOk = await this.deliveryAuth.authorizeDelivery(
+              organization.id,
+              conversation.id,
+            );
             if (!authOk) {
-              this.logger.warn(`Follow-up delivery aborted for text (Org: ${organization.id}, Conv: ${conversation.id})`);
-              await this.recordCancellation(conversation.id, organization.id, 'Follow-up aborted prior to text send due to authorization failure.');
+              this.logger.warn(
+                `Follow-up delivery aborted for text (Org: ${organization.id}, Conv: ${conversation.id})`,
+              );
+              await this.recordCancellation(
+                conversation.id,
+                organization.id,
+                'Follow-up aborted prior to text send due to authorization failure.',
+              );
               return;
             }
             const metaResponse = await this.whatsappService.sendTextMessage(
@@ -209,7 +288,8 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
           const aiMessage = await this.prisma.message.create({
             data: {
               conversationId: conversation.id,
-              content: replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
+              content:
+                replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
               mediaUrl: mediaUrl || null,
               metaMessageId: metaMessageId ?? null,
               type: 'AI_TEXT',

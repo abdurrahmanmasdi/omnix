@@ -4,6 +4,6 @@ import { AiPersonaController } from './ai-persona.controller';
 
 @Module({
   providers: [AiPersonaService],
-  controllers: [AiPersonaController]
+  controllers: [AiPersonaController],
 })
 export class AiPersonaModule {}

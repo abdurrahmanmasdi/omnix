@@ -46,21 +46,15 @@ export class CrmIntegrationService {
       );
     }
 
-    this.logger.log(
-      `Syncing Lead ${lead.id} to ${crmType}...`,
-    );
+    this.logger.log(`Syncing Lead ${lead.id} to ${crmType}...`);
 
     // Step 1: Contact
     const externalContactId = await adapter.syncContact(lead);
-    this.logger.log(
-      `Contact synced → externalContactId: ${externalContactId}`,
-    );
+    this.logger.log(`Contact synced → externalContactId: ${externalContactId}`);
 
     // Step 2: Deal (linked to the contact we just created/updated)
     const externalDealId = await adapter.syncDeal(externalContactId, lead);
-    this.logger.log(
-      `Deal synced → externalDealId: ${externalDealId}`,
-    );
+    this.logger.log(`Deal synced → externalDealId: ${externalDealId}`);
 
     return { externalContactId, externalDealId };
   }

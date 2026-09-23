@@ -9,9 +9,9 @@ describe('AiPersonaController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AiPersonaController,
-        { provide: AiPersonaService, useValue: { methodName: jest.fn() } }
+        { provide: AiPersonaService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: [AiPersonaController]
+      controllers: [AiPersonaController],
     }).compile();
 
     provider = module.get<AiPersonaController>(AiPersonaController);

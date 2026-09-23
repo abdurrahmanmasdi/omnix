@@ -57,7 +57,6 @@ model Organization {
   metaAccountId String? @unique
 
   // Deprecated legacy field. New integrations use Credential records.
-  crmAccessToken String?
   crmSyncEnabled Boolean @default(false)
 
   // Relationships
@@ -335,9 +334,11 @@ model Conversation {
   aiDisclosureSent  Boolean   @default(false)
   stateVersion      Int       @default(1)
   assignedAgentId   String?   @db.Uuid
+  channelId         String?   @db.Uuid
 
   lead               Lead?               @relation("LeadConversation", fields: [leadId], references: [id])
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel            Channel?            @relation(fields: [channelId], references: [id])
   messages           Message[]
   assignedAgent      User?               @relation("ConversationAgent", fields: [assignedAgentId], references: [id])
   scheduledFollowUps ScheduledFollowUp[]
@@ -356,6 +357,7 @@ model Message {
   metadata       Json? // To store Tool Call JSON, execution times, token counts
   handledBy      ActiveHandler @default(AI) // Determines if AI or Human
   metaMessageId  String?       @unique // WhatsApp's specific message ID
+  idempotencyKey String?       @unique // To prevent duplicate outbound sends
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
@@ -550,6 +552,7 @@ model Channel {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   credential   Credential?  @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  conversations Conversation[]
 
   @@unique([organizationId, provider, providerAccountId])
   @@map("channels")

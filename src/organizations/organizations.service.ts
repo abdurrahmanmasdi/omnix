@@ -16,14 +16,15 @@ export class OrganizationsService {
         return await this.prisma.$transaction(
           async (tx) => {
             // Lock or verify the user doesn't already have an active membership
-            const existingMembership = await tx.organizationMembership.findFirst({
-              where: { userId, status: 'ACTIVE', deletedAt: null },
-            });
-            
+            const existingMembership =
+              await tx.organizationMembership.findFirst({
+                where: { userId, status: 'ACTIVE', deletedAt: null },
+              });
+
             if (existingMembership) {
-              return { 
-                organizationId: existingMembership.organizationId, 
-                roleId: existingMembership.roleId 
+              return {
+                organizationId: existingMembership.organizationId,
+                roleId: existingMembership.roleId,
               };
             }
 
@@ -32,7 +33,9 @@ export class OrganizationsService {
               where: { slug: dto.slug },
             });
             if (existingOrg) {
-              throw new ConflictException('An organization with this slug already exists');
+              throw new ConflictException(
+                'An organization with this slug already exists',
+              );
             }
 
             // Create the Organization and Persona
@@ -52,10 +55,14 @@ export class OrganizationsService {
             });
 
             // Provision standard roles and permissions for the organization
-            const roleMap = await provisionOrganizationRolesAndPermissions(tx, org.id);
+            const roleMap = await provisionOrganizationRolesAndPermissions(
+              tx,
+              org.id,
+            );
             const superAdminRole = roleMap.get('Super Admin');
 
-            if (!superAdminRole) throw new Error('Super Admin role not created');
+            if (!superAdminRole)
+              throw new Error('Super Admin role not created');
 
             // Attach the User to the Organization as a Manager/Super Admin
             await tx.organizationMembership.create({
@@ -79,21 +86,18 @@ export class OrganizationsService {
       } catch (error: any) {
         if (error.code === 'P2002') {
           // Unique constraint failed (e.g. concurrent slug or user membership insertion)
-          throw new ConflictException('Organization creation failed due to a concurrent conflict');
+          throw new ConflictException(
+            'Organization creation failed due to a concurrent conflict',
+          );
         }
         if (error.code === 'P2034') {
           // Transaction failed due to a write conflict/deadlock, throw conflict so they can retry
-          throw new ConflictException('Concurrent request conflict. Please try again.');
+          throw new ConflictException(
+            'Concurrent request conflict. Please try again.',
+          );
         }
         throw error;
       }
-    });
-  }
-
-  async updateCrmToken(organizationId: string, crmAccessToken: string) {
-    return this.prisma.organization.update({
-      where: { id: organizationId },
-      data: { crmAccessToken },
     });
   }
 

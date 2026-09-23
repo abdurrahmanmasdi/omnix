@@ -9,9 +9,9 @@ describe('AuthController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthController,
-        { provide: AuthService, useValue: { methodName: jest.fn() } }
+        { provide: AuthService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: [AuthController]
+      controllers: [AuthController],
     }).compile();
 
     provider = module.get<AuthController>(AuthController);

@@ -19,8 +19,18 @@ describe('EventsGateway', () => {
         EventsGateway,
         { provide: JwtService, useValue: { verify: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: PermissionService, useValue: { has: jest.fn().mockResolvedValue(true) } },
-        { provide: PrismaService, useValue: { organizationMembership: { findFirst: jest.fn().mockResolvedValue({ id: 'test' }) } } },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            organizationMembership: {
+              findFirst: jest.fn().mockResolvedValue({ id: 'test' }),
+            },
+          },
+        },
       ],
     }).compile();
 
@@ -69,24 +79,38 @@ describe('EventsGateway', () => {
       expect(mockEmit).toHaveBeenCalledWith('onLeadUpdate', expect.any(Object));
 
       const emittedDto = mockEmit.mock.calls[0][1];
-      
+
       // Ensure safe fields exist
       expect(emittedDto.id).toBe('lead-123');
       expect(emittedDto.firstName).toBe('John');
       expect(emittedDto.createdAt).toBe('2026-01-01T00:00:00.000Z');
-      
+
       // Ensure dangerous fields DO NOT exist
       expect(emittedDto).not.toHaveProperty('organization');
       expect(emittedDto).not.toHaveProperty('passwordHash');
       expect(emittedDto).not.toHaveProperty('socialLinks');
-      
+
       // Ensure the object spread wasn't used by checking Object.keys
       const allowedKeys = [
-        'id', 'organizationId', 'assignedAgentId', 'firstName', 'lastName',
-        'email', 'phoneNumber', 'country', 'timezone', 'primaryLanguage',
-        'status', 'priority', 'summary', 'createdAt', 'updatedAt'
+        'id',
+        'organizationId',
+        'assignedAgentId',
+        'firstName',
+        'lastName',
+        'email',
+        'phoneNumber',
+        'country',
+        'timezone',
+        'primaryLanguage',
+        'status',
+        'priority',
+        'summary',
+        'createdAt',
+        'updatedAt',
       ];
-      expect(Object.keys(emittedDto).every(key => allowedKeys.includes(key))).toBe(true);
+      expect(
+        Object.keys(emittedDto).every((key) => allowedKeys.includes(key)),
+      ).toBe(true);
     });
 
     it('strips metadata and relations from message broadcasts', () => {
@@ -101,11 +125,11 @@ describe('EventsGateway', () => {
         // Adversarial
         metadata: { openaiKey: 'sk-123' },
         sender: { passwordHash: 'secret' },
-        conversation: { internalStatus: 'foo' }
+        conversation: { internalStatus: 'foo' },
       };
 
       gateway.broadcastNewMessage('org-456', maliciousMessage);
-      
+
       const emittedDto = mockEmit.mock.calls[0][1];
       expect(emittedDto).not.toHaveProperty('metadata');
       expect(emittedDto).not.toHaveProperty('sender');
@@ -126,7 +150,7 @@ describe('EventsGateway', () => {
       };
 
       gateway.broadcastConversationUpdate('org-456', maliciousConversation);
-      
+
       const emittedDto = mockEmit.mock.calls[0][1];
       expect(emittedDto).not.toHaveProperty('organization');
       expect(emittedDto).not.toHaveProperty('messages');
@@ -144,7 +168,7 @@ describe('EventsGateway', () => {
         createdAt: new Date(),
         // Adversarial
         user: { password: 'pwd' },
-        internalRoutingId: '12345'
+        internalRoutingId: '12345',
       };
 
       gateway.broadcastNotification('user-1', maliciousNotification);

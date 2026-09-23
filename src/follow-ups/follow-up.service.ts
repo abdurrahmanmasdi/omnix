@@ -18,10 +18,13 @@ export class FollowUpService {
    */
   async scheduleAutoFollowUps(conversationId: string, organizationId: string) {
     // 1. Cancel any existing pending follow-ups
-    await this.cancelPendingFollowUps(conversationId, 'Re-scheduled due to new AI reply');
+    await this.cancelPendingFollowUps(
+      conversationId,
+      'Re-scheduled due to new AI reply',
+    );
 
     const now = new Date();
-    
+
     // 12 hours from now
     const time12h = new Date(now.getTime() + 12 * 60 * 60 * 1000);
     // 24 hours from now
@@ -52,13 +55,13 @@ export class FollowUpService {
     const job12h = await this.followUpQueue.add(
       'process-follow-up',
       { followUpId: followUp12h.id },
-      { delay: 12 * 60 * 60 * 1000, removeOnComplete: true }
+      { delay: 12 * 60 * 60 * 1000, removeOnComplete: true },
     );
 
     const job24h = await this.followUpQueue.add(
       'process-follow-up',
       { followUpId: followUp24h.id },
-      { delay: 24 * 60 * 60 * 1000, removeOnComplete: true }
+      { delay: 24 * 60 * 60 * 1000, removeOnComplete: true },
     );
 
     // Update records with Job IDs
@@ -73,8 +76,10 @@ export class FollowUpService {
     });
 
     await this.updateLeadNextFollowUp(conversationId);
-    
-    this.logger.log(`Scheduled auto follow-ups for Conv ${conversationId} (12h, 24h)`);
+
+    this.logger.log(
+      `Scheduled auto follow-ups for Conv ${conversationId} (12h, 24h)`,
+    );
   }
 
   /**
@@ -87,7 +92,10 @@ export class FollowUpService {
     context?: string,
   ) {
     // 1. Cancel existing
-    await this.cancelPendingFollowUps(conversationId, 'Overridden by AI scheduled follow-up');
+    await this.cancelPendingFollowUps(
+      conversationId,
+      'Overridden by AI scheduled follow-up',
+    );
 
     const now = new Date();
     const delay = Math.max(0, scheduledAt.getTime() - now.getTime());
@@ -106,7 +114,7 @@ export class FollowUpService {
     const job = await this.followUpQueue.add(
       'process-follow-up',
       { followUpId: followUp.id },
-      { delay, removeOnComplete: true }
+      { delay, removeOnComplete: true },
     );
 
     await this.prisma.scheduledFollowUp.update({
@@ -115,15 +123,20 @@ export class FollowUpService {
     });
 
     await this.updateLeadNextFollowUp(conversationId);
-    
-    this.logger.log(`Scheduled AI follow-up for Conv ${conversationId} at ${scheduledAt.toISOString()}`);
+
+    this.logger.log(
+      `Scheduled AI follow-up for Conv ${conversationId} at ${scheduledAt.toISOString()}`,
+    );
   }
 
   /**
    * Cancels all pending follow ups for a conversation.
    * Called when the customer sends a new message.
    */
-  async cancelPendingFollowUps(conversationId: string, reason = 'Customer responded') {
+  async cancelPendingFollowUps(
+    conversationId: string,
+    reason = 'Customer responded',
+  ) {
     const pending = await this.prisma.scheduledFollowUp.findMany({
       where: {
         conversationId,
@@ -142,7 +155,9 @@ export class FollowUpService {
             await job.remove();
           }
         } catch (error) {
-          this.logger.warn(`Failed to remove BullMQ job ${record.bullJobId}: ${error.message}`);
+          this.logger.warn(
+            `Failed to remove BullMQ job ${record.bullJobId}: ${error.message}`,
+          );
         }
       }
     }
@@ -160,7 +175,9 @@ export class FollowUpService {
     });
 
     await this.updateLeadNextFollowUp(conversationId);
-    this.logger.log(`Cancelled ${pending.length} pending follow-ups for Conv ${conversationId}`);
+    this.logger.log(
+      `Cancelled ${pending.length} pending follow-ups for Conv ${conversationId}`,
+    );
   }
 
   /**

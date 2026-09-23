@@ -13,9 +13,9 @@ describe('ConversationsService', () => {
         ConversationsService,
         { provide: PrismaService, useValue: { methodName: jest.fn() } },
         { provide: WhatsappService, useValue: { methodName: jest.fn() } },
-        { provide: EventsGateway, useValue: { methodName: jest.fn() } }
+        { provide: EventsGateway, useValue: { methodName: jest.fn() } },
       ],
-      controllers: []
+      controllers: [],
     }).compile();
 
     provider = module.get<ConversationsService>(ConversationsService);

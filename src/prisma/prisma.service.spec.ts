@@ -7,11 +7,8 @@ describe('PrismaService', () => {
   beforeEach(async () => {
     process.env.DATABASE_URL = 'postgres://fake:fake@localhost:5432/fake';
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        PrismaService,
-        
-      ],
-      controllers: []
+      providers: [PrismaService],
+      controllers: [],
     }).compile();
 
     provider = module.get<PrismaService>(PrismaService);

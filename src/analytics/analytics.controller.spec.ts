@@ -9,9 +9,9 @@ describe('AnalyticsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalyticsController,
-        { provide: AnalyticsService, useValue: { methodName: jest.fn() } }
+        { provide: AnalyticsService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: [AnalyticsController]
+      controllers: [AnalyticsController],
     }).compile();
 
     provider = module.get<AnalyticsController>(AnalyticsController);

@@ -8,7 +8,8 @@ export class CreateChannelDto {
   provider: ChannelProvider;
 
   @ApiProperty({
-    description: 'The Account ID for the provider (e.g., WhatsApp Phone Number ID)',
+    description:
+      'The Account ID for the provider (e.g., WhatsApp Phone Number ID)',
   })
   @IsString()
   @IsNotEmpty()

@@ -251,9 +251,15 @@ export class ExperiencesService implements OnModuleInit {
     // 2. 🚀 If any text fields changed, we MUST recalculate the AI Vector
     if (dto.consentObtained === false) {
       // T12: When consent changes from true to false, remove/disable its embedding
-      await this.prisma.$executeRaw`UPDATE organization_experiences SET embedding = NULL WHERE id = ${experienceId}::uuid`;
-      this.logger.log(`Cleared embedding for revoked consent on ${experienceId}`);
-    } else if ((dto.title || dto.storyText || dto.patientCountry || dto.procedureType) && dto.consentObtained === true) {
+      await this.prisma
+        .$executeRaw`UPDATE organization_experiences SET embedding = NULL WHERE id = ${experienceId}::uuid`;
+      this.logger.log(
+        `Cleared embedding for revoked consent on ${experienceId}`,
+      );
+    } else if (
+      (dto.title || dto.storyText || dto.patientCountry || dto.procedureType) &&
+      dto.consentObtained === true
+    ) {
       console.log(
         `Text changed for ${experienceId}. Re-firing gRPC to update vector...`,
       );

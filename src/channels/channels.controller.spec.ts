@@ -12,18 +12,18 @@ describe('ChannelsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChannelsController,
-        { 
-          provide: ChannelsService, 
-          useValue: { 
+        {
+          provide: ChannelsService,
+          useValue: {
             createChannel: jest.fn(),
             getChannels: jest.fn(),
             deleteChannel: jest.fn(),
-          } 
+          },
         },
         { provide: PermissionService, useValue: { has: jest.fn() } },
-        { provide: Reflector, useValue: { getAllAndOverride: jest.fn() } }
+        { provide: Reflector, useValue: { getAllAndOverride: jest.fn() } },
       ],
-      controllers: [ChannelsController]
+      controllers: [ChannelsController],
     }).compile();
 
     provider = module.get<ChannelsController>(ChannelsController);
@@ -35,7 +35,11 @@ describe('ChannelsController', () => {
   });
 
   it('should return channels for an organization', async () => {
-    const mockUser = { id: 'user1', email: 'test@test.com', organizationId: 'org1' };
+    const mockUser = {
+      id: 'user1',
+      email: 'test@test.com',
+      organizationId: 'org1',
+    };
     const mockChannels = [{ id: 'chan1' }];
     jest.spyOn(service, 'getChannels').mockResolvedValue(mockChannels as any);
 

@@ -10,6 +10,9 @@ import { BullModule } from '@nestjs/bullmq';
     BullModule.registerQueue({
       name: 'outbox-relay',
     }),
+    BullModule.registerQueue({
+      name: 'ai-reply',
+    }),
   ],
   providers: [OutboxProcessor, OutboxReplayService],
   exports: [OutboxReplayService],

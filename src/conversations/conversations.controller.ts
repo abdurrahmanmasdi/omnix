@@ -105,7 +105,7 @@ export class ConversationsController {
   async getMessages(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
-    @Query('page') page: string = '1',
+    @Query('cursor') cursor?: string,
     @Query('limit') limit: string = '50',
   ) {
     if (!user.organizationId) {
@@ -115,7 +115,7 @@ export class ConversationsController {
       user.organizationId,
       user.id,
       conversationId,
-      parseInt(page, 10),
+      cursor,
       parseInt(limit, 10),
     );
   }

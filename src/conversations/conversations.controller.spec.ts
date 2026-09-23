@@ -12,19 +12,19 @@ describe('ConversationsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversationsController,
-        { 
-          provide: ConversationsService, 
-          useValue: { 
+        {
+          provide: ConversationsService,
+          useValue: {
             getConversations: jest.fn(),
             getMessages: jest.fn(),
             sendManualMessage: jest.fn(),
-            toggleAiState: jest.fn()
-          } 
+            toggleAiState: jest.fn(),
+          },
         },
         { provide: PermissionService, useValue: { has: jest.fn() } },
-        { provide: Reflector, useValue: { getAllAndOverride: jest.fn() } }
+        { provide: Reflector, useValue: { getAllAndOverride: jest.fn() } },
       ],
-      controllers: [ConversationsController]
+      controllers: [ConversationsController],
     }).compile();
 
     provider = module.get<ConversationsController>(ConversationsController);
@@ -36,9 +36,15 @@ describe('ConversationsController', () => {
   });
 
   it('should return conversations for an organization', async () => {
-    const mockUser = { id: 'user1', email: 'test@test.com', organizationId: 'org1' };
+    const mockUser = {
+      id: 'user1',
+      email: 'test@test.com',
+      organizationId: 'org1',
+    };
     const mockConversations = [{ id: 'conv1' }];
-    jest.spyOn(service, 'getConversations').mockResolvedValue(mockConversations as any);
+    jest
+      .spyOn(service, 'getConversations')
+      .mockResolvedValue(mockConversations as any);
 
     const result = await provider.getConversations(mockUser as any, '1', '20');
     expect(result).toEqual(mockConversations);

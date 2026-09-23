@@ -258,7 +258,7 @@ export class QueryBuilderService {
     const orderBy: any[] = [];
 
     // Explicitly iterate over any[] to satisfy TS, and check property existence safely
-    for (const item of parsed as any[]) {
+    for (const item of parsed) {
       if (
         item &&
         typeof item === 'object' &&

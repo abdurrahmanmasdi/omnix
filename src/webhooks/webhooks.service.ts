@@ -14,20 +14,28 @@ export class WebhooksService {
     private readonly configService: ConfigService,
   ) {}
 
-  isValidMetaSignature(rawBody: Buffer, signature: string | undefined): boolean {
+  isValidMetaSignature(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): boolean {
     const appSecret = this.configService.get<string>('META_APP_SECRET');
     if (!appSecret || !signature?.startsWith('sha256=')) return false;
     const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`;
     const supplied = Buffer.from(signature);
     const expectedBuffer = Buffer.from(expected);
-    return supplied.length === expectedBuffer.length && timingSafeEqual(supplied, expectedBuffer);
+    return (
+      supplied.length === expectedBuffer.length &&
+      timingSafeEqual(supplied, expectedBuffer)
+    );
   }
 
   async queueIncomingMessage(payload: WhatsAppWebhookPayload) {
     // Add the payload to Redis. We will process this later in a separate worker.
-    const ids = payload.entry.flatMap((entry) => entry.changes.flatMap((change) =>
-      change.value.messages?.map((message) => message.id) ?? [],
-    ));
+    const ids = payload.entry.flatMap((entry) =>
+      entry.changes.flatMap(
+        (change) => change.value.messages?.map((message) => message.id) ?? [],
+      ),
+    );
     // A status-only webhook has no message id; use a hash-sized stable value
     // derived from the payload rather than treating it as a delivery candidate.
     const jobId = `inbound-${ids.sort().join('-') || createHmac('sha256', 'webhook').update(JSON.stringify(payload)).digest('hex')}`;

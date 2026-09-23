@@ -12,7 +12,9 @@ export class AiPersonaService {
     });
 
     if (!persona) {
-      throw new NotFoundException('AI Persona configuration not found for this organization');
+      throw new NotFoundException(
+        'AI Persona configuration not found for this organization',
+      );
     }
 
     return persona;

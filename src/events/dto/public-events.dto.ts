@@ -19,8 +19,14 @@ export function toPublicMessageDto(message: any): PublicMessageDto {
     mediaUrl: message.mediaUrl || null,
     type: message.type,
     handledBy: message.handledBy,
-    createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : new Date(message.createdAt).toISOString(),
-    updatedAt: message.updatedAt instanceof Date ? message.updatedAt.toISOString() : new Date(message.updatedAt).toISOString(),
+    createdAt:
+      message.createdAt instanceof Date
+        ? message.createdAt.toISOString()
+        : new Date(message.createdAt).toISOString(),
+    updatedAt:
+      message.updatedAt instanceof Date
+        ? message.updatedAt.toISOString()
+        : new Date(message.updatedAt).toISOString(),
   };
 }
 
@@ -57,8 +63,14 @@ export function toPublicLeadDto(lead: any): PublicLeadDto {
     status: lead.status,
     priority: lead.priority,
     summary: lead.summary || null,
-    createdAt: lead.createdAt instanceof Date ? lead.createdAt.toISOString() : new Date(lead.createdAt).toISOString(),
-    updatedAt: lead.updatedAt instanceof Date ? lead.updatedAt.toISOString() : new Date(lead.updatedAt).toISOString(),
+    createdAt:
+      lead.createdAt instanceof Date
+        ? lead.createdAt.toISOString()
+        : new Date(lead.createdAt).toISOString(),
+    updatedAt:
+      lead.updatedAt instanceof Date
+        ? lead.updatedAt.toISOString()
+        : new Date(lead.updatedAt).toISOString(),
   };
 }
 
@@ -74,7 +86,9 @@ export interface PublicConversationDto {
   updatedAt: string;
 }
 
-export function toPublicConversationDto(conversation: any): PublicConversationDto {
+export function toPublicConversationDto(
+  conversation: any,
+): PublicConversationDto {
   return {
     id: conversation.id,
     organizationId: conversation.organizationId,
@@ -83,8 +97,14 @@ export function toPublicConversationDto(conversation: any): PublicConversationDt
     leadId: conversation.leadId || null,
     aiPaused: !!conversation.aiPaused,
     assignedAgentId: conversation.assignedAgentId || null,
-    createdAt: conversation.createdAt instanceof Date ? conversation.createdAt.toISOString() : new Date(conversation.createdAt).toISOString(),
-    updatedAt: conversation.updatedAt instanceof Date ? conversation.updatedAt.toISOString() : new Date(conversation.updatedAt).toISOString(),
+    createdAt:
+      conversation.createdAt instanceof Date
+        ? conversation.createdAt.toISOString()
+        : new Date(conversation.createdAt).toISOString(),
+    updatedAt:
+      conversation.updatedAt instanceof Date
+        ? conversation.updatedAt.toISOString()
+        : new Date(conversation.updatedAt).toISOString(),
   };
 }
 
@@ -101,7 +121,9 @@ export interface PublicNotificationDto {
   createdAt: string;
 }
 
-export function toPublicNotificationDto(notification: any): PublicNotificationDto {
+export function toPublicNotificationDto(
+  notification: any,
+): PublicNotificationDto {
   return {
     id: notification.id,
     organizationId: notification.organizationId,
@@ -112,6 +134,9 @@ export function toPublicNotificationDto(notification: any): PublicNotificationDt
     isRead: !!notification.isRead,
     referenceId: notification.referenceId || null,
     referenceType: notification.referenceType || null,
-    createdAt: notification.createdAt instanceof Date ? notification.createdAt.toISOString() : new Date(notification.createdAt).toISOString(),
+    createdAt:
+      notification.createdAt instanceof Date
+        ? notification.createdAt.toISOString()
+        : new Date(notification.createdAt).toISOString(),
   };
 }

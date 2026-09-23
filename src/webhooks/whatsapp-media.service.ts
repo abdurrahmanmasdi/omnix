@@ -30,7 +30,9 @@ export class WhatsappMediaService {
       const mediaUrl = metadataResponse.data?.url;
 
       if (!mediaUrl) {
-        this.logger.error(`No media URL found in response for mediaId: ${mediaId}`);
+        this.logger.error(
+          `No media URL found in response for mediaId: ${mediaId}`,
+        );
         return null;
       }
 

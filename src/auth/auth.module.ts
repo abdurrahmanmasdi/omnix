@@ -1,5 +1,5 @@
-import { Global } from "@nestjs/common";
-import { UserJwtStrategy } from "./jwt-user.strategy";
+import { Global } from '@nestjs/common';
+import { UserJwtStrategy } from './jwt-user.strategy';
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';

@@ -103,12 +103,20 @@ export class PrismaService
               queryArgs: Record<string, unknown>,
             ) => Promise<unknown>;
             const result = await typedQuery(typedArgs);
-            
-            if (model === 'Lead' && (operation === 'update' || operation === 'updateMany')) {
+
+            if (
+              model === 'Lead' &&
+              (operation === 'update' || operation === 'updateMany')
+            ) {
               const data = (typedArgs.data as Record<string, unknown>) ?? {};
               if (data.deletedAt !== undefined && data.deletedAt !== null) {
                 const leadIds: string[] = [];
-                if (operation === 'update' && result && typeof result === 'object' && 'id' in result) {
+                if (
+                  operation === 'update' &&
+                  result &&
+                  typeof result === 'object' &&
+                  'id' in result
+                ) {
                   leadIds.push((result as any).id as string);
                 }
 
@@ -116,11 +124,11 @@ export class PrismaService
                   // Run bypass to prevent recursive interception issues
                   await self.conversation.updateMany({
                     where: { leadId: { in: leadIds }, organizationId },
-                    data: { deletedAt: data.deletedAt as Date }
+                    data: { deletedAt: data.deletedAt as Date },
                   });
                   await (self as any).scheduledFollowUp.updateMany({
                     where: { leadId: { in: leadIds }, organizationId },
-                    data: { deletedAt: data.deletedAt as Date }
+                    data: { deletedAt: data.deletedAt as Date },
                   });
                 }
               }

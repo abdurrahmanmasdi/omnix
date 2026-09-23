@@ -13,9 +13,9 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: { methodName: jest.fn() } },
         { provide: JwtService, useValue: { methodName: jest.fn() } },
-        { provide: ConfigService, useValue: { methodName: jest.fn() } }
+        { provide: ConfigService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: []
+      controllers: [],
     }).compile();
 
     provider = module.get<AuthService>(AuthService);

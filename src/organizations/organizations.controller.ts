@@ -25,7 +25,10 @@ import { JwtUserGuard } from '../auth/guards/jwt-user.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { getRefreshCookieOptions, REFRESH_COOKIE_NAME } from '../auth/cookie.helper';
+import {
+  getRefreshCookieOptions,
+  REFRESH_COOKIE_NAME,
+} from '../auth/cookie.helper';
 
 @ApiTags('Organizations')
 @ApiBearerAuth()
@@ -71,94 +74,16 @@ export class OrganizationsController {
     );
 
     // 3. Set the new Refresh Token cookie using shared helper
-    res.cookie(REFRESH_COOKIE_NAME, newTokens.refreshToken, getRefreshCookieOptions());
+    res.cookie(
+      REFRESH_COOKIE_NAME,
+      newTokens.refreshToken,
+      getRefreshCookieOptions(),
+    );
 
     return {
       message: 'Workspace created successfully',
       organizationId: workspace.organizationId,
       access_token: newTokens.accessToken,
     };
-  }
-
-  @Patch('crm-token')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermissions('settings:crm:sync')
-  @ApiOperation({ summary: 'Update the HubSpot CRM access token for the current organization' })
-  @ApiResponse({
-    status: 200,
-    description: 'CRM token updated successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        organizationId: { type: 'string' },
-      },
-    },
-  })
-  async updateCrmToken(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: UpdateCrmTokenDto,
-  ) {
-    if (!user.organizationId) {
-      throw new ForbiddenException('User is not associated with an organization');
-    }
-
-    const organization = await this.orgService.updateCrmToken(
-      user.organizationId,
-      dto.crmAccessToken,
-    );
-
-    return {
-      message: 'CRM token updated successfully',
-      organizationId: organization.id,
-    };
-  }
-
-  @Post('crm-token/test')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
-  @RequirePermissions('settings:crm:sync')
-  @ApiOperation({ summary: 'Smoke-test the stored HubSpot CRM access token' })
-  @ApiResponse({
-    status: 200,
-    description: 'CRM token is valid',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        hubSpotAppId: { type: 'number' },
-        hubSpotPortalId: { type: 'number' },
-      },
-    },
-  })
-  async testCrmToken(@CurrentUser() user: AuthenticatedUser) {
-    if (!user.organizationId) {
-      throw new ForbiddenException('User is not associated with an organization');
-    }
-
-    const organization = await this.orgService.findById(user.organizationId);
-    if (!organization?.crmAccessToken) {
-      throw new ForbiddenException('No HubSpot token configured for this organization');
-    }
-
-    try {
-      const { data } = await axios.get(
-        'https://api.hubapi.com/integrations/v1/me',
-        {
-          headers: {
-            Authorization: `Bearer ${organization.crmAccessToken}`,
-          },
-        },
-      );
-
-      return {
-        message: 'HubSpot token is valid',
-        hubSpotAppId: data.app_id,
-        hubSpotPortalId: data.portal_id,
-      };
-    } catch (error: any) {
-      const message =
-        error.response?.data?.message || error.message || 'HubSpot token test failed';
-      throw new ForbiddenException(message);
-    }
   }
 }

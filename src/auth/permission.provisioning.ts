@@ -28,7 +28,7 @@ export async function provisionOrganizationRolesAndPermissions(
     select: { id: true, action: true },
   });
 
-  const permissionIdMap = new Map(permissions.map(p => [p.action, p.id]));
+  const permissionIdMap = new Map(permissions.map((p) => [p.action, p.id]));
 
   // 2. Create the standard roles
   const roles = await Promise.all(
@@ -47,10 +47,10 @@ export async function provisionOrganizationRolesAndPermissions(
         });
       }
       return role;
-    })
+    }),
   );
 
-  const roleMap = new Map(roles.map(r => [r.name, r]));
+  const roleMap = new Map(roles.map((r) => [r.name, r]));
 
   // 3. Grant permissions to each role
   const rolePermissionsData = [];

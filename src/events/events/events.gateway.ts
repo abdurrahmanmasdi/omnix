@@ -20,8 +20,8 @@ import {
   toPublicNotificationDto,
 } from '../dto/public-events.dto';
 
-const allowedOrigins = process.env.FRONTEND_URL 
-  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim()) 
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
   : ['http://localhost:3001'];
 
 @WebSocketGateway({
@@ -30,7 +30,9 @@ const allowedOrigins = process.env.FRONTEND_URL
     credentials: true,
   },
 })
-export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
+export class EventsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+{
   @WebSocketServer()
   server!: Server;
 
@@ -45,9 +47,11 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     private readonly prisma: PrismaService,
   ) {
     // Schedule bounded revalidation every 30 seconds
-    this.revalidationInterval = setInterval(() => this.revalidateConnections(), 30000);
+    this.revalidationInterval = setInterval(
+      () => this.revalidateConnections(),
+      30000,
+    );
   }
-
 
   afterInit(server: Server) {
     server.use(async (socket, next) => {
@@ -60,29 +64,40 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect, 
           secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
         });
 
-        const { organizationId, sub: userId, roleId, exp } = payload as JwtPayload & { exp: number };
+        const {
+          organizationId,
+          sub: userId,
+          roleId,
+          exp,
+        } = payload as JwtPayload & { exp: number };
         if (!organizationId || !userId || !roleId) {
           throw new Error('User has no organization context');
         }
 
         // Authorize membership and permissions inside the Tenant Context
         await tenantStorage.run({ organizationId }, async () => {
-          const membership = await this.prisma.organizationMembership.findFirst({
-            where: {
-              userId,
-              organizationId,
-              roleId,
-              status: 'ACTIVE',
-              deletedAt: null,
+          const membership = await this.prisma.organizationMembership.findFirst(
+            {
+              where: {
+                userId,
+                organizationId,
+                roleId,
+                status: 'ACTIVE',
+                deletedAt: null,
+              },
+              select: { id: true },
             },
-            select: { id: true },
-          });
+          );
 
           if (!membership) {
             throw new Error('Invalid or inactive organization membership');
           }
 
-          const hasPermission = await this.permissionService.has(userId, organizationId, 'view_conversations');
+          const hasPermission = await this.permissionService.has(
+            userId,
+            organizationId,
+            'view_conversations',
+          );
           if (!hasPermission) {
             throw new Error('Missing view_conversations permission');
           }
@@ -96,7 +111,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect, 
             tokenExp: exp,
           };
         });
-        
+
         next();
       } catch (error: any) {
         this.logger.error(`Socket handshake rejected: ${error.message}`);
@@ -150,23 +165,31 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect, 
         // 2. Revalidate DB membership and permissions inside the Tenant Context
         try {
           await tenantStorage.run({ organizationId }, async () => {
-            const membership = await this.prisma.organizationMembership.findFirst({
-              where: {
-                userId,
-                organizationId,
-                roleId,
-                status: 'ACTIVE',
-                deletedAt: null,
-              },
-            });
+            const membership =
+              await this.prisma.organizationMembership.findFirst({
+                where: {
+                  userId,
+                  organizationId,
+                  roleId,
+                  status: 'ACTIVE',
+                  deletedAt: null,
+                },
+              });
 
-            if (!membership) throw new Error('Membership inactive or role changed');
+            if (!membership)
+              throw new Error('Membership inactive or role changed');
 
-            const hasPermission = await this.permissionService.has(userId, organizationId, 'view_conversations');
+            const hasPermission = await this.permissionService.has(
+              userId,
+              organizationId,
+              'view_conversations',
+            );
             if (!hasPermission) throw new Error('Permission revoked');
           });
         } catch (error: any) {
-          this.logger.warn(`Disconnecting ${socket.id} due to revalidation failure: ${error.message}`);
+          this.logger.warn(
+            `Disconnecting ${socket.id} due to revalidation failure: ${error.message}`,
+          );
           socket.disconnect(true);
         }
       }

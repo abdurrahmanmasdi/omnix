@@ -64,9 +64,9 @@ export class DocumentsService implements OnModuleInit {
       const absolutePath = join(process.cwd(), file.path);
 
       this.logger.log(`🤖 Telling Python to ingest ${file.originalname}...`);
-      
+
       const fileBuffer = await fs.readFile(absolutePath);
-      
+
       const result = await lastValueFrom(
         this.ragService!.ingestPdf({
           organizationId,

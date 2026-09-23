@@ -28,7 +28,10 @@ import {
   UpdateLeadDto,
   UpdateLeadStageDto,
 } from './dtos/lead.dto';
-import { LeadResponseDto, LeadsPaginatedResponseDto } from './dtos/lead-response.dto';
+import {
+  LeadResponseDto,
+  LeadsPaginatedResponseDto,
+} from './dtos/lead-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -165,7 +168,7 @@ export class LeadsController {
   @ApiResponse({
     status: 200,
     description: 'Leads retrieved successfully with pagination metadata',
-    type: LeadsPaginatedResponseDto
+    type: LeadsPaginatedResponseDto,
   })
   @ApiResponse({
     status: 401,
@@ -246,7 +249,9 @@ export class LeadsController {
 
   @Patch(':id/stage')
   @RequirePermissions('leads:manage')
-  @ApiOperation({ summary: 'Update the pipeline stage and optionally the status of a lead' })
+  @ApiOperation({
+    summary: 'Update the pipeline stage and optionally the status of a lead',
+  })
   @ApiParam({
     name: 'id',
     type: String,

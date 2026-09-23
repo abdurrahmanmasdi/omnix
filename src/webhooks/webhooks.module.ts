@@ -32,15 +32,27 @@ import { AuditModule } from '../audit/audit.module';
     // Register the specific queue we will push messages to
     BullModule.registerQueue({
       name: 'whatsapp-messages',
-      defaultJobOptions: { attempts: 5, backoff: { type: 'exponential', delay: 2000 }, removeOnFail: false },
+      defaultJobOptions: {
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnFail: false,
+      },
     }),
     BullModule.registerQueue({
       name: 'ai-reply',
-      defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 2000 }, removeOnFail: false },
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnFail: false,
+      },
     }),
     BullModule.registerQueue({
       name: 'follow-up',
-      defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnFail: false },
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnFail: false,
+      },
     }),
     ClientsModule.register([
       {
@@ -68,7 +80,13 @@ import { AuditModule } from '../audit/audit.module';
     DeliveryAuthService,
     NotificationEmitterService,
   ],
-  exports: [WhatsappService, DeliveryAuthService, InstagramService, ActionExecutorService,
-    DeliveryAuthService, FollowUpService],
+  exports: [
+    WhatsappService,
+    DeliveryAuthService,
+    InstagramService,
+    ActionExecutorService,
+    DeliveryAuthService,
+    FollowUpService,
+  ],
 })
 export class WebhooksModule {}

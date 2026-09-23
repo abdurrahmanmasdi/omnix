@@ -8,6 +8,6 @@ import { CredentialsModule } from '../../../credentials/credentials.module';
 @Module({
   imports: [HttpModule, CredentialsModule],
   providers: [CrmIntegrationService, HubspotAdapter, ZohoAdapter],
-  exports: [CrmIntegrationService],
+  exports: [CrmIntegrationService, HubspotAdapter],
 })
 export class CrmIntegrationModule {}

@@ -13,6 +13,7 @@ export class OutboxProcessor {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue('outbox-relay') private readonly outboxRelayQueue: Queue,
+    @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {}
 
   @Cron(CronExpression.EVERY_10_SECONDS)
@@ -35,30 +36,78 @@ export class OutboxProcessor {
 
         this.logger.debug(`Found ${events.length} pending outbox events.`);
 
-        for (const event of events) {
+        // Group AI reply events by conversationId to batch newMessageIds
+        const aiReplyEvents = events.filter(
+          (e) => e.topic === 'generate-reply',
+        );
+        const otherEvents = events.filter((e) => e.topic !== 'generate-reply');
+
+        const groups = new Map<string, typeof aiReplyEvents>();
+        for (const event of aiReplyEvents) {
+          const convId = (event.payload as any).conversationId;
+          if (!groups.has(convId)) groups.set(convId, []);
+          groups.get(convId)!.push(event);
+        }
+
+        for (const [convId, group] of groups.entries()) {
           try {
-            // Push to BullMQ or external service depending on topic
+            const newMessageIds = group
+              .map((e) => (e.payload as any).messageId)
+              .filter(Boolean);
+            const latestStateVersion = Math.max(
+              ...group.map((e) => (e.payload as any).stateVersion || 0),
+            );
+            const firstPayload = group[0].payload as any;
+
+            await this.aiReplyQueue.add(
+              'generate-reply',
+              {
+                organizationId: firstPayload.organizationId,
+                conversationId: convId,
+                customerPhone: firstPayload.customerPhone,
+                newMessageIds,
+                stateVersion: latestStateVersion,
+              },
+              {
+                jobId: `reply-${convId}-${latestStateVersion}`,
+                delay: 7000,
+                removeOnComplete: true,
+              },
+            );
+
+            await this.prisma.outboxEvent.updateMany({
+              where: { id: { in: group.map((e) => e.id) } },
+              data: { status: 'PROCESSED', processedAt: new Date() },
+            });
+          } catch (err: any) {
+            this.logger.error(
+              `Failed to process batched ai-reply for ${convId}: ${err.message}`,
+            );
+            await this.prisma.outboxEvent.updateMany({
+              where: { id: { in: group.map((e) => e.id) } },
+              data: { status: 'FAILED', error: err.message },
+            });
+          }
+        }
+
+        for (const event of otherEvents) {
+          try {
             await this.outboxRelayQueue.add(event.topic, event.payload, {
               jobId: `outbox-${event.id}`,
               removeOnComplete: true,
               removeOnFail: false,
             });
-
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
-              data: {
-                status: 'PROCESSED',
-                processedAt: new Date(),
-              },
+              data: { status: 'PROCESSED', processedAt: new Date() },
             });
           } catch (error: any) {
-            this.logger.error(`Failed to process outbox event ${event.id}: ${error.message}`);
+            this.logger.error(
+              `Failed to process outbox event ${event.id}: ${error.message}`,
+            );
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
-              data: {
-                status: 'FAILED',
-                error: error.message,
-              },
+              data: { status: 'FAILED', error: error.message },
             });
           }
         }

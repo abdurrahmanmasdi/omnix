@@ -126,7 +126,7 @@ export class AuthService {
       user.firstName,
       user.lastName,
       userAgent,
-      ip
+      ip,
     );
   }
 
@@ -158,7 +158,11 @@ export class AuthService {
       // Revoke the whole family.
       await this.prisma.session.updateMany({
         where: { familyId, isRevoked: false },
-        data: { isRevoked: true, revokedAt: new Date(), revokedReason: 'Reused token detected' }
+        data: {
+          isRevoked: true,
+          revokedAt: new Date(),
+          revokedReason: 'Reused token detected',
+        },
       });
       throw new UnauthorizedException('Session revoked due to token reuse');
     }
@@ -174,11 +178,11 @@ export class AuthService {
     // 2. Make sure the user still exists and membership is valid
     const user = await this.prisma.user.findUnique({
       where: { id: session.userId },
-      include: { 
+      include: {
         memberships: {
           where: { status: 'ACTIVE', deletedAt: null },
           orderBy: { createdAt: 'asc' },
-        } 
+        },
       },
     });
 
@@ -192,7 +196,11 @@ export class AuthService {
     // Revoke the old token (rotation)
     await this.prisma.session.update({
       where: { id: session.id },
-      data: { isRevoked: true, revokedAt: new Date(), revokedReason: 'Rotated' }
+      data: {
+        isRevoked: true,
+        revokedAt: new Date(),
+        revokedReason: 'Rotated',
+      },
     });
 
     return this.generateTokens(
@@ -204,7 +212,7 @@ export class AuthService {
       user.lastName,
       userAgent,
       ip,
-      familyId
+      familyId,
     );
   }
 
@@ -216,10 +224,17 @@ export class AuthService {
       });
       const { familyId, nonce } = payload;
       if (familyId && nonce) {
-        const tokenHash = crypto.createHash('sha256').update(nonce).digest('hex');
+        const tokenHash = crypto
+          .createHash('sha256')
+          .update(nonce)
+          .digest('hex');
         await this.prisma.session.updateMany({
           where: { familyId, tokenHash, isRevoked: false },
-          data: { isRevoked: true, revokedAt: new Date(), revokedReason: 'Logout' }
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            revokedReason: 'Logout',
+          },
         });
       }
     } catch (e) {
@@ -258,17 +273,20 @@ export class AuthService {
 
     const refreshPayload = {
       familyId,
-      nonce
+      nonce,
     };
 
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION') as any,
+      expiresIn: this.configService.get<string>(
+        'JWT_REFRESH_EXPIRATION',
+      ) as any,
     });
 
     // Parse expiration
-    const expiresInStr = this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
+    const expiresInStr =
+      this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
     const days = parseInt(expiresInStr) || 7;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + days);
@@ -279,8 +297,8 @@ export class AuthService {
         familyId,
         tokenHash,
         expiresAt,
-        deviceMetadata: { userAgent, ip }
-      }
+        deviceMetadata: { userAgent, ip },
+      },
     });
 
     return {

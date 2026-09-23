@@ -11,9 +11,9 @@ describe('OrganizationsController', () => {
       providers: [
         OrganizationsController,
         { provide: OrganizationsService, useValue: { methodName: jest.fn() } },
-        { provide: AuthService, useValue: { methodName: jest.fn() } }
+        { provide: AuthService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: [OrganizationsController]
+      controllers: [OrganizationsController],
     }).compile();
 
     provider = module.get<OrganizationsController>(OrganizationsController);

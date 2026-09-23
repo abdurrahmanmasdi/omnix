@@ -10,7 +10,10 @@ import { Logger } from 'nestjs-pino';
 async function bootstrap() {
   // Preserve the exact bytes Meta signed. JSON parsing changes whitespace/key
   // ordering, so verification must never be performed against @Body().
-  const app = await NestFactory.create(AppModule, { rawBody: true, bufferLogs: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    bufferLogs: true,
+  });
 
   // Use Pino as the default logger
   app.enableShutdownHooks();
@@ -20,7 +23,9 @@ async function bootstrap() {
   app.use(cookieParser());
 
   const frontendUrls = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((url) => url.trim().replace(/\/$/, ''))
+    ? process.env.FRONTEND_URL.split(',').map((url) =>
+        url.trim().replace(/\/$/, ''),
+      )
     : ['http://localhost:3001'];
 
   app.enableCors({

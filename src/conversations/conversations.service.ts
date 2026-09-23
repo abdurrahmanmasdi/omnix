@@ -24,7 +24,11 @@ export class ConversationsService {
     page: number = 1,
     limit: number = 20,
   ) {
-    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    const canReadAll = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:all',
+    );
     const dynamicWhere: any = { organizationId };
     if (!canReadAll) {
       dynamicWhere.lead = { assignedAgentId: userId };
@@ -53,33 +57,44 @@ export class ConversationsService {
     organizationId: string,
     userId: string,
     conversationId: string,
-    page: number = 1,
+    cursor?: string,
     limit: number = 50,
   ) {
-    const skip = (page - 1) * limit;
-
     // Verify the conversation actually belongs to this organization
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: { lead: true }
+      include: { lead: true },
     });
 
     if (!conversation || conversation.organizationId !== organizationId) {
       throw new NotFoundException('Conversation not found');
     }
-    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    const canReadAll = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:all',
+    );
     if (!canReadAll && conversation.lead?.assignedAgentId !== userId) {
-      throw new ForbiddenException('You do not have permission to access this conversation');
+      throw new ForbiddenException(
+        'You do not have permission to access this conversation',
+      );
     }
 
     const messages = await this.prisma.message.findMany({
       where: { conversationId },
-      orderBy: { createdAt: 'desc' }, // Newest first (we will invert this on the frontend)
-      take: limit,
-      skip,
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
-    return messages;
+    const hasMore = messages.length > limit;
+    if (hasMore) messages.pop();
+
+    return {
+      data: messages,
+      hasMore,
+      nextCursor: hasMore ? messages[messages.length - 1].id : null,
+    };
   }
 
   async sendManualMessage(
@@ -97,9 +112,15 @@ export class ConversationsService {
     if (!conversation || conversation.organizationId !== organizationId) {
       throw new NotFoundException('Conversation not found');
     }
-    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    const canReadAll = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:all',
+    );
     if (!canReadAll && conversation.lead?.assignedAgentId !== userId) {
-      throw new ForbiddenException('You do not have permission to access this conversation');
+      throw new ForbiddenException(
+        'You do not have permission to access this conversation',
+      );
     }
 
     const { organization, lead } = conversation;
@@ -151,18 +172,28 @@ export class ConversationsService {
     return newMessage;
   }
 
-  async toggleAiState(organizationId: string, userId: string, conversationId: string) {
+  async toggleAiState(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+  ) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: { lead: true }
+      include: { lead: true },
     });
 
     if (!conversation || conversation.organizationId !== organizationId) {
       throw new NotFoundException('Conversation not found');
     }
-    const canReadAll = await this.permissionService.has(userId, organizationId, 'leads:read:all');
+    const canReadAll = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:all',
+    );
     if (!canReadAll && conversation.lead?.assignedAgentId !== userId) {
-      throw new ForbiddenException('You do not have permission to access this conversation');
+      throw new ForbiddenException(
+        'You do not have permission to access this conversation',
+      );
     }
 
     const updatedConversation = await this.prisma.conversation.update({

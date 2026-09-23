@@ -64,11 +64,26 @@ describe('WebhooksProcessor', () => {
       providers: [
         WebhooksProcessor,
         { provide: PrismaService, useValue: mockPrismaService },
-        { provide: NotificationEmitterService, useValue: { emitNotification: jest.fn() } },
+        {
+          provide: NotificationEmitterService,
+          useValue: { emitNotification: jest.fn() },
+        },
         { provide: WhatsappService, useValue: { sendTextMessage: jest.fn() } },
-        { provide: WhatsappMediaService, useValue: { downloadMediaAsBase64: jest.fn() } },
-        { provide: EventsGateway, useValue: { server: { to: jest.fn().mockReturnThis(), emit: jest.fn() }, broadcastNewMessage: jest.fn() } },
-        { provide: FollowUpService, useValue: { cancelPendingFollowUps: jest.fn() } },
+        {
+          provide: WhatsappMediaService,
+          useValue: { downloadMediaAsBase64: jest.fn() },
+        },
+        {
+          provide: EventsGateway,
+          useValue: {
+            server: { to: jest.fn().mockReturnThis(), emit: jest.fn() },
+            broadcastNewMessage: jest.fn(),
+          },
+        },
+        {
+          provide: FollowUpService,
+          useValue: { cancelPendingFollowUps: jest.fn() },
+        },
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: CredentialsService, useValue: { readActive: jest.fn() } },
         { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
@@ -79,7 +94,7 @@ describe('WebhooksProcessor', () => {
     processor = module.get<WebhooksProcessor>(WebhooksProcessor);
     prisma = module.get(PrismaService);
     aiReplyQueue = module.get(getQueueToken('ai-reply'));
-    
+
     // Simulate OnModuleInit
     processor.onModuleInit();
   });
@@ -129,7 +144,14 @@ describe('WebhooksProcessor', () => {
             {
               value: {
                 metadata: { phone_number_id: 'unknown-phone' },
-                messages: [{ from: '123', id: 'msg123', type: 'text', text: { body: 'Hi' } }],
+                messages: [
+                  {
+                    from: '123',
+                    id: 'msg123',
+                    type: 'text',
+                    text: { body: 'Hi' },
+                  },
+                ],
               },
             },
           ],
@@ -153,10 +175,10 @@ describe('WebhooksProcessor', () => {
 
     // 2. Message is not a duplicate
     prisma.message.findUnique.mockResolvedValue(null as any);
-    
+
     // 3. Conversation doesn't exist yet
     prisma.conversation.findFirst.mockResolvedValue(null as any);
-    
+
     // 4. Lead doesn't exist yet (in transaction)
     prisma.lead.findFirst.mockResolvedValue(null as any);
 
@@ -164,9 +186,13 @@ describe('WebhooksProcessor', () => {
     const newLead = { id: 'lead-1', organizationId: 'org-1' };
     prisma.lead.upsert.mockResolvedValue(newLead as any);
 
-    const newConversation = { id: 'conv-1', leadId: 'lead-1', organizationId: 'org-1' };
+    const newConversation = {
+      id: 'conv-1',
+      leadId: 'lead-1',
+      organizationId: 'org-1',
+    };
     prisma.conversation.create.mockResolvedValue(newConversation as any);
-    
+
     const newMessage = { id: 'db-msg-1' };
     prisma.message.create.mockResolvedValue(newMessage as any);
 
@@ -177,7 +203,14 @@ describe('WebhooksProcessor', () => {
             {
               value: {
                 metadata: { phone_number_id: 'phone123' },
-                messages: [{ from: '4915112345678', id: 'meta-msg-123', type: 'text', text: { body: 'Hello there' } }],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'meta-msg-123',
+                    type: 'text',
+                    text: { body: 'Hello there' },
+                  },
+                ],
               },
             },
           ],
@@ -200,7 +233,7 @@ describe('WebhooksProcessor', () => {
         imageBase64: undefined,
         audioBase64: undefined,
       },
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
@@ -213,9 +246,12 @@ describe('WebhooksProcessor', () => {
 
     // 2. Message already exists in DB
     prisma.message.findUnique.mockResolvedValue({ id: 'existing-msg' } as any);
-    
+
     // 3. Conversation exists
-    prisma.conversation.findFirst.mockResolvedValue({ id: 'conv-1', leadId: 'lead-1' } as any);
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'conv-1',
+      leadId: 'lead-1',
+    } as any);
 
     const job = createMockJob({
       entry: [
@@ -224,7 +260,14 @@ describe('WebhooksProcessor', () => {
             {
               value: {
                 metadata: { phone_number_id: 'phone123' },
-                messages: [{ from: '4915112345678', id: 'duplicate-msg-id', type: 'text', text: { body: 'Hello' } }],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'duplicate-msg-id',
+                    type: 'text',
+                    text: { body: 'Hello' },
+                  },
+                ],
               },
             },
           ],

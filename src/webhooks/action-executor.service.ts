@@ -15,15 +15,51 @@ const CRM_SYNC_STATUSES: LeadStatus[] = [
 ];
 
 const VALID_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
-  [LeadStatus.NEW]: [LeadStatus.QUALIFYING, LeadStatus.QUALIFIED, LeadStatus.UNQUALIFIED, LeadStatus.HANDED_OFF],
-  [LeadStatus.QUALIFYING]: [LeadStatus.QUALIFIED, LeadStatus.UNQUALIFIED, LeadStatus.HANDED_OFF, LeadStatus.READY_TO_BOOK, LeadStatus.READY_TO_PAY],
-  [LeadStatus.QUALIFIED]: [LeadStatus.READY_TO_BOOK, LeadStatus.READY_TO_PAY, LeadStatus.UNQUALIFIED, LeadStatus.HANDED_OFF, LeadStatus.WON],
-  [LeadStatus.READY_TO_BOOK]: [LeadStatus.READY_TO_PAY, LeadStatus.WON, LeadStatus.UNQUALIFIED, LeadStatus.HANDED_OFF],
-  [LeadStatus.READY_TO_PAY]: [LeadStatus.WON, LeadStatus.LOST, LeadStatus.UNQUALIFIED, LeadStatus.HANDED_OFF],
+  [LeadStatus.NEW]: [
+    LeadStatus.QUALIFYING,
+    LeadStatus.QUALIFIED,
+    LeadStatus.UNQUALIFIED,
+    LeadStatus.HANDED_OFF,
+  ],
+  [LeadStatus.QUALIFYING]: [
+    LeadStatus.QUALIFIED,
+    LeadStatus.UNQUALIFIED,
+    LeadStatus.HANDED_OFF,
+    LeadStatus.READY_TO_BOOK,
+    LeadStatus.READY_TO_PAY,
+  ],
+  [LeadStatus.QUALIFIED]: [
+    LeadStatus.READY_TO_BOOK,
+    LeadStatus.READY_TO_PAY,
+    LeadStatus.UNQUALIFIED,
+    LeadStatus.HANDED_OFF,
+    LeadStatus.WON,
+  ],
+  [LeadStatus.READY_TO_BOOK]: [
+    LeadStatus.READY_TO_PAY,
+    LeadStatus.WON,
+    LeadStatus.UNQUALIFIED,
+    LeadStatus.HANDED_OFF,
+  ],
+  [LeadStatus.READY_TO_PAY]: [
+    LeadStatus.WON,
+    LeadStatus.LOST,
+    LeadStatus.UNQUALIFIED,
+    LeadStatus.HANDED_OFF,
+  ],
   [LeadStatus.WON]: [LeadStatus.HANDED_OFF],
   [LeadStatus.LOST]: [LeadStatus.HANDED_OFF],
   [LeadStatus.UNQUALIFIED]: [LeadStatus.HANDED_OFF],
-  [LeadStatus.HANDED_OFF]: [LeadStatus.QUALIFYING, LeadStatus.QUALIFIED, LeadStatus.UNQUALIFIED, LeadStatus.NEW, LeadStatus.READY_TO_BOOK, LeadStatus.READY_TO_PAY, LeadStatus.WON, LeadStatus.LOST],
+  [LeadStatus.HANDED_OFF]: [
+    LeadStatus.QUALIFYING,
+    LeadStatus.QUALIFIED,
+    LeadStatus.UNQUALIFIED,
+    LeadStatus.NEW,
+    LeadStatus.READY_TO_BOOK,
+    LeadStatus.READY_TO_PAY,
+    LeadStatus.WON,
+    LeadStatus.LOST,
+  ],
 };
 
 @Injectable()
@@ -57,7 +93,9 @@ export class ActionExecutorService {
     });
 
     if (!conversation) {
-      this.logger.error(`executeActions aborted: conversation ${conversationId} not found in org ${organizationId}`);
+      this.logger.error(
+        `executeActions aborted: conversation ${conversationId} not found in org ${organizationId}`,
+      );
       result.failed = actions.length;
       return result;
     }
@@ -68,7 +106,10 @@ export class ActionExecutorService {
         if (outcome === 'executed') result.executed++;
         else if (outcome === 'rejected') result.rejected++;
       } catch (error: any) {
-        this.logger.error(`Failed to execute action ${action.type}: ${error.message}`, error.stack);
+        this.logger.error(
+          `Failed to execute action ${action.type}: ${error.message}`,
+          error.stack,
+        );
         result.failed++;
       }
     }
@@ -83,7 +124,9 @@ export class ActionExecutorService {
     try {
       payload = JSON.parse(action.payload);
     } catch {
-      this.logger.error(`Rejected malformed JSON payload for action ${action.type}`);
+      this.logger.error(
+        `Rejected malformed JSON payload for action ${action.type}`,
+      );
       return 'rejected';
     }
 
@@ -116,7 +159,10 @@ export class ActionExecutorService {
         break;
 
       case 'SCHEDULE_FOLLOW_UP':
-        if (!payload.scheduledAt || isNaN(new Date(payload.scheduledAt).getTime())) {
+        if (
+          !payload.scheduledAt ||
+          isNaN(new Date(payload.scheduledAt).getTime())
+        ) {
           throw new Error('Invalid or missing scheduledAt date');
         }
         await this.followUpService.scheduleAiFollowUp(
@@ -136,10 +182,15 @@ export class ActionExecutorService {
 
   private async handleUpdateLead(conversation: any, payload: any) {
     if (!conversation.leadId) {
-      throw new Error(`Cannot UPDATE_LEAD: No lead linked to Conv ${conversation.id}`);
+      throw new Error(
+        `Cannot UPDATE_LEAD: No lead linked to Conv ${conversation.id}`,
+      );
     }
 
-    const updateData = this.buildLeadUpdateData(payload, conversation.lead?.status);
+    const updateData = this.buildLeadUpdateData(
+      payload,
+      conversation.lead?.status,
+    );
 
     if (Object.keys(updateData).length === 0) {
       throw new Error(`UPDATE_LEAD payload contained no updateable fields.`);
@@ -150,8 +201,13 @@ export class ActionExecutorService {
       data: updateData,
     });
 
-    this.eventsGateway.broadcastLeadUpdate(conversation.organizationId, updatedLead);
-    this.logger.log(`✅ Lead ${conversation.leadId} updated for Conv: ${conversation.id}`);
+    this.eventsGateway.broadcastLeadUpdate(
+      conversation.organizationId,
+      updatedLead,
+    );
+    this.logger.log(
+      `✅ Lead ${conversation.leadId} updated for Conv: ${conversation.id}`,
+    );
 
     if (
       updateData.status &&
@@ -159,10 +215,11 @@ export class ActionExecutorService {
       !updatedLead.externalContactId
     ) {
       try {
-        const { externalContactId, externalDealId } = await this.crmIntegration.syncLeadToExternalCrm(
-          updatedLead,
-          updatedLead.externalCrmType,
-        );
+        const { externalContactId, externalDealId } =
+          await this.crmIntegration.syncLeadToExternalCrm(
+            updatedLead,
+            updatedLead.externalCrmType,
+          );
 
         if (externalContactId) {
           await this.prisma.lead.update({
@@ -171,7 +228,10 @@ export class ActionExecutorService {
           });
         }
       } catch (crmError: any) {
-        this.logger.error(`CRM sync failed for Lead ${updatedLead.id}: ${crmError.message}`, crmError.stack);
+        this.logger.error(
+          `CRM sync failed for Lead ${updatedLead.id}: ${crmError.message}`,
+          crmError.stack,
+        );
       }
     }
   }
@@ -184,20 +244,27 @@ export class ActionExecutorService {
       data: { aiPaused: true, stateVersion: { increment: 1 } },
     });
 
-    this.eventsGateway.broadcastConversationUpdate(conversation.organizationId, updatedConversation);
+    this.eventsGateway.broadcastConversationUpdate(
+      conversation.organizationId,
+      updatedConversation,
+    );
     this.logger.log(`✅ Conv ${conversation.id} paused.`);
   }
 
   private async handleNotifyAgent(conversation: any, payload: any) {
     const targetUserId = conversation.lead?.assignedAgentId;
-    
+
     if (targetUserId) {
       await this.notificationEmitter.send({
         organizationId: conversation.organizationId,
         userId: targetUserId,
         type: NotificationType.LEAD_HANDED_OFF,
-        title: typeof payload.title === 'string' ? payload.title : 'AI Escalation',
-        body: typeof payload.body === 'string' ? payload.body : 'A conversation has been escalated by the AI.',
+        title:
+          typeof payload.title === 'string' ? payload.title : 'AI Escalation',
+        body:
+          typeof payload.body === 'string'
+            ? payload.body
+            : 'A conversation has been escalated by the AI.',
         referenceId: conversation.leadId || conversation.id,
         referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
       });
@@ -211,8 +278,12 @@ export class ActionExecutorService {
           organizationId: conversation.organizationId,
           userId: membership.userId,
           type: NotificationType.LEAD_HANDED_OFF,
-          title: typeof payload.title === 'string' ? payload.title : 'AI Escalation',
-          body: typeof payload.body === 'string' ? payload.body : 'A conversation has been escalated by the AI.',
+          title:
+            typeof payload.title === 'string' ? payload.title : 'AI Escalation',
+          body:
+            typeof payload.body === 'string'
+              ? payload.body
+              : 'A conversation has been escalated by the AI.',
           referenceId: conversation.leadId || conversation.id,
           referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
         });
@@ -222,62 +293,90 @@ export class ActionExecutorService {
   }
 
   private async handleUpsertLead(conversation: any, payload: any) {
-    const updateData = this.buildLeadUpdateData(payload, conversation.lead?.status);
+    const updateData = this.buildLeadUpdateData(
+      payload,
+      conversation.lead?.status,
+    );
 
     if (conversation.leadId) {
       const updatedLead = await this.prisma.lead.update({
         where: { id: conversation.leadId },
         data: updateData,
       });
-      this.eventsGateway.broadcastLeadUpdate(conversation.organizationId, updatedLead);
+      this.eventsGateway.broadcastLeadUpdate(
+        conversation.organizationId,
+        updatedLead,
+      );
     } else {
       const newLead = await this.prisma.lead.create({
         data: {
           ...updateData,
           organizationId: conversation.organizationId,
-          phoneNumber: typeof payload.phoneNumber === 'string' ? payload.phoneNumber : (conversation.externalContactId || 'Unknown'),
-          firstName: typeof payload.firstName === 'string' ? payload.firstName : 'Unknown',
-          lastName: typeof payload.lastName === 'string' ? payload.lastName : 'Unknown',
-          country: typeof payload.country === 'string' ? payload.country : 'Unknown',
-          timezone: typeof payload.timezone === 'string' ? payload.timezone : 'UTC',
-          primaryLanguage: typeof payload.primaryLanguage === 'string' ? payload.primaryLanguage : 'en',
+          phoneNumber:
+            typeof payload.phoneNumber === 'string'
+              ? payload.phoneNumber
+              : conversation.externalContactId || 'Unknown',
+          firstName:
+            typeof payload.firstName === 'string'
+              ? payload.firstName
+              : 'Unknown',
+          lastName:
+            typeof payload.lastName === 'string' ? payload.lastName : 'Unknown',
+          country:
+            typeof payload.country === 'string' ? payload.country : 'Unknown',
+          timezone:
+            typeof payload.timezone === 'string' ? payload.timezone : 'UTC',
+          primaryLanguage:
+            typeof payload.primaryLanguage === 'string'
+              ? payload.primaryLanguage
+              : 'en',
         },
       });
       await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: { leadId: newLead.id },
       });
-      this.eventsGateway.broadcastLeadUpdate(conversation.organizationId, newLead);
+      this.eventsGateway.broadcastLeadUpdate(
+        conversation.organizationId,
+        newLead,
+      );
     }
   }
 
-  private async handleHandoffToHuman(conversation: any, payload: any) {
-    const reason = typeof payload.reason === 'string' ? payload.reason : 'User requested human intervention';
+  public async handleHandoffToHuman(conversation: any, payload: any) {
+    const reason =
+      typeof payload.reason === 'string'
+        ? payload.reason
+        : 'User requested human intervention';
 
     // Idempotency: if already paused, skip re-pausing and re-notifying, but consider it successful.
     if (conversation.aiPaused) {
-      this.logger.log(`Handoff already processed for Conv: ${conversation.id}. Ignoring duplicate.`);
+      this.logger.log(
+        `Handoff already processed for Conv: ${conversation.id}. Ignoring duplicate.`,
+      );
       return;
     }
 
     const leadId = conversation.leadId;
     const organizationId = conversation.organizationId;
 
-    const [updatedConversation, updatedLead] = await this.prisma.$transaction(async (tx) => {
-      const conv = await tx.conversation.update({
-        where: { id: conversation.id },
-        data: { aiPaused: true, stateVersion: { increment: 1 } },
-      });
-
-      let lead = null;
-      if (leadId) {
-        lead = await tx.lead.update({
-          where: { id: leadId },
-          data: { status: 'HANDED_OFF' }, // LeadStatus.HANDED_OFF
+    const [updatedConversation, updatedLead] = await this.prisma.$transaction(
+      async (tx) => {
+        const conv = await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { aiPaused: true, stateVersion: { increment: 1 } },
         });
-      }
-      return [conv, lead];
-    });
+
+        let lead = null;
+        if (leadId) {
+          lead = await tx.lead.update({
+            where: { id: leadId },
+            data: { status: 'HANDED_OFF' }, // LeadStatus.HANDED_OFF
+          });
+        }
+        return [conv, lead];
+      },
+    );
 
     const memberships = await this.prisma.organizationMembership.findMany({
       where: { organizationId: organizationId },
@@ -311,7 +410,10 @@ export class ActionExecutorService {
     if (updatedLead) {
       this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead);
     }
-    this.eventsGateway.broadcastConversationUpdate(organizationId, updatedConversation);
+    this.eventsGateway.broadcastConversationUpdate(
+      organizationId,
+      updatedConversation,
+    );
   }
 
   private async handleUpdateSummary(conversation: any, payload: any) {
@@ -326,11 +428,16 @@ export class ActionExecutorService {
         data: { summary },
       });
     } else {
-      throw new Error(`Cannot update summary. No Lead linked to Conv ${conversation.id}`);
+      throw new Error(
+        `Cannot update summary. No Lead linked to Conv ${conversation.id}`,
+      );
     }
   }
 
-  private buildLeadUpdateData(payload: any, currentStatus?: LeadStatus): Record<string, any> {
+  private buildLeadUpdateData(
+    payload: any,
+    currentStatus?: LeadStatus,
+  ): Record<string, any> {
     const updateData: Record<string, any> = {};
 
     if (payload.status !== undefined) {
@@ -340,7 +447,9 @@ export class ActionExecutorService {
       if (currentStatus && payload.status !== currentStatus) {
         const allowedNext = VALID_STATUS_TRANSITIONS[currentStatus] || [];
         if (!allowedNext.includes(payload.status as LeadStatus)) {
-          throw new Error(`Invalid lead status transition from ${currentStatus} to ${payload.status}`);
+          throw new Error(
+            `Invalid lead status transition from ${currentStatus} to ${payload.status}`,
+          );
         }
       }
       updateData.status = payload.status as LeadStatus;
@@ -355,7 +464,9 @@ export class ActionExecutorService {
 
     if (payload.mediaConsentGranted !== undefined) {
       if (typeof payload.mediaConsentGranted !== 'boolean') {
-        throw new Error(`Invalid type for mediaConsentGranted, expected boolean`);
+        throw new Error(
+          `Invalid type for mediaConsentGranted, expected boolean`,
+        );
       }
       updateData.mediaConsentGranted = payload.mediaConsentGranted;
       updateData.mediaConsentSource = 'ai_agent_tool';
@@ -368,7 +479,17 @@ export class ActionExecutorService {
     }
 
     // Only allow specific string fields
-    const stringFields = ['firstName', 'lastName', 'email', 'phoneNumber', 'country', 'primaryLanguage', 'gender', 'timezone', 'currency'];
+    const stringFields = [
+      'firstName',
+      'lastName',
+      'email',
+      'phoneNumber',
+      'country',
+      'primaryLanguage',
+      'gender',
+      'timezone',
+      'currency',
+    ];
     for (const field of stringFields) {
       if (payload[field] !== undefined) {
         if (typeof payload[field] !== 'string') {

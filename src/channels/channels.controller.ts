@@ -25,7 +25,9 @@ export class ChannelsController {
 
   @Post()
   @RequirePermissions('manage_channels')
-  @ApiOperation({ summary: 'Connect a new communication channel (e.g., WhatsApp)' })
+  @ApiOperation({
+    summary: 'Connect a new communication channel (e.g., WhatsApp)',
+  })
   @ApiResponse({ status: 201, description: 'Channel connected successfully' })
   async createChannel(
     @CurrentUser() user: AuthenticatedUser,
@@ -51,7 +53,10 @@ export class ChannelsController {
   @Delete(':id')
   @RequirePermissions('manage_channels')
   @ApiOperation({ summary: 'Disconnect a channel' })
-  @ApiResponse({ status: 200, description: 'Channel disconnected successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Channel disconnected successfully',
+  })
   async deleteChannel(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') channelId: string,

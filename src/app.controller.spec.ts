@@ -9,9 +9,9 @@ describe('AppController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AppController,
-        { provide: AppService, useValue: { methodName: jest.fn() } }
+        { provide: AppService, useValue: { methodName: jest.fn() } },
       ],
-      controllers: [AppController]
+      controllers: [AppController],
     }).compile();
 
     provider = module.get<AppController>(AppController);

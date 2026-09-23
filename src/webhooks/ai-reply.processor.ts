@@ -50,6 +50,23 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       this.client.getService<SalesAgentService>('SalesAgent');
   }
 
+  private async recordCancellation(
+    conversationId: string,
+    organizationId: string,
+    reason: string,
+  ) {
+    const msg = await this.prisma.message.create({
+      data: {
+        conversationId,
+        metaMessageId: `cancel-${Date.now()}`,
+        content: `[SYSTEM: Generation Cancelled] ${reason}`,
+        type: 'SYSTEM' as any,
+        handledBy: 'SYSTEM' as any,
+      },
+    });
+    this.eventsGateway.broadcastNewMessage(organizationId, msg);
+  }
+
   async process(
     job: Job<{
       organizationId: string;
@@ -60,8 +77,22 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     }>,
   ): Promise<any> {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
-      const { organizationId, conversationId, customerPhone, newMessageIds, stateVersion } =
+      const { organizationId, conversationId, customerPhone, stateVersion } =
         job.data;
+
+      const pendingMessages = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          handledBy: 'HUMAN',
+          type: { in: ['LEAD_TEXT', 'LEAD_MEDIA'] },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      const newMessageIds = pendingMessages.map((m: any) => m.id);
+      if (newMessageIds.length === 0) {
+        this.logger.log(`No pending messages for Conv: ${conversationId}`);
+        return;
+      }
 
       // Ensure the organization exists and has a valid AI persona
       const organization = await this.prisma.organization.findUnique({
@@ -76,20 +107,24 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         return;
       }
 
-      // 🚀 NEW: Get active WhatsApp channel
-      const channel = await this.prisma.channel.findFirst({
-        where: {
-          organizationId,
-          provider: 'WHATSAPP_CLOUD_API',
-          status: 'ACTIVE',
-        },
-      });
-
       // Ensure the conversation wasn't manually paused by a human during the window
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
-        include: { lead: true },
+        include: { lead: true, channel: true },
       });
+
+      const channel = conversation?.channel;
+      if (!channel || channel.status !== 'ACTIVE') {
+        this.logger.warn(
+          `Delivery aborted: Bound channel is missing or inactive for conversation ${conversationId}`,
+        );
+        await this.recordCancellation(
+          conversationId,
+          organizationId,
+          'Delivery aborted because the bound WhatsApp channel is missing or inactive.',
+        );
+        return;
+      }
 
       if (conversation?.aiPaused || (conversation as any)?.lead?.optedOutAt) {
         this.logger.log(
@@ -110,6 +145,31 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       const leadSummary = (conversation as any)?.lead?.summary || '';
 
       try {
+        // T18: Idempotency Check
+        if (!job.id) throw new Error('Missing job ID for idempotency');
+        let aiMessage = await this.prisma.message.findUnique({
+          where: { idempotencyKey: job.id },
+        });
+
+        if (aiMessage?.metaMessageId) {
+          this.logger.log(
+            `Idempotency check: AI reply for ${job.id} already sent (wamid: ${aiMessage.metaMessageId}). Skipping.`,
+          );
+          return;
+        }
+
+        if (!aiMessage) {
+          aiMessage = await this.prisma.message.create({
+            data: {
+              conversationId,
+              content: '[PENDING AI REPLY]',
+              idempotencyKey: job.id,
+              type: 'SYSTEM' as any,
+              handledBy: 'SYSTEM' as any,
+            },
+          });
+        }
+
         // The disclosure is its own delivered message so an AI service failure cannot
         // accidentally mark a conversation as disclosed. The flag changes only after
         // Meta acknowledges successful delivery.
@@ -121,11 +181,21 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             organization.aiPersona?.agentName,
             organization.aiPersona?.clinicName,
           );
-          
-          const authOk = await this.deliveryAuth.authorizeDelivery(organizationId, conversationId, stateVersion);
+
+          const authOk = await this.deliveryAuth.authorizeDelivery(
+            organizationId,
+            conversationId,
+            stateVersion,
+          );
           if (!authOk) {
-            this.logger.warn(`Delivery aborted for disclosure (Org: ${organizationId}, Conv: ${conversationId})`);
-            await this.recordCancellation(conversationId, organizationId, 'Delivery aborted prior to disclosure send due to authorization failure or version mismatch.');
+            this.logger.warn(
+              `Delivery aborted for disclosure (Org: ${organizationId}, Conv: ${conversationId})`,
+            );
+            await this.recordCancellation(
+              conversationId,
+              organizationId,
+              'Delivery aborted prior to disclosure send due to authorization failure or version mismatch.',
+            );
             return;
           }
           const disclosureResponse = await this.whatsappService.sendTextMessage(
@@ -243,13 +313,36 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           }
         }
 
+        await this.prisma.message.update({
+          where: { idempotencyKey: job.id },
+          data: {
+            content: [
+              disclosureText,
+              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
+            ]
+              .filter(Boolean)
+              .join('|||'),
+            mediaUrl: safeMediaUrl || null,
+          },
+        });
+
         if (safeMediaUrl && channel?.credentialId) {
           // If there's media, we send the image first
-          
-          const authOk = await this.deliveryAuth.authorizeDelivery(organizationId, conversationId, stateVersion);
+
+          const authOk = await this.deliveryAuth.authorizeDelivery(
+            organizationId,
+            conversationId,
+            stateVersion,
+          );
           if (!authOk) {
-            this.logger.warn(`Delivery aborted for media (Org: ${organizationId}, Conv: ${conversationId})`);
-            await this.recordCancellation(conversationId, organizationId, 'Delivery aborted prior to media send due to authorization failure or version mismatch.');
+            this.logger.warn(
+              `Delivery aborted for media (Org: ${organizationId}, Conv: ${conversationId})`,
+            );
+            await this.recordCancellation(
+              conversationId,
+              organizationId,
+              'Delivery aborted prior to media send due to authorization failure or version mismatch.',
+            );
             return;
           }
           const mediaResponse = await this.whatsappService.sendMediaMessage(
@@ -272,11 +365,21 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             const message = messages[i];
 
             // Send to Meta
-            
-            const authOk = await this.deliveryAuth.authorizeDelivery(organizationId, conversationId, stateVersion);
+
+            const authOk = await this.deliveryAuth.authorizeDelivery(
+              organizationId,
+              conversationId,
+              stateVersion,
+            );
             if (!authOk) {
-              this.logger.warn(`Delivery aborted for text bubble ${i} (Org: ${organizationId}, Conv: ${conversationId})`);
-              await this.recordCancellation(conversationId, organizationId, 'Delivery aborted prior to text send due to authorization failure or version mismatch.');
+              this.logger.warn(
+                `Delivery aborted for text bubble ${i} (Org: ${organizationId}, Conv: ${conversationId})`,
+              );
+              await this.recordCancellation(
+                conversationId,
+                organizationId,
+                'Delivery aborted prior to text send due to authorization failure or version mismatch.',
+              );
               return;
             }
             const metaResponse = await this.whatsappService.sendTextMessage(
@@ -307,28 +410,19 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           return;
         }
 
-        // 3. Save the AI's response to the database
-        const aiMessage = await this.prisma.message.create({
-          data: {
-            conversationId: conversationId,
-            content: [
-              disclosureText,
-              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
-            ]
-              .filter(Boolean)
-              .join('|||'),
-            mediaUrl: safeMediaUrl || null,
-            metaMessageId: metaMessageId ?? null,
-            type: 'AI_TEXT',
-            handledBy: 'AI',
-          },
-        });
-
         // 4. Update the conversation timestamp
         await this.prisma.conversation.update({
           where: { id: conversationId },
           data: { updatedAt: new Date() },
         });
+
+        // 5. Update the DB message with the real metaMessageId
+        if (metaMessageId) {
+          await this.prisma.message.update({
+            where: { idempotencyKey: job.id },
+            data: { metaMessageId },
+          });
+        }
 
         // 5. Broadcast the AI message to the frontend UI
         this.eventsGateway.broadcastNewMessage(organization.id, aiMessage);

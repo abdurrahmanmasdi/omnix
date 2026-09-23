@@ -69,8 +69,13 @@ describe('ActionExecutorService', () => {
   describe('executeActions', () => {
     it('An action containing a different conversation ID cannot update that conversation', async () => {
       // The model returns an action with a different conversationId in payload
-      const actions = [{ type: 'PAUSE_CONVERSATION', payload: JSON.stringify({ conversationId: 'other-conv' }) }];
-      
+      const actions = [
+        {
+          type: 'PAUSE_CONVERSATION',
+          payload: JSON.stringify({ conversationId: 'other-conv' }),
+        },
+      ];
+
       // The processor calls with the trusted ID 'trusted-conv'
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
         id: 'trusted-conv',
@@ -79,7 +84,11 @@ describe('ActionExecutorService', () => {
       });
       (prismaService.conversation.update as jest.Mock).mockResolvedValue({});
 
-      const result = await service.executeActions('org-1', 'trusted-conv', actions);
+      const result = await service.executeActions(
+        'org-1',
+        'trusted-conv',
+        actions,
+      );
       expect(result.executed).toBe(1);
       expect(result.failed).toBe(0);
 
@@ -91,12 +100,23 @@ describe('ActionExecutorService', () => {
     });
 
     it('An action cannot mutate a lead from another organization', async () => {
-      const actions = [{ type: 'UPDATE_LEAD', payload: JSON.stringify({ status: LeadStatus.QUALIFIED }) }];
-      
-      // Simulate that findFirst returns null because the conversation does not belong to the org
-      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue(null);
+      const actions = [
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({ status: LeadStatus.QUALIFIED }),
+        },
+      ];
 
-      const result = await service.executeActions('wrong-org', 'trusted-conv', actions);
+      // Simulate that findFirst returns null because the conversation does not belong to the org
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue(
+        null,
+      );
+
+      const result = await service.executeActions(
+        'wrong-org',
+        'trusted-conv',
+        actions,
+      );
       expect(result.executed).toBe(0);
       expect(result.failed).toBe(1); // Failed because context could not be loaded
 
@@ -105,8 +125,16 @@ describe('ActionExecutorService', () => {
 
     it('Invalid status/priority values are rejected before Prisma is called', async () => {
       // payload with invalid status and priority
-      const actions = [{ type: 'UPDATE_LEAD', payload: JSON.stringify({ status: 'SUPER_HOT', priority: 'MEGA_HIGH' }) }];
-      
+      const actions = [
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({
+            status: 'SUPER_HOT',
+            priority: 'MEGA_HIGH',
+          }),
+        },
+      ];
+
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
         id: 'trusted-conv',
         organizationId: 'org-1',
@@ -114,8 +142,12 @@ describe('ActionExecutorService', () => {
         lead: { status: LeadStatus.NEW },
       });
 
-      const result = await service.executeActions('org-1', 'trusted-conv', actions);
-      
+      const result = await service.executeActions(
+        'org-1',
+        'trusted-conv',
+        actions,
+      );
+
       // The action itself fails due to validation
       expect(result.executed).toBe(0);
       expect(result.failed).toBe(1);
@@ -125,8 +157,13 @@ describe('ActionExecutorService', () => {
     });
 
     it('A valid action updates only the lead attached to the trusted conversation', async () => {
-      const actions = [{ type: 'UPDATE_LEAD', payload: JSON.stringify({ status: LeadStatus.QUALIFYING }) }];
-      
+      const actions = [
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({ status: LeadStatus.QUALIFYING }),
+        },
+      ];
+
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
         id: 'trusted-conv',
         organizationId: 'org-1',
@@ -134,9 +171,15 @@ describe('ActionExecutorService', () => {
         lead: { status: LeadStatus.NEW },
       });
 
-      (prismaService.lead.update as jest.Mock).mockResolvedValue({ id: 'lead-1' });
+      (prismaService.lead.update as jest.Mock).mockResolvedValue({
+        id: 'lead-1',
+      });
 
-      const result = await service.executeActions('org-1', 'trusted-conv', actions);
+      const result = await service.executeActions(
+        'org-1',
+        'trusted-conv',
+        actions,
+      );
       expect(result.executed).toBe(1);
       expect(result.failed).toBe(0);
 
@@ -148,8 +191,13 @@ describe('ActionExecutorService', () => {
     });
 
     it('Enforces lead status transition matrix (rejects WON -> NEW)', async () => {
-      const actions = [{ type: 'UPDATE_LEAD', payload: JSON.stringify({ status: LeadStatus.NEW }) }];
-      
+      const actions = [
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({ status: LeadStatus.NEW }),
+        },
+      ];
+
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
         id: 'trusted-conv',
         organizationId: 'org-1',
@@ -157,8 +205,12 @@ describe('ActionExecutorService', () => {
         lead: { status: LeadStatus.WON },
       });
 
-      const result = await service.executeActions('org-1', 'trusted-conv', actions);
-      
+      const result = await service.executeActions(
+        'org-1',
+        'trusted-conv',
+        actions,
+      );
+
       // Should fail transition validation
       expect(result.executed).toBe(0);
       expect(result.failed).toBe(1);

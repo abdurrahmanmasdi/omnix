@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
   Headers,
   Req,
 } from '@nestjs/common';
@@ -29,13 +31,17 @@ export class WebhooksController {
     @Query('hub.verify_token') token: string,
     @Query('hub.challenge') challenge: string,
   ) {
+    if (!mode || !token) {
+      throw new BadRequestException('Missing hub.mode or hub.verify_token');
+    }
+
     const verifyToken = this.configService.get<string>('META_VERIFY_TOKEN');
 
     if (mode === 'subscribe' && token === verifyToken) {
       return challenge; // Meta requires us to return this exact string back to them
     }
 
-    throw new UnauthorizedException('Invalid verification token');
+    throw new ForbiddenException('Invalid verification token');
   }
 
   // 2. Receiving Messages (POST)
@@ -47,7 +53,10 @@ export class WebhooksController {
     @Req() request: Request & { rawBody?: Buffer },
   ) {
     const rawBody = request.rawBody;
-    if (!rawBody || !this.webhooksService.isValidMetaSignature(rawBody, signature)) {
+    if (
+      !rawBody ||
+      !this.webhooksService.isValidMetaSignature(rawBody, signature)
+    ) {
       throw new UnauthorizedException('Invalid Meta webhook signature');
     }
     // Check if it's a valid WhatsApp API payload
