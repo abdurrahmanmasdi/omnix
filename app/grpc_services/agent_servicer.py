@@ -87,6 +87,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             state_data = {
                 "organization_id": org_id,
                 "clinic_name": clinic_name,
+                "agent_tone": agent_tone,
+                "business_rules": business_rules,
                 "conversation_id": conv_id,
                 "lead_id": str(res.lead_id) if getattr(res, 'lead_id', None) else None,
                 "customer": {
@@ -241,7 +243,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             logger.error("Error generating AI reply for Conv %s: %s", conv_id, e, exc_info=True)
             import json
             return agent_pb2.AgentReply(
-                replyText="I apologize, but I am experiencing a brief system update. Let me pass you to a human agent.",
+                replyText=SAFE_HANDOFF_MESSAGE,
                 actions=[agent_pb2.ToolAction(
                     type="HANDOFF_TO_HUMAN",
                     payload=json.dumps({"reason": "system_exception"})

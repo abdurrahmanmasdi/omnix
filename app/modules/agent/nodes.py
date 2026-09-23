@@ -154,13 +154,20 @@ def _get_smart_llm():
 from langchain_core.messages import AIMessage
 async def objection_handler_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
         current_actions = state.get("pending_crm_actions", [])
         new_actions = list(current_actions)
         new_actions.append(escalation_msg)
-        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user has an objection (fear, price, trust, or competitor comparison). 
@@ -169,6 +176,13 @@ async def objection_handler_node(state: ConversationState):
     Acknowledge their concern with deep empathy, present the proof/rebuttal, and end with a gentle question to move forward. Max 3-4 sentences."""
     prompt += "\n" + HANDOFF_PROMPT
     
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
@@ -217,13 +231,20 @@ async def objection_handler_node(state: ConversationState):
 
 async def qualification_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
         current_actions = state.get("pending_crm_actions", [])
         new_actions = list(current_actions)
         new_actions.append(escalation_msg)
-        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
 
     customer = state.get("customer", {})
@@ -257,7 +278,16 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
 - If the analysis confirms it IS a valid dental photo or X-ray, warmly THANK THEM for the clear image, and ONLY ask for the remaining missing info ({missing_str}).
 - If the analysis shows an irrelevant object (like a laptop/dark frame), humorously point it out and ask for the teeth photo.
 """
-    prompt += """\nKeep your response under 3 sentences. Use a natural, friendly WhatsApp tone."""
+    
+    prompt += """\nKeep your response under 3 sentences unless business rules dictate otherwise."""
+
+
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
 
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
@@ -310,13 +340,20 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
 from langchain_core.messages import AIMessage
 async def value_pitch_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
         current_actions = state.get("pending_crm_actions", [])
         new_actions = list(current_actions)
         new_actions.append(escalation_msg)
-        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is asking for pricing or service details.
@@ -326,6 +363,13 @@ async def value_pitch_node(state: ConversationState):
     
     prompt += "\n" + HANDOFF_PROMPT
     
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
@@ -371,13 +415,20 @@ async def value_pitch_node(state: ConversationState):
 
 async def closing_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
         current_actions = state.get("pending_crm_actions", [])
         new_actions = list(current_actions)
         new_actions.append(escalation_msg)
-        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
 
     clinic_name = state.get("clinic_name", "our clinic")
@@ -387,6 +438,13 @@ async def closing_node(state: ConversationState):
     Keep it under 3 sentences, conversational (WhatsApp style), and extremely warm."""
     
     prompt += "\n" + HANDOFF_PROMPT
+
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
 
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
@@ -440,13 +498,20 @@ async def out_of_domain_node(state: ConversationState):
 from langchain_core.messages import AIMessage
 async def general_qa_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
         current_actions = state.get("pending_crm_actions", [])
         new_actions = list(current_actions)
         new_actions.append(escalation_msg)
-        safe_response = AIMessage(content="I apologize, but I need to transfer you to our human medical coordinator to give you the most accurate pricing and details. They will be with you shortly.")
+        safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user is asking general questions about the clinic, doctors, location, or procedures.
@@ -455,6 +520,13 @@ async def general_qa_node(state: ConversationState):
     
     prompt += "\n" + HANDOFF_PROMPT
     
+
+    # T24: Inject Tone and Business Rules
+    agent_tone = state.get("agent_tone", "Professional and empathetic")
+    business_rules = state.get("business_rules", "{}")
+    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
+    prompt += f"BUSINESS RULES: {business_rules}\n"
+
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
