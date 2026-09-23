@@ -94,7 +94,7 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
         sql = text("""
             SELECT title, "storyText", "patientCountry", "procedureType", "beforeImageUrl", "afterImageUrl"
             FROM organization_experiences
-            WHERE "organizationId" = :org_id
+            WHERE "organizationId" = :org_id AND "consentObtained" = true
             ORDER BY embedding <=> :vector
             LIMIT 1
         """)
@@ -147,7 +147,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
         sql = text("""
             SELECT "competitorName", "objectionType", "rebuttalText"
             FROM organization_battlecards
-            WHERE "organizationId" = :org_id
+            WHERE "organizationId" = :org_id AND "consentObtained" = true
               AND embedding IS NOT NULL
             ORDER BY embedding <=> :vector
             LIMIT 1
