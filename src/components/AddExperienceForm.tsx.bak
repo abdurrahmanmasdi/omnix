@@ -100,7 +100,9 @@ export function AddExperienceForm({ organizationId }: AddExperienceFormProps) {
             "message" in error.response.data
           ) {
             const message = error.response.data.message;
-            setSubmissionState({ status: 'ERROR', message: Array.isArray(message) ? message.join(", ") : String(message) });
+            setSubmissionState({ status: 'ERROR', message: 
+              Array.isArray(message) ? message.join(", ") : String(message),
+            );
             return;
           }
 

@@ -112,8 +112,12 @@ export function LeadsDashboardClient() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleLeadUpdate = (data: LeadUpdatePayload) => {
+    const handleLeadUpdate = async (data: LeadUpdatePayload) => {
       console.log('[Socket] onLeadUpdate received:', data.id);
+
+      // Cancel any outgoing refetches so they don't overwrite our new state
+      await queryClient.cancelQueries({ queryKey: scopeKey(['/leads']) });
+      await queryClient.cancelQueries({ queryKey: scopeKey(['/pipeline-stages']) });
 
       // Invalidate all leads queries (list, individual, any filtered view)
       queryClient.invalidateQueries({ queryKey: scopeKey(['/leads']) });

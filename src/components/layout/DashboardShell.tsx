@@ -18,13 +18,30 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const { accessToken, user } = useAuthStore();
   const [hasHydrated, setHasHydrated] = useState(false);
 
-  // Wait for Zustand to hydrate from localStorage
+  // Wait for auth to hydrate (or trigger refresh)
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let mounted = true;
+    async function initAuth() {
+      if (!accessToken) {
+        try {
+          // This will trigger a 401, which axios interceptor will catch and attempt a silent refresh
+          await axiosInstance.get('/auth/me');
+        } catch (err) {
+          if (mounted) router.push('/login');
+        }
+      }
+      if (mounted) setHasHydrated(true);
+    }
+    
+    // Only attempt refresh if we haven't hydrated yet and have no token
+    if (!hasHydrated && !accessToken) {
+      initAuth();
+    } else if (!hasHydrated && accessToken) {
       setHasHydrated(true);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+    
+    return () => { mounted = false; };
+  }, [accessToken, hasHydrated, router]);
 
   // Route protection
   useEffect(() => {

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
 import { 
-  useConversationsControllerGetMessages,
+  conversationsControllerGetMessages,
   useConversationsControllerSendMessage,
   useConversationsControllerToggleAi,
 } from '@/lib/api/generated/conversations/conversations';
@@ -27,33 +28,58 @@ interface LiveChatPaneProps {
   liveMessages: ConversationsControllerGetMessages200Item[]; // Real-time messages passed down from Orchestrator
 }
 
-export function LiveChatPane({ activeConversationId, activeConversationData, onClose, liveMessages }: LiveChatPaneProps) {
+export function LiveChatPane({ activeConversationId, activeConversationData, onClose }: Omit<LiveChatPaneProps, 'liveMessages'>) {
   const queryClient = useQueryClient();
   const scopeKey = useTenantQueryKey();
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  // Historical messages
-  const { data: historicalMessages } = useConversationsControllerGetMessages(
-    activeConversationId,
-    { page: "1", limit: "50" },
-    { query: { enabled: !!activeConversationId } }
-  );
+  // Historical messages with infinite scrolling
+  const { 
+    data: infiniteData, 
+    fetchNextPage, 
+    hasNextPage, 
+    isFetchingNextPage 
+  } = useInfiniteQuery({
+    queryKey: scopeKey(['/conversations', activeConversationId, 'messages']),
+    queryFn: ({ pageParam }) => conversationsControllerGetMessages(activeConversationId, { limit: "50", cursor: pageParam as string } as any),
+    getNextPageParam: (lastPage: any) => lastPage.nextCursor || undefined,
+    initialPageParam: undefined,
+    enabled: !!activeConversationId
+  });
 
-  // Combine historical and live messages safely
   const activeMessages: ConversationsControllerGetMessages200Item[] = useMemo(() => {
-    const hist = historicalMessages && historicalMessages.length > 0 ? [...historicalMessages].reverse() : [];
-    const newMsgs = liveMessages.filter(
-      (liveMsg) => !hist.some((prevMsg) => prevMsg.id === liveMsg.id)
-    );
-    return [...hist, ...newMsgs];
-  }, [historicalMessages, liveMessages]);
+    if (!infiniteData) return [];
+    // Flatten all pages and reverse them (newest first -> chronological order for UI)
+    const allMessages = infiniteData.pages.flatMap((page: any) => page.data || []);
+    return [...allMessages].reverse();
+  }, [infiniteData]);
 
-  // Auto-scroll
+  // Handle scroll to top for pagination
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop } = scrollRef.current;
+    if (scrollTop === 0 && hasNextPage && !isFetchingNextPage) {
+      // Save current scroll height so we can restore position after new items are added
+      const oldScrollHeight = scrollRef.current.scrollHeight;
+      fetchNextPage().then(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight - oldScrollHeight;
+        }
+      });
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Auto-scroll to bottom on new message if already near bottom
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      // Only force scroll to bottom if we are already near it, OR if it's the initial load
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      if (isNearBottom || infiniteData?.pages.length === 1) {
+         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
     }
-  }, [activeMessages]);
+  }, [activeMessages.length, infiniteData]);
 
   const [messageInput, setMessageInput] = useState("");
   const sendMessageMutation = useConversationsControllerSendMessage();
@@ -178,6 +204,7 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
       <div
         className="flex-1 overflow-y-auto p-6 bg-[#051126]/50 relative"
         ref={scrollRef}
+        onScroll={handleScroll}
       >
         <div className="space-y-6">
           {activeMessages.length === 0 ? (

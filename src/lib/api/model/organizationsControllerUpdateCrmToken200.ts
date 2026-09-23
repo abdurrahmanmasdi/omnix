@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
-export type ConversationsControllerGetMessagesParams = {
-  cursor: string;
-  limit: string;
+export type OrganizationsControllerUpdateCrmToken200 = {
+  message?: string;
+  organizationId?: string;
 };

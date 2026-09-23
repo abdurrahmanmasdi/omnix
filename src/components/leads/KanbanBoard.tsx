@@ -1,4 +1,6 @@
 'use client';
+import type { LeadResponseDto } from '@/lib/api/model';
+
 
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,18 +34,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 // --- Types ---
-interface Lead {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  email?: string;
-  status?: string;
-  pipelineStageId?: string;
-  conversationId?: string;
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 interface Stage {
   id: string;
@@ -54,7 +44,7 @@ interface Stage {
 }
 
 interface KanbanBoardProps {
-  leads: Lead[];
+  leads: LeadResponseDto[];
   isLoading: boolean;
   onEdit: (id: string) => void;
   onViewProfile: (id: string) => void;
@@ -64,7 +54,7 @@ interface KanbanBoardProps {
 // --- Subcomponents ---
 
 interface SortableLeadCardProps {
-  lead: Lead;
+  lead: LeadResponseDto;
   onViewProfile: (id: string) => void;
   onOpenConversation: (conversationId?: string) => void;
 }
@@ -120,10 +110,10 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
           <Button 
             variant="ghost" 
             size="icon" 
-            className={`h-6 w-6 ${lead.conversationId ? 'text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10' : 'text-brand-ice/20 cursor-not-allowed'}`}
-            onClick={(e) => { e.stopPropagation(); onOpenConversation(lead.conversationId); }}
+            className={`h-6 w-6 ${lead.conversation?.id ? 'text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10' : 'text-brand-ice/20 cursor-not-allowed'}`}
+            onClick={(e) => { e.stopPropagation(); onOpenConversation(lead.conversation?.id as string); }}
             onPointerDown={(e) => e.stopPropagation()}
-            disabled={!lead.conversationId}
+            disabled={!lead.conversation?.id}
           >
             <MessageSquare className="h-3 w-3" />
           </Button>
@@ -177,11 +167,11 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
   const { data: stagesData, isLoading: stagesLoading } = usePipelineStagesControllerFindAll();
   const updateStageMutation = useLeadsControllerUpdateStage();
 
-  const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const [activeLead, setActiveLead] = useState<LeadResponseDto | null>(null);
 
   // We need to manage optimistic state locally during drag and drop
   // because relying solely on React Query cache updates during the fast drag events can be clunky.
-  const [localLeads, setLocalLeads] = useState<Lead[]>(leads);
+  const [localLeads, setLocalLeads] = useState<LeadResponseDto[]>(leads);
 
   // Sync local state when fresh leads come from props
   React.useEffect(() => {
@@ -209,7 +199,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
   // Group leads by stage id
   const columns = useMemo(() => {
-    const cols: Record<string, Lead[]> = {};
+    const cols: Record<string, LeadResponseDto[]> = {};
     stages.forEach((stage: Stage) => {
       cols[stage.id] = [];
     });
@@ -297,13 +287,13 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
       // Optimistically update React Query Cache
       queryClient.setQueryData(scopeKey(['/leads']), (oldData: unknown) => {
         if (!oldData) return oldData;
-        const processItems = (items: Lead[]) => items.map(item => 
+        const processItems = (items: LeadResponseDto[]) => items.map(item => 
           item.id === activeLeadId ? { ...item, pipelineStageId: newStageId } : item
         );
 
         if (Array.isArray(oldData)) return processItems(oldData);
         if (typeof oldData === 'object' && oldData !== null) {
-          const d = oldData as { items?: Lead[], data?: Lead[] };
+          const d = oldData as { items?: LeadResponseDto[], data?: LeadResponseDto[] };
           if (d.items) return { ...d, items: processItems(d.items) };
           if (d.data) return { ...d, data: processItems(d.data) };
         }
@@ -384,7 +374,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
 interface KanbanColumnProps {
   stage: Stage;
-  leads: Lead[];
+  leads: LeadResponseDto[];
   onViewProfile: (id: string) => void;
   onOpenConversation: (conversationId?: string) => void;
 }

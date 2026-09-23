@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
+export * from "./analyticsSummaryDto";
 export * from "./authControllerLogout200";
 export * from "./authControllerRefreshTokens200";
 export * from "./authControllerRefreshTokens200User";
@@ -32,18 +33,30 @@ export * from "./createOrganizationDto";
 export * from "./createOrganizationDtoBusinessRules";
 export * from "./createPipelineStageDto";
 export * from "./createPipelineStageDtoMappedStatus";
+export * from "./leadResponseDto";
+export * from "./leadResponseDtoConversation";
+export * from "./leadResponseDtoCurrency";
+export * from "./leadResponseDtoPriority";
+export * from "./leadResponseDtoSocialLinks";
+export * from "./leadResponseDtoStatus";
 export * from "./leadsControllerFindAllParams";
 export * from "./leadsControllerFindAllPriority";
 export * from "./leadsControllerFindAllStatus";
+export * from "./leadsPaginatedResponseDto";
+export * from "./leadsPaginatedResponseDtoMeta";
 export * from "./loginDto";
 export * from "./notificationsControllerGetNotifications200Item";
 export * from "./notificationsControllerGetNotificationsParams";
 export * from "./notificationsControllerMarkAllAsRead200";
 export * from "./notificationsControllerMarkOneAsRead200";
 export * from "./organizationsControllerCreateOrganization201";
+export * from "./organizationsControllerTestCrmToken200";
+export * from "./organizationsControllerUpdateCrmToken200";
+export * from "./recentActivityDto";
 export * from "./reorderStageItemDto";
 export * from "./sendMessageDto";
 export * from "./signupDto";
+export * from "./updateCrmTokenDto";
 export * from "./updateExperienceDto";
 export * from "./updateLeadDto";
 export * from "./updateLeadDtoCurrency";
@@ -60,5 +73,3 @@ export * from "./uploadDocumentDto";
 export * from "./upsertAiPersonaDto";
 export * from "./upsertAiPersonaDtoBusinessRules";
 export * from "./webhooksControllerVerifyWebhookParams";
-export * from "./analyticsSummaryDto";
-export * from "./recentActivityDto";

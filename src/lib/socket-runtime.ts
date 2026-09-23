@@ -33,11 +33,11 @@ export function getOrCreateSocket(
   token: string,
   onConnectError?: (err: Error) => void,
 ): { socket: Socket; generation: number } {
-  if (globalSocket?.connected) {
+  // T20: Return the global socket if it exists, even if it's currently connecting
+  if (globalSocket) {
     return { socket: globalSocket, generation: socketGeneration };
   }
 
-  globalSocket?.disconnect();
 
   socketGeneration++;
   const myGeneration = socketGeneration;
@@ -95,7 +95,6 @@ export function releaseRef(callerGeneration: number): void {
 
   refCount--;
   if (refCount <= 0) {
-    globalSocket?.disconnect();
     globalSocket = null;
     connected = false;
     refCount = 0;
@@ -108,7 +107,6 @@ export function releaseRef(callerGeneration: number): void {
  * Safe to call multiple times.
  */
 export function disconnectSocket(): void {
-  globalSocket?.disconnect();
   globalSocket = null;
   connected = false;
   refCount = 0;

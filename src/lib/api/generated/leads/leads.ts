@@ -24,6 +24,7 @@ import type {
 import type {
   CreateLeadDto,
   LeadsControllerFindAllParams,
+  LeadsPaginatedResponseDto,
   UpdateLeadDto,
   UpdateLeadStageDto,
 } from "../../model";
@@ -132,7 +133,7 @@ export const leadsControllerFindAll = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<unknown>(
+  return customFetch<LeadsPaginatedResponseDto>(
     { url: `/leads`, method: "GET", params, signal },
     options,
   );

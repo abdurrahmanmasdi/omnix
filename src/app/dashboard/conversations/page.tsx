@@ -32,7 +32,7 @@ export default function ConversationsPage() {
   
   const leads = Array.isArray(paginatedLeads) 
     ? paginatedLeads 
-    : (((paginatedLeads as Record<string, unknown>)?.items ?? (paginatedLeads as Record<string, unknown>)?.data ?? []) as unknown[]);
+    : ((paginatedLeads as any)?.data ?? []);
 
   // We also need conversation data to get `aiPaused` state. We can fetch conversations and map them.
   const { data: conversations, refetch: refetchConversations } =
@@ -42,8 +42,7 @@ export default function ConversationsPage() {
     (c: ConversationsControllerGetConversations200Item) => c.id === activeConversationId
   );
 
-  // 3. Local state for incoming live messages to pass down to the chat pane
-  const [liveMessages, setLiveMessages] = useState<ConversationsControllerGetMessages200Item[]>([]);
+
 
   // 4. THE MAGIC: Orchestrate WebSockets
   useEffect(() => {
@@ -53,25 +52,35 @@ export default function ConversationsPage() {
     const handleNewMessage = (data: LiveMessagePayload) => {
       refetchConversations(); // refresh sidebar/conversations
 
-      if (data && data.content) {
-        // Pass it to local state so LiveChatPane can append it
-        if (data.conversationId === activeConversationId) {
-          setLiveMessages((prev) => {
-            if (prev.some((m) => m.id === data.id)) return prev;
-            
-            // Cast to expected type since schema has differences but we only need these fields
-            const newMsg = {
-              id: data.id,
-              content: data.content,
-              createdAt: data.createdAt,
-              handledBy: data.handledBy as "AI" | "HUMAN",
-              type: data.type as "USER_TEXT" | "SYSTEM_TEXT" | "AI_TEXT",
-              mediaUrl: data.mediaUrl || undefined
-            } as ConversationsControllerGetMessages200Item;
-            
-            return [...prev, newMsg];
-          });
-        }
+      if (data && data.content && data.conversationId) {
+        const queryKey = scopeKey(['/conversations', data.conversationId, 'messages']);
+        
+        queryClient.setQueryData(queryKey, (old: any) => {
+          if (!old || !old.pages || old.pages.length === 0) return old;
+          
+          // Check if already exists in any page
+          for (const page of old.pages) {
+            if (page.data?.some((m: any) => m.id === data.id)) return old;
+          }
+
+          const newMsg = {
+            id: data.id,
+            content: data.content,
+            createdAt: data.createdAt,
+            handledBy: data.handledBy as "AI" | "HUMAN",
+            type: data.type as "USER_TEXT" | "SYSTEM_TEXT" | "AI_TEXT",
+            mediaUrl: data.mediaUrl || undefined
+          };
+          
+          // Prepend to first page
+          const newPages = [...old.pages];
+          newPages[0] = {
+            ...newPages[0],
+            data: [newMsg, ...(newPages[0].data || [])]
+          };
+          
+          return { ...old, pages: newPages };
+        });
       }
     };
 
@@ -93,8 +102,9 @@ export default function ConversationsPage() {
     };
 
     // --- Lead Update (Stage Changed) Listener ---
-    const handleLeadUpdate = (data: LeadUpdatePayload) => {
+    const handleLeadUpdate = async (data: LeadUpdatePayload) => {
       console.log('[Socket] onLeadUpdate received in Orchestrator:', data.id);
+      await queryClient.cancelQueries({ queryKey: scopeKey(['/leads']) });
       // Invalidate leads so the Kanban board physically moves the card if the stage changed on the backend
       queryClient.invalidateQueries({ queryKey: scopeKey(['/leads']) });
     };
@@ -110,11 +120,7 @@ export default function ConversationsPage() {
     };
   }, [socket, activeConversationId, queryClient, refetchConversations, scopeKey]);
 
-  // Clear live messages when switching conversations so they don't bleed over
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLiveMessages([]);
-  }, [activeConversationId]);
+
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] w-full overflow-hidden bg-transparent">
@@ -161,7 +167,6 @@ export default function ConversationsPage() {
             <LiveChatPane 
               activeConversationId={activeConversationId}
               activeConversationData={activeConversationData}
-              liveMessages={liveMessages}
               onClose={() => setActiveConversationId(null)}
             />
           </div>

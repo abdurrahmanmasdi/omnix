@@ -1,4 +1,6 @@
 'use client';
+import type { LeadResponseDto } from '@/lib/api/model';
+
 
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -57,7 +59,7 @@ interface Stage {
 }
 
 interface LiveKanbanBoardProps {
-  leads: Lead[];
+  leads: LeadResponseDto[];
   isLoading: boolean;
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
@@ -66,7 +68,7 @@ interface LiveKanbanBoardProps {
 // --- Subcomponents ---
 
 interface SortableLeadCardProps {
-  lead: Lead;
+  lead: LeadResponseDto;
   isActiveConversation: boolean;
   onSelectConversation: (conversationId: string) => void;
 }
@@ -84,7 +86,7 @@ function LeadCard({
   // Note: The UI queries the leads endpoint which nests `conversation: { id }`
   // since the frontend type SortableLeadCardProps may have it nested.
   // Actually, we don't have to touch it if it's related to the REST API, not sockets.
-  const conversationId = lead.conversation?.id ?? lead.conversationId;
+  const conversationId = lead.conversation?.id ?? lead.conversation?.id;
   
   return (
     <div 
@@ -92,7 +94,7 @@ function LeadCard({
       style={style}
       onClick={() => {
         if (conversationId) {
-          onSelectConversation(conversationId);
+          if (conversationId) onSelectConversation(conversationId as string);
         }
       }}
       className={`bg-transparent border rounded-lg p-3 shadow-none flex flex-col gap-2 cursor-grab active:cursor-grabbing transition-colors 
@@ -109,7 +111,7 @@ function LeadCard({
               Handed Off
             </Badge>
           )}
-          {conversationId && (
+          {!!conversationId && (
             <MessageSquare className={`h-4 w-4 ${isActiveConversation ? 'text-brand-cyan' : 'text-brand-ice/40'}`} />
           )}
         </div>
@@ -183,10 +185,10 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
   const { data: stagesData, isLoading: stagesLoading } = usePipelineStagesControllerFindAll();
   const updateStageMutation = useLeadsControllerUpdateStage();
 
-  const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const [activeLead, setActiveLead] = useState<LeadResponseDto | null>(null);
 
   // Optimistic local state for drag and drop
-  const [localLeads, setLocalLeads] = useState<Lead[]>(leads);
+  const [localLeads, setLocalLeads] = useState<LeadResponseDto[]>(leads);
 
   React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -219,7 +221,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
   );
 
   const columns = useMemo(() => {
-    const cols: Record<string, Lead[]> = {};
+    const cols: Record<string, LeadResponseDto[]> = {};
     extendedStages.forEach((stage: Stage) => {
       cols[stage.id] = [];
     });
@@ -303,14 +305,14 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
       // Optimistically update React Query Cache for ALL `/leads` queries
       queryClient.setQueriesData({ queryKey: scopeKey(['/leads']) }, (oldData: unknown) => {
         if (!oldData) return oldData;
-        const processItems = (items: Lead[]) => items.map(item => 
+        const processItems = (items: LeadResponseDto[]) => items.map(item => 
           item.id === activeLeadId ? { ...item, pipelineStageId: newStageId } : item
         );
 
         const oldDataRecord = oldData as Record<string, unknown>;
         if (Array.isArray(oldData)) return processItems(oldData);
-        if (oldDataRecord.items) return { ...oldDataRecord, items: processItems(oldDataRecord.items as Lead[]) };
-        if (oldDataRecord.data) return { ...oldDataRecord, data: processItems(oldDataRecord.data as Lead[]) };
+        if (oldDataRecord.items) return { ...oldDataRecord, items: processItems(oldDataRecord.items as LeadResponseDto[]) };
+        if (oldDataRecord.data) return { ...oldDataRecord, data: processItems(oldDataRecord.data as LeadResponseDto[]) };
         return oldData;
       });
 
@@ -375,7 +377,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
             <LeadCard 
               lead={activeLead} 
               isOverlay 
-              isActiveConversation={(activeLead.conversation?.id ?? activeLead.conversationId) === activeConversationId}
+              isActiveConversation={(activeLead.conversation?.id ?? activeLead.conversation?.id) === activeConversationId}
               onSelectConversation={onSelectConversation}
             />
           ) : null}
@@ -387,7 +389,7 @@ export function LiveKanbanBoard({ leads, isLoading, activeConversationId, onSele
 
 interface KanbanColumnProps {
   stage: Stage;
-  leads: Lead[];
+  leads: LeadResponseDto[];
   activeConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
 }
@@ -426,7 +428,7 @@ function KanbanColumn({ stage, leads, activeConversationId, onSelectConversation
             <SortableLeadCard 
               key={lead.id} 
               lead={lead} 
-              isActiveConversation={(lead.conversation?.id ?? lead.conversationId) === activeConversationId}
+              isActiveConversation={(lead.conversation?.id ?? lead.conversation?.id) === activeConversationId}
               onSelectConversation={onSelectConversation}
             />
           ))}

@@ -1,4 +1,6 @@
 'use client';
+import type { LeadResponseDto, CreateLeadSourceDto } from '@/lib/api/model';
+
 
 import {
   Table,
@@ -76,15 +78,10 @@ interface Lead {
   [key: string]: unknown;
 }
 
-interface Source {
-  id: string;
-  name: string;
-  [key: string]: unknown;
-}
 
 interface LeadsTableProps {
-  leads: Lead[];
-  sources: Source[];
+  leads: LeadResponseDto[];
+  sources: (CreateLeadSourceDto & { id: string })[];
   isLoading: boolean;
   sortBy: { field: string; direction: 'asc' | 'desc' };
   onSortChange: (field: string) => void;
@@ -246,7 +243,7 @@ export function LeadsTable({
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             className="rounded-lg font-bold hover:bg-transparent/5 py-2.5 cursor-pointer"
-                            onClick={() => onOpenConversation(lead.conversation?.id)}
+                            onClick={() => onOpenConversation((lead.conversation as any)?.id)}
                           >
                             <MessageSquare className="mr-3 h-4 w-4 text-emerald-500" /> Open Conversation
                           </DropdownMenuItem>

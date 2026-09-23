@@ -12,4 +12,5 @@ export type CreateChannelDtoProvider =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CreateChannelDtoProvider = {
   WHATSAPP_CLOUD_API: "WHATSAPP_CLOUD_API",
+  INSTAGRAM_GRAPH_API: "INSTAGRAM_GRAPH_API",
 } as const;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Save, Plug, TestTube } from "lucide-react";
+import { Loader2, Save, Plug } from "lucide-react";
 
 import {
   Card,
@@ -15,11 +15,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { axiosInstance } from "@/lib/api/axios-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTenantQueryKey } from "@/hooks/useTenantQueryKey";
 
 export default function IntegrationsSettingsPage() {
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
+  const queryClient = useQueryClient();
+  const scopeKey = useTenantQueryKey();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,33 +33,20 @@ export default function IntegrationsSettingsPage() {
 
     setIsLoading(true);
     try {
-      await axiosInstance.patch("/organizations/crm-token", {
-        crmAccessToken: token.trim(),
+      await axiosInstance.post("/channels", {
+        provider: "HUBSPOT",
+        accessToken: token.trim(),
+        providerAccountId: "hubspot-oauth",
       });
-      toast.success("HubSpot token saved successfully.");
+      toast.success("HubSpot connected successfully.");
       setToken("");
-    } catch (error) {
-      toast.error("Failed to save HubSpot token.");
+      // Refresh channels so they appear
+      queryClient.invalidateQueries({ queryKey: scopeKey(["/channels"]) });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to connect HubSpot.");
       console.error(error);
     } finally {
       setIsLoading(false);
-    }
-  }
-
-  async function onTest() {
-    setIsTesting(true);
-    try {
-      const { data } = await axiosInstance.post("/organizations/crm-token/test");
-      toast.success(
-        `HubSpot connection OK (portal ${data.hubSpotPortalId}, app ${data.hubSpotAppId}).`
-      );
-    } catch (error: any) {
-      toast.error(
-        error.response?.data?.message || "HubSpot connection test failed."
-      );
-      console.error(error);
-    } finally {
-      setIsTesting(false);
     }
   }
 
@@ -98,25 +88,11 @@ export default function IntegrationsSettingsPage() {
               />
               <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
                 Create a private app in HubSpot and paste its access token here.
-                The token is stored encrypted at rest.
+                The token is verified immediately and stored encrypted at rest.
               </p>
             </div>
 
             <div className="pt-4 flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isTesting}
-                onClick={onTest}
-                className="h-11 px-6 rounded-lg border-white/10 hover:bg-white/5 font-bold transition-all active:scale-95"
-              >
-                {isTesting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <TestTube className="mr-2 h-4 w-4" />
-                )}
-                {isTesting ? "Testing..." : "Test Connection"}
-              </Button>
               <Button
                 type="submit"
                 disabled={isLoading}
