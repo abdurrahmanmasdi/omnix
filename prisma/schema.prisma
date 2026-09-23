@@ -333,6 +333,7 @@ model Conversation {
   leadId            String?   @unique @db.Uuid
   aiPaused          Boolean   @default(false)
   aiDisclosureSent  Boolean   @default(false)
+  stateVersion      Int       @default(1)
   assignedAgentId   String?   @db.Uuid
 
   lead               Lead?               @relation("LeadConversation", fields: [leadId], references: [id])

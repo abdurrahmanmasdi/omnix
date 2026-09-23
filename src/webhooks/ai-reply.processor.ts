@@ -9,6 +9,7 @@ import type { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import type { SalesAgentService } from './interfaces/agent.interface';
 import { ActionExecutorService } from './action-executor.service';
+import { DeliveryAuthService } from './delivery-auth.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -38,6 +39,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     private readonly actionExecutor: ActionExecutorService,
     private readonly followUpService: FollowUpService,
     private readonly auditService: AuditService,
+    private readonly deliveryAuth: DeliveryAuthService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
   ) {
     super();
@@ -54,10 +56,11 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       conversationId: string;
       customerPhone: string;
       newMessageIds: string[];
+      stateVersion?: number;
     }>,
   ): Promise<any> {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
-      const { organizationId, conversationId, customerPhone, newMessageIds } =
+      const { organizationId, conversationId, customerPhone, newMessageIds, stateVersion } =
         job.data;
 
       // Ensure the organization exists and has a valid AI persona
@@ -118,6 +121,13 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             organization.aiPersona?.agentName,
             organization.aiPersona?.clinicName,
           );
+          
+          const authOk = await this.deliveryAuth.authorizeDelivery(organizationId, conversationId, stateVersion);
+          if (!authOk) {
+            this.logger.warn(`Delivery aborted for disclosure (Org: ${organizationId}, Conv: ${conversationId})`);
+            await this.recordCancellation(conversationId, organizationId, 'Delivery aborted prior to disclosure send due to authorization failure or version mismatch.');
+            return;
+          }
           const disclosureResponse = await this.whatsappService.sendTextMessage(
             channel.credentialId,
             organizationId,
@@ -235,6 +245,13 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
         if (safeMediaUrl && channel?.credentialId) {
           // If there's media, we send the image first
+          
+          const authOk = await this.deliveryAuth.authorizeDelivery(organizationId, conversationId, stateVersion);
+          if (!authOk) {
+            this.logger.warn(`Delivery aborted for media (Org: ${organizationId}, Conv: ${conversationId})`);
+            await this.recordCancellation(conversationId, organizationId, 'Delivery aborted prior to media send due to authorization failure or version mismatch.');
+            return;
+          }
           const mediaResponse = await this.whatsappService.sendMediaMessage(
             channel.credentialId,
             organizationId,
@@ -255,6 +272,13 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
             const message = messages[i];
 
             // Send to Meta
+            
+            const authOk = await this.deliveryAuth.authorizeDelivery(organizationId, conversationId, stateVersion);
+            if (!authOk) {
+              this.logger.warn(`Delivery aborted for text bubble ${i} (Org: ${organizationId}, Conv: ${conversationId})`);
+              await this.recordCancellation(conversationId, organizationId, 'Delivery aborted prior to text send due to authorization failure or version mismatch.');
+              return;
+            }
             const metaResponse = await this.whatsappService.sendTextMessage(
               channel.credentialId,
               organizationId,

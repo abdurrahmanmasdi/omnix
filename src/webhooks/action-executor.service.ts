@@ -181,7 +181,7 @@ export class ActionExecutorService {
 
     const updatedConversation = await this.prisma.conversation.update({
       where: { id: conversation.id },
-      data: { aiPaused: true },
+      data: { aiPaused: true, stateVersion: { increment: 1 } },
     });
 
     this.eventsGateway.broadcastConversationUpdate(conversation.organizationId, updatedConversation);
@@ -266,7 +266,7 @@ export class ActionExecutorService {
     const [updatedConversation, updatedLead] = await this.prisma.$transaction(async (tx) => {
       const conv = await tx.conversation.update({
         where: { id: conversation.id },
-        data: { aiPaused: true },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
       });
 
       let lead = null;

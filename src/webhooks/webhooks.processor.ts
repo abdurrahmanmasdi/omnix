@@ -280,7 +280,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                     where: { organizationId: organization.id, phoneNumber: customerPhone, deletedAt: null },
                     data: { optedOutAt: new Date(), optOutReason: messageContent },
                   }),
-                  this.prisma.conversation.update({ where: { id: conversation.id }, data: { aiPaused: true } }),
+                  this.prisma.conversation.update({ where: { id: conversation.id }, data: { aiPaused: true, stateVersion: { increment: 1 } } }),
                 ]);
                 await this.auditService.record({
                   organizationId: organization.id,
@@ -366,6 +366,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                     conversationId: conversation.id,
                     customerPhone: customerPhone,
                     newMessageIds: newMessageIds, // 🚀 NEW: Pass the array of IDs instead of inline media/text
+                    stateVersion: conversation.stateVersion + 1, // T13: Pass the version to check immediately before sending
                   },
                   {
                     jobId: jobId, // This ensures we can find and delete it later

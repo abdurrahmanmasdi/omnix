@@ -11,6 +11,7 @@ import { InstagramService } from './instagram.service';
 import { EventsModule } from '../events/events.module';
 import { AiReplyProcessor } from './ai-reply.processor';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
+import { DeliveryAuthService } from './delivery-auth.service';
 import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 import { WhatsappMediaService } from './whatsapp-media.service';
@@ -64,8 +65,10 @@ import { AuditModule } from '../audit/audit.module';
     InstagramService,
     WhatsappMediaService,
     ActionExecutorService,
+    DeliveryAuthService,
     NotificationEmitterService,
   ],
-  exports: [WhatsappService, InstagramService, ActionExecutorService, FollowUpService],
+  exports: [WhatsappService, DeliveryAuthService, InstagramService, ActionExecutorService,
+    DeliveryAuthService, FollowUpService],
 })
 export class WebhooksModule {}

@@ -23,6 +23,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
     private readonly eventsGateway: EventsGateway,
     private readonly actionExecutor: ActionExecutorService,
     private readonly notificationEmitter: NotificationEmitterService,
+    private readonly deliveryAuth: DeliveryAuthService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
   ) {
     super();
@@ -30,6 +31,19 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
 
   onModuleInit() {
     this.salesAgentService = this.client.getService<SalesAgentService>('SalesAgent');
+  }
+
+  
+  private async recordCancellation(conversationId: string, organizationId: string, reason: string) {
+    const sysMsg = await this.prisma.message.create({
+      data: {
+        conversationId,
+        content: `[SYSTEM: Follow-up Cancelled] ${reason}`,
+        type: 'SYSTEM',
+        handledBy: 'SYSTEM',
+      },
+    });
+    this.eventsGateway.broadcastNewMessage(organizationId, sysMsg);
   }
 
   async process(job: Job<{ followUpId: string }>): Promise<any> {
@@ -149,6 +163,13 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         let metaMessageId: string | undefined = undefined;
 
         if (mediaUrl) {
+          
+          const authOk = await this.deliveryAuth.authorizeDelivery(organization.id, conversation.id);
+          if (!authOk) {
+            this.logger.warn(`Follow-up delivery aborted for media (Org: ${organization.id}, Conv: ${conversation.id})`);
+            await this.recordCancellation(conversation.id, organization.id, 'Follow-up aborted prior to media send due to authorization failure.');
+            return;
+          }
           const mediaResponse = await this.whatsappService.sendMediaMessage(
             channel.credentialId,
             organization.id,
@@ -162,6 +183,13 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
           const messages = replyText.split('|||').map((m) => m.trim()).filter((m) => m.length > 0);
           for (let i = 0; i < messages.length; i++) {
             const message = messages[i];
+            
+            const authOk = await this.deliveryAuth.authorizeDelivery(organization.id, conversation.id);
+            if (!authOk) {
+              this.logger.warn(`Follow-up delivery aborted for text (Org: ${organization.id}, Conv: ${conversation.id})`);
+              await this.recordCancellation(conversation.id, organization.id, 'Follow-up aborted prior to text send due to authorization failure.');
+              return;
+            }
             const metaResponse = await this.whatsappService.sendTextMessage(
               channel.credentialId,
               organization.id,
