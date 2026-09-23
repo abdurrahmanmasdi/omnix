@@ -5,6 +5,20 @@ import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
   imports: [
     PinoLoggerModule.forRoot({
       pinoHttp: {
+        
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'req.body.password',
+            'req.body.accessToken',
+            'req.body.refreshToken',
+            'req.body.email',
+            'req.body.phoneNumber',
+            'res.headers["set-cookie"]'
+          ],
+          censor: '[REDACTED]'
+        },
         transport:
           process.env.NODE_ENV !== 'production'
             ? {

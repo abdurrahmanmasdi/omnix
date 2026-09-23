@@ -255,7 +255,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                   }
                 }
 
-                conversation = result as any;
+                conversation = result || null;
                 if (!conversation) continue; // TS safety check
               }
 
@@ -381,7 +381,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 // phone number. This prevents one tenant's STOP from affecting
                 // another tenant that happens to know the same contact.
                 await this.prisma.$transaction([
-                  (this.prisma.lead as any).updateMany({
+                  this.prisma.lead.updateMany({
                     where: {
                       organizationId: organization.id,
                       phoneNumber: customerPhone,
@@ -417,7 +417,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 continue;
               }
 
-              const leadConsent = await (this.prisma.lead as any).findFirst({
+              const leadConsent = await this.prisma.lead.findFirst({
                 where: {
                   organizationId: organization.id,
                   phoneNumber: customerPhone,

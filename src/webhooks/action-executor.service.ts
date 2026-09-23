@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Conversation, Lead } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ToolAction } from './interfaces/agent.interface';
 import { LeadStatus, Priority, NotificationType } from '@prisma/client';
@@ -117,10 +118,10 @@ export class ActionExecutorService {
   }
 
   private async handleAction(
-    conversation: any,
+    conversation: Conversation & { lead?: Lead | null },
     action: ToolAction,
   ): Promise<'executed' | 'rejected'> {
-    let payload: any;
+    let payload: Record<string, any>;
     try {
       payload = JSON.parse(action.payload);
     } catch {
@@ -180,7 +181,7 @@ export class ActionExecutorService {
     return 'executed';
   }
 
-  private async handleUpdateLead(conversation: any, payload: any) {
+  private async handleUpdateLead(conversation: Conversation & { lead?: Lead | null }, payload: any) {
     if (!conversation.leadId) {
       throw new Error(
         `Cannot UPDATE_LEAD: No lead linked to Conv ${conversation.id}`,
@@ -236,7 +237,7 @@ export class ActionExecutorService {
     }
   }
 
-  private async handlePauseConversation(conversation: any) {
+  private async handlePauseConversation(conversation: Conversation & { lead?: Lead | null }) {
     if (conversation.aiPaused) return;
 
     const updatedConversation = await this.prisma.conversation.update({
@@ -251,7 +252,7 @@ export class ActionExecutorService {
     this.logger.log(`✅ Conv ${conversation.id} paused.`);
   }
 
-  private async handleNotifyAgent(conversation: any, payload: any) {
+  private async handleNotifyAgent(conversation: Conversation & { lead?: Lead | null }, payload: any) {
     const targetUserId = conversation.lead?.assignedAgentId;
 
     if (targetUserId) {
@@ -292,7 +293,7 @@ export class ActionExecutorService {
     }
   }
 
-  private async handleUpsertLead(conversation: any, payload: any) {
+  private async handleUpsertLead(conversation: Conversation & { lead?: Lead | null }, payload: any) {
     const updateData = this.buildLeadUpdateData(
       payload,
       conversation.lead?.status,
@@ -343,7 +344,7 @@ export class ActionExecutorService {
     }
   }
 
-  public async handleHandoffToHuman(conversation: any, payload: any) {
+  public async handleHandoffToHuman(conversation: Conversation & { lead?: Lead | null }, payload: any) {
     const reason =
       typeof payload.reason === 'string'
         ? payload.reason
@@ -416,7 +417,7 @@ export class ActionExecutorService {
     );
   }
 
-  private async handleUpdateSummary(conversation: any, payload: any) {
+  private async handleUpdateSummary(conversation: Conversation & { lead?: Lead | null }, payload: any) {
     const summary = payload.summary;
     if (!summary || typeof summary !== 'string') {
       throw new Error(`UPDATE_SUMMARY action missing or invalid 'summary'`);
