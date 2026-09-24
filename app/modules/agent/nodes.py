@@ -155,12 +155,6 @@ from langchain_core.messages import AIMessage
 async def objection_handler_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
 
-    # T24: Inject Tone and Business Rules
-    agent_tone = state.get("agent_tone", "Professional and empathetic")
-    business_rules = state.get("business_rules", "{}")
-    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
-    prompt += f"BUSINESS RULES: {business_rules}\n"
-
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
@@ -232,12 +226,6 @@ async def objection_handler_node(state: ConversationState):
 async def qualification_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
 
-    # T24: Inject Tone and Business Rules
-    agent_tone = state.get("agent_tone", "Professional and empathetic")
-    business_rules = state.get("business_rules", "{}")
-    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
-    prompt += f"BUSINESS RULES: {business_rules}\n"
-
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
         escalation_msg = await escalate_to_human.ainvoke({"reason": "AI failed compliance checks multiple times."}, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
@@ -297,10 +285,10 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
     response = await smart_writer_llm.ainvoke(messages)
     
     new_messages = [response]
-    node_updates = {messages: new_messages, current_stage:  + stage_name + r}
-    new_pending_actions = list(state.get(pending_crm_actions, []))
+    node_updates = {"messages": new_messages, "current_stage": "QUALIFYING"}
+    new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, tool_calls) and response.tool_calls:
+    if hasattr(response, "tool_calls") and response.tool_calls:
         messages.append(response)
         for tool_call in response.tool_calls:
             if tool_call["name"] == "search_clinic_knowledge":
@@ -317,13 +305,13 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
                 tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
             else:
                 tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call[id], content=str(tool_result), name=tool_call[name])
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
             messages.append(tool_msg)
             new_messages.append(tool_msg)
             
             try:
                 parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and action in parsed:
+                if isinstance(parsed, dict) and "action" in parsed:
                     new_pending_actions.append(json.dumps(parsed))
             except Exception:
                 pass
@@ -332,7 +320,7 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
         final_response = await flagship_llm.ainvoke(messages)
         new_messages.append(final_response)
         
-    if len(new_pending_actions) > len(state.get(pending_crm_actions, [])):
+    if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
         node_updates[pending_crm_actions] = new_pending_actions
         
     return node_updates
@@ -340,12 +328,6 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
 from langchain_core.messages import AIMessage
 async def value_pitch_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
-
-    # T24: Inject Tone and Business Rules
-    agent_tone = state.get("agent_tone", "Professional and empathetic")
-    business_rules = state.get("business_rules", "{}")
-    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
-    prompt += f"BUSINESS RULES: {business_rules}\n"
 
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
@@ -379,10 +361,10 @@ async def value_pitch_node(state: ConversationState):
     response = await smart_writer_llm.ainvoke(messages)
     
     new_messages = [response]
-    node_updates = {messages: new_messages, current_stage:  + stage_name + r}
-    new_pending_actions = list(state.get(pending_crm_actions, []))
+    node_updates = {"messages": new_messages, "current_stage": "VALUE_PITCH"}
+    new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, tool_calls) and response.tool_calls:
+    if hasattr(response, "tool_calls") and response.tool_calls:
         messages.append(response)
         for tool_call in response.tool_calls:
             if tool_call["name"] == "search_clinic_knowledge":
@@ -393,13 +375,13 @@ async def value_pitch_node(state: ConversationState):
                 tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
             else:
                 tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call[id], content=str(tool_result), name=tool_call[name])
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
             messages.append(tool_msg)
             new_messages.append(tool_msg)
             
             try:
                 parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and action in parsed:
+                if isinstance(parsed, dict) and "action" in parsed:
                     new_pending_actions.append(json.dumps(parsed))
             except Exception:
                 pass
@@ -408,19 +390,13 @@ async def value_pitch_node(state: ConversationState):
         final_response = await flagship_llm.ainvoke(messages)
         new_messages.append(final_response)
         
-    if len(new_pending_actions) > len(state.get(pending_crm_actions, [])):
+    if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
         node_updates[pending_crm_actions] = new_pending_actions
         
     return node_updates
 
 async def closing_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
-
-    # T24: Inject Tone and Business Rules
-    agent_tone = state.get("agent_tone", "Professional and empathetic")
-    business_rules = state.get("business_rules", "{}")
-    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
-    prompt += f"BUSINESS RULES: {business_rules}\n"
 
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
@@ -454,10 +430,10 @@ async def closing_node(state: ConversationState):
     response = await smart_writer_llm.ainvoke(messages)
     
     new_messages = [response]
-    node_updates = {messages: new_messages, current_stage:  + stage_name + r}
-    new_pending_actions = list(state.get(pending_crm_actions, []))
+    node_updates = {"messages": new_messages, "current_stage": "CLOSING"}
+    new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, tool_calls) and response.tool_calls:
+    if hasattr(response, "tool_calls") and response.tool_calls:
         messages.append(response)
         for tool_call in response.tool_calls:
             if tool_call["name"] == "search_clinic_knowledge":
@@ -468,13 +444,13 @@ async def closing_node(state: ConversationState):
                 tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
             else:
                 tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call[id], content=str(tool_result), name=tool_call[name])
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
             messages.append(tool_msg)
             new_messages.append(tool_msg)
             
             try:
                 parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and action in parsed:
+                if isinstance(parsed, dict) and "action" in parsed:
                     new_pending_actions.append(json.dumps(parsed))
             except Exception:
                 pass
@@ -483,7 +459,7 @@ async def closing_node(state: ConversationState):
         final_response = await flagship_llm.ainvoke(messages)
         new_messages.append(final_response)
         
-    if len(new_pending_actions) > len(state.get(pending_crm_actions, [])):
+    if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
         node_updates[pending_crm_actions] = new_pending_actions
         
     return node_updates
@@ -498,12 +474,6 @@ async def out_of_domain_node(state: ConversationState):
 from langchain_core.messages import AIMessage
 async def general_qa_node(state: ConversationState):
     attempts = state.get("generation_attempts", 0)
-
-    # T24: Inject Tone and Business Rules
-    agent_tone = state.get("agent_tone", "Professional and empathetic")
-    business_rules = state.get("business_rules", "{}")
-    prompt += f"\n\nPERSONA TONE: {agent_tone}\n"
-    prompt += f"BUSINESS RULES: {business_rules}\n"
 
     if not state.get("is_compliant", True) and attempts >= 2:
         from app.modules.agent.tools import escalate_to_human
@@ -535,10 +505,10 @@ async def general_qa_node(state: ConversationState):
     smart_writer_llm = _get_smart_llm()
     response = await smart_writer_llm.ainvoke(messages)
     new_messages = [response]
-    node_updates = {messages: new_messages, current_stage:  + stage_name + r}
-    new_pending_actions = list(state.get(pending_crm_actions, []))
+    node_updates = {"messages": new_messages, "current_stage": "GENERAL_QA"}
+    new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, tool_calls) and response.tool_calls:
+    if hasattr(response, "tool_calls") and response.tool_calls:
         messages.append(response)
         for tool_call in response.tool_calls:
             if tool_call["name"] == "search_clinic_knowledge":
@@ -547,13 +517,13 @@ async def general_qa_node(state: ConversationState):
                 tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
             else:
                 tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call[id], content=str(tool_result), name=tool_call[name])
+            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
             messages.append(tool_msg)
             new_messages.append(tool_msg)
             
             try:
                 parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and action in parsed:
+                if isinstance(parsed, dict) and "action" in parsed:
                     new_pending_actions.append(json.dumps(parsed))
             except Exception:
                 pass
@@ -562,7 +532,7 @@ async def general_qa_node(state: ConversationState):
         final_response = await flagship_llm.ainvoke(messages)
         new_messages.append(final_response)
         
-    if len(new_pending_actions) > len(state.get(pending_crm_actions, [])):
+    if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
         node_updates[pending_crm_actions] = new_pending_actions
         
     return node_updates

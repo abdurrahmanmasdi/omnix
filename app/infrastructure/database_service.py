@@ -40,12 +40,15 @@ class DatabaseService:
         def _fetch():
             with SessionLocal() as db:
                 query = text("""
-                    SELECT m.content, m.type 
-                    FROM messages m
-                    JOIN conversations c ON m."conversationId" = c.id
-                    WHERE m."conversationId" = :conv_id AND c."organizationId" = :org_id
-                    ORDER BY m."createdAt" ASC 
-                    LIMIT :limit
+                    SELECT sub.content, sub.type FROM (
+                        SELECT m.content, m.type, m."createdAt"
+                        FROM messages m
+                        JOIN conversations c ON m."conversationId" = c.id
+                        WHERE m."conversationId" = :conv_id AND c."organizationId" = :org_id
+                        ORDER BY m."createdAt" DESC
+                        LIMIT :limit
+                    ) sub
+                    ORDER BY sub."createdAt" ASC
                 """)
                 return db.execute(query, {"conv_id": conv_id, "org_id": org_id, "limit": limit}).fetchall()
         return await asyncio.to_thread(_fetch)

@@ -28,6 +28,8 @@ class DeliverySafetyPolicy:
     INPUT_PATTERNS = {
         "prompt_injection": r"(?:ignore|disregard|override|reveal|show).{0,80}(?:previous|prior|system|developer|instruction|prompt)|"
         r"(?:system prompt|developer message|jailbreak|do anything now)",
+        "human_handoff_request": r"\b(?:human|real person|manager|operator|someone else|supervisor|representative|customer service|help)\b",
+        "medical_diagnosis_request": r"\b(?:diagnose|what(?:'s| is) wrong with|is it broken|do i have|can you check my|is this infected|how do i treat|what should i take)\b",
     }
     # A reply that includes any of these claims is unsafe unless it is replaced
     # by a coordinator handoff.  Do not depend on prompts/model self-reporting.
@@ -35,6 +37,7 @@ class DeliverySafetyPolicy:
         "guarantee": r"\b(?:guarantee(?:d)?|risk[- ]free|100%|always successful|permanent results?)\b",
         "medical_diagnosis_or_treatment": r"\b(?:diagnos(?:e|is)|prescri(?:be|ption)|dosage|take \d|infection|medication|you have (?:cancer|diabetes|disease|a condition|an infection)|you need (?:surgery|treatment|antibiotics|medicine)|you should (?:take|stop|avoid|rest))\b",
         "pii_or_secret_exfiltration": r"(?:data:image|base64|-----BEGIN|\b(?:api[_ -]?key|authorization|bearer token|password)\b)",
+        "false_urgency_or_unauthorized_discount": r"\b(?:expires today|limited time|act now|only \d+ left|discount|% off|coupon|voucher|special offer|price drop|sale ends|buy now or)\b",
     }
 
     @classmethod

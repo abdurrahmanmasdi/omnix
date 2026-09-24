@@ -22,7 +22,7 @@ async def search_clinic_knowledge(search_query: str, config: RunnableConfig) -> 
     Use this WHENEVER the patient asks a specific question about the clinic's services.
     """
     org_id = config["configurable"].get("organization_id")
-    logger.info("[TOOL] Searching Knowledge Base for: '%s' (Org: %s)", search_query, org_id)
+    logger.info("[TOOL] Searching Knowledge Base (Org: %s)", org_id)
     db = SessionLocal()
     try:
         retriever = RAGRetriever(db_session=db, api_key=settings.OPENAI_API_KEY)
@@ -134,7 +134,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
     Use this when the patient compares us to another clinic (e.g. 'Clinic X is cheaper' or 'Why are you more expensive?').
     """
     org_id = config["configurable"].get("organization_id")
-    logger.info("[TOOL] Searching Battlecards for: '%s' (Org: %s)", user_objection, org_id)
+    logger.info("[TOOL] Searching Battlecards (Org: %s)", org_id)
     db = SessionLocal()
     try:
         embeddings = OpenAIEmbeddings(
