@@ -2,9 +2,10 @@
 // Low-level socket lifecycle. Both useSocket.ts and session-manager.ts
 // import this module — no circular dependency.
 
-import { io, Socket } from 'socket.io-client';
+import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
 
 // ─── State ──────────────────────────────────────────────
 let globalSocket: Socket | null = null;
@@ -38,20 +39,19 @@ export function getOrCreateSocket(
     return { socket: globalSocket, generation: socketGeneration };
   }
 
-
   socketGeneration++;
   const myGeneration = socketGeneration;
 
   const newSocket = io(SOCKET_URL, {
     auth: { token },
-    transports: ['websocket', 'polling'],
+    transports: ["websocket", "polling"],
     withCredentials: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 2000,
     autoConnect: true,
   });
 
-  newSocket.on('connect', () => {
+  newSocket.on("connect", () => {
     // Only update state if this socket is still the current one
     if (socketGeneration === myGeneration) {
       connected = true;
@@ -59,7 +59,7 @@ export function getOrCreateSocket(
     }
   });
 
-  newSocket.on('disconnect', () => {
+  newSocket.on("disconnect", () => {
     if (socketGeneration === myGeneration) {
       connected = false;
       emitChange();
@@ -67,7 +67,7 @@ export function getOrCreateSocket(
   });
 
   if (onConnectError) {
-    newSocket.on('connect_error', (err) => {
+    newSocket.on("connect_error", (err) => {
       if (socketGeneration === myGeneration) {
         connected = false;
         emitChange();
@@ -95,6 +95,10 @@ export function releaseRef(callerGeneration: number): void {
 
   refCount--;
   if (refCount <= 0) {
+    if (globalSocket) {
+      globalSocket.disconnect();
+      globalSocket.removeAllListeners();
+    }
     globalSocket = null;
     connected = false;
     refCount = 0;
@@ -107,6 +111,10 @@ export function releaseRef(callerGeneration: number): void {
  * Safe to call multiple times.
  */
 export function disconnectSocket(): void {
+  if (globalSocket) {
+    globalSocket.disconnect();
+    globalSocket.removeAllListeners();
+  }
   globalSocket = null;
   connected = false;
   refCount = 0;
