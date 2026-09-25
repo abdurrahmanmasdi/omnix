@@ -240,7 +240,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             )
             
         except Exception as e:
-            logger.error("Error generating AI reply for Conv %s: %s", conv_id, e, exc_info=True)
+            error_type = e.__class__.__name__
+            logger.error("Error generating AI reply for Conv %s: %s - %s", conv_id, error_type, str(e))
             import json
             return agent_pb2.AgentReply(
                 replyText=SAFE_HANDOFF_MESSAGE,
