@@ -6,6 +6,7 @@ export interface PublicMessageDto {
   mediaUrl: string | null;
   type: string;
   handledBy: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -19,6 +20,7 @@ export function toPublicMessageDto(message: any): PublicMessageDto {
     mediaUrl: message.mediaUrl || null,
     type: message.type,
     handledBy: message.handledBy,
+    status: message.status,
     createdAt:
       message.createdAt instanceof Date
         ? message.createdAt.toISOString()

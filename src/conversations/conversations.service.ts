@@ -157,6 +157,7 @@ export class ConversationsService {
         metaMessageId: metaResponse?.messages?.[0]?.id || null,
         type: 'USER_TEXT', // Distinguish human from AI
         handledBy: 'HUMAN',
+        status: 'SENT',
       },
     });
 

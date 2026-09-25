@@ -323,6 +323,16 @@ enum MessageType {
   TOOL_RESULT
 }
 
+enum MessageStatus {
+  PENDING
+  PROCESSED
+  SENT
+  CANCELLED
+  FAILED
+  DELIVERED
+  READ
+}
+
 model Conversation {
   id                String    @id @default(uuid()) @db.Uuid
   organizationId    String    @db.Uuid
@@ -358,6 +368,7 @@ model Message {
   type           MessageType   @default(USER_TEXT)
   metadata       Json? // To store Tool Call JSON, execution times, token counts
   handledBy      ActiveHandler @default(AI) // Determines if AI or Human
+  status         MessageStatus @default(PENDING)
   metaMessageId  String?       @unique // WhatsApp's specific message ID
   idempotencyKey String?       @unique // To prevent duplicate outbound sends
   createdAt      DateTime      @default(now())

@@ -54,7 +54,25 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     conversationId: string,
     organizationId: string,
     reason: string,
+    jobId?: string,
   ) {
+    if (jobId) {
+      const existing = await this.prisma.message.findUnique({
+        where: { idempotencyKey: jobId },
+      });
+      if (existing) {
+        const msg = await this.prisma.message.update({
+          where: { id: existing.id },
+          data: {
+            content: `[SYSTEM: Generation Cancelled] ${reason}`,
+            status: 'CANCELLED',
+          },
+        });
+        this.eventsGateway.broadcastNewMessage(organizationId, msg);
+        return;
+      }
+    }
+
     const msg = await this.prisma.message.create({
       data: {
         conversationId,
@@ -62,6 +80,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         content: `[SYSTEM: Generation Cancelled] ${reason}`,
         type: 'SYSTEM_PROMPT',
         handledBy: 'AI',
+        status: 'CANCELLED',
       },
     });
     this.eventsGateway.broadcastNewMessage(organizationId, msg);
@@ -80,19 +99,12 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       const { organizationId, conversationId, customerPhone, stateVersion } =
         job.data;
 
-      const lastAiMessage = await this.prisma.message.findFirst({
-        where: { conversationId, type: 'AI_TEXT' },
-        orderBy: { createdAt: 'desc' },
-      });
-
       const pendingMessages = await this.prisma.message.findMany({
         where: {
           conversationId,
           handledBy: 'AI',
           type: { in: ['LEAD_TEXT', 'LEAD_MEDIA'] },
-          ...(lastAiMessage
-            ? { createdAt: { gt: lastAiMessage.createdAt } }
-            : {}),
+          status: 'PENDING',
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -135,6 +147,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           conversationId,
           organizationId,
           'Delivery aborted because the bound WhatsApp channel is missing or inactive.',
+          job.id,
         );
         return;
       }
@@ -179,6 +192,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
               idempotencyKey: job.id,
               type: 'AI_TEXT',
               handledBy: 'AI',
+              status: 'PENDING',
             },
           });
         }
@@ -208,6 +222,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
               conversationId,
               organizationId,
               'Delivery aborted prior to disclosure send due to authorization failure or version mismatch.',
+              job.id,
             );
             return;
           }
@@ -355,6 +370,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
               conversationId,
               organizationId,
               'Delivery aborted prior to media send due to authorization failure or version mismatch.',
+              job.id,
             );
             return;
           }
@@ -392,6 +408,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                 conversationId,
                 organizationId,
                 'Delivery aborted prior to text send due to authorization failure or version mismatch.',
+                job.id,
               );
               return;
             }
@@ -429,13 +446,35 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           data: { updatedAt: new Date() },
         });
 
-        // 5. Update the DB message with the real metaMessageId
+        // 5. Update the DB message with the real metaMessageId and status
+        const txOperations: any[] = [];
+
         if (metaMessageId) {
-          await this.prisma.message.update({
-            where: { idempotencyKey: job.id },
-            data: { metaMessageId },
-          });
+          txOperations.push(
+            this.prisma.message.update({
+              where: { idempotencyKey: job.id },
+              data: { metaMessageId, status: 'SENT' },
+            }),
+          );
+        } else {
+          // If no message was sent, mark the placeholder as PROCESSED or CANCELLED?
+          // Since it might just be an action execution, let's mark it PROCESSED.
+          txOperations.push(
+            this.prisma.message.update({
+              where: { idempotencyKey: job.id },
+              data: { status: 'PROCESSED' },
+            }),
+          );
         }
+
+        txOperations.push(
+          this.prisma.message.updateMany({
+            where: { id: { in: newMessageIds } },
+            data: { status: 'PROCESSED' },
+          }),
+        );
+
+        await this.prisma.$transaction(txOperations);
 
         // 5. Broadcast the AI message to the frontend UI
         this.eventsGateway.broadcastNewMessage(organization.id, aiMessage);

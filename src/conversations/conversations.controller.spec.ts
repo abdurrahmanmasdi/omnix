@@ -46,8 +46,16 @@ describe('ConversationsController', () => {
       .spyOn(service, 'getConversations')
       .mockResolvedValue(mockConversations as any);
 
-    const result = await provider.getConversations(mockUser as any, '1', '20');
+    const result = await provider.getConversations(mockUser as any, {
+      page: 1,
+      limit: 20,
+    });
     expect(result).toEqual(mockConversations);
-    expect(service.getConversations).toHaveBeenCalledWith('org1', 1, 20);
+    expect(service.getConversations).toHaveBeenCalledWith(
+      'org1',
+      'user1',
+      1,
+      20,
+    );
   });
 });

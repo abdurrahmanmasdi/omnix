@@ -320,8 +320,9 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                       metaMessageId: metaMessageId,
                       content: messageContent,
                       mediaUrl: mediaUrl,
-                      type: 'LEAD_TEXT',
+                      type: mediaUrl ? 'LEAD_MEDIA' : 'LEAD_TEXT',
                       handledBy: conversation.aiPaused ? 'HUMAN' : 'AI',
+                      status: 'PENDING',
                     },
                   });
 

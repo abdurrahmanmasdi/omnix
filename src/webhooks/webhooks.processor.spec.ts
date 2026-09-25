@@ -12,6 +12,7 @@ import { tenantStorage } from '../core/tenant/tenant.context';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
+import { ActionExecutorService } from './action-executor.service';
 
 describe('WebhooksProcessor', () => {
   let processor: WebhooksProcessor;
@@ -43,6 +44,9 @@ describe('WebhooksProcessor', () => {
       },
       pipelineStage: {
         findFirst: jest.fn(),
+      },
+      outboxEvent: {
+        create: jest.fn(),
       },
       $transaction: jest.fn().mockImplementation(async (cb) => {
         return cb(mockPrismaService);
@@ -88,6 +92,10 @@ describe('WebhooksProcessor', () => {
         { provide: CredentialsService, useValue: { readActive: jest.fn() } },
         { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
         { provide: getQueueToken('ai-reply'), useValue: mockAiReplyQueue },
+        {
+          provide: ActionExecutorService,
+          useValue: { executeActions: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -192,6 +200,10 @@ describe('WebhooksProcessor', () => {
       organizationId: 'org-1',
     };
     prisma.conversation.create.mockResolvedValue(newConversation as any);
+    prisma.conversation.update.mockResolvedValue({
+      ...newConversation,
+      stateVersion: 1,
+    } as any);
 
     const newMessage = { id: 'db-msg-1' };
     prisma.message.create.mockResolvedValue(newMessage as any);
@@ -223,18 +235,20 @@ describe('WebhooksProcessor', () => {
     expect(prisma.lead.upsert).toHaveBeenCalled(); // Should auto-create lead
     expect(prisma.conversation.create).toHaveBeenCalled(); // Should auto-create conversation
     expect(prisma.message.create).toHaveBeenCalled(); // Should save the user's message
-    expect(aiReplyQueue.add).toHaveBeenCalledWith(
-      'generate-reply',
-      {
-        conversationId: 'conv-1',
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: {
+        topic: 'generate-reply',
         organizationId: 'org-1',
-        customerPhone: '4915112345678',
-        latestMetaMessageId: 'meta-msg-123',
-        imageBase64: undefined,
-        audioBase64: undefined,
+        payload: {
+          conversationId: 'conv-1',
+          customerPhone: '4915112345678',
+          messageId: 'db-msg-1',
+          organizationId: 'org-1',
+          stateVersion: 1,
+        },
+        status: 'PENDING',
       },
-      expect.any(Object),
-    );
+    });
   });
 
   it('should skip duplicate messages (idempotency check)', async () => {
@@ -282,6 +296,6 @@ describe('WebhooksProcessor', () => {
     });
     // Should stop right here
     expect(prisma.message.create).not.toHaveBeenCalled();
-    expect(aiReplyQueue.add).not.toHaveBeenCalled();
+    expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
   });
 });

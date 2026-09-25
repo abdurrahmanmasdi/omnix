@@ -51,6 +51,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         content: `[SYSTEM: Follow-up Cancelled] ${reason}`,
         type: 'SYSTEM_PROMPT',
         handledBy: 'AI',
+        status: 'CANCELLED',
       },
     });
     this.eventsGateway.broadcastNewMessage(organizationId, sysMsg);
@@ -209,6 +210,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
               idempotencyKey,
               type: conversation.aiPaused ? 'AI_DRAFT' : 'AI_TEXT',
               handledBy: 'AI',
+              status: 'PENDING',
             },
           });
         }
@@ -388,7 +390,10 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
         if (metaMessageId || actions?.length) {
           const updatedMsg = await this.prisma.message.update({
             where: { idempotencyKey: `followUp-${followUp.id}` },
-            data: { metaMessageId: metaMessageId ?? null },
+            data: {
+              metaMessageId: metaMessageId ?? null,
+              status: metaMessageId ? 'SENT' : 'PROCESSED',
+            },
           });
 
           await this.prisma.conversation.update({
