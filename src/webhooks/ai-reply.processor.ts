@@ -60,8 +60,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         conversationId,
         metaMessageId: `cancel-${Date.now()}`,
         content: `[SYSTEM: Generation Cancelled] ${reason}`,
-        type: 'SYSTEM' as any,
-        handledBy: 'SYSTEM' as any,
+        type: 'SYSTEM_PROMPT',
+        handledBy: 'AI',
       },
     });
     this.eventsGateway.broadcastNewMessage(organizationId, msg);
@@ -80,11 +80,19 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       const { organizationId, conversationId, customerPhone, stateVersion } =
         job.data;
 
+      const lastAiMessage = await this.prisma.message.findFirst({
+        where: { conversationId, type: 'AI_TEXT' },
+        orderBy: { createdAt: 'desc' },
+      });
+
       const pendingMessages = await this.prisma.message.findMany({
         where: {
           conversationId,
-          handledBy: 'HUMAN',
+          handledBy: 'AI',
           type: { in: ['LEAD_TEXT', 'LEAD_MEDIA'] },
+          ...(lastAiMessage
+            ? { createdAt: { gt: lastAiMessage.createdAt } }
+            : {}),
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -100,9 +108,14 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         include: { aiPersona: true },
       });
 
-      if (!organization || !organization.aiPersona) {
+      if (
+        !organization ||
+        !organization.isActive ||
+        organization.deleted_at ||
+        !organization.aiPersona
+      ) {
         this.logger.warn(
-          `Organization ${organizationId} or AI persona missing. Skipping reply.`,
+          `Organization ${organizationId} is inactive, deleted, or missing AI persona. Skipping reply.`,
         );
         return;
       }
@@ -164,8 +177,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
               conversationId,
               content: '[PENDING AI REPLY]',
               idempotencyKey: job.id,
-              type: 'SYSTEM' as any,
-              handledBy: 'SYSTEM' as any,
+              type: 'AI_TEXT',
+              handledBy: 'AI',
             },
           });
         }
@@ -427,11 +440,16 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
         // 5. Broadcast the AI message to the frontend UI
         this.eventsGateway.broadcastNewMessage(organization.id, aiMessage);
 
-        // 6. Schedule auto follow-ups
-        await this.followUpService.scheduleAutoFollowUps(
-          conversationId,
-          organization.id,
+        // 6. Schedule auto follow-ups ONLY if the AI didn't explicitly schedule one
+        const hasCustomFollowUp = actions?.some(
+          (a: any) => a.type === 'SCHEDULE_FOLLOW_UP',
         );
+        if (!hasCustomFollowUp) {
+          await this.followUpService.scheduleAutoFollowUps(
+            conversationId,
+            organization.id,
+          );
+        }
       } catch (error) {
         this.logger.error(`Failed to generate or send AI reply: ${error}`);
         throw error;

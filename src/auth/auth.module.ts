@@ -11,7 +11,7 @@ import { PermissionService } from './permission.service';
 @Module({
   imports: [JwtModule.register({})],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, PermissionService],
+  providers: [AuthService, JwtStrategy, UserJwtStrategy, PermissionService],
   exports: [AuthService, PermissionService],
 })
 export class AuthModule {}

@@ -22,6 +22,11 @@ import type { AuthenticatedUser } from '../auth/decorators/current-user.decorato
 import { ConversationsService } from './conversations.service';
 import { SendMessageDto } from './dto/send-message.dto';
 
+import {
+  PaginationQueryDto,
+  CursorPaginationQueryDto,
+} from './dto/pagination.dto';
+
 @ApiTags('Conversations')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -67,8 +72,7 @@ export class ConversationsController {
   })
   async getConversations(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
+    @Query() query: PaginationQueryDto,
   ) {
     if (!user.organizationId) {
       throw new Error('Organization ID not found');
@@ -76,8 +80,8 @@ export class ConversationsController {
     return this.conversationsService.getConversations(
       user.organizationId,
       user.id,
-      parseInt(page, 10),
-      parseInt(limit, 10),
+      query.page || 1,
+      query.limit || 20,
     );
   }
 
@@ -105,8 +109,7 @@ export class ConversationsController {
   async getMessages(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
-    @Query('cursor') cursor?: string,
-    @Query('limit') limit: string = '50',
+    @Query() query: CursorPaginationQueryDto,
   ) {
     if (!user.organizationId) {
       throw new Error('Organization ID not found');
@@ -115,8 +118,8 @@ export class ConversationsController {
       user.organizationId,
       user.id,
       conversationId,
-      cursor,
-      parseInt(limit, 10),
+      query.cursor,
+      query.limit || 50,
     );
   }
 

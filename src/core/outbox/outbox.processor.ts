@@ -23,13 +23,20 @@ export class OutboxProcessor {
 
     try {
       await tenantStorage.run({ isSystemBypass: true }, async () => {
-        const events = await this.prisma.outboxEvent.findMany({
-          where: { status: 'PENDING' },
-          take: 50,
-          orderBy: { createdAt: 'asc' },
-        });
+        const events = await this.prisma.$queryRaw<any[]>`
+          UPDATE "outbox_events"
+          SET status = 'PROCESSING'
+          WHERE id IN (
+            SELECT id FROM "outbox_events"
+            WHERE status = 'PENDING'
+            ORDER BY "createdAt" ASC
+            LIMIT 50
+            FOR UPDATE SKIP LOCKED
+          )
+          RETURNING *;
+        `;
 
-        if (events.length === 0) {
+        if (!events || events.length === 0) {
           this.isProcessing = false;
           return;
         }
@@ -44,7 +51,7 @@ export class OutboxProcessor {
 
         const groups = new Map<string, typeof aiReplyEvents>();
         for (const event of aiReplyEvents) {
-          const convId = (event.payload as any).conversationId;
+          const convId = event.payload.conversationId;
           if (!groups.has(convId)) groups.set(convId, []);
           groups.get(convId)!.push(event);
         }
@@ -52,12 +59,12 @@ export class OutboxProcessor {
         for (const [convId, group] of groups.entries()) {
           try {
             const newMessageIds = group
-              .map((e) => (e.payload as any).messageId)
+              .map((e) => e.payload.messageId)
               .filter(Boolean);
             const latestStateVersion = Math.max(
-              ...group.map((e) => (e.payload as any).stateVersion || 0),
+              ...group.map((e) => e.payload.stateVersion || 0),
             );
-            const firstPayload = group[0].payload as any;
+            const firstPayload = group[0].payload;
 
             await this.aiReplyQueue.add(
               'generate-reply',
@@ -69,7 +76,7 @@ export class OutboxProcessor {
                 stateVersion: latestStateVersion,
               },
               {
-                jobId: `reply-${convId}-${latestStateVersion}`,
+                jobId: `reply-${convId}`, // Proper debounce! Prevents concurrent AI jobs for the same conversation
                 delay: 7000,
                 removeOnComplete: true,
               },

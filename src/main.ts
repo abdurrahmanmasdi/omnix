@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { GRPC_CONFIG } from './config/grpc.constants';
 import { Logger } from 'nestjs-pino';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   // Preserve the exact bytes Meta signed. JSON parsing changes whitespace/key
@@ -14,6 +15,10 @@ async function bootstrap() {
     rawBody: true,
     bufferLogs: true,
   });
+
+  // Limit JSON and urlencoded payloads to 2MB (prevents DoS on webhook endpoints)
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ extended: true, limit: '2mb' }));
 
   // Use Pino as the default logger
   app.enableShutdownHooks();

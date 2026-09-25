@@ -160,10 +160,10 @@ export class ConversationsService {
       },
     });
 
-    // 4. Update the conversation timestamp to bump it to the top of the inbox
+    // 4. Update the conversation timestamp to bump it to the top of the inbox, and pause the AI
     await this.prisma.conversation.update({
       where: { id: conversation.id },
-      data: { updatedAt: new Date() },
+      data: { updatedAt: new Date(), aiPaused: true },
     });
 
     // 5. Broadcast to the frontend using your exact working format!

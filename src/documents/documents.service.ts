@@ -49,6 +49,19 @@ export class DocumentsService implements OnModuleInit {
   }
 
   async uploadDocument(organizationId: string, file: Express.Multer.File) {
+    const fs = require('fs');
+    const buffer = Buffer.alloc(4);
+    const fd = fs.openSync(file.path, 'r');
+    fs.readSync(fd, buffer, 0, 4, 0);
+    fs.closeSync(fd);
+
+    if (buffer.toString('hex') !== '25504446') {
+      fs.unlinkSync(file.path);
+      throw new Error(
+        'Invalid file signature. Only actual PDF files are allowed.',
+      );
+    }
+
     // 1. Save metadata to database with PENDING status
     const doc = await this.prisma.organizationDocumentation.create({
       data: {

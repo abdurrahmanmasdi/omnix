@@ -12,6 +12,8 @@ describe('Authentication (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    const cookieParser = require('cookie-parser');
+    app.use(cookieParser());
     await app.init();
   });
 
@@ -44,7 +46,8 @@ describe('Authentication (e2e)', () => {
     expect(loginRes.body.access_token).toBeDefined();
 
     // Cookie should be returned
-    const cookies = (loginRes.headers['set-cookie'] || []) as unknown as string[];
+    const cookies = (loginRes.headers['set-cookie'] ||
+      []) as unknown as string[];
     expect(cookies).toBeDefined();
     const refreshTokenCookie = cookies.find((c: string) =>
       c.startsWith('refresh_token='),
@@ -57,7 +60,8 @@ describe('Authentication (e2e)', () => {
       .set('Cookie', [refreshTokenCookie || ''])
       .expect(200);
 
-    const cookiesB = (refresh1Res.headers['set-cookie'] || []) as unknown as string[];
+    const cookiesB = (refresh1Res.headers['set-cookie'] ||
+      []) as unknown as string[];
     const refreshTokenCookieB = cookiesB.find((c: string) =>
       c.startsWith('refresh_token='),
     );

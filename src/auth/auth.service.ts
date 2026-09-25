@@ -51,9 +51,8 @@ export class AuthService {
       );
 
       // 2. SIMULATE SENDING EMAIL (In production, use Resend, Sendgrid, AWS SES, etc.)
-      console.log(`\n📧 [EMAIL SIMULATION] To: ${user.email}`);
       console.log(
-        `Please click here to verify your email: http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}\n`,
+        `\n📧 [EMAIL SIMULATION] Verification email queued for user ${user.id}\n`,
       );
 
       return this.generateTokens(
@@ -63,6 +62,10 @@ export class AuthService {
         null,
         user.firstName,
         user.lastName,
+        undefined,
+        undefined,
+        undefined,
+        tx,
       );
     });
   }
@@ -146,74 +149,91 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token payload');
     }
 
-    // Hash the nonce to find the session
     const tokenHash = crypto.createHash('sha256').update(nonce).digest('hex');
 
-    const session = await this.prisma.session.findFirst({
-      where: { familyId, tokenHash },
-    });
+    // Atomic refresh: lookup, validate, revoke old, create new — all in one tx
+    const txResult = await this.prisma.$transaction(async (tx) => {
+      const session = await tx.session.findFirst({
+        where: { familyId, tokenHash },
+      });
 
-    if (!session) {
-      // Reuse detected! Token is valid but not in DB (probably already used and rotated).
-      // Revoke the whole family.
-      await this.prisma.session.updateMany({
-        where: { familyId, isRevoked: false },
+      if (!session) {
+        // Token not found -> already rotated -> REUSE DETECTED
+        await tx.session.updateMany({
+          where: { familyId },
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            revokedReason: 'Reused token detected',
+          },
+        });
+        return { error: 'Session revoked due to token reuse' };
+      }
+
+      if (session.isRevoked) {
+        // A revoked token being presented -> REUSE DETECTED -> revoke whole family
+        await tx.session.updateMany({
+          where: { familyId, isRevoked: false },
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            revokedReason: 'Reused token detected (revoked session presented)',
+          },
+        });
+        return { error: 'Session revoked due to token reuse' };
+      }
+
+      if (session.expiresAt < new Date()) {
+        return { error: 'Session expired' };
+      }
+
+      const user = await tx.user.findUnique({
+        where: { id: session.userId },
+        include: {
+          memberships: {
+            where: { status: 'ACTIVE', deletedAt: null },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+
+      if (!user) return { error: 'User not found' };
+
+      // Deterministic selection
+      const activeMembership = user.memberships[0];
+      const organizationId = activeMembership?.organizationId || null;
+      const roleId = activeMembership?.roleId || null;
+
+      // Revoke old session atomically within the same tx
+      await tx.session.update({
+        where: { id: session.id },
         data: {
           isRevoked: true,
           revokedAt: new Date(),
-          revokedReason: 'Reused token detected',
+          revokedReason: 'Rotated',
         },
       });
-      throw new UnauthorizedException('Session revoked due to token reuse');
-    }
 
-    if (session.isRevoked) {
-      throw new UnauthorizedException('Session is revoked');
-    }
-
-    if (session.expiresAt < new Date()) {
-      throw new UnauthorizedException('Session expired');
-    }
-
-    // 2. Make sure the user still exists and membership is valid
-    const user = await this.prisma.user.findUnique({
-      where: { id: session.userId },
-      include: {
-        memberships: {
-          where: { status: 'ACTIVE', deletedAt: null },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
+      // Generate new tokens (session creation also happens inside tx)
+      return this.generateTokens(
+        user.id,
+        user.email,
+        organizationId,
+        roleId,
+        user.firstName,
+        user.lastName,
+        userAgent,
+        ip,
+        familyId,
+        tx,
+      );
     });
 
-    if (!user) throw new UnauthorizedException('User not found');
+    if (txResult && 'error' in txResult) {
+      throw new UnauthorizedException(txResult.error);
+    }
 
-    // Deterministic selection
-    const activeMembership = user.memberships[0];
-    const organizationId = activeMembership?.organizationId || null;
-    const roleId = activeMembership?.roleId || null;
-
-    // Revoke the old token (rotation)
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: {
-        isRevoked: true,
-        revokedAt: new Date(),
-        revokedReason: 'Rotated',
-      },
-    });
-
-    return this.generateTokens(
-      user.id,
-      user.email,
-      organizationId,
-      roleId,
-      user.firstName,
-      user.lastName,
-      userAgent,
-      ip,
-      familyId,
-    );
+    return txResult;
   }
 
   async logout(refreshToken: string) {
@@ -252,7 +272,9 @@ export class AuthService {
     userAgent?: string,
     ip?: string,
     existingFamilyId?: string,
+    txClient?: any,
   ) {
+    const tx = txClient || this.prisma;
     const payload = {
       sub: userId,
       email,
@@ -262,7 +284,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRATION') as any,
     });
 
@@ -278,7 +300,7 @@ export class AuthService {
 
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
       expiresIn: this.configService.get<string>(
         'JWT_REFRESH_EXPIRATION',
       ) as any,
@@ -291,7 +313,7 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + days);
 
-    await this.prisma.session.create({
+    await tx.session.create({
       data: {
         userId,
         familyId,

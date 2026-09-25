@@ -313,50 +313,48 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               let outboxEvent;
               try {
                 // T14: Create message, increment stateVersion, and create scheduling outbox event atomically
-                const result = await this.prisma.$transaction([
-                  this.prisma.message.create({
+                const result = await this.prisma.$transaction(async (tx) => {
+                  const msg = await tx.message.create({
                     data: {
                       conversationId: conversation.id,
                       metaMessageId: metaMessageId,
                       content: messageContent,
                       mediaUrl: mediaUrl,
-                      type: 'LEAD_TEXT', // Keep original type
-                      handledBy: 'HUMAN', // Wait, handledBy should be SYSTEM if AI is supposed to reply? Let's use SYSTEM so AI can find it.
+                      type: 'LEAD_TEXT',
+                      handledBy: conversation.aiPaused ? 'HUMAN' : 'AI',
                     },
-                  }),
-                  this.prisma.conversation.update({
+                  });
+
+                  const updatedC = await tx.conversation.update({
                     where: { id: conversation.id },
                     data: {
                       status: 'ACTIVE',
                       updatedAt: new Date(),
                       stateVersion: { increment: 1 },
                     },
-                  }),
-                  this.prisma.outboxEvent.create({
+                  });
+
+                  const outbox = await tx.outboxEvent.create({
                     data: {
                       topic: 'generate-reply',
                       organizationId: organization.id,
-                      payload: {}, // Will update with stateVersion
+                      payload: {
+                        organizationId: organization.id,
+                        conversationId: conversation.id,
+                        customerPhone: customerPhone,
+                        messageId: msg.id,
+                        stateVersion: updatedC.stateVersion,
+                      },
                       status: 'PENDING',
                     },
-                  }),
-                ]);
-                wpMessage = result[0];
-                updatedConv = result[1];
-                outboxEvent = result[2];
+                  });
 
-                // Update payload with new stateVersion
-                await this.prisma.outboxEvent.update({
-                  where: { id: outboxEvent.id },
-                  data: {
-                    payload: {
-                      organizationId: organization.id,
-                      conversationId: conversation.id,
-                      customerPhone: customerPhone,
-                      stateVersion: updatedConv.stateVersion,
-                    },
-                  },
+                  return { msg, updatedC, outbox };
                 });
+
+                wpMessage = result.msg;
+                updatedConv = result.updatedC;
+                outboxEvent = result.outbox;
               } catch (error: any) {
                 if (error?.code === 'P2002') {
                   this.logger.warn(
@@ -434,7 +432,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
 
               if (this.isHandoffRequested(messageContent)) {
                 this.logger.log(
-                  `Explicit handoff requested by contact ${customerPhone} in conversation ${conversation.id}.`,
+                  `Explicit handoff requested in conversation ${conversation.id}.`,
                 );
                 await this.actionExecutor.handleHandoffToHuman(conversation, {
                   reason: 'User requested to speak with a human.',
@@ -443,7 +441,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               }
 
               this.logger.log(
-                `Saved new message from ${customerPhone} for organization ${organization.name}`,
+                `Saved new message for conversation ${conversation.id} (org: ${organization.name})`,
               );
 
               if (conversation.aiPaused) {

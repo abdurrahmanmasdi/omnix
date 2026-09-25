@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -130,20 +131,33 @@ export class AuthController {
       return;
     }
 
-    const {
-      accessToken,
-      refreshToken: newRefreshToken,
-      user,
-    } = await this.authService.refreshTokens(
-      refreshToken,
-      req.headers['user-agent'],
-      req.ip,
-    );
+    try {
+      const {
+        accessToken,
+        refreshToken: newRefreshToken,
+        user,
+      } = await this.authService.refreshTokens(
+        refreshToken,
+        req.headers['user-agent'],
+        req.ip,
+      );
 
-    // Rotate the refresh token for maximum security
-    res.cookie(REFRESH_COOKIE_NAME, newRefreshToken, getRefreshCookieOptions());
+      // Rotate the refresh token for maximum security
+      res.cookie(
+        REFRESH_COOKIE_NAME,
+        newRefreshToken,
+        getRefreshCookieOptions(),
+      );
 
-    return { access_token: accessToken, user };
+      return { access_token: accessToken, user };
+    } catch (error) {
+      res.clearCookie(REFRESH_COOKIE_NAME, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      });
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
   }
 
   @Get('verify-email')
