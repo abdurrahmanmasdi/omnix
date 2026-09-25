@@ -37,6 +37,12 @@ export class UserJwtStrategy extends PassportStrategy(Strategy, 'jwt-user') {
       throw new UnauthorizedException('User account is deleted');
     }
 
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException(
+        'User account is not active. Please verify your email.',
+      );
+    }
+
     // Return the database fields instead of trusting the token payload
     return {
       id: user.id,

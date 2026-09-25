@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  status?: string;
   organizationId: string | null;
   roleId: string | null;
 }
