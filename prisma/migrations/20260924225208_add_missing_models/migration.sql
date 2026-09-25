@@ -13,8 +13,8 @@ ALTER TYPE "ChannelProvider" ADD VALUE 'INSTAGRAM_GRAPH_API';
 -- AlterEnum
 ALTER TYPE "CredentialProvider" ADD VALUE 'ZOHO';
 
--- DropIndex
-DROP INDEX "leads_organizationId_phoneNumber_idx";
+-- DropIndex (non-unique version, will be recreated as unique below)
+DROP INDEX IF EXISTS "leads_organizationId_phoneNumber_idx";
 
 -- AlterTable
 ALTER TABLE "audit_logs" ALTER COLUMN "id" DROP DEFAULT;
@@ -38,12 +38,35 @@ ADD COLUMN     "mediaConsentWithdrawnAt" TIMESTAMP(3);
 -- AlterTable
 ALTER TABLE "messages" ADD COLUMN     "idempotencyKey" TEXT;
 
--- Move existing crmAccessToken to credentials table before dropping
+-- Migrate existing crmAccessToken into credentials table.
+-- Tokens are prefixed with "PLAINTEXT_MIGRATE:" so the application layer
+-- can detect them on first read, re-encrypt with AES-256-GCM, and update
+-- the row. Pure SQL cannot replicate the Node.js encryption format
+-- (iv.authTag.ciphertext in base64). The prefix is never a valid encrypted
+-- payload (no dots), so decrypt() will detect it reliably.
 INSERT INTO credentials (id, "organizationId", provider, "encryptedPayload", "keyVersion", status, "createdAt", "updatedAt")
-SELECT gen_random_uuid(), id, 'HUBSPOT', "crmAccessToken", 1, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-FROM organizations WHERE "crmAccessToken" IS NOT NULL;
+SELECT gen_random_uuid(), id, 'HUBSPOT',
+       'PLAINTEXT_MIGRATE:' || "crmAccessToken",
+       1, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM organizations WHERE "crmAccessToken" IS NOT NULL AND "crmAccessToken" <> '';
 
--- AlterTable
+-- Verify every non-null token was migrated before dropping the column
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM organizations o
+    WHERE o."crmAccessToken" IS NOT NULL
+      AND o."crmAccessToken" <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM credentials c
+        WHERE c."organizationId" = o.id AND c.provider = 'HUBSPOT'
+      )
+  ) THEN
+    RAISE EXCEPTION 'Credential backfill verification failed: some organizations still have unmigrated crmAccessToken values';
+  END IF;
+END $$;
+
+-- Safe to drop now — every non-empty token has been copied
 ALTER TABLE "organizations" DROP COLUMN "crmAccessToken";
 
 -- Add status column first (without dropping isEmailVerified yet)
@@ -55,6 +78,27 @@ UPDATE "users" SET "status" = 'PENDING' WHERE "isEmailVerified" = false;
 
 -- Drop isEmailVerified column
 ALTER TABLE "users" DROP COLUMN "isEmailVerified";
+
+-- Deduplicate lead phone numbers before adding the unique constraint.
+-- The unique index is unconditional (covers all rows, including soft-deleted).
+-- Strategy: for each (org, phone) group, keep the most recently active lead
+-- (prefer non-deleted, then most recent updatedAt). For duplicates, append the
+-- lead ID to the phone number to make them unique while preserving traceability.
+UPDATE "leads" AS l
+SET "phoneNumber" = l."phoneNumber" || '_dup_' || l.id,
+    "deletedAt" = COALESCE(l."deletedAt", CURRENT_TIMESTAMP)
+FROM (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY "organizationId", "phoneNumber"
+           ORDER BY
+             (CASE WHEN "deletedAt" IS NULL THEN 0 ELSE 1 END),
+             "updatedAt" DESC,
+             "createdAt" DESC
+         ) AS rn
+  FROM "leads"
+) ranked
+WHERE l.id = ranked.id AND ranked.rn > 1;
 
 -- CreateTable
 CREATE TABLE "organization_battlecards" (

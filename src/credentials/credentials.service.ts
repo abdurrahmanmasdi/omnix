@@ -48,6 +48,31 @@ export class CredentialsService {
       where: { id, organizationId, status: CredentialStatus.ACTIVE },
     });
     if (!credential) throw new NotFoundException('Active credential not found');
+
+    const MIGRATE_PREFIX = 'PLAINTEXT_MIGRATE:';
+    if (credential.encryptedPayload.startsWith(MIGRATE_PREFIX)) {
+      // Legacy credential backfilled by the SQL migration — the token was
+      // stored as plaintext with a prefix because SQL cannot replicate
+      // Node.js AES-256-GCM encryption. Re-encrypt on first read.
+      const rawToken = credential.encryptedPayload.slice(MIGRATE_PREFIX.length);
+      const payload: SecretPayload = { accessToken: rawToken };
+      const encrypted = this.encrypt(payload);
+      await this.prisma.credential.update({
+        where: { id },
+        data: { encryptedPayload: encrypted },
+      });
+      await this.audit.record({
+        organizationId,
+        action: 'credential.migrated',
+        targetId: id,
+        actor: 'system',
+        metadata: {
+          reason: 'Legacy plaintext token re-encrypted on first read',
+        },
+      });
+      return payload;
+    }
+
     return this.decrypt(credential.encryptedPayload);
   }
 
