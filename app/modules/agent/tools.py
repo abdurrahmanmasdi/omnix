@@ -81,7 +81,7 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
     Use this when the patient shows hesitation, fear of pain, or doubts about the result.
     """
     org_id = config["configurable"].get("organization_id")
-    logger.info("[TOOL] Searching Social Proof for: '%s' (Org: %s)", user_objection, org_id)
+    logger.info("[TOOL] Searching Social Proof (Org: %s) [Query redacted]", org_id)
     db = SessionLocal()
     try:
         embeddings = OpenAIEmbeddings(
@@ -123,7 +123,7 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
 
     except Exception as e:
         logger.error("Social proof tool error: %s", e)
-        return "Our clinic has a 98% satisfaction rate and thousands of happy patients."
+        return "I cannot verify specific success rates at this moment, but I can escalate you to a medical coordinator for patient references."
     finally:
         db.close()
 
@@ -168,7 +168,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
 
     except Exception as e:
         logger.error("Battlecard tool error: %s", e)
-        return "We focus on premium care and long-term results rather than competing purely on price."
+        return "I cannot provide specific comparisons right now, but I can connect you with a coordinator to discuss our exact pricing and procedures."
     finally:
         db.close()
 
@@ -185,7 +185,7 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
     org_id = config["configurable"].get("organization_id")
     conv_id = config["configurable"].get("conversation_id")
 
-    logger.info("[TOOL] Escalating Conv: %s to Human. Reason: %s", conv_id, reason)
+    logger.info("[TOOL] Escalating Conv: %s to Human [Reason redacted]", conv_id)
 
     db = SessionLocal()
     try:
@@ -271,7 +271,7 @@ async def schedule_follow_up(
         "scheduledAt": scheduled_at,
         "context": context,
     }
-    logger.info("[VIRTUAL TOOL] Schedule Follow Up: %s at %s", context, scheduled_at)
+    logger.info("[VIRTUAL TOOL] Schedule Follow Up at %s [Context redacted]", scheduled_at)
     return json.dumps({
         "action": "SCHEDULE_FOLLOW_UP",
         "payload": payload

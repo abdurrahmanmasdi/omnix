@@ -8,13 +8,15 @@ service CrmTools {
 }
 
 message BookRequest {
-  string leadId = 1;
-  string dateTime = 2;
+  string organizationId = 1;
+  string leadId = 2;
+  string dateTime = 3;
 }
 
 message UpdateLeadRequest {
-  string leadId = 1;
-  string status = 2;
+  string organizationId = 1;
+  string leadId = 2;
+  string status = 3;
 }
 
 message ToolResponse {

@@ -205,7 +205,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
 
             class StructuredAction(BaseModel):
                 action: ActionType
-                payload: dict[str, Any]
+                payload: dict[str, Any] | None = None
+                parameters: dict[str, Any] | None = None
 
             tool_actions = []
             
@@ -215,7 +216,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                     structured_action = StructuredAction(**action_obj)
                     tool_actions.append(agent_pb2.ToolAction(
                         type=structured_action.action.value,
-                        payload=json.dumps(structured_action.payload)
+                        payload=json.dumps(structured_action.payload or structured_action.parameters or {})
                     ))
                 except (ValidationError, ValueError, TypeError) as e:
                     action_type_safe = "UNKNOWN"
