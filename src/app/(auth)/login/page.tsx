@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { toast } from 'sonner';
-import { loginSchema, type LoginFormData } from '@/lib/validations/auth';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { toast } from "sonner";
+import { loginSchema, type LoginFormData } from "@/lib/validations/auth";
 
 // IMPORTANT: Update this import to match the exact name Orval generated for you!
-import { useAuthControllerLogin } from '@/lib/api/generated/authentication/authentication';
+import { useAuthControllerLogin } from "@/lib/api/generated/authentication/authentication";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -20,18 +20,18 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { installSession } from '@/lib/session-manager';
+} from "@/components/ui/card";
+import { installSession } from "@/lib/session-manager";
 
 export default function LoginPage() {
   const router = useRouter();
-  
+
   // 1. Initialize React Hook Form with Zod validation
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
   });
 
@@ -44,27 +44,35 @@ export default function LoginPage() {
       { data }, // Orval expects the body payload inside a 'data' property
       {
         onSuccess: (response) => {
-          toast.success('Welcome back!');
-          
+          toast.success("Welcome back!");
+
           // The backend sends us { access_token, user }
-          const { access_token, user } = response as unknown as { access_token: string; user: { hasCompletedOnboarding: boolean, id: string, organizationId: string } };
-          
+          const { access_token, user } = response as unknown as {
+            access_token: string;
+            user: {
+              hasCompletedOnboarding: boolean;
+              id: string;
+              organizationId: string;
+            };
+          };
+
           installSession(access_token, user);
-          
+
           // Route based on whether they have an organization yet!
           if (user.hasCompletedOnboarding) {
-            router.push('/dashboard');
+            router.push("/dashboard");
           } else {
-            router.push('/onboarding/create-organization');
+            router.push("/onboarding/create-organization");
           }
         },
         onError: (error: unknown) => {
           // Extract the error message from our NestJS backend
           const err = error as { response?: { data?: { message?: string } } };
-          const message = err.response?.data?.message || 'Invalid email or password';
+          const message =
+            err.response?.data?.message || "Invalid email or password";
           toast.error(message);
         },
-      }
+      },
     );
   };
 
@@ -78,7 +86,7 @@ export default function LoginPage() {
           Enter your email and password to log in to your CRM.
         </CardDescription>
       </CardHeader>
-      
+
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <CardContent className="space-y-4">
           {/* Email Field */}
@@ -88,7 +96,7 @@ export default function LoginPage() {
               id="email"
               type="email"
               placeholder="admin@clinic.com"
-              {...form.register('email')}
+              {...form.register("email")}
               disabled={loginMutation.isPending}
             />
             {form.formState.errors.email && (
@@ -104,7 +112,7 @@ export default function LoginPage() {
             <Input
               id="password"
               type="password"
-              {...form.register('password')}
+              {...form.register("password")}
               disabled={loginMutation.isPending}
             />
             {form.formState.errors.password && (
@@ -114,19 +122,22 @@ export default function LoginPage() {
             )}
           </div>
         </CardContent>
-        
+
         <CardFooter className="flex flex-col gap-4">
-          <Button 
-            type="submit" 
-            className="w-full" 
+          <Button
+            type="submit"
+            className="w-full"
             disabled={loginMutation.isPending}
           >
-            {loginMutation.isPending ? 'Logging in...' : 'Log in'}
+            {loginMutation.isPending ? "Logging in..." : "Log in"}
           </Button>
           <div className="text-center text-sm text-slate-500">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-blue-600 hover:underline font-medium">
-              Sign up
+            Need pilot access?{" "}
+            <Link
+              href="/signup"
+              className="text-blue-600 hover:underline font-medium"
+            >
+              Invitation information
             </Link>
           </div>
         </CardFooter>
