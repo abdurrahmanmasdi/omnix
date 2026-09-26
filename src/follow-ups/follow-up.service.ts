@@ -3,6 +3,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { FollowUpType, FollowUpStatus } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { tenantStorage } from '../core/tenant/tenant.context';
 
 @Injectable()
 export class FollowUpService {
@@ -12,6 +14,75 @@ export class FollowUpService {
     private readonly prisma: PrismaService,
     @InjectQueue('follow-up') private readonly followUpQueue: Queue,
   ) {}
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async recoverDueFollowUps() {
+    await tenantStorage.run({ isSystemBypass: true }, async () => {
+      const now = new Date();
+      const due = await this.prisma.scheduledFollowUp.findMany({
+        where: {
+          status: FollowUpStatus.PENDING,
+          scheduledAt: { lt: new Date(now.getTime() - 120_000) },
+          OR: [
+            { recoveryQueuedAt: null },
+            { recoveryQueuedAt: { lt: new Date(now.getTime() - 300_000) } },
+          ],
+          AND: [
+            {
+              OR: [
+                { processingOwner: null },
+                { processingLeaseUntil: { lt: now } },
+              ],
+            },
+          ],
+        },
+        take: 100,
+        orderBy: { scheduledAt: 'asc' },
+      });
+      for (const followUp of due) {
+        const queuedAt = new Date();
+        const marked = await this.prisma.scheduledFollowUp.updateMany({
+          where: {
+            id: followUp.id,
+            status: FollowUpStatus.PENDING,
+            OR: [
+              { recoveryQueuedAt: null },
+              { recoveryQueuedAt: { lt: new Date(Date.now() - 300_000) } },
+            ],
+            AND: [
+              {
+                OR: [
+                  { processingOwner: null },
+                  { processingLeaseUntil: { lt: new Date() } },
+                ],
+              },
+            ],
+          },
+          data: { recoveryQueuedAt: queuedAt },
+        });
+        if (marked.count !== 1) continue;
+        try {
+          await this.followUpQueue.add(
+            'process-follow-up',
+            { followUpId: followUp.id },
+            {
+              jobId: `followup-recovery-${followUp.id}-${Math.floor(queuedAt.getTime() / 300_000)}`,
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 5000 },
+              removeOnComplete: true,
+              removeOnFail: false,
+            },
+          );
+        } catch {
+          await this.prisma.scheduledFollowUp.updateMany({
+            where: { id: followUp.id, recoveryQueuedAt: queuedAt },
+            data: { recoveryQueuedAt: null },
+          });
+          this.logger.error(`FOLLOW_UP_RELAY_FAILED followUp=${followUp.id}`);
+        }
+      }
+    });
+  }
 
   /**
    * Schedules standard 12h and 24h follow ups after the AI replies.

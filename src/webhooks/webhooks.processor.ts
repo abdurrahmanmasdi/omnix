@@ -16,6 +16,7 @@ import { WhatsappMediaService } from './whatsapp-media.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
+import { OutboundAttemptService } from './outbound-attempt.service';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
@@ -31,6 +32,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly followUpService: FollowUpService,
     private readonly auditService: AuditService,
     private readonly credentials: CredentialsService,
+    private readonly outboundAttempts: OutboundAttemptService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {
@@ -66,18 +68,22 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
             const value = change.value;
             const receivingPhoneNumberId = value.metadata.phone_number_id;
 
-            // If there are no messages (e.g., it's just a status update like "delivered" or "read"), skip for now.
-            if (!value.messages || value.messages.length === 0) continue;
-
             // Find the channel and its organization
-            const channel = await this.prisma.channel.findFirst({
+            const matchingChannels = await this.prisma.channel.findMany({
               where: {
                 provider: 'WHATSAPP_CLOUD_API',
                 providerAccountId: receivingPhoneNumberId,
-                status: 'ACTIVE',
               },
               include: { organization: true },
+              take: 2,
             });
+            if (matchingChannels.length !== 1) {
+              this.logger.warn(
+                'Webhook channel routing is missing or ambiguous.',
+              );
+              continue;
+            }
+            const channel = matchingChannels[0];
 
             const organization = channel?.organization;
 
@@ -87,6 +93,22 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               );
               continue;
             }
+
+            for (const status of value.statuses ?? []) {
+              if (
+                status.id &&
+                ['sent', 'delivered', 'read', 'failed'].includes(status.status)
+              ) {
+                await this.outboundAttempts.reconcileStatus(
+                  organization.id,
+                  status.id,
+                  status.status,
+                  status.biz_opaque_callback_data,
+                );
+              }
+            }
+            if (!value.messages || value.messages.length === 0) continue;
+            if (channel.status !== 'ACTIVE') continue;
 
             let accessTokenForMedia: string | undefined;
             if (channel?.credentialId) {
@@ -213,6 +235,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                         organizationId: organization.id,
                         externalContactId: customerPhone,
                         leadId: lead.id,
+                        channelId: channel.id,
                       },
                     });
                     return { ...newConv, lead };
@@ -220,7 +243,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                     // Repair the existing conversation by linking the lead
                     const updatedConv = await tx.conversation.update({
                       where: { id: conversation.id },
-                      data: { leadId: lead.id },
+                      data: { leadId: lead.id, channelId: channel.id },
                     });
                     return { ...updatedConv, lead };
                   }
@@ -281,20 +304,77 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 continue; // A batch can contain other, non-duplicate messages.
               }
 
-              // 2. Save the incoming message
+              // 2. Save the inbound message and durable reply intent together.
               let wpMessage;
+              const isStop = this.isOptOut(messageContent);
+              const shouldGenerate =
+                !isStop &&
+                !conversation.aiPaused &&
+                !conversation.lead?.optedOutAt &&
+                organization.isActive &&
+                !organization.deleted_at &&
+                channel.status === 'ACTIVE';
               try {
                 // metaMessageId is unique in the database. This catch closes the
                 // check/create race between simultaneous BullMQ workers.
-                wpMessage = await this.prisma.message.create({
-                  data: {
-                    conversationId: conversation.id,
-                    metaMessageId: metaMessageId,
-                    content: messageContent,
-                    mediaUrl: mediaUrl,
-                    type: 'LEAD_TEXT',
-                    handledBy: 'HUMAN',
-                  },
+                wpMessage = await this.prisma.$transaction(async (tx) => {
+                  const saved = await tx.message.create({
+                    data: {
+                      conversationId: conversation.id,
+                      metaMessageId,
+                      content: messageContent,
+                      mediaUrl,
+                      type:
+                        message.type === 'text' ? 'LEAD_TEXT' : 'LEAD_MEDIA',
+                      handledBy: 'HUMAN',
+                      status: shouldGenerate ? 'PENDING' : 'PROCESSED',
+                    },
+                  });
+                  // Every inbound arrival invalidates a reply based on older
+                  // conversation history, including STOP during generation.
+                  const currentConversation = await tx.conversation.update({
+                    where: { id: conversation.id },
+                    data: {
+                      stateVersion: { increment: 1 },
+                      ...(!conversation.channelId
+                        ? { channelId: channel.id }
+                        : {}),
+                    },
+                    select: { stateVersion: true },
+                  });
+                  await tx.scheduledFollowUp.updateMany({
+                    where: {
+                      conversationId: conversation.id,
+                      status: 'PENDING',
+                    },
+                    data: {
+                      status: 'CANCELLED',
+                      cancelledAt: new Date(),
+                      cancelReason: 'Customer responded',
+                    },
+                  });
+                  if (conversation.leadId) {
+                    await tx.lead.update({
+                      where: { id: conversation.leadId },
+                      data: { nextFollowUpAt: null },
+                    });
+                  }
+                  if (shouldGenerate) {
+                    await tx.outboxEvent.create({
+                      data: {
+                        organizationId: organization.id,
+                        topic: 'generate-reply',
+                        payload: {
+                          organizationId: organization.id,
+                          conversationId: conversation.id,
+                          customerPhone,
+                          messageId: saved.id,
+                          stateVersion: currentConversation.stateVersion,
+                        },
+                      },
+                    });
+                  }
+                  return saved;
                 });
               } catch (error: any) {
                 if (error?.code === 'P2002') {
@@ -360,7 +440,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 );
               }
 
-              if (this.isOptOut(messageContent)) {
+              if (isStop) {
                 // Consent is stored on the tenant-owned lead, not globally by
                 // phone number. This prevents one tenant's STOP from affecting
                 // another tenant that happens to know the same contact.
@@ -447,55 +527,13 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 this.logger.log(
                   `AI execution bypassed for conversation ${conversation.id}. State: Paused.`,
                 );
-                return; // Terminate execution loop. AI will not reply.
+                continue; // Keep processing other messages in the webhook batch.
               }
 
               // const autoReplyText = `Hello! We received your message: "${messageContent}". Our AI agent will process this shortly.`;
 
-              if (channel) {
-                const jobId = `reply-${conversation.id}`; // Unique ID for this conversation
-
-                // Look for an existing countdown timer
-                const existingJob = await this.aiReplyQueue.getJob(jobId);
-                let newMessageIds: string[] = [wpMessage.id];
-
-                if (existingJob) {
-                  // Merge message IDs from the existing job
-                  if (
-                    existingJob.data &&
-                    Array.isArray(existingJob.data.newMessageIds)
-                  ) {
-                    newMessageIds = [
-                      ...existingJob.data.newMessageIds,
-                      wpMessage.id,
-                    ];
-                  }
-                  await existingJob.remove();
-                  this.logger.log(
-                    `User is typing again... Resetting 25s timer for Conv: ${conversation.id}. Merged ${newMessageIds.length} messages.`,
-                  );
-                }
-
-                // Add a NEW 25-second timer
-                await this.aiReplyQueue.add(
-                  'generate-reply',
-                  {
-                    organizationId: organization.id,
-                    conversationId: conversation.id,
-                    customerPhone: customerPhone,
-                    newMessageIds: newMessageIds, // 🚀 NEW: Pass the array of IDs instead of inline media/text
-                  },
-                  {
-                    jobId: jobId, // This ensures we can find and delete it later
-                    delay: 7000, // Wait exactly 7 seconds
-                    removeOnComplete: true,
-                  },
-                );
-              } else {
-                this.logger.warn(
-                  `Organization ${organization.id} is missing outbound WhatsApp credentials. Auto-reply skipped.`,
-                );
-              }
+              // The outbox relay owns scheduling. A Redis failure after this
+              // point cannot lose the committed inbound message.
             }
           }
         }

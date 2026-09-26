@@ -77,6 +77,7 @@ model Organization {
   auditLogs          AuditLog[]
   crmSyncLogs        CrmSyncLog[]
   credentials        Credential[]
+  outboundAttempts   OutboundAttempt[]
 
   @@map("organizations")
 }
@@ -348,6 +349,8 @@ model Conversation {
   aiPaused          Boolean   @default(false)
   aiDisclosureSent  Boolean   @default(false)
   stateVersion      Int       @default(1)
+  generationOwner String?
+  generationLeaseUntil DateTime?
   assignedAgentId   String?   @db.Uuid
   channelId         String?   @db.Uuid
 
@@ -355,10 +358,12 @@ model Conversation {
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   channel            Channel?            @relation(fields: [channelId], references: [id])
   messages           Message[]
+  outboundAttempts   OutboundAttempt[]
   assignedAgent      User?               @relation("ConversationAgent", fields: [assignedAgentId], references: [id])
   scheduledFollowUps ScheduledFollowUp[]
 
   @@unique([organizationId, externalContactId])
+  @@index([generationLeaseUntil])
   @@map("conversations")
 }
 
@@ -373,6 +378,9 @@ model Message {
   metadata       Json? // To store Tool Call JSON, execution times, token counts
   handledBy      ActiveHandler @default(AI) // Determines if AI or Human
   status         MessageStatus @default(PENDING)
+  processingOwner String?
+  processingLeaseUntil DateTime?
+  recoveryQueuedAt DateTime?
   metaMessageId  String?       @unique // WhatsApp's specific message ID
   idempotencyKey String?       @unique // To prevent duplicate outbound sends
   createdAt      DateTime      @default(now())
@@ -381,8 +389,45 @@ model Message {
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User?        @relation("SentMessages", fields: [senderId], references: [id])
+  outboundAttempt OutboundAttempt?
 
+  @@index([status, processingLeaseUntil])
   @@map("messages")
+}
+
+enum OutboundAttemptStatus {
+  PENDING
+  SENDING
+  ACCEPTED
+  UNKNOWN
+  FAILED
+  CANCELLED
+}
+
+model OutboundAttempt {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  conversationId String                @db.Uuid
+  messageId      String                @unique
+  dedupeKey      String                @unique
+  conversationVersion Int              @default(0)
+  purpose        String                @default("reply")
+  status         OutboundAttemptStatus @default(PENDING)
+  providerId     String?               @unique
+  attemptCount   Int                   @default(0)
+  startedAt      DateTime?
+  acceptedAt     DateTime?
+  lastErrorCode  String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([status, startedAt])
+  @@index([organizationId, conversationId])
+  @@map("outbound_attempts")
 }
 
 model OrganizationDocumentation {
@@ -628,6 +673,9 @@ model ScheduledFollowUp {
   attempt        Int            @default(1)
   scheduledAt    DateTime
   bullJobId      String?
+  processingOwner String?
+  processingLeaseUntil DateTime?
+  recoveryQueuedAt DateTime?
   aiContext      String?        @db.Text
   sentAt         DateTime?
   cancelledAt    DateTime?
@@ -640,6 +688,7 @@ model ScheduledFollowUp {
   @@index([conversationId, status])
   @@index([organizationId])
   @@index([scheduledAt, status])
+  @@index([processingLeaseUntil])
   @@map("scheduled_follow_ups")
 }
 

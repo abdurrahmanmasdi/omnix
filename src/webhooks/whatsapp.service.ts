@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { firstValueFrom, throwError, timer } from 'rxjs';
+import { firstValueFrom, throwError } from 'rxjs';
 import { catchError, retry, timeout } from 'rxjs/operators';
 import { IChannelProvider } from '../core/interfaces/channel-provider.interface';
 import { CredentialsService } from '../credentials/credentials.service';
@@ -192,13 +192,8 @@ export class WhatsappService implements IChannelProvider {
           })
           .pipe(
             timeout(8000),
-            retry({
-              count: 3,
-              delay: (error, retryCount) => {
-                if (error.response?.status === 401) throw error; // Don't retry auth errors
-                return timer(Math.pow(2, retryCount) * 500); // Exponential backoff: 1s, 2s, 4s
-              },
-            }),
+            // A timed-out POST may have been accepted. Retrying at HTTP level
+            // can send a second patient-visible message.
             catchError((error) => throwError(() => error)),
           ),
       );

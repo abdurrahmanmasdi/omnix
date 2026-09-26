@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,9 +9,12 @@ import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { PermissionService } from '../auth/permission.service';
 import { ForbiddenException } from '@nestjs/common';
+import { toConversationResponse } from './conversation-response.mapper';
+import { toPublicMessageDto } from '../events/dto/public-events.dto';
 
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsappService: WhatsappService,
@@ -29,6 +33,10 @@ export class ConversationsService {
       organizationId,
       'leads:read:all',
     );
+    const [canReadPii, canReadMessages] = await Promise.all([
+      this.permissionService.has(userId, organizationId, 'leads:read:pii'),
+      this.permissionService.has(userId, organizationId, 'leads:read:messages'),
+    ]);
     const dynamicWhere: any = { organizationId };
     if (!canReadAll) {
       dynamicWhere.lead = { assignedAgentId: userId };
@@ -50,7 +58,9 @@ export class ConversationsService {
       },
     });
 
-    return conversations;
+    return conversations.map((conversation) =>
+      toConversationResponse(conversation, canReadPii, canReadMessages),
+    );
   }
 
   async getMessages(
@@ -79,6 +89,15 @@ export class ConversationsService {
         'You do not have permission to access this conversation',
       );
     }
+    if (
+      !(await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:messages',
+      ))
+    ) {
+      throw new ForbiddenException('Message access is not granted');
+    }
 
     const messages = await this.prisma.message.findMany({
       where: { conversationId },
@@ -91,7 +110,7 @@ export class ConversationsService {
     if (hasMore) messages.pop();
 
     return {
-      data: messages,
+      data: messages.map(toPublicMessageDto),
       hasMore,
       nextCursor: hasMore ? messages[messages.length - 1].id : null,
     };
@@ -123,7 +142,7 @@ export class ConversationsService {
       );
     }
 
-    const { organization, lead } = conversation;
+    const { lead } = conversation;
 
     // 🚀 NEW: Get active WhatsApp channel
     const channel = await this.prisma.channel.findFirst({
@@ -168,7 +187,11 @@ export class ConversationsService {
     });
 
     // 5. Broadcast to the frontend using your exact working format!
-    this.eventsGateway.broadcastNewMessage(organizationId, newMessage);
+    await this.eventsGateway
+      .broadcastNewMessage(organizationId, newMessage)
+      .catch((error: unknown) =>
+        this.logger.warn('Manual-message live broadcast failed', error),
+      );
 
     return newMessage;
   }

@@ -9,10 +9,16 @@ describe('EventsGateway', () => {
   let gateway: EventsGateway;
   let mockEmit: jest.Mock;
   let mockTo: jest.Mock;
+  let mockMembershipFind: jest.Mock;
+  let mockPermissionHas: jest.Mock;
+  let mockDisconnect: jest.Mock;
 
   beforeEach(async () => {
     mockEmit = jest.fn();
     mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
+    mockMembershipFind = jest.fn().mockResolvedValue({ id: 'test' });
+    mockPermissionHas = jest.fn().mockResolvedValue(true);
+    mockDisconnect = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -21,13 +27,16 @@ describe('EventsGateway', () => {
         { provide: ConfigService, useValue: { get: jest.fn() } },
         {
           provide: PermissionService,
-          useValue: { has: jest.fn().mockResolvedValue(true) },
+          useValue: { has: mockPermissionHas },
         },
         {
           provide: PrismaService,
           useValue: {
+            user: {
+              findFirst: jest.fn().mockResolvedValue({ id: 'test-user' }),
+            },
             organizationMembership: {
-              findFirst: jest.fn().mockResolvedValue({ id: 'test' }),
+              findFirst: mockMembershipFind,
             },
             conversation: {
               findUnique: jest
@@ -50,10 +59,14 @@ describe('EventsGateway', () => {
             emit: mockEmit,
             data: {
               userId: 'test-user',
+              organizationId: 'org-456',
+              roleId: 'role-1',
+              tokenExp: Math.floor(Date.now() / 1000) + 3600,
               canReadAll: true,
               canReadPii: true,
               canReadMessages: true,
             },
+            disconnect: mockDisconnect,
           },
         ]),
         disconnectSockets: jest.fn(),
@@ -69,6 +82,69 @@ describe('EventsGateway', () => {
 
   it('should be defined', () => {
     expect(gateway).toBeDefined();
+  });
+
+  it('disconnects a revoked membership before emitting a patient event', async () => {
+    mockMembershipFind.mockResolvedValue(null);
+    await gateway.broadcastNewMessage('org-456', {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      content: 'Private patient text',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(mockDisconnect).toHaveBeenCalledWith(true);
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  it('rechecks message-content permission at emission time', async () => {
+    mockPermissionHas.mockImplementation(
+      async (_userId: string, _organizationId: string, action: string) =>
+        action !== 'leads:read:messages',
+    );
+    await gateway.broadcastNewMessage('org-456', {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      content: 'Private patient text',
+      mediaUrl: 'https://example.invalid/private-media',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(mockEmit).toHaveBeenCalledWith(
+      'onNewMessage',
+      expect.objectContaining({
+        content: '[Message content hidden]',
+        mediaUrl: '[Media hidden]',
+      }),
+    );
+  });
+
+  it('redacts live PII after its grant is revoked', async () => {
+    mockPermissionHas.mockImplementation(
+      async (_userId: string, _organizationId: string, action: string) =>
+        action !== 'leads:read:pii',
+    );
+    await gateway.broadcastConversationUpdate('org-456', {
+      id: 'conv-1',
+      organizationId: 'org-456',
+      externalContactId: '+15551234567',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(mockEmit).toHaveBeenCalledWith(
+      'onConversationUpdate',
+      expect.objectContaining({ externalContactId: null }),
+    );
+  });
+
+  it('does not send notification content across organization rooms', async () => {
+    await gateway.broadcastNotification('test-user', {
+      id: 'notification-other-org',
+      organizationId: 'org-other',
+      title: 'Private patient',
+      body: 'Private detail',
+    });
+    expect(mockEmit).not.toHaveBeenCalled();
   });
 
   describe('Adversarial DTO Mapping', () => {
@@ -184,8 +260,8 @@ describe('EventsGateway', () => {
     it('strips internal fields from notification broadcasts', async () => {
       const maliciousNotification = {
         id: 'notif-1',
-        organizationId: 'org-1',
-        userId: 'user-1',
+        organizationId: 'org-456',
+        userId: 'test-user',
         type: 'LEAD_HANDED_OFF',
         title: 'Title',
         body: 'Body',
@@ -196,7 +272,7 @@ describe('EventsGateway', () => {
         internalRoutingId: '12345',
       };
 
-      gateway.broadcastNotification('user-1', maliciousNotification);
+      await gateway.broadcastNotification('test-user', maliciousNotification);
 
       const emittedDto = mockEmit.mock.calls[0][1];
       expect(emittedDto).not.toHaveProperty('user');

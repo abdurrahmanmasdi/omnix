@@ -28,10 +28,7 @@ import {
   UpdateLeadDto,
   UpdateLeadStageDto,
 } from './dtos/lead.dto';
-import {
-  LeadResponseDto,
-  LeadsPaginatedResponseDto,
-} from './dtos/lead-response.dto';
+import { LeadsPaginatedResponseDto } from './dtos/lead-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
@@ -127,7 +124,7 @@ export class LeadsController {
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateLeadDto) {
     if (!user.organizationId)
       throw new UnauthorizedException('Organization context missing');
-    return this.leadsService.create(user.organizationId, dto);
+    return this.leadsService.create(user.organizationId, user.id, dto);
   }
 
   @Get()

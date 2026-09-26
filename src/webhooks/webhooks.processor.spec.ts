@@ -12,6 +12,7 @@ import { Job } from 'bullmq';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
+import { OutboundAttemptService } from './outbound-attempt.service';
 import { ActionExecutorService } from './action-executor.service';
 import { PermissionService } from '../auth/permission.service';
 
@@ -19,6 +20,7 @@ describe('WebhooksProcessor', () => {
   it('should ask for consent and not download media if consent is not granted', async () => {
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
       id: 'channel-1',
+      status: 'ACTIVE',
       organizationId: 'org-1',
       accessToken: 'token-123',
       organization: { id: 'org-1' },
@@ -75,6 +77,7 @@ describe('WebhooksProcessor', () => {
   it('should update consent status if user sends I CONSENT', async () => {
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
       id: 'channel-1',
+      status: 'ACTIVE',
       organizationId: 'org-1',
       accessToken: 'token-123',
       organization: { id: 'org-1' },
@@ -130,6 +133,7 @@ describe('WebhooksProcessor', () => {
   it('should clear mediaUrls and set consent to false if user sends WITHDRAW CONSENT', async () => {
     (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
       id: 'channel-1',
+      status: 'ACTIVE',
       organizationId: 'org-1',
       accessToken: 'token-123',
       organization: { id: 'org-1' },
@@ -203,6 +207,10 @@ describe('WebhooksProcessor', () => {
       channel: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn().mockImplementation(async () => {
+          const match = await mockPrismaService.channel.findFirst();
+          return match ? [match] : [];
+        }),
       },
       message: {
         findFirst: jest.fn(),
@@ -230,6 +238,9 @@ describe('WebhooksProcessor', () => {
       },
       outboxEvent: {
         create: jest.fn(),
+      },
+      scheduledFollowUp: {
+        updateMany: jest.fn(),
       },
       $transaction: jest.fn().mockImplementation(async (cb) => {
         return cb(mockPrismaService);
@@ -273,6 +284,10 @@ describe('WebhooksProcessor', () => {
         },
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: CredentialsService, useValue: { readActive: jest.fn() } },
+        {
+          provide: OutboundAttemptService,
+          useValue: { reconcileStatus: jest.fn() },
+        },
         { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
         { provide: getQueueToken('ai-reply'), useValue: mockQueue },
         {
@@ -327,7 +342,7 @@ describe('WebhooksProcessor', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
-    expect(prisma.channel.findFirst).not.toHaveBeenCalled();
+    expect(prisma.channel.findFirst).toHaveBeenCalled();
   });
 
   it('should drop message if organization is not found for the receiving phone number', async () => {
@@ -366,7 +381,8 @@ describe('WebhooksProcessor', () => {
     prisma.channel.findFirst.mockResolvedValue({
       id: 'chan-1',
       organizationId: 'org-1',
-      organization: { id: 'org-1' },
+      status: 'ACTIVE',
+      organization: { id: 'org-1', isActive: true },
       providerAccountId: 'phone123',
     } as any);
 
@@ -387,6 +403,7 @@ describe('WebhooksProcessor', () => {
       id: 'conv-1',
       leadId: 'lead-1',
       organizationId: 'org-1',
+      stateVersion: 1,
     };
     prisma.conversation.create.mockResolvedValue(newConversation as any);
     prisma.conversation.update.mockResolvedValue({
@@ -425,22 +442,27 @@ describe('WebhooksProcessor', () => {
     expect(prisma.lead.upsert).toHaveBeenCalled(); // Should auto-create lead
     expect(prisma.conversation.create).toHaveBeenCalled(); // Should auto-create conversation
     expect(prisma.message.create).toHaveBeenCalled(); // Should save the user's message
-    expect(aiReplyQueue.add).toHaveBeenCalledWith(
-      'generate-reply',
-      {
-        conversationId: 'conv-1',
-        customerPhone: '4915112345678',
-        newMessageIds: ['db-msg-1'],
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: {
         organizationId: 'org-1',
+        topic: 'generate-reply',
+        payload: {
+          organizationId: 'org-1',
+          conversationId: 'conv-1',
+          customerPhone: '4915112345678',
+          messageId: 'db-msg-1',
+          stateVersion: 1,
+        },
       },
-      expect.any(Object),
-    );
+    });
+    expect(aiReplyQueue.add).not.toHaveBeenCalled();
   });
 
   it('should skip duplicate messages (idempotency check)', async () => {
     // 1. Channel exists
     prisma.channel.findFirst.mockResolvedValue({
       id: 'chan-1',
+      status: 'ACTIVE',
       organization: { id: 'org-1' },
     } as any);
 

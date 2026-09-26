@@ -1,39 +1,34 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { JwtService } from '@nestjs/jwt';
 import { tenantStorage } from './tenant.context';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    // 1. Webhook bypass: Webhooks run as "System"
-    if (req.path.includes('/webhooks')) {
+    // The webhook controller verifies Meta's signature before it queues work.
+    if (req.path === '/webhooks/whatsapp') {
       return tenantStorage.run({ isSystemBypass: true }, () => next());
     }
 
-    let organizationId: string | undefined = undefined;
-
-    // 2. Extract the JWT from the header
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-
+    // Establish the async context before Nest enters its guards. The JWT
+    // strategy subsequently checks the active user and membership in the DB.
+    // A malformed or unsigned header must never set a tenant here.
+    let organizationId: string | undefined;
+    const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
+    const secret = process.env.JWT_ACCESS_SECRET;
+    if (token && secret) {
       try {
-        // Lightning-fast decode of the JWT payload (the middle section of the token)
-        const payloadStr = Buffer.from(
-          token.split('.')[1],
-          'base64',
-        ).toString();
-        const payload = JSON.parse(payloadStr);
-
-        if (payload && payload.organizationId) {
+        const payload = new JwtService().verify<{ organizationId?: unknown }>(
+          token,
+          { secret },
+        );
+        if (typeof payload.organizationId === 'string')
           organizationId = payload.organizationId;
-        }
-      } catch (e) {
-        // We ignore decode errors here. The JwtAuthGuard will catch bad tokens and block the request.
+      } catch {
+        // The route's auth guard returns the appropriate 401 response.
       }
     }
-
-    // 3. Run the entire HTTP request inside the Tenant Context "Backpack"!
     tenantStorage.run({ organizationId, isSystemBypass: false }, () => {
       next();
     });

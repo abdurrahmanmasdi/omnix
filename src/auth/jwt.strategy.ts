@@ -60,8 +60,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Organization membership is inactive');
     }
 
-    // Replace middleware's decoded-token context with the verified identity.
-    // This keeps Prisma tenant filtering tied to the authenticated membership.
+    // Install tenant context only after verifying the signed token and active membership.
     tenantStorage.enterWith({
       organizationId: payload.organizationId,
       isSystemBypass: false,

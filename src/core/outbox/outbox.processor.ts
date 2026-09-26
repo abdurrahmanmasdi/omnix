@@ -5,6 +5,17 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { tenantStorage } from '../tenant/tenant.context';
 
+type ClaimedOutboxEvent = {
+  id: string;
+  topic: string;
+  payload: {
+    organizationId?: unknown;
+    conversationId?: unknown;
+    messageId?: unknown;
+    stateVersion?: unknown;
+  } | null;
+};
+
 @Injectable()
 export class OutboxProcessor {
   private readonly logger = new Logger(OutboxProcessor.name);
@@ -43,9 +54,9 @@ export class OutboxProcessor {
 
     try {
       await tenantStorage.run({ isSystemBypass: true }, async () => {
-        const events = await this.prisma.$queryRaw<any[]>`
+        const events = await this.prisma.$queryRaw<ClaimedOutboxEvent[]>`
           UPDATE "outbox_events"
-          SET status = 'PROCESSING'
+          SET status = 'PROCESSING', "updatedAt" = CURRENT_TIMESTAMP
           WHERE id IN (
             SELECT id FROM "outbox_events"
             WHERE status = 'PENDING'
@@ -71,27 +82,50 @@ export class OutboxProcessor {
 
         const groups = new Map<string, typeof aiReplyEvents>();
         for (const event of aiReplyEvents) {
-          const convId = event.payload.conversationId as string;
-          if (!groups.has(convId)) groups.set(convId, []);
-          groups.get(convId)!.push(event);
+          const payload = event.payload ?? {};
+          const key = `${String(payload.organizationId)}:${String(payload.conversationId)}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(event);
         }
 
-        for (const [convId, group] of groups.entries()) {
+        for (const [groupKey, group] of groups.entries()) {
           try {
             const newMessageIds = group
-              .map((e) => e.payload.messageId)
-              .filter(Boolean);
-            const latestStateVersion = Math.max(
-              ...group.map((e) => (e.payload.stateVersion as number) || 0),
+              .map((e) => e.payload?.messageId)
+              .filter(
+                (id): id is string => typeof id === 'string' && id.length > 0,
+              );
+            const firstPayload = group[0].payload ?? {};
+            if (
+              typeof firstPayload.organizationId !== 'string' ||
+              typeof firstPayload.conversationId !== 'string' ||
+              newMessageIds.length !== group.length ||
+              group.some(
+                (e) =>
+                  e.payload?.organizationId !== firstPayload.organizationId ||
+                  e.payload?.conversationId !== firstPayload.conversationId,
+              )
+            ) {
+              throw new Error('OUTBOX_INVALID_INBOUND_PAYLOAD');
+            }
+            const latestStateVersion = group.reduce(
+              (latest, event) =>
+                Math.max(
+                  latest,
+                  typeof event.payload?.stateVersion === 'number'
+                    ? event.payload.stateVersion
+                    : 0,
+                ),
+              0,
             );
-            const firstPayload = group[0].payload;
+            if (latestStateVersion < 1)
+              throw new Error('OUTBOX_INVALID_INBOUND_PAYLOAD');
 
             await this.aiReplyQueue.add(
               'generate-reply',
               {
                 organizationId: firstPayload.organizationId,
-                conversationId: convId,
-                customerPhone: firstPayload.customerPhone,
+                conversationId: firstPayload.conversationId,
                 newMessageIds,
                 stateVersion: latestStateVersion,
               },
@@ -103,31 +137,37 @@ export class OutboxProcessor {
             );
 
             await this.prisma.outboxEvent.updateMany({
-              where: { id: { in: group.map((e) => e.id) } },
+              where: {
+                id: { in: group.map((e) => e.id) },
+                status: 'PROCESSING',
+              },
               data: { status: 'PROCESSED', processedAt: new Date() },
             });
           } catch (err: any) {
-            this.logger.error(
-              `Failed to process batched ai-reply for ${convId}: ${err.message}`,
-            );
+            this.logger.error(`OUTBOX_INBOUND_RELAY_FAILED group=${groupKey}`);
+            const invalid = err?.message === 'OUTBOX_INVALID_INBOUND_PAYLOAD';
             await this.prisma.outboxEvent.updateMany({
-              where: { id: { in: group.map((e) => e.id) } },
-              data: { status: 'FAILED', error: err.message },
+              where: {
+                id: { in: group.map((e) => e.id) },
+                status: 'PROCESSING',
+              },
+              data: {
+                status: invalid ? 'FAILED' : 'PENDING',
+                error: invalid
+                  ? 'OUTBOX_INVALID_INBOUND_PAYLOAD'
+                  : 'OUTBOX_INBOUND_RELAY_FAILED',
+              },
             });
           }
         }
 
         for (const event of otherEvents) {
           try {
-            await this.outboxRelayQueue.add(
-              event.topic as string,
-              event.payload,
-              {
-                jobId: `outbox-${event.id as string}`,
-                removeOnComplete: true,
-                removeOnFail: false,
-              },
-            );
+            await this.outboxRelayQueue.add(event.topic, event.payload, {
+              jobId: `outbox-${event.id}`,
+              removeOnComplete: true,
+              removeOnFail: false,
+            });
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
               data: { status: 'PROCESSED', processedAt: new Date() },

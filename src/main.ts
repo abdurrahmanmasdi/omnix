@@ -3,8 +3,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
-import { Transport, MicroserviceOptions } from '@nestjs/microservices';
-import { GRPC_CONFIG } from './config/grpc.constants';
 import { Logger } from 'nestjs-pino';
 import { json, urlencoded } from 'express';
 
@@ -56,19 +54,6 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document); // Hosts the docs at http://localhost:3000/api
-
-  // This tells NestJS to listen on port 50052 for Python's Tool requests
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.GRPC,
-    options: {
-      package: GRPC_CONFIG.PACKAGES.TOOLS,
-      protoPath: GRPC_CONFIG.PROTO_PATHS.TOOLS,
-      url: GRPC_CONFIG.NEST_SERVER_URL,
-    },
-  });
-
-  // Start the microservice listeners
-  await app.startAllMicroservices();
 
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }

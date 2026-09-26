@@ -12,11 +12,14 @@ import { EventsModule } from '../events/events.module';
 import { AiReplyProcessor } from './ai-reply.processor';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { DeliveryAuthService } from './delivery-auth.service';
+import { InboundClaimService } from './inbound-claim.service';
+import { OutboundAttemptService } from './outbound-attempt.service';
 import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 import { WhatsappMediaService } from './whatsapp-media.service';
 import { GRPC_CONFIG } from '../config/grpc.constants';
 import { CredentialsModule } from '../credentials/credentials.module';
+import { AuthModule } from '../auth/auth.module';
 
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
@@ -29,6 +32,7 @@ import { AuditModule } from '../audit/audit.module';
     CrmIntegrationModule,
     AuditModule,
     CredentialsModule,
+    AuthModule,
     // Register the specific queue we will push messages to
     BullModule.registerQueue({
       name: 'whatsapp-messages',
@@ -78,6 +82,8 @@ import { AuditModule } from '../audit/audit.module';
     WhatsappMediaService,
     ActionExecutorService,
     DeliveryAuthService,
+    InboundClaimService,
+    OutboundAttemptService,
     NotificationEmitterService,
   ],
   exports: [

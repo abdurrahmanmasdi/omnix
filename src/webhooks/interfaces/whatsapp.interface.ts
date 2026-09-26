@@ -78,4 +78,5 @@ export interface WhatsAppStatus {
   status: 'sent' | 'delivered' | 'read' | 'failed';
   timestamp: string;
   recipient_id: string;
+  biz_opaque_callback_data?: string;
 }

@@ -108,7 +108,9 @@ export class QueryBuilderService {
 
     if (isFilterCondition(node)) {
       if (!config.allowedFilterFields.includes(node.field)) {
-        return null; // Silently ignore unallowed fields for security
+        throw new BadRequestException(
+          `Filter field is not allowed: ${node.field}`,
+        );
       }
 
       const value = this.normalizeValue(node.field, node.value, config);

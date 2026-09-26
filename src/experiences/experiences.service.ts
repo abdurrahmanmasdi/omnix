@@ -10,6 +10,7 @@ import {
 import type { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom, Observable } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { tenantStorage } from '../core/tenant/tenant.context';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Prisma, OrganizationExperience } from '@prisma/client';
@@ -251,8 +252,12 @@ export class ExperiencesService implements OnModuleInit {
     // 2. 🚀 If any text fields changed, we MUST recalculate the AI Vector
     if (dto.consentObtained === false) {
       // T12: When consent changes from true to false, remove/disable its embedding
-      await this.prisma
-        .$executeRaw`UPDATE organization_experiences SET embedding = NULL WHERE id = ${experienceId}::uuid`;
+      await tenantStorage.run(
+        { isSystemBypass: true },
+        async () =>
+          await this.prisma
+            .$executeRaw`UPDATE organization_experiences SET embedding = NULL WHERE id = ${experienceId}::uuid AND "organizationId" = ${organizationId}::uuid`,
+      );
       this.logger.log(
         `Cleared embedding for revoked consent on ${experienceId}`,
       );

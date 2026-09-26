@@ -39,7 +39,18 @@ describe('ActionExecutorService', () => {
               create: jest.fn(),
             },
             organizationMembership: {
-              findMany: jest.fn().mockResolvedValue([{ userId: 'staff-1' }]),
+              findMany: jest.fn().mockResolvedValue([
+                {
+                  userId: 'staff-1',
+                  role: {
+                    rolePermissions: [
+                      { permission: { action: 'notifications:view' } },
+                      { permission: { action: 'leads:read:all' } },
+                    ],
+                  },
+                  permissionOverrides: [],
+                },
+              ]),
             },
           },
         },
@@ -191,7 +202,10 @@ describe('ActionExecutorService', () => {
           deletedAt: null,
           user: { status: 'ACTIVE', deletedAt: null },
         },
-        select: { userId: true },
+        include: expect.objectContaining({
+          role: expect.any(Object),
+          permissionOverrides: expect.any(Object),
+        }),
       });
     });
 
@@ -227,6 +241,23 @@ describe('ActionExecutorService', () => {
         actor: 'ai',
         metadata: { reason: 'Requires human attention' },
       });
+    });
+
+    it('does not notify staff without visibility of the handed-off lead', async () => {
+      (
+        prismaService.organizationMembership.findMany as jest.Mock
+      ).mockResolvedValue([
+        {
+          userId: 'unassigned-staff',
+          role: {
+            rolePermissions: [{ permission: { action: 'notifications:view' } }],
+          },
+          permissionOverrides: [],
+        },
+      ]);
+      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.notification.create).not.toHaveBeenCalled();
+      expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
     });
 
     it('uses the conversation reference when there is no linked lead', async () => {

@@ -8,6 +8,10 @@ import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
+import {
+  MEMBERSHIP_GRANTS_INCLUDE,
+  membershipHasPermission,
+} from '../auth/permission.service';
 
 /** Statuses that trigger an automatic CRM sync */
 const CRM_SYNC_STATUSES: LeadStatus[] = [
@@ -406,7 +410,7 @@ export class ActionExecutorService {
             deletedAt: null,
             user: { status: 'ACTIVE', deletedAt: null },
           },
-          select: { userId: true },
+          include: MEMBERSHIP_GRANTS_INCLUDE,
         });
         const conv = await tx.conversation.update({
           where: { id: conversation.id, organizationId },
@@ -424,6 +428,13 @@ export class ActionExecutorService {
         const notifications = [];
         if (memberships.length > 0) {
           for (const membership of memberships) {
+            if (
+              !membershipHasPermission(membership, 'notifications:view') ||
+              (membership.userId !== lead?.assignedAgentId &&
+                membership.userId !== conv.assignedAgentId &&
+                !membershipHasPermission(membership, 'leads:read:all'))
+            )
+              continue;
             const notification = await tx.notification.create({
               data: {
                 organizationId: organizationId,

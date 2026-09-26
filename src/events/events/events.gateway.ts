@@ -16,7 +16,6 @@ import {
   toPublicMessageDto,
   toPublicLeadDto,
   toPublicConversationDto,
-  toPublicNotificationDto,
 } from '../dto/public-events.dto';
 
 const allowedOrigins = process.env.FRONTEND_URL
@@ -289,6 +288,7 @@ export class EventsGateway
       const [local, domain] = masked.email.split('@');
       if (domain) masked.email = `${local.substring(0, 2)}***@${domain}`;
     }
+    masked.summary = null;
     return masked;
   }
 
@@ -300,6 +300,70 @@ export class EventsGateway
     };
   }
 
+  private async currentSocketAccess(
+    organizationId: string,
+    socket: { data: Record<string, any>; disconnect(force?: boolean): void },
+    requiredPermission: string,
+  ) {
+    const { userId, roleId, tokenExp } = socket.data;
+    if (
+      socket.data.organizationId !== organizationId ||
+      typeof userId !== 'string' ||
+      typeof roleId !== 'string' ||
+      typeof tokenExp !== 'number' ||
+      tokenExp <= Math.floor(Date.now() / 1000)
+    ) {
+      socket.disconnect(true);
+      return null;
+    }
+    const [user, membership] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: { id: userId, status: 'ACTIVE', deletedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.organizationMembership.findFirst({
+        where: {
+          userId,
+          roleId,
+          organizationId,
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (
+      !user ||
+      !membership ||
+      !(await this.permissionService.has(
+        userId,
+        organizationId,
+        requiredPermission,
+      ))
+    ) {
+      socket.disconnect(true);
+      return null;
+    }
+    return {
+      userId,
+      canReadAll: await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:all',
+      ),
+      canReadPii: await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:pii',
+      ),
+      canReadMessages: await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:messages',
+      ),
+    };
+  }
+
   private async emitToAuthorized(
     organizationId: string,
     event: string,
@@ -307,32 +371,42 @@ export class EventsGateway
     assignedAgentId: string | null,
   ) {
     const sockets = await this.server.in(organizationId).fetchSockets();
-    for (const socket of sockets) {
-      const { canReadAll, canReadPii, canReadMessages, userId } = socket.data;
+    await tenantStorage.run({ organizationId }, async () => {
+      for (const socket of sockets) {
+        const access = await this.currentSocketAccess(
+          organizationId,
+          socket,
+          'view_conversations',
+        );
+        if (!access) continue;
+        const { canReadAll, canReadPii, canReadMessages, userId } = access;
 
-      const isAssigned = assignedAgentId && userId === assignedAgentId;
-      if (!canReadAll && !isAssigned) {
-        continue;
-      }
-
-      let personalizedPayload = payload;
-
-      if (event === 'onLeadUpdate') {
-        if (!canReadPii) personalizedPayload = this.maskLeadPii(payload);
-      } else if (event === 'onNewMessage') {
-        if (!canReadMessages)
-          personalizedPayload = this.maskMessageContent(payload);
-      } else if (event === 'onConversationUpdate' && payload.lead) {
-        if (!canReadPii) {
-          personalizedPayload = {
-            ...payload,
-            lead: this.maskLeadPii(payload.lead),
-          };
+        const isAssigned = assignedAgentId && userId === assignedAgentId;
+        if (!canReadAll && !isAssigned) {
+          continue;
         }
-      }
 
-      socket.emit(event, personalizedPayload);
-    }
+        let personalizedPayload = payload;
+
+        if (event === 'onLeadUpdate') {
+          personalizedPayload = canReadPii
+            ? { ...payload, summary: null }
+            : this.maskLeadPii(payload);
+        } else if (event === 'onNewMessage') {
+          if (!canReadMessages)
+            personalizedPayload = this.maskMessageContent(payload);
+        } else if (event === 'onConversationUpdate') {
+          if (!canReadPii) {
+            personalizedPayload = {
+              ...payload,
+              externalContactId: null,
+            };
+          }
+        }
+
+        socket.emit(event, personalizedPayload);
+      }
+    });
   }
 
   // 🚀 Broadcast methods (Public events)
@@ -378,8 +452,28 @@ export class EventsGateway
     );
   }
 
-  broadcastNotification(userId: string, notificationData: any) {
-    const safeDto = toPublicNotificationDto(notificationData);
-    this.server.to(`user_${userId}`).emit('new_notification', safeDto);
+  async broadcastNotification(userId: string, notificationData: any) {
+    const organizationId = notificationData.organizationId as
+      | string
+      | undefined;
+    if (!organizationId) return;
+    const sockets = await this.server.in(`user_${userId}`).fetchSockets();
+    await tenantStorage.run({ organizationId }, async () => {
+      for (const socket of sockets) {
+        const access = await this.currentSocketAccess(
+          organizationId,
+          socket,
+          'notifications:view',
+        );
+        if (!access || access.userId !== userId) continue;
+        socket.emit('new_notification', {
+          id: notificationData.id,
+          organizationId,
+          type: 'UPDATE',
+          title: 'New notification',
+          body: 'Open notifications to view details.',
+        });
+      }
+    });
   }
 }

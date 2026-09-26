@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionService } from '../auth/permission.service';
@@ -18,20 +19,11 @@ import {
 } from './dtos/lead.dto';
 import { EventsGateway } from '../events/events/events.gateway';
 import { Prisma } from '@prisma/client';
-
-const LEAD_RELATIONS_INCLUDE = {
-  assignedAgent: {
-    select: { id: true, firstName: true, lastName: true, email: true },
-  },
-  source: true,
-  pipelineStage: true,
-  conversation: {
-    select: { id: true, status: true, createdAt: true, updatedAt: true },
-  },
-};
+import { LEAD_RELATIONS_INCLUDE, toLeadResponse } from './lead-response.mapper';
 
 @Injectable()
 export class LeadsService {
+  private readonly logger = new Logger(LeadsService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly queryBuilder: QueryBuilderService,
@@ -39,10 +31,10 @@ export class LeadsService {
     private readonly permissionService: PermissionService,
   ) {}
 
-  async create(organizationId: string, dto: CreateLeadDto) {
+  async create(organizationId: string, userId: string, dto: CreateLeadDto) {
     await this.validateScopedReferences(organizationId, dto);
 
-    return this.prisma.lead.create({
+    const lead = await this.prisma.lead.create({
       data: {
         organizationId,
         firstName: dto.firstName,
@@ -74,6 +66,14 @@ export class LeadsService {
       },
       include: LEAD_RELATIONS_INCLUDE,
     });
+    return toLeadResponse(
+      lead,
+      await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:pii',
+      ),
+    );
   }
 
   async findAll(
@@ -85,6 +85,11 @@ export class LeadsService {
       userId,
       organizationId,
       'leads:read:all',
+    );
+    const canReadPii = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:pii',
     );
 
     const page = filters.page && filters.page > 0 ? filters.page : 1;
@@ -101,7 +106,7 @@ export class LeadsService {
         'country',
         'firstName',
         'lastName',
-        'email',
+        ...(canReadPii ? ['email'] : []),
         'estimatedValue',
         'createdAt',
         'pipelineStageId',
@@ -126,7 +131,10 @@ export class LeadsService {
     };
 
     const orderBy = this.queryBuilder.buildOrderBy(filters.sorts, config);
-    const dynamicWhere = this.queryBuilder.buildWhere(filters.filters, config);
+    const dynamicWhere = this.queryBuilder.buildWhere(
+      filters.filters,
+      config,
+    ) as Prisma.LeadWhereInput;
 
     const dynamicConditions: Prisma.LeadWhereInput[] = [
       { organizationId, deletedAt: null },
@@ -156,7 +164,7 @@ export class LeadsService {
     });
 
     return {
-      data,
+      data: data.map((lead) => toLeadResponse(lead, canReadPii)),
       meta: {
         page,
         limit,
@@ -185,22 +193,12 @@ export class LeadsService {
       );
     }
 
-    // PII shaping
     const canReadPii = await this.permissionService.has(
       userId,
       organizationId,
       'leads:read:pii',
     );
-    if (!canReadPii) {
-      if (lead.phoneNumber)
-        lead.phoneNumber = lead.phoneNumber.replace(/\d(?=\d{4})/g, '*');
-      if (lead.email) {
-        const [local, domain] = lead.email.split('@');
-        if (domain) lead.email = `${local.substring(0, 2)}***@${domain}`;
-      }
-    }
-
-    return lead;
+    return toLeadResponse(lead, canReadPii);
   }
 
   async updateStage(
@@ -231,9 +229,20 @@ export class LeadsService {
     });
 
     // Broadcast the update so UI reacts in real-time
-    this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead);
+    await this.eventsGateway
+      .broadcastLeadUpdate(organizationId, updatedLead)
+      .catch((error: unknown) =>
+        this.logger.warn('Lead update live broadcast failed', error),
+      );
 
-    return updatedLead;
+    return toLeadResponse(
+      updatedLead,
+      await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:pii',
+      ),
+    );
   }
 
   async update(
@@ -265,11 +274,19 @@ export class LeadsService {
       (key) => cleanData[key] === undefined && delete cleanData[key],
     );
 
-    return this.prisma.lead.update({
+    const updatedLead = await this.prisma.lead.update({
       where: { id: leadId },
       data: updateData,
       include: LEAD_RELATIONS_INCLUDE,
     });
+    return toLeadResponse(
+      updatedLead,
+      await this.permissionService.has(
+        userId,
+        organizationId,
+        'leads:read:pii',
+      ),
+    );
   }
 
   async remove(organizationId: string, userId: string, leadId: string) {

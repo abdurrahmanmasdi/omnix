@@ -421,12 +421,14 @@ it('rolls back organization, persona, roles and permissions when membership crea
     personas: await prisma.aiPersona.count(),
     grants: await prisma.rolePermission.count(),
   }));
-  await prisma.$executeRawUnsafe(
-    `CREATE FUNCTION reject_test_membership() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic provisioning failure'; END $$`,
-  );
-  await prisma.$executeRawUnsafe(
-    'CREATE TRIGGER reject_test_membership BEFORE INSERT ON organization_memberships FOR EACH ROW EXECUTE FUNCTION reject_test_membership()',
-  );
+  await system(async () => {
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION reject_test_membership() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic provisioning failure'; END $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      'CREATE TRIGGER reject_test_membership BEFORE INSERT ON organization_memberships FOR EACH ROW EXECUTE FUNCTION reject_test_membership()',
+    );
+  });
   try {
     await request(app.getHttpServer())
       .post('/organizations')
@@ -447,10 +449,12 @@ it('rolls back organization, persona, roles and permissions when membership crea
       expect(await prisma.rolePermission.count()).toBe(before.grants);
     });
   } finally {
-    await prisma.$executeRawUnsafe(
-      'DROP TRIGGER reject_test_membership ON organization_memberships',
-    );
-    await prisma.$executeRawUnsafe('DROP FUNCTION reject_test_membership()');
+    await system(async () => {
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER reject_test_membership ON organization_memberships',
+      );
+      await prisma.$executeRawUnsafe('DROP FUNCTION reject_test_membership()');
+    });
   }
 });
 

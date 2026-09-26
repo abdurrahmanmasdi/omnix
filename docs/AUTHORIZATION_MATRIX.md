@@ -1,0 +1,16 @@
+# Pilot authorization matrix
+
+| Data or event                           | Required access                                                                                               | Current response                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Lead list/detail                        | `leads:view` and either `leads:read:all` or current assignment                                                | Explicit public lead fields only                                            |
+| Phone, email, native name, social links | Visible lead plus `leads:read:pii`                                                                            | Phone/email masked and other fields null without grant                      |
+| Email filter                            | `leads:read:pii`                                                                                              | 400 when absent; disallowed filter fields fail closed                       |
+| Conversation list                       | `view_conversations` and all-leads grant or current lead assignment                                           | Explicit conversation/lead fields; no external contact ID without PII grant |
+| Message history                         | Visible conversation plus `leads:read:messages`                                                               | 403 without grant; preview omitted without grant                            |
+| Live lead/conversation/message event    | Active user, active membership, `view_conversations`, current visibility                                      | Grants rechecked at emission; PII and content redacted before emit          |
+| Persisted notification                  | Active recipient membership, `notifications:view`, current record visibility for lead/conversation references | Title/body generalized when PII or message grant is missing                 |
+| Live notification                       | Active recipient membership and `notifications:view`                                                          | Generic invalidation only; details fetched through HTTP                     |
+
+There is no lead export endpoint in the current backend. The `LeadsService` filter allowlist excludes phone and allows email only with the PII grant. `ActionExecutorService` now creates handoff notifications only for the assigned agent or staff with `leads:read:all` and notification access, honoring role overrides.
+
+This matrix records the implemented checks, not a completed S07 acceptance gate. Current tests cover two organizations, list/detail/history permissions, recipient denial and redaction, plus mocked mid-session socket revocation. Still needed: two-staff connected-socket database acceptance, current-visibility filtering when reading older persisted notifications after reassignment, and a review of every notification producer and frontend rendering path. The periodic socket sweep remains a fallback; event emission rechecks access immediately.
