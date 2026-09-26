@@ -325,6 +325,7 @@ enum MessageType {
 
 enum MessageStatus {
   PENDING
+  PROCESSING
   PROCESSED
   SENT
   CANCELLED

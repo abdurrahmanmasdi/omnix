@@ -190,96 +190,158 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
           : `This is a scheduled follow-up. Context: ${followUp.aiContext || 'Follow up'}`;
 
       try {
-        const idempotencyKey = `followUp-${followUp.id}`;
-        let aiMessage = await this.prisma.message.findUnique({
-          where: { idempotencyKey },
+        const idempotencyKeyBase = `followUp-${followUp.id}`;
+
+        // Check if we already generated bubbles for this job
+        let existingBubbles = await this.prisma.message.findMany({
+          where: { idempotencyKey: { startsWith: `${idempotencyKeyBase}-` } },
+          orderBy: { createdAt: 'asc' },
         });
 
-        if (aiMessage?.metaMessageId) {
-          this.logger.log(
-            `Idempotency check: Follow-up ${followUp.id} already sent. Skipping.`,
-          );
-          return;
-        }
+        if (existingBubbles.length === 0) {
+          // Backward compatibility check for old single message row
+          const legacyMessage = await this.prisma.message.findUnique({
+            where: { idempotencyKey: idempotencyKeyBase },
+          });
 
-        if (!aiMessage) {
-          aiMessage = await this.prisma.message.create({
-            data: {
+          if (legacyMessage && legacyMessage.metaMessageId) {
+            this.logger.log(
+              `Idempotency check: Follow-up ${followUp.id} already sent. Skipping.`,
+            );
+            return;
+          }
+
+          const aiResponse = await lastValueFrom(
+            this.salesAgentService!.generateReply({
+              organizationId: organization.id,
               conversationId: conversation.id,
-              content: '[PENDING AI REPLY]',
-              idempotencyKey,
+              newMessageIds: [],
+              clinicName: persona?.clinicName || 'OmniDesk Clinic',
+              agentTone: persona?.tone || 'Professional and empathetic',
+              businessRulesJson: businessRulesJson,
+              totalMessageCount,
+              leadSummary,
+              isFollowUp: true,
+              followUpContext: contextMsg,
+            }),
+          );
+
+          const { replyText, mediaUrl, actions } = aiResponse;
+
+          if (actions && actions.length > 0) {
+            const actionResult = await this.actionExecutor.executeActions(
+              organization.id,
+              conversation.id,
+              actions,
+            );
+            if (actionResult.failed > 0) {
+              throw new Error(
+                `Critical action execution failure (${actionResult.failed} failed), aborting follow-up delivery to prevent inconsistency`,
+              );
+            }
+          }
+
+          if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
+            this.logger.log('AI requested to skip follow-up. Cancelling.');
+            await this.prisma.scheduledFollowUp.update({
+              where: { id: followUp.id },
+              data: {
+                status: FollowUpStatus.CANCELLED,
+                cancelReason: 'AI chose not to reply',
+              },
+            });
+            return;
+          }
+
+          let safeMediaUrl = mediaUrl;
+          let safeReplyText = replyText;
+
+          if (safeMediaUrl) {
+            const revoked = await this.prisma.organizationExperience.findFirst({
+              where: {
+                organizationId: organization.id,
+                consentObtained: false,
+                OR: [
+                  { beforeImageUrl: safeMediaUrl },
+                  { afterImageUrl: safeMediaUrl },
+                ],
+              },
+            });
+            if (revoked) {
+              this.logger.warn(
+                `Blocked outbound transmission of revoked media URL: ${safeMediaUrl}`,
+              );
+              safeMediaUrl = undefined;
+              safeReplyText =
+                '[Media removed due to privacy rules] ' + (safeReplyText || '');
+            }
+          }
+
+          const bubblesToCreate: any[] = [];
+          let bubbleIndex = 0;
+
+          if (safeMediaUrl) {
+            bubblesToCreate.push({
+              conversationId: conversation.id,
+              content: safeReplyText || '[Image Sent]',
+              mediaUrl: safeMediaUrl,
+              idempotencyKey: `${idempotencyKeyBase}-bubble-${bubbleIndex++}`,
               type: conversation.aiPaused ? 'AI_DRAFT' : 'AI_TEXT',
               handledBy: 'AI',
               status: 'PENDING',
-            },
+            });
+          } else if (safeReplyText) {
+            const messages = safeReplyText
+              .split('|||')
+              .map((m: any) => m.trim())
+              .filter((m: any) => m.length > 0);
+            for (const msg of messages) {
+              bubblesToCreate.push({
+                conversationId: conversation.id,
+                content: msg,
+                idempotencyKey: `${idempotencyKeyBase}-bubble-${bubbleIndex++}`,
+                type: conversation.aiPaused ? 'AI_DRAFT' : 'AI_TEXT',
+                handledBy: 'AI',
+                status: 'PENDING',
+              });
+            }
+          }
+
+          if (bubblesToCreate.length > 0) {
+            await this.prisma.message.createMany({
+              data: bubblesToCreate,
+            });
+          }
+
+          existingBubbles = await this.prisma.message.findMany({
+            where: { idempotencyKey: { startsWith: `${idempotencyKeyBase}-` } },
+            orderBy: { createdAt: 'asc' },
           });
         }
 
-        const aiResponse = await lastValueFrom(
-          this.salesAgentService!.generateReply({
-            organizationId: organization.id,
-            conversationId: conversation.id,
-            newMessageIds: [],
-            clinicName: persona?.clinicName || 'OmniDesk Clinic',
-            agentTone: persona?.tone || 'Professional and empathetic',
-            businessRulesJson: businessRulesJson,
-            totalMessageCount,
-            leadSummary,
-            isFollowUp: true,
-            followUpContext: contextMsg,
-          }),
-        );
+        if (existingBubbles.length === 0) {
+          this.logger.warn(`No bubbles to send for follow-up ${followUp.id}`);
 
-        const { replyText, mediaUrl, actions } = aiResponse;
+          if (existingBubbles.length === 0) return; // If no actions either, just return
 
-        if (actions && actions.length > 0) {
-          const actionResult = await this.actionExecutor.executeActions(
-            organization.id,
-            conversation.id,
-            actions,
-          );
-          if (actionResult.failed > 0) {
-            throw new Error(
-              `Critical action execution failure (${actionResult.failed} failed), aborting follow-up delivery to prevent inconsistency`,
-            );
-          }
-        }
-
-        if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
-          this.logger.log('AI requested to skip follow-up. Cancelling.');
+          // If we have actions but no bubbles, mark as sent so it doesn't retry
           await this.prisma.scheduledFollowUp.update({
             where: { id: followUp.id },
-            data: {
-              status: FollowUpStatus.CANCELLED,
-              cancelReason: 'AI chose not to reply',
-            },
+            data: { status: FollowUpStatus.SENT, sentAt: new Date() },
           });
           return;
         }
-
-        // We already created the message on line 203 with idempotencyKey
-        let metaMessageId: string | undefined = undefined;
-
-        await this.prisma.message.update({
-          where: { idempotencyKey: `followUp-${followUp.id}` },
-          data: {
-            content:
-              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
-            mediaUrl: mediaUrl || null,
-          },
-        });
 
         if (conversation.aiPaused) {
           this.logger.log(
             `Conversation ${conversation.id} is paused. Saving follow-up as draft.`,
           );
-
           await this.prisma.scheduledFollowUp.update({
             where: { id: followUp.id },
-            data: { status: FollowUpStatus.SENT }, // Mark as sent so it doesn't retry
+            data: { status: FollowUpStatus.SENT },
           });
 
-          const lead = conversation.lead as any;
+          const lead = (conversation as any).lead;
           if (lead?.assignedAgentId) {
             this.eventsGateway.broadcastNotification(lead.assignedAgentId, {
               title: 'Draft Follow-Up Ready',
@@ -289,78 +351,99 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
             });
           }
 
-          const updatedMsg = await this.prisma.message.findUnique({
-            where: { idempotencyKey: `followUp-${followUp.id}` },
-          });
-          if (updatedMsg) {
-            this.eventsGateway.broadcastNewMessage(organization.id, updatedMsg);
+          for (const bubble of existingBubbles) {
+            this.eventsGateway.broadcastNewMessage(organization.id, bubble);
           }
           return;
         }
 
         try {
-          if (mediaUrl) {
+          for (let i = 0; i < existingBubbles.length; i++) {
+            const bubble = existingBubbles[i];
+            if (bubble.status === 'SENT') continue;
+
             const authOk = await this.deliveryAuth.authorizeDelivery(
               organization.id,
               conversation.id,
             );
             if (!authOk) {
               this.logger.warn(
-                `Follow-up delivery aborted for media (Org: ${organization.id}, Conv: ${conversation.id})`,
+                `Follow-up delivery aborted for bubble ${i} (Org: ${organization.id}, Conv: ${conversation.id})`,
               );
               await this.recordCancellation(
                 conversation.id,
                 organization.id,
-                'Follow-up aborted prior to media send due to authorization failure.',
+                'Follow-up aborted prior to send due to authorization failure.',
               );
               return;
             }
-            const mediaResponse = await this.whatsappService.sendMediaMessage(
-              channel.credentialId,
-              organization.id,
-              conversation.externalContactId!,
-              mediaUrl,
-              replyText || undefined,
-              channel.providerAccountId,
-            );
-            metaMessageId = mediaResponse?.messages?.[0]?.id;
-          } else if (replyText) {
-            const messages = replyText
-              .split('|||')
-              .map((m) => m.trim())
-              .filter((m) => m.length > 0);
-            for (let i = 0; i < messages.length; i++) {
-              const message = messages[i];
-              const authOk = await this.deliveryAuth.authorizeDelivery(
-                organization.id,
-                conversation.id,
+
+            const currentConv = await this.prisma.conversation.findUnique({
+              where: { id: conversation.id },
+              include: { lead: true, channel: true },
+            });
+            if (
+              currentConv?.aiPaused ||
+              (currentConv as any)?.lead?.optedOutAt
+            ) {
+              this.logger.log(
+                `AI paused or opted out mid-transmission. Aborting remaining follow-up bubbles.`,
               );
-              if (!authOk) {
-                this.logger.warn(
-                  `Follow-up delivery aborted for text (Org: ${organization.id}, Conv: ${conversation.id})`,
-                );
-                await this.recordCancellation(
-                  conversation.id,
-                  organization.id,
-                  'Follow-up aborted prior to text send due to authorization failure.',
-                );
-                return;
-              }
+              return;
+            }
+
+            let metaMessageId: string | undefined;
+
+            if (bubble.mediaUrl) {
+              const mediaResponse = await this.whatsappService.sendMediaMessage(
+                channel.credentialId,
+                organization.id,
+                conversation.externalContactId!,
+                bubble.mediaUrl,
+                bubble.content !== '[Image Sent]' ? bubble.content : undefined,
+                channel.providerAccountId,
+              );
+              metaMessageId = mediaResponse?.messages?.[0]?.id;
+            } else {
               const metaResponse = await this.whatsappService.sendTextMessage(
                 channel.credentialId,
                 organization.id,
                 conversation.externalContactId!,
-                message,
+                bubble.content,
                 channel.providerAccountId,
               );
               metaMessageId = metaResponse?.messages?.[0]?.id;
-              if (i < messages.length - 1) {
+
+              if (i < existingBubbles.length - 1) {
                 await new Promise((resolve) => setTimeout(resolve, 1500));
               }
             }
+
+            if (!metaMessageId) {
+              throw new Error('No meta message ID returned');
+            }
+
+            const updatedMsg = await this.prisma.message.update({
+              where: { id: bubble.id },
+              data: {
+                metaMessageId,
+                status: 'SENT',
+              },
+            });
+
+            this.eventsGateway.broadcastNewMessage(organization.id, updatedMsg);
           }
+
+          await this.prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() },
+          });
+
+          await this.prisma.scheduledFollowUp.update({
+            where: { id: followUp.id },
+            data: { status: FollowUpStatus.SENT, sentAt: new Date() },
+          });
         } catch (waError: any) {
-          // R05: Catch WhatsApp API errors securely without crashing or losing lead state
           const statusCode =
             waError?.response?.status || waError?.status || 'Unknown';
           const errorMsg =
@@ -384,36 +467,12 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
             organization.id,
             'Follow-up failed due to WhatsApp API error.',
           );
-          return; // Do NOT throw, we don't want infinite BullMQ retries for a 400 Bad Request
-        }
-
-        if (metaMessageId || actions?.length) {
-          const updatedMsg = await this.prisma.message.update({
-            where: { idempotencyKey: `followUp-${followUp.id}` },
-            data: {
-              metaMessageId: metaMessageId ?? null,
-              status: metaMessageId ? 'SENT' : 'PROCESSED',
-            },
-          });
-
-          await this.prisma.conversation.update({
-            where: { id: conversation.id },
-            data: { updatedAt: new Date() },
-          });
-
-          this.eventsGateway.broadcastNewMessage(organization.id, updatedMsg);
-
-          // Mark as sent
-          await this.prisma.scheduledFollowUp.update({
-            where: { id: followUp.id },
-            data: { status: FollowUpStatus.SENT, sentAt: new Date() },
-          });
+          return;
         }
       } catch (error) {
         this.logger.error(
           `Failed to process follow-up: ${error instanceof Error ? error.message : 'Unknown'}`,
         );
-        // Log stack trace only in debug to avoid leaking PII in prod logs
         this.logger.debug(error);
         throw error;
       }

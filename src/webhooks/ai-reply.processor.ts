@@ -99,20 +99,27 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       const { organizationId, conversationId, customerPhone, stateVersion } =
         job.data;
 
+      const authoritativeIds = job.data.newMessageIds || [];
       const pendingMessages = await this.prisma.message.findMany({
         where: {
-          conversationId,
-          handledBy: 'AI',
-          type: { in: ['LEAD_TEXT', 'LEAD_MEDIA'] },
+          id: { in: authoritativeIds },
           status: 'PENDING',
         },
         orderBy: { createdAt: 'asc' },
       });
-      const newMessageIds = pendingMessages.map((m: any) => m.id);
-      if (newMessageIds.length === 0) {
-        this.logger.log(`No pending messages for Conv: ${conversationId}`);
+      const claimedMessageIds = pendingMessages.map((m: any) => m.id);
+      if (claimedMessageIds.length === 0) {
+        this.logger.log(
+          `No pending messages for Conv: ${conversationId} from claimed outbox batch.`,
+        );
         return;
       }
+
+      // 🚀 Mark them as PROCESSING durably to claim them for this job
+      await this.prisma.message.updateMany({
+        where: { id: { in: claimedMessageIds } },
+        data: { status: 'PROCESSING' },
+      });
 
       // Ensure the organization exists and has a valid AI persona
       const organization = await this.prisma.organization.findUnique({
@@ -171,192 +178,194 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
       const leadSummary = (conversation as any)?.lead?.summary || '';
 
       try {
-        // T18: Idempotency Check
         if (!job.id) throw new Error('Missing job ID for idempotency');
-        let aiMessage = await this.prisma.message.findUnique({
-          where: { idempotencyKey: job.id },
+
+        // Check if we already generated bubbles for this job
+        let existingBubbles = await this.prisma.message.findMany({
+          where: { idempotencyKey: { startsWith: `${job.id}-` } },
+          orderBy: { createdAt: 'asc' },
         });
 
-        if (aiMessage?.metaMessageId) {
-          this.logger.log(
-            `Idempotency check: AI reply for ${job.id} already sent (wamid: ${aiMessage.metaMessageId}). Skipping.`,
-          );
-          return;
-        }
+        // 1. If we haven't generated anything yet, call the AI and create the bubbles in the database
+        if (existingBubbles.length === 0) {
+          let disclosureText: string | undefined = undefined;
+          if (!conversation.aiDisclosureSent && channel?.credentialId) {
+            disclosureText = this.buildDisclosure(
+              organization.aiPersona?.aiDisclosureText,
+              conversation.lead?.firstName,
+              organization.aiPersona?.agentName,
+              organization.aiPersona?.clinicName,
+            );
+          }
 
-        if (!aiMessage) {
-          aiMessage = await this.prisma.message.create({
-            data: {
+          // Simulate Typing Indicator on WhatsApp
+          if (channel?.credentialId && claimedMessageIds.length > 0) {
+            try {
+              const lastMsg = await this.prisma.message.findUnique({
+                where: { id: claimedMessageIds[claimedMessageIds.length - 1] },
+                select: { metaMessageId: true },
+              });
+              if (lastMsg?.metaMessageId) {
+                await this.whatsappService.sendTypingIndicator(
+                  channel.credentialId,
+                  organizationId,
+                  lastMsg.metaMessageId,
+                );
+              }
+            } catch (e: any) {
+              this.logger.warn(
+                `Typing indicator failed (likely API version mismatch or expired msg): ${e.message}`,
+              );
+            }
+          }
+
+          const persona = organization.aiPersona;
+          const businessRulesJson = persona?.businessRules
+            ? JSON.stringify(persona.businessRules)
+            : '{}';
+
+          // THE MAGIC BRIDGE: Call Python over gRPC!
+          const aiResponse = await lastValueFrom(
+            this.salesAgentService!.generateReply({
+              organizationId: organization.id,
+              conversationId: conversationId,
+              newMessageIds: claimedMessageIds,
+              clinicName: persona?.clinicName || 'OmniDesk Clinic',
+              agentTone: persona?.tone || 'Professional and empathetic',
+              businessRulesJson: businessRulesJson,
+              totalMessageCount: totalMessageCount,
+              leadSummary: leadSummary,
+            }),
+          );
+
+          const { replyText, mediaUrl, actions } = aiResponse;
+
+          // Execute Virtual Tool Actions (CRM Updates)
+          if (actions && actions.length > 0) {
+            const actionResult = await this.actionExecutor.executeActions(
+              organization.id,
               conversationId,
-              content: '[PENDING AI REPLY]',
-              idempotencyKey: job.id,
+              actions,
+            );
+            if (actionResult.failed > 0) {
+              throw new Error(
+                `Critical action execution failure (${actionResult.failed} failed), aborting reply delivery to prevent inconsistency`,
+              );
+            }
+          }
+
+          if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
+            this.logger.log(
+              'AI requested to sleep. Aborting WhatsApp message delivery.',
+            );
+            return;
+          }
+
+          let safeMediaUrl = mediaUrl;
+          let safeReplyText = replyText;
+
+          if (safeMediaUrl) {
+            // Check revocation
+            const revoked = await this.prisma.organizationExperience.findFirst({
+              where: {
+                organizationId: organizationId,
+                consentObtained: false,
+                OR: [
+                  { beforeImageUrl: safeMediaUrl },
+                  { afterImageUrl: safeMediaUrl },
+                ],
+              },
+            });
+            if (revoked) {
+              this.logger.warn(
+                `Blocked outbound transmission of revoked media URL: ${safeMediaUrl}`,
+              );
+              safeMediaUrl = undefined;
+              safeReplyText =
+                '[Media removed due to privacy rules] ' + (safeReplyText || '');
+            }
+          }
+
+          const bubblesToCreate: any[] = [];
+          let bubbleIndex = 0;
+
+          // Disclosure bubble
+          if (disclosureText) {
+            bubblesToCreate.push({
+              conversationId,
+              content: disclosureText,
+              idempotencyKey: `${job.id}-bubble-${bubbleIndex++}`,
               type: 'AI_TEXT',
               handledBy: 'AI',
               status: 'PENDING',
-            },
-          });
-        }
-
-        // The disclosure is its own delivered message so an AI service failure cannot
-        // accidentally mark a conversation as disclosed. The flag changes only after
-        // Meta acknowledges successful delivery.
-        let disclosureText: string | undefined;
-        if (!conversation.aiDisclosureSent && channel?.credentialId) {
-          disclosureText = this.buildDisclosure(
-            organization.aiPersona?.aiDisclosureText,
-            conversation.lead?.firstName,
-            organization.aiPersona?.agentName,
-            organization.aiPersona?.clinicName,
-          );
-
-          const authOk = await this.deliveryAuth.authorizeDelivery(
-            organizationId,
-            conversationId,
-            stateVersion,
-          );
-          if (!authOk) {
-            this.logger.warn(
-              `Delivery aborted for disclosure (Org: ${organizationId}, Conv: ${conversationId})`,
-            );
-            await this.recordCancellation(
-              conversationId,
-              organizationId,
-              'Delivery aborted prior to disclosure send due to authorization failure or version mismatch.',
-              job.id,
-            );
-            return;
-          }
-          const disclosureResponse = await this.whatsappService.sendTextMessage(
-            channel.credentialId,
-            organizationId,
-            customerPhone,
-            disclosureText,
-            channel.providerAccountId,
-          );
-          if (!disclosureResponse?.messages?.[0]?.id) {
-            throw new Error('AI disclosure was not acknowledged by WhatsApp');
-          }
-          await this.prisma.conversation.update({
-            where: { id: conversationId },
-            data: { aiDisclosureSent: true },
-          });
-          await this.auditService.record({
-            organizationId: conversation.organizationId,
-            action: 'ai.disclosure_sent',
-            targetId: conversation.id,
-            actor: 'ai',
-            metadata: { messageId: disclosureResponse.messages[0].id },
-          });
-        }
-
-        // 🚀 NEW: Simulate Typing Indicator on WhatsApp
-        if (channel?.credentialId && newMessageIds.length > 0) {
-          try {
-            // Find the meta message ID from the last message in the batch
-            const lastMsg = await this.prisma.message.findUnique({
-              where: { id: newMessageIds[newMessageIds.length - 1] },
-              select: { metaMessageId: true },
             });
-            if (lastMsg?.metaMessageId) {
-              await this.whatsappService.sendTypingIndicator(
-                channel.credentialId,
-                organizationId,
-                lastMsg.metaMessageId,
-              );
+          }
+
+          // Media bubble
+          if (safeMediaUrl) {
+            bubblesToCreate.push({
+              conversationId,
+              content: safeReplyText || '[Image Sent]', // Optional caption
+              mediaUrl: safeMediaUrl,
+              idempotencyKey: `${job.id}-bubble-${bubbleIndex++}`,
+              type: 'AI_TEXT',
+              handledBy: 'AI',
+              status: 'PENDING',
+            });
+            // If it had media, the text acts as caption. We don't need text bubbles.
+          } else if (safeReplyText) {
+            const messages = safeReplyText
+              .split('|||')
+              .map((m: any) => m.trim())
+              .filter((m: any) => m.length > 0);
+            for (const msg of messages) {
+              bubblesToCreate.push({
+                conversationId,
+                content: msg,
+                idempotencyKey: `${job.id}-bubble-${bubbleIndex++}`,
+                type: 'AI_TEXT',
+                handledBy: 'AI',
+                status: 'PENDING',
+              });
             }
-          } catch (e: any) {
+          }
+
+          if (bubblesToCreate.length === 0 && !actions?.length) {
             this.logger.warn(
-              `Typing indicator failed (likely API version mismatch or expired msg): ${e.message}`,
+              `AI returned empty reply and no actions for Conv: ${conversationId}`,
             );
+            return;
           }
-        }
 
-        const persona = organization.aiPersona;
-        const businessRulesJson = persona?.businessRules
-          ? JSON.stringify(persona.businessRules)
-          : '{}';
-
-        // THE MAGIC BRIDGE: Call Python over gRPC!
-        const aiResponse = await lastValueFrom(
-          this.salesAgentService!.generateReply({
-            organizationId: organization.id,
-            conversationId: conversationId,
-            newMessageIds: newMessageIds,
-            clinicName: persona?.clinicName || 'OmniDesk Clinic',
-            agentTone: persona?.tone || 'Professional and empathetic',
-            businessRulesJson: businessRulesJson,
-            totalMessageCount: totalMessageCount,
-            leadSummary: leadSummary,
-          }),
-        );
-
-        const { replyText, mediaUrl, actions } = aiResponse;
-
-        // 1. Execute Virtual Tool Actions (CRM Updates)
-        if (actions && actions.length > 0) {
-          const actionResult = await this.actionExecutor.executeActions(
-            organization.id,
-            conversationId,
-            actions,
-          );
-          if (actionResult.failed > 0) {
-            throw new Error(
-              `Critical action execution failure (${actionResult.failed} failed), aborting reply delivery to prevent inconsistency`,
-            );
+          // Create bubbles in DB
+          if (bubblesToCreate.length > 0) {
+            await this.prisma.message.createMany({
+              data: bubblesToCreate,
+            });
           }
-        }
 
-        if (replyText && replyText.includes('[SYSTEM: DO_NOT_SEND_REPLY]')) {
-          this.logger.log(
-            'AI requested to sleep. Aborting WhatsApp message delivery.',
-          );
-          return; // Stop execution here, do not send anything to WhatsApp
-        }
-
-        // 2. Handle Multimodal Reply
-        let metaMessageId: string | undefined = undefined;
-
-        let safeMediaUrl = mediaUrl;
-        let safeReplyText = replyText;
-
-        if (safeMediaUrl) {
-          // T12: Final outbound check
-          const revoked = await this.prisma.organizationExperience.findFirst({
-            where: {
-              organizationId: organizationId,
-              consentObtained: false,
-              OR: [
-                { beforeImageUrl: safeMediaUrl },
-                { afterImageUrl: safeMediaUrl },
-              ],
-            },
+          existingBubbles = await this.prisma.message.findMany({
+            where: { idempotencyKey: { startsWith: `${job.id}-` } },
+            orderBy: { createdAt: 'asc' },
           });
-          if (revoked) {
-            this.logger.warn(
-              `Blocked outbound transmission of revoked media URL: ${safeMediaUrl}`,
+
+          const hasCustomFollowUp = actions?.some(
+            (a: any) => a.type === 'SCHEDULE_FOLLOW_UP',
+          );
+          if (!hasCustomFollowUp) {
+            await this.followUpService.scheduleAutoFollowUps(
+              conversationId,
+              organization.id,
             );
-            safeMediaUrl = undefined;
-            safeReplyText =
-              '[Media removed due to privacy rules] ' + (safeReplyText || '');
           }
-        }
+        } // end of if (existingBubbles.length === 0)
 
-        await this.prisma.message.update({
-          where: { idempotencyKey: job.id },
-          data: {
-            content: [
-              disclosureText,
-              replyText || (mediaUrl ? '[Image Sent]' : '[Action Executed]'),
-            ]
-              .filter(Boolean)
-              .join('|||'),
-            mediaUrl: safeMediaUrl || null,
-          },
-        });
+        // 2. Transmit bubbles to Meta
+        for (let i = 0; i < existingBubbles.length; i++) {
+          const bubble = existingBubbles[i];
+          if (bubble.status === 'SENT') continue;
 
-        if (safeMediaUrl && channel?.credentialId) {
-          // If there's media, we send the image first
-
+          // Re-check auth before each send
           const authOk = await this.deliveryAuth.authorizeDelivery(
             organizationId,
             conversationId,
@@ -364,131 +373,103 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
           );
           if (!authOk) {
             this.logger.warn(
-              `Delivery aborted for media (Org: ${organizationId}, Conv: ${conversationId})`,
+              `Delivery aborted for bubble ${i} (Org: ${organizationId}, Conv: ${conversationId})`,
             );
             await this.recordCancellation(
               conversationId,
               organizationId,
-              'Delivery aborted prior to media send due to authorization failure or version mismatch.',
-              job.id,
+              'Delivery aborted prior to text send due to authorization failure or version mismatch.',
+              bubble.idempotencyKey || undefined,
             );
             return;
           }
-          const mediaResponse = await this.whatsappService.sendMediaMessage(
-            channel.credentialId,
-            organizationId,
-            customerPhone,
-            safeMediaUrl,
-            safeReplyText || undefined, // Use replyText as caption if it's short/not split
-            channel.providerAccountId,
-          );
-          metaMessageId = mediaResponse?.messages?.[0]?.id;
-        } else if (safeReplyText && channel?.credentialId) {
-          // Split the reply into multiple bubbles if the separator is present
-          const messages = safeReplyText
-            .split('|||')
-            .map((m) => m.trim())
-            .filter((m) => m.length > 0);
 
-          for (let i = 0; i < messages.length; i++) {
-            const message = messages[i];
-
-            // Send to Meta
-
-            const authOk = await this.deliveryAuth.authorizeDelivery(
-              organizationId,
-              conversationId,
-              stateVersion,
+          // Also recheck if conversation got paused in between bubbles
+          const currentConv = await this.prisma.conversation.findUnique({
+            where: { id: conversationId },
+            include: { lead: true, channel: true },
+          });
+          if (currentConv?.aiPaused || (currentConv as any)?.lead?.optedOutAt) {
+            this.logger.log(
+              `AI paused or opted out mid-transmission. Aborting remaining bubbles.`,
             );
-            if (!authOk) {
-              this.logger.warn(
-                `Delivery aborted for text bubble ${i} (Org: ${organizationId}, Conv: ${conversationId})`,
-              );
-              await this.recordCancellation(
-                conversationId,
-                organizationId,
-                'Delivery aborted prior to text send due to authorization failure or version mismatch.',
-                job.id,
-              );
-              return;
-            }
-            const metaResponse = await this.whatsappService.sendTextMessage(
-              channel.credentialId,
+            return;
+          }
+
+          let metaMessageId: string | undefined;
+
+          if (bubble.mediaUrl) {
+            const mediaResponse = await this.whatsappService.sendMediaMessage(
+              channel.credentialId!,
               organizationId,
               customerPhone,
-              message,
+              bubble.mediaUrl,
+              bubble.content !== '[Image Sent]' ? bubble.content : undefined,
               channel.providerAccountId,
             );
-
-            // We use the ID of the last message in the sequence for our DB record
+            metaMessageId = mediaResponse?.messages?.[0]?.id;
+          } else {
+            const metaResponse = await this.whatsappService.sendTextMessage(
+              channel.credentialId!,
+              organizationId,
+              customerPhone,
+              bubble.content,
+              channel.providerAccountId,
+            );
             metaMessageId = metaResponse?.messages?.[0]?.id;
 
-            // If there's another message coming, wait 1.5 - 2 seconds to simulate typing
-            if (i < messages.length - 1) {
+            // Wait 1.5-2 seconds before the next bubble to simulate typing
+            if (i < existingBubbles.length - 1) {
               const delay = Math.floor(
                 Math.random() * (2000 - 1500 + 1) + 1500,
               );
               await new Promise((resolve) => setTimeout(resolve, delay));
             }
           }
-        }
 
-        if (!metaMessageId && !actions?.length) {
-          this.logger.warn(
-            `AI returned empty reply and no actions for Conv: ${conversationId}`,
-          );
-          return;
-        }
+          if (!metaMessageId) {
+            throw new Error('Meta did not return a message ID for bubble ' + i);
+          }
 
-        // 4. Update the conversation timestamp
+          // Update bubble status
+          const updatedBubble = await this.prisma.message.update({
+            where: { id: bubble.id },
+            data: { metaMessageId, status: 'SENT' },
+          });
+
+          this.eventsGateway.broadcastNewMessage(organizationId, updatedBubble);
+
+          // If this was the disclosure, update the conversation flag
+          // We assume it's disclosure if it matches the buildDisclosure output or just because it's first and flag is false.
+          if (
+            i === 0 &&
+            !currentConv?.aiDisclosureSent &&
+            bubble.content.includes('digital assistant for')
+          ) {
+            await this.prisma.conversation.update({
+              where: { id: conversationId },
+              data: { aiDisclosureSent: true },
+            });
+            await this.auditService.record({
+              organizationId: organizationId,
+              action: 'ai.disclosure_sent',
+              targetId: conversationId,
+              actor: 'ai',
+              metadata: { messageId: metaMessageId },
+            });
+          }
+        } // end of transmission loop
+
+        // 3. Mark inbound messages as processed and update conversation timestamp
         await this.prisma.conversation.update({
           where: { id: conversationId },
           data: { updatedAt: new Date() },
         });
 
-        // 5. Update the DB message with the real metaMessageId and status
-        const txOperations: any[] = [];
-
-        if (metaMessageId) {
-          txOperations.push(
-            this.prisma.message.update({
-              where: { idempotencyKey: job.id },
-              data: { metaMessageId, status: 'SENT' },
-            }),
-          );
-        } else {
-          // If no message was sent, mark the placeholder as PROCESSED or CANCELLED?
-          // Since it might just be an action execution, let's mark it PROCESSED.
-          txOperations.push(
-            this.prisma.message.update({
-              where: { idempotencyKey: job.id },
-              data: { status: 'PROCESSED' },
-            }),
-          );
-        }
-
-        txOperations.push(
-          this.prisma.message.updateMany({
-            where: { id: { in: newMessageIds } },
-            data: { status: 'PROCESSED' },
-          }),
-        );
-
-        await this.prisma.$transaction(txOperations);
-
-        // 5. Broadcast the AI message to the frontend UI
-        this.eventsGateway.broadcastNewMessage(organization.id, aiMessage);
-
-        // 6. Schedule auto follow-ups ONLY if the AI didn't explicitly schedule one
-        const hasCustomFollowUp = actions?.some(
-          (a: any) => a.type === 'SCHEDULE_FOLLOW_UP',
-        );
-        if (!hasCustomFollowUp) {
-          await this.followUpService.scheduleAutoFollowUps(
-            conversationId,
-            organization.id,
-          );
-        }
+        await this.prisma.message.updateMany({
+          where: { id: { in: claimedMessageIds } },
+          data: { status: 'PROCESSED' },
+        });
       } catch (error) {
         this.logger.error(`Failed to generate or send AI reply: ${error}`);
         throw error;

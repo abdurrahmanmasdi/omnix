@@ -76,7 +76,7 @@ export class OutboxProcessor {
                 stateVersion: latestStateVersion,
               },
               {
-                jobId: `reply-${convId}`, // Proper debounce! Prevents concurrent AI jobs for the same conversation
+                jobId: `reply-${group[0].id}`, // Use outbox event ID to ensure no dropped jobs
                 delay: 7000,
                 removeOnComplete: true,
               },
