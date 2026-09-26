@@ -366,6 +366,7 @@ model Message {
   senderId       String?       @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
   content        String
   mediaUrl       String? // For Voice Notes, Images, etc.
+  mediaExpiresAt DateTime? // Defines short-lived storage for patient media
   type           MessageType   @default(USER_TEXT)
   metadata       Json? // To store Tool Call JSON, execution times, token counts
   handledBy      ActiveHandler @default(AI) // Determines if AI or Human

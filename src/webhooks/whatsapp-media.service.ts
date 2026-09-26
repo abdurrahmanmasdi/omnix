@@ -1,9 +1,37 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 
 @Injectable()
 export class WhatsappMediaService {
   private readonly logger = new Logger(WhatsappMediaService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async cleanupExpiredMedia() {
+    this.logger.log('Running cleanup for expired patient media...');
+    try {
+      const result = await this.prisma.message.updateMany({
+        where: {
+          mediaExpiresAt: { lte: new Date() },
+          mediaUrl: { not: null },
+        },
+        data: {
+          mediaUrl: null,
+          content: '[Patient Media - Expired and Deleted]',
+        },
+      });
+      if (result.count > 0) {
+        this.logger.log(
+          `Successfully deleted media for ${result.count} expired messages.`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Failed to cleanup expired media', error);
+    }
+  }
 
   /**
    * Downloads media from WhatsApp Graph API and converts it to a Base64 string.

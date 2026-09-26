@@ -16,6 +16,181 @@ import { ActionExecutorService } from './action-executor.service';
 import { PermissionService } from '../auth/permission.service';
 
 describe('WebhooksProcessor', () => {
+  it('should ask for consent and not download media if consent is not granted', async () => {
+    (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+      id: 'channel-1',
+      organizationId: 'org-1',
+      accessToken: 'token-123',
+      organization: { id: 'org-1' },
+    });
+    (prisma.lead.findFirst as jest.Mock).mockResolvedValue({
+      id: 'lead-1',
+      mediaConsentGranted: false,
+    });
+    (prisma.conversation.findFirst as jest.Mock).mockResolvedValue({
+      id: 'conv-1',
+      leadId: 'lead-1',
+      lead: { mediaConsentGranted: false },
+    });
+    (prisma.message.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const job = {
+      data: {
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { display_phone_number: '123' },
+                  messages: [
+                    {
+                      from: '456',
+                      id: 'msg-media-1',
+                      timestamp: '123456789',
+                      type: 'image',
+                      image: { id: 'img-1' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    } as any;
+
+    await processor.process(job);
+
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          content: '[Patient Media - Consent Required]',
+          mediaUrl: null,
+        }),
+      }),
+    );
+  });
+
+  it('should update consent status if user sends I CONSENT', async () => {
+    (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+      id: 'channel-1',
+      organizationId: 'org-1',
+      accessToken: 'token-123',
+      organization: { id: 'org-1' },
+    });
+    (prisma.lead.findFirst as jest.Mock).mockResolvedValue({
+      id: 'lead-1',
+      mediaConsentGranted: false,
+    });
+    (prisma.conversation.findFirst as jest.Mock).mockResolvedValue({
+      id: 'conv-1',
+      leadId: 'lead-1',
+      lead: { mediaConsentGranted: false },
+    });
+    (prisma.message.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const job = {
+      data: {
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { display_phone_number: '123' },
+                  messages: [
+                    {
+                      from: '456',
+                      id: 'msg-consent-1',
+                      timestamp: '123456789',
+                      type: 'text',
+                      text: { body: 'I CONSENT' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    } as any;
+
+    await processor.process(job);
+
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
+      data: expect.objectContaining({
+        mediaConsentGranted: true,
+        mediaConsentSource: 'patient_message',
+      }),
+    });
+  });
+
+  it('should clear mediaUrls and set consent to false if user sends WITHDRAW CONSENT', async () => {
+    (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+      id: 'channel-1',
+      organizationId: 'org-1',
+      accessToken: 'token-123',
+      organization: { id: 'org-1' },
+    });
+    (prisma.lead.findFirst as jest.Mock).mockResolvedValue({
+      id: 'lead-1',
+      mediaConsentGranted: true,
+    });
+    (prisma.conversation.findFirst as jest.Mock).mockResolvedValue({
+      id: 'conv-1',
+      leadId: 'lead-1',
+      lead: { mediaConsentGranted: true },
+    });
+    (prisma.message.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const job = {
+      data: {
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { display_phone_number: '123' },
+                  messages: [
+                    {
+                      from: '456',
+                      id: 'msg-withdraw-1',
+                      timestamp: '123456789',
+                      type: 'text',
+                      text: { body: 'WITHDRAW CONSENT' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    } as any;
+
+    await processor.process(job);
+
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
+      data: expect.objectContaining({
+        mediaConsentGranted: false,
+        mediaConsentSource: 'patient_message',
+      }),
+    });
+
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({
+      where: {
+        conversation: { leadId: 'lead-1' },
+        mediaUrl: { not: null },
+      },
+      data: {
+        mediaUrl: null,
+        mediaExpiresAt: null,
+        content: '[Patient withdrew consent - Media deleted]',
+      },
+    });
+  });
+
   let processor: WebhooksProcessor;
   let prisma: jest.Mocked<PrismaService>;
   let aiReplyQueue: any;
@@ -30,18 +205,23 @@ describe('WebhooksProcessor', () => {
       message: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
-        create: jest.fn(),
+        create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
+        updateMany: jest.fn(),
       },
       conversation: {
         findFirst: jest.fn(),
         create: jest.fn(),
         upsert: jest.fn(),
-        update: jest.fn(),
+        update: jest.fn().mockResolvedValue({ stateVersion: 2 }),
       },
       lead: {
         findFirst: jest.fn(),
         create: jest.fn(),
         upsert: jest.fn(),
+        update: jest.fn(),
+      },
+      auditLog: {
+        create: jest.fn(),
       },
       pipelineStage: {
         findFirst: jest.fn(),

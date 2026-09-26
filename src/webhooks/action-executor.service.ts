@@ -488,22 +488,6 @@ export class ActionExecutorService {
       updateData.priority = payload.priority as Priority;
     }
 
-    if (payload.mediaConsentGranted !== undefined) {
-      if (typeof payload.mediaConsentGranted !== 'boolean') {
-        throw new Error(
-          `Invalid type for mediaConsentGranted, expected boolean`,
-        );
-      }
-      updateData.mediaConsentGranted = payload.mediaConsentGranted;
-      updateData.mediaConsentSource = 'ai_agent_tool';
-      if (payload.mediaConsentGranted) {
-        updateData.mediaConsentGrantedAt = new Date();
-        updateData.mediaConsentWithdrawnAt = null;
-      } else {
-        updateData.mediaConsentWithdrawnAt = new Date();
-      }
-    }
-
     // Only allow specific string fields
     const stringFields = [
       'firstName',

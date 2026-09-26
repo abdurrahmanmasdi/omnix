@@ -262,11 +262,97 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               let messageContent = '[Non-text message]';
               let mediaUrl: string | null = null;
 
-              const consentGranted = !!conversation?.lead?.mediaConsentGranted;
+              let newConsentStatus: boolean | undefined = undefined;
+
+              if (
+                message.type === 'interactive' &&
+                message.interactive?.button_reply?.id
+              ) {
+                if (message.interactive.button_reply.id === 'CONSENT_GRANTED') {
+                  newConsentStatus = true;
+                  messageContent = '[Patient granted media consent]';
+                } else if (
+                  message.interactive.button_reply.id === 'CONSENT_DENIED' ||
+                  message.interactive.button_reply.id === 'CONSENT_WITHDRAWN'
+                ) {
+                  newConsentStatus = false;
+                  messageContent = '[Patient withdrew/denied media consent]';
+                } else {
+                  messageContent = `[Button click: ${message.interactive.button_reply.title}]`;
+                }
+              }
 
               if (message.type === 'text' && message.text) {
                 messageContent = message.text.body;
-              } else if (message.type === 'image' && message.image?.id) {
+                const textUpper = messageContent.trim().toUpperCase();
+                if (textUpper === 'I CONSENT' || textUpper === 'CONSENT') {
+                  newConsentStatus = true;
+                } else if (
+                  textUpper === 'WITHDRAW CONSENT' ||
+                  textUpper === 'NO CONSENT' ||
+                  textUpper === 'REVOKE CONSENT'
+                ) {
+                  newConsentStatus = false;
+                }
+              }
+
+              if (newConsentStatus !== undefined) {
+                await this.prisma.$transaction(async (tx) => {
+                  await tx.lead.update({
+                    where: { id: conversation.leadId },
+                    data: {
+                      mediaConsentGranted: newConsentStatus,
+                      mediaConsentSource: 'patient_message',
+                      mediaConsentGrantedAt: newConsentStatus
+                        ? new Date()
+                        : null,
+                      mediaConsentWithdrawnAt: newConsentStatus
+                        ? null
+                        : new Date(),
+                    },
+                  });
+
+                  if (newConsentStatus === false) {
+                    // Wipe all existing media URLs for this lead's conversations
+                    await tx.message.updateMany({
+                      where: {
+                        conversation: { leadId: conversation.leadId },
+                        mediaUrl: { not: null },
+                      },
+                      data: {
+                        mediaUrl: null,
+                        mediaExpiresAt: null,
+                        content: '[Patient withdrew consent - Media deleted]',
+                      },
+                    });
+                  }
+                });
+
+                await this.prisma.auditLog.create({
+                  data: {
+                    organizationId: channel.organizationId,
+                    actor: `patient:${conversation.leadId}`,
+                    action: newConsentStatus
+                      ? 'MEDIA_CONSENT_GRANTED'
+                      : 'MEDIA_CONSENT_WITHDRAWN',
+                    targetId: conversation.leadId,
+                    metadata: {
+                      messageId: message.id,
+                      source: 'patient_message',
+                      purpose:
+                        'Provide visual/audio information for AI assessment',
+                      timestamp: message.timestamp,
+                    },
+                  },
+                });
+              }
+
+              const consentGranted =
+                newConsentStatus !== undefined
+                  ? newConsentStatus
+                  : !!conversation?.lead?.mediaConsentGranted;
+
+              if (message.type === 'image' && message.image?.id) {
                 if (consentGranted && accessTokenForMedia) {
                   const base64 =
                     await this.whatsappMediaService.downloadMediaAsBase64(
@@ -320,6 +406,9 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                       metaMessageId: metaMessageId,
                       content: messageContent,
                       mediaUrl: mediaUrl,
+                      mediaExpiresAt: mediaUrl
+                        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                        : null,
                       type: mediaUrl ? 'LEAD_MEDIA' : 'LEAD_TEXT',
                       handledBy: conversation.aiPaused ? 'HUMAN' : 'AI',
                       status: 'PENDING',

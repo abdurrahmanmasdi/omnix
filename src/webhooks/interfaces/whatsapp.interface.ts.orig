@@ -60,16 +60,6 @@ export interface WhatsAppMessage {
     id: string;
     mime_type?: string;
   };
-  interactive?: {
-    type: string;
-    button_reply?: {
-      id: string;
-      title: string;
-    };
-  };
-  button?: {
-    text: string;
-  };
   // Add other types as you expand (e.g., document: { id: string }, etc.)
 }
 

@@ -33,14 +33,12 @@ describe('ActionExecutorService', () => {
             },
             $transaction: jest.fn(),
             organizationMembership: {
-              findMany: jest
-                .fn()
-                .mockResolvedValue([
-                  {
-                    provide: PermissionService,
-                    useValue: { has: jest.fn().mockResolvedValue(true) },
-                  },
-                ]),
+              findMany: jest.fn().mockResolvedValue([
+                {
+                  provide: PermissionService,
+                  useValue: { has: jest.fn().mockResolvedValue(true) },
+                },
+              ]),
             },
           },
         },
@@ -79,6 +77,36 @@ describe('ActionExecutorService', () => {
   });
 
   describe('executeActions', () => {
+    it('An action cannot forge patient media consent', async () => {
+      const actions = [
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({
+            mediaConsentGranted: true,
+            status: 'QUALIFIED',
+          }),
+        },
+      ];
+
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        id: 'trusted-conv',
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        lead: { status: 'NEW' },
+        aiPaused: false,
+      });
+
+      await service.executeActions('org-1', 'trusted-conv', actions);
+
+      expect(prismaService.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1' },
+        data: expect.not.objectContaining({
+          mediaConsentGranted: expect.anything(),
+          mediaConsentSource: expect.anything(),
+        }),
+      });
+    });
+
     it('An action containing a different conversation ID cannot update that conversation', async () => {
       // The model returns an action with a different conversationId in payload
       const actions = [
