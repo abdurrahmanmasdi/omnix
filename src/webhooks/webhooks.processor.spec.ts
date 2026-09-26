@@ -8,7 +8,7 @@ import { WhatsappMediaService } from './whatsapp-media.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { tenantStorage } from '../core/tenant/tenant.context';
+
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
@@ -59,6 +59,7 @@ describe('WebhooksProcessor', () => {
       },
     } as any;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
 
     expect(prisma.message.create).toHaveBeenCalledWith(
@@ -114,6 +115,7 @@ describe('WebhooksProcessor', () => {
       },
     } as any;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
 
     expect(prisma.lead.update).toHaveBeenCalledWith({
@@ -168,6 +170,7 @@ describe('WebhooksProcessor', () => {
       },
     } as any;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
 
     expect(prisma.lead.update).toHaveBeenCalledWith({
@@ -180,13 +183,12 @@ describe('WebhooksProcessor', () => {
 
     expect(prisma.message.updateMany).toHaveBeenCalledWith({
       where: {
-        conversation: { leadId: 'lead-1' },
+        conversationId: 'conv-1',
         mediaUrl: { not: null },
       },
       data: {
         mediaUrl: null,
-        mediaExpiresAt: null,
-        content: '[Patient withdrew consent - Media deleted]',
+        content: '[Media removed due to privacy rules]',
       },
     });
   });
@@ -235,7 +237,7 @@ describe('WebhooksProcessor', () => {
     };
 
     // 2. Setup Mock Queue
-    const mockAiReplyQueue = {
+    const mockQueue = {
       add: jest.fn(),
       getJob: jest.fn().mockResolvedValue(null),
     };
@@ -272,7 +274,7 @@ describe('WebhooksProcessor', () => {
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: CredentialsService, useValue: { readActive: jest.fn() } },
         { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
-        { provide: getQueueToken('ai-reply'), useValue: mockAiReplyQueue },
+        { provide: getQueueToken('ai-reply'), useValue: mockQueue },
         {
           provide: ActionExecutorService,
           useValue: { executeActions: jest.fn() },
@@ -323,6 +325,7 @@ describe('WebhooksProcessor', () => {
       ],
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
     expect(prisma.channel.findFirst).not.toHaveBeenCalled();
   });
@@ -352,6 +355,7 @@ describe('WebhooksProcessor', () => {
       ],
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
     expect(prisma.channel.findFirst).toHaveBeenCalled();
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
@@ -415,25 +419,22 @@ describe('WebhooksProcessor', () => {
       ],
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
 
     expect(prisma.lead.upsert).toHaveBeenCalled(); // Should auto-create lead
     expect(prisma.conversation.create).toHaveBeenCalled(); // Should auto-create conversation
     expect(prisma.message.create).toHaveBeenCalled(); // Should save the user's message
-    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
-      data: {
-        topic: 'generate-reply',
+    expect(aiReplyQueue.add).toHaveBeenCalledWith(
+      'generate-reply',
+      {
+        conversationId: 'conv-1',
+        customerPhone: '4915112345678',
+        newMessageIds: ['db-msg-1'],
         organizationId: 'org-1',
-        payload: {
-          conversationId: 'conv-1',
-          customerPhone: '4915112345678',
-          messageId: 'db-msg-1',
-          organizationId: 'org-1',
-          stateVersion: 1,
-        },
-        status: 'PENDING',
       },
-    });
+      expect.any(Object),
+    );
   });
 
   it('should skip duplicate messages (idempotency check)', async () => {
@@ -474,6 +475,7 @@ describe('WebhooksProcessor', () => {
       ],
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await processor.process(job);
 
     expect(prisma.message.findUnique).toHaveBeenCalledWith({

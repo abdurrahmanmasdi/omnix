@@ -162,15 +162,15 @@ export class ActionExecutorService {
       case 'SCHEDULE_FOLLOW_UP':
         if (
           !payload.scheduledAt ||
-          isNaN(new Date(payload.scheduledAt).getTime())
+          isNaN(new Date(payload.scheduledAt as string).getTime())
         ) {
           throw new Error('Invalid or missing scheduledAt date');
         }
         await this.followUpService.scheduleAiFollowUp(
           conversation.organizationId,
           conversation.id,
-          new Date(payload.scheduledAt),
-          payload.context || '',
+          new Date(payload.scheduledAt as string),
+          (payload.context as string) || '',
         );
         break;
 
@@ -205,7 +205,7 @@ export class ActionExecutorService {
       data: updateData,
     });
 
-    this.eventsGateway.broadcastLeadUpdate(
+    void void this.eventsGateway.broadcastLeadUpdate(
       conversation.organizationId,
       updatedLead,
     );
@@ -215,7 +215,7 @@ export class ActionExecutorService {
 
     if (
       updateData.status &&
-      CRM_SYNC_STATUSES.includes(updateData.status) &&
+      CRM_SYNC_STATUSES.includes(updateData.status as LeadStatus) &&
       !updatedLead.externalContactId
     ) {
       try {
@@ -250,7 +250,7 @@ export class ActionExecutorService {
       data: { aiPaused: true, stateVersion: { increment: 1 } },
     });
 
-    this.eventsGateway.broadcastConversationUpdate(
+    void this.eventsGateway.broadcastConversationUpdate(
       conversation.organizationId,
       updatedConversation,
     );
@@ -319,7 +319,7 @@ export class ActionExecutorService {
         where: { id: conversation.leadId },
         data: updateData,
       });
-      this.eventsGateway.broadcastLeadUpdate(
+      void void this.eventsGateway.broadcastLeadUpdate(
         conversation.organizationId,
         updatedLead,
       );
@@ -352,7 +352,7 @@ export class ActionExecutorService {
         where: { id: conversation.id },
         data: { leadId: newLead.id },
       });
-      this.eventsGateway.broadcastLeadUpdate(
+      void this.eventsGateway.broadcastLeadUpdate(
         conversation.organizationId,
         newLead,
       );
@@ -361,13 +361,7 @@ export class ActionExecutorService {
 
   public async handleHandoffToHuman(
     conversation: Conversation & { lead?: Lead | null },
-    payload: any,
   ) {
-    const reason =
-      typeof payload.reason === 'string'
-        ? payload.reason
-        : 'User requested human intervention';
-
     // Idempotency: if already paused, skip re-pausing and re-notifying, but consider it successful.
     if (conversation.aiPaused) {
       this.logger.log(
@@ -379,8 +373,16 @@ export class ActionExecutorService {
     const leadId = conversation.leadId;
     const organizationId = conversation.organizationId;
 
-    const [updatedConversation, updatedLead] = await this.prisma.$transaction(
-      async (tx) => {
+    const memberships = await this.prisma.organizationMembership.findMany({
+      where: {
+        organizationId: organizationId,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+    });
+
+    const [updatedConversation, updatedLead, createdNotifications] =
+      await this.prisma.$transaction(async (tx) => {
         const conv = await tx.conversation.update({
           where: { id: conversation.id },
           data: { aiPaused: true, stateVersion: { increment: 1 } },
@@ -390,50 +392,56 @@ export class ActionExecutorService {
         if (leadId) {
           lead = await tx.lead.update({
             where: { id: leadId },
-            data: { status: 'HANDED_OFF' }, // LeadStatus.HANDED_OFF
+            data: { status: 'HANDED_OFF' },
           });
         }
-        return [conv, lead];
-      },
-    );
 
-    const memberships = await this.prisma.organizationMembership.findMany({
-      where: {
-        organizationId: organizationId,
-        status: 'ACTIVE',
-        deletedAt: null,
-      },
-    });
+        const notifications = [];
+        if (memberships.length > 0) {
+          for (const membership of memberships) {
+            const notification = await tx.notification.create({
+              data: {
+                organizationId: organizationId,
+                userId: membership.userId,
+                type: 'LEAD_HANDED_OFF',
+                title: 'Human Intervention Required',
+                body: `Requires human attention`,
+                referenceId: lead ? lead.id : conv.id,
+                referenceType: lead ? 'LEAD' : 'CONVERSATION',
+              },
+            });
+            notifications.push(notification);
+          }
+        }
+        return [conv, lead, notifications];
+      });
 
     if (memberships.length === 0) {
-      // T10: If no staff member exists, create an operational alert/audit record; do not report a completed staff notification.
       this.logger.warn(`No staff found for Handoff in Org ${organizationId}`);
       await this.auditService.record({
         organizationId: organizationId,
         action: 'ai.handoff_failed_no_staff',
         targetId: conversation.id,
         actor: 'ai',
-        metadata: { reason },
+        metadata: { reason: 'Requires human attention' },
       });
     } else {
-      // Ensure at least one eligible staff notification is persisted
-      for (const membership of memberships) {
-        await this.notificationEmitter.send({
-          organizationId: organizationId,
-          userId: membership.userId,
-          type: 'LEAD_HANDED_OFF', // NotificationType.LEAD_HANDED_OFF
-          title: 'Human Intervention Required',
-          body: `Requires human attention: ${reason}`,
-          referenceId: updatedLead ? updatedLead.id : updatedConversation.id,
-          referenceType: updatedLead ? 'LEAD' : 'CONVERSATION',
-        });
+      // Safely emit to websockets since it's already durably stored
+      for (const notification of createdNotifications) {
+        void void void void this.eventsGateway.broadcastNotification(
+          notification.userId,
+          notification,
+        );
       }
     }
 
     if (updatedLead) {
-      this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead);
+      void void this.eventsGateway.broadcastLeadUpdate(
+        organizationId,
+        updatedLead,
+      );
     }
-    this.eventsGateway.broadcastConversationUpdate(
+    void this.eventsGateway.broadcastConversationUpdate(
       organizationId,
       updatedConversation,
     );
@@ -467,7 +475,7 @@ export class ActionExecutorService {
     const updateData: Record<string, any> = {};
 
     if (payload.status !== undefined) {
-      if (!Object.values(LeadStatus).includes(payload.status)) {
+      if (!Object.values(LeadStatus).includes(payload.status as LeadStatus)) {
         throw new Error(`Invalid status: ${payload.status}`);
       }
       if (currentStatus && payload.status !== currentStatus) {
@@ -482,7 +490,7 @@ export class ActionExecutorService {
     }
 
     if (payload.priority !== undefined) {
-      if (!Object.values(Priority).includes(payload.priority)) {
+      if (!Object.values(Priority).includes(payload.priority as Priority)) {
         throw new Error(`Invalid priority: ${payload.priority}`);
       }
       updateData.priority = payload.priority as Priority;

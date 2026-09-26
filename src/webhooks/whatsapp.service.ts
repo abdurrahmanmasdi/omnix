@@ -72,7 +72,11 @@ export class WhatsappService implements IChannelProvider {
     organizationId: string,
     newPayload: any,
   ): Promise<void> {
-    await this.credentials.rotate(organizationId, credentialId, newPayload);
+    await this.credentials.rotate(
+      organizationId,
+      credentialId,
+      newPayload as Record<string, string>,
+    );
     await this.verifyCredentials(credentialId, organizationId);
   }
 
@@ -200,12 +204,12 @@ export class WhatsappService implements IChannelProvider {
       );
 
       this.logger.log(
-        `Successfully sent ${payload.type} message to ${payload.to}`,
+        `Successfully sent ${payload.type} message to [REDACTED_PHONE]`, // R11: Do not log patient phone numbers
       );
       return response.data as MetaMessageResponse;
     } catch (error: any) {
       this.logger.error(
-        `Failed to send WhatsApp message: ${error?.response?.data?.error?.message || error.message}`,
+        `Failed to send WhatsApp message. Provider code: ${error?.response?.status || 'UNKNOWN'}`, // R11: Provider bodies may contain patient data,
       );
 
       // If it's an auth error (401), record verification failure

@@ -1,8 +1,10 @@
 import {
+  OnModuleInit,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { tenantStorage } from '../core/tenant/tenant.context';
 import { ConfigService } from '@nestjs/config';
 import { CredentialProvider, CredentialStatus } from '@prisma/client';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
@@ -13,12 +15,45 @@ type SecretPayload = Record<string, string>;
 import { AuditService } from '../audit/audit.service';
 
 @Injectable()
-export class CredentialsService {
+export class CredentialsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
   ) {}
+
+  async onModuleInit() {
+    await tenantStorage.run({ isSystemBypass: true }, async () => {
+      // Encrypt any plaintext migrated tokens on boot instead of waiting for first read
+      const credentials = await this.prisma.credential.findMany({
+        where: { encryptedPayload: { startsWith: 'PLAINTEXT_MIGRATE:' } },
+      });
+
+      for (const cred of credentials) {
+        const rawToken = cred.encryptedPayload.slice(
+          'PLAINTEXT_MIGRATE:'.length,
+        );
+        const payload: SecretPayload = { accessToken: rawToken };
+        const encrypted = this.encrypt(payload);
+
+        await this.prisma.credential.update({
+          where: { id: cred.id },
+          data: { encryptedPayload: encrypted },
+        });
+
+        void this.audit.record({
+          organizationId: cred.organizationId,
+          action: 'credential.migrated_on_boot',
+          targetId: cred.id,
+          actor: 'system',
+          metadata: {
+            reason:
+              'Legacy plaintext token re-encrypted securely on application boot',
+          },
+        });
+      }
+    });
+  }
 
   async create(
     organizationId: string,
@@ -57,10 +92,12 @@ export class CredentialsService {
       const rawToken = credential.encryptedPayload.slice(MIGRATE_PREFIX.length);
       const payload: SecretPayload = { accessToken: rawToken };
       const encrypted = this.encrypt(payload);
+
       await this.prisma.credential.update({
         where: { id },
         data: { encryptedPayload: encrypted },
       });
+
       await this.audit.record({
         organizationId,
         action: 'credential.migrated',
@@ -84,7 +121,7 @@ export class CredentialsService {
 
     const newCredId = require('crypto').randomUUID();
 
-    const [_, newCred] = await this.prisma.$transaction([
+    const [, newCred] = await this.prisma.$transaction([
       this.prisma.credential.update({
         where: { id },
         data: { status: CredentialStatus.ROTATED },

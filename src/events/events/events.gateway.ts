@@ -3,7 +3,6 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
@@ -72,6 +71,16 @@ export class EventsGateway
         } = payload as JwtPayload & { exp: number };
         if (!organizationId || !userId || !roleId) {
           throw new Error('User has no organization context');
+        }
+
+        // Check if user is still active globally (fixes R06)
+        const user = await this.prisma.user.findFirst({
+          where: { id: userId, status: 'ACTIVE', deletedAt: null },
+          select: { id: true },
+        });
+
+        if (!user) {
+          throw new Error('User account is inactive or deleted');
         }
 
         // Authorize membership and permissions inside the Tenant Context
@@ -144,9 +153,9 @@ export class EventsGateway
   async handleConnection(client: Socket) {
     const { userId, organizationId } = client.data;
     if (userId && organizationId) {
-      await client.join(organizationId);
-      await client.join(`user_${userId}`);
-      this.activeOrganizations.add(organizationId);
+      await client.join(organizationId as string);
+      await client.join(`user_${userId as string}`);
+      this.activeOrganizations.add(organizationId as string);
       this.logger.log(`Client ${client.id} joined org ${organizationId}`);
     } else {
       client.disconnect(true);
@@ -224,24 +233,24 @@ export class EventsGateway
               }
 
               const hasPermission = await this.permissionService.has(
-                userId,
+                userId as string,
                 organizationId,
                 'view_conversations',
               );
               if (!hasPermission) throw new Error('Permission revoked');
 
               socket.data.canReadAll = await this.permissionService.has(
-                userId,
+                userId as string,
                 organizationId,
                 'leads:read:all',
               );
               socket.data.canReadPii = await this.permissionService.has(
-                userId,
+                userId as string,
                 organizationId,
                 'leads:read:pii',
               );
               socket.data.canReadMessages = await this.permissionService.has(
-                userId,
+                userId as string,
                 organizationId,
                 'leads:read:messages',
               );
@@ -330,7 +339,7 @@ export class EventsGateway
   async broadcastNewMessage(organizationId: string, messageData: any) {
     const safeDto = toPublicMessageDto(messageData);
     const assignedAgentId = await this.getAssignedAgentForConversation(
-      messageData.conversationId,
+      messageData.conversationId as string,
     );
     await this.emitToAuthorized(
       organizationId,
@@ -347,7 +356,7 @@ export class EventsGateway
       organizationId,
       'onLeadUpdate',
       safeDto,
-      assignedAgentId,
+      assignedAgentId as string,
     );
   }
 
@@ -358,12 +367,14 @@ export class EventsGateway
     const safeDto = toPublicConversationDto(conversationData);
     const assignedAgentId =
       conversationData.lead?.assignedAgentId ||
-      (await this.getAssignedAgentForConversation(conversationData.id));
+      (await this.getAssignedAgentForConversation(
+        conversationData.id as string,
+      ));
     await this.emitToAuthorized(
       organizationId,
       'onConversationUpdate',
       safeDto,
-      assignedAgentId,
+      assignedAgentId as string,
     );
   }
 

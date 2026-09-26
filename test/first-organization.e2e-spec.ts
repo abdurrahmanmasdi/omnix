@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -55,14 +56,6 @@ describe('First Organization Onboarding (e2e)', () => {
     return res.body.access_token;
   }
 
-  // Helper: activate a PENDING user in the database (simulates email verification)
-  async function activateUser(email: string): Promise<void> {
-    await prisma.user.update({
-      where: { email },
-      data: { status: 'ACTIVE' },
-    });
-  }
-
   it('should signup and get a token without an organization', async () => {
     userEmail = `test-org-${Date.now()}@example.com`;
     accessToken = await signupUser(userEmail);
@@ -98,9 +91,6 @@ describe('First Organization Onboarding (e2e)', () => {
   });
 
   it('should create the first organization after email verification', async () => {
-    // Simulate email verification by activating the user
-    await activateUser(userEmail);
-
     const res = await request(app.getHttpServer())
       .post('/organizations')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -170,7 +160,6 @@ describe('First Organization Onboarding (e2e)', () => {
   it('should handle duplicate organization slugs by throwing conflict', async () => {
     const userEmail2 = `test-org2-${Date.now()}@example.com`;
     await signupUser(userEmail2);
-    await activateUser(userEmail2);
 
     // Re-login to get a fresh token (signup token was for PENDING status)
     const loginRes2 = await request(app.getHttpServer())
@@ -194,7 +183,6 @@ describe('First Organization Onboarding (e2e)', () => {
     // user3 tries to create org with the same slug → 409 Conflict
     const userEmail3 = `test-org3-${Date.now()}@example.com`;
     await signupUser(userEmail3);
-    await activateUser(userEmail3);
 
     const loginRes3 = await request(app.getHttpServer())
       .post('/auth/login')

@@ -16,6 +16,26 @@ export class OutboxProcessor {
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {}
 
+  @Cron(CronExpression.EVERY_MINUTE)
+  async recoverStuckEvents() {
+    // Recover events that were marked PROCESSING but never finished (e.g. due to crash)
+    await tenantStorage.run({ isSystemBypass: true }, async () => {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const result = await this.prisma.outboxEvent.updateMany({
+        where: {
+          status: 'PROCESSING',
+          updatedAt: { lt: fiveMinutesAgo },
+        },
+        data: { status: 'PENDING' },
+      });
+      if (result.count > 0) {
+        this.logger.warn(
+          `Recovered ${result.count} stuck outbox events from PROCESSING to PENDING.`,
+        );
+      }
+    });
+  }
+
   @Cron(CronExpression.EVERY_10_SECONDS)
   async processPendingEvents() {
     if (this.isProcessing) return;
@@ -51,7 +71,7 @@ export class OutboxProcessor {
 
         const groups = new Map<string, typeof aiReplyEvents>();
         for (const event of aiReplyEvents) {
-          const convId = event.payload.conversationId;
+          const convId = event.payload.conversationId as string;
           if (!groups.has(convId)) groups.set(convId, []);
           groups.get(convId)!.push(event);
         }
@@ -62,7 +82,7 @@ export class OutboxProcessor {
               .map((e) => e.payload.messageId)
               .filter(Boolean);
             const latestStateVersion = Math.max(
-              ...group.map((e) => e.payload.stateVersion || 0),
+              ...group.map((e) => (e.payload.stateVersion as number) || 0),
             );
             const firstPayload = group[0].payload;
 
@@ -99,11 +119,15 @@ export class OutboxProcessor {
 
         for (const event of otherEvents) {
           try {
-            await this.outboxRelayQueue.add(event.topic, event.payload, {
-              jobId: `outbox-${event.id}`,
-              removeOnComplete: true,
-              removeOnFail: false,
-            });
+            await this.outboxRelayQueue.add(
+              event.topic as string,
+              event.payload,
+              {
+                jobId: `outbox-${event.id as string}`,
+                removeOnComplete: true,
+                removeOnFail: false,
+              },
+            );
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
               data: { status: 'PROCESSED', processedAt: new Date() },

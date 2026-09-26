@@ -14,7 +14,6 @@ import { NotificationEmitterService } from '../notifications/notification-emitte
 import { NotificationType } from '@prisma/client';
 import { WhatsappMediaService } from './whatsapp-media.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
-import { ActionExecutorService } from './action-executor.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
 
@@ -34,7 +33,6 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly credentials: CredentialsService,
     @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
-    private readonly actionExecutor: ActionExecutorService,
   ) {
     super();
   }
@@ -49,13 +47,6 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
   private isOptOut(text: string): boolean {
     const normalized = text.trim().toLocaleLowerCase();
     return /^(stop|unsubscribe|cancel|end|quit|opt[ -]?out|no messages|no more messages|nicht mehr|abmelden|stopp|iptal|mesaj gönderme|mesaj gonderme|artık mesaj|artik mesaj|parar|basta|detener|cancelar)$/iu.test(
-      normalized,
-    );
-  }
-
-  private isHandoffRequested(text: string): boolean {
-    const normalized = text.trim().toLocaleLowerCase();
-    return /^(human|agent|person|representative|operator|real person|talk to someone|help|support|mensch|mitarbeiter|berater|hilfe|insan|temsilci|müşteri temsilcisi|yardım|humano|agente|persona|asistencia)$/iu.test(
       normalized,
     );
   }
@@ -125,234 +116,131 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               // If leadId is null, we need to fix it before sending to AI.
               if (!conversation || !conversation.leadId) {
                 this.logger.log(
-                  `No linked lead found for ${customerPhone}. Creating/Repairing lead-conversation link...`,
+                  `No linked lead found for inbound message. Creating/Repairing lead-conversation link...`,
                 );
 
-                // T19: Protect Lead-to-Conversation uniqueness dynamically
-                let result;
-                let retries = 0;
-                while (retries < 2) {
-                  try {
-                    result = await this.prisma.$transaction(async (tx) => {
-                      // Check if a lead already exists for this phone (maybe from a CSV import or previous deleted conv)
-                      let lead = await tx.lead.findFirst({
-                        where: {
-                          organizationId: organization.id,
-                          phoneNumber: customerPhone,
-                          deletedAt: null,
-                        },
+                // Use a transaction to ensure we don't end up with partial data
+                const result = await this.prisma.$transaction(async (tx) => {
+                  // Check if a lead already exists for this phone (maybe from a CSV import or previous deleted conv)
+                  let lead = await tx.lead.findFirst({
+                    where: {
+                      organizationId: organization.id,
+                      phoneNumber: customerPhone,
+                      deletedAt: null,
+                    },
+                  });
+
+                  if (!lead) {
+                    // 1. Parse the WhatsApp Number
+                    const phoneNumberObj = parsePhoneNumberFromString(
+                      `+${customerPhone}`,
+                    );
+                    const countryCode = phoneNumberObj?.country || 'Unknown'; // e.g., 'DE', 'US', 'TR'
+
+                    // 2. Simple EU detection for Currency
+                    const euCountries = [
+                      'AT',
+                      'BE',
+                      'BG',
+                      'HR',
+                      'CY',
+                      'CZ',
+                      'DK',
+                      'EE',
+                      'FI',
+                      'FR',
+                      'DE',
+                      'GR',
+                      'HU',
+                      'IE',
+                      'IT',
+                      'LV',
+                      'LT',
+                      'LU',
+                      'MT',
+                      'NL',
+                      'PL',
+                      'PT',
+                      'RO',
+                      'SK',
+                      'SI',
+                      'ES',
+                      'SE',
+                    ];
+                    const defaultCurrency = euCountries.includes(countryCode)
+                      ? 'EUR'
+                      : 'USD';
+
+                    // 3. Fetch the default Pipeline Stage (Order 0)
+                    const defaultPipeline =
+                      await this.prisma.pipelineStage.findFirst({
+                        where: { organizationId: organization.id },
+                        orderBy: { orderIndex: 'asc' },
                       });
 
-                      if (!lead) {
-                        // 1. Parse the WhatsApp Number
-                        const phoneNumberObj = parsePhoneNumberFromString(
-                          `+${customerPhone}`,
-                        );
-                        const countryCode =
-                          phoneNumberObj?.country || 'Unknown'; // e.g., 'DE', 'US', 'TR'
-
-                        // 2. Simple EU detection for Currency
-                        const euCountries = [
-                          'AT',
-                          'BE',
-                          'BG',
-                          'HR',
-                          'CY',
-                          'CZ',
-                          'DK',
-                          'EE',
-                          'FI',
-                          'FR',
-                          'DE',
-                          'GR',
-                          'HU',
-                          'IE',
-                          'IT',
-                          'LV',
-                          'LT',
-                          'LU',
-                          'MT',
-                          'NL',
-                          'PL',
-                          'PT',
-                          'RO',
-                          'SK',
-                          'SI',
-                          'ES',
-                          'SE',
-                        ];
-                        const defaultCurrency = euCountries.includes(
-                          countryCode,
-                        )
-                          ? 'EUR'
-                          : 'USD';
-
-                        // 3. Fetch the default Pipeline Stage (Order 0)
-                        const defaultPipeline =
-                          await this.prisma.pipelineStage.findFirst({
-                            where: { organizationId: organization.id },
-                            orderBy: { orderIndex: 'asc' },
-                          });
-
-                        // 4. Create or Get the Enriched Lead using atomic upsert
-                        lead = await tx.lead.upsert({
-                          where: {
-                            organizationId_phoneNumber: {
-                              organizationId: organization.id,
-                              phoneNumber: customerPhone,
-                            },
-                          },
-                          update: {}, // Do not override existing if it was concurrently created
-                          create: {
-                            organizationId: organization.id,
-                            phoneNumber: customerPhone,
-                            firstName:
-                              value.contacts?.[0]?.profile?.name || 'Unknown',
-                            lastName: '',
-                            country: countryCode,
-                            timezone: 'Unknown',
-                            primaryLanguage: 'Unknown',
-                            currency: defaultCurrency,
-                            status: 'NEW',
-                            priority: 'COLD',
-                            pipelineStageId: defaultPipeline?.id || null,
-                            socialLinks: {
-                              whatsapp: `https://wa.me/${customerPhone}`,
-                            },
-                          },
-                        });
-                      }
-
-                      if (!conversation) {
-                        const newConv = await tx.conversation.create({
-                          data: {
-                            organizationId: organization.id,
-                            externalContactId: customerPhone,
-                            leadId: lead.id,
-                            channelId: channel.id,
-                          },
-                        });
-                        return { ...newConv, lead };
-                      } else {
-                        // Repair the existing conversation by linking the lead
-                        const updatedConv = await tx.conversation.update({
-                          where: { id: conversation.id },
-                          data: { leadId: lead.id, channelId: channel.id },
-                        });
-                        return { ...updatedConv, lead };
-                      }
+                    // 4. Create or Get the Enriched Lead using atomic upsert
+                    lead = await tx.lead.upsert({
+                      where: {
+                        organizationId_phoneNumber: {
+                          organizationId: organization.id,
+                          phoneNumber: customerPhone,
+                        },
+                      },
+                      update: {}, // Do not override existing if it was concurrently created
+                      create: {
+                        organizationId: organization.id,
+                        phoneNumber: customerPhone,
+                        firstName:
+                          value.contacts?.[0]?.profile?.name || 'Unknown',
+                        lastName: '',
+                        country: countryCode,
+                        timezone: 'Unknown',
+                        primaryLanguage: 'Unknown',
+                        currency: defaultCurrency,
+                        status: 'NEW',
+                        priority: 'COLD',
+                        pipelineStageId: defaultPipeline?.id || null,
+                        socialLinks: {
+                          whatsapp: `https://wa.me/${customerPhone}`,
+                        },
+                      },
                     });
-                    break; // Success, break retry loop
-                  } catch (e: any) {
-                    if (e.code === 'P2002' && retries === 0) {
-                      this.logger.warn(
-                        `Concurrent creation detected for ${customerPhone}. Retrying...`,
-                      );
-                      retries++;
-                      continue;
-                    }
-                    throw e;
                   }
-                }
 
-                conversation = result || null;
-                if (!conversation) continue; // TS safety check
+                  if (!conversation) {
+                    const newConv = await tx.conversation.create({
+                      data: {
+                        organizationId: organization.id,
+                        externalContactId: customerPhone,
+                        leadId: lead.id,
+                      },
+                    });
+                    return { ...newConv, lead };
+                  } else {
+                    // Repair the existing conversation by linking the lead
+                    const updatedConv = await tx.conversation.update({
+                      where: { id: conversation.id },
+                      data: { leadId: lead.id },
+                    });
+                    return { ...updatedConv, lead };
+                  }
+                });
+
+                conversation = result;
+              }
+
+              if (!conversation) {
+                throw new Error('Conversation could not be created');
               }
 
               let messageContent = '[Non-text message]';
               let mediaUrl: string | null = null;
 
-              let newConsentStatus: boolean | undefined = undefined;
-
-              if (
-                message.type === 'interactive' &&
-                message.interactive?.button_reply?.id
-              ) {
-                if (message.interactive.button_reply.id === 'CONSENT_GRANTED') {
-                  newConsentStatus = true;
-                  messageContent = '[Patient granted media consent]';
-                } else if (
-                  message.interactive.button_reply.id === 'CONSENT_DENIED' ||
-                  message.interactive.button_reply.id === 'CONSENT_WITHDRAWN'
-                ) {
-                  newConsentStatus = false;
-                  messageContent = '[Patient withdrew/denied media consent]';
-                } else {
-                  messageContent = `[Button click: ${message.interactive.button_reply.title}]`;
-                }
-              }
+              const consentGranted = !!conversation?.lead?.mediaConsentGranted;
 
               if (message.type === 'text' && message.text) {
                 messageContent = message.text.body;
-                const textUpper = messageContent.trim().toUpperCase();
-                if (textUpper === 'I CONSENT' || textUpper === 'CONSENT') {
-                  newConsentStatus = true;
-                } else if (
-                  textUpper === 'WITHDRAW CONSENT' ||
-                  textUpper === 'NO CONSENT' ||
-                  textUpper === 'REVOKE CONSENT'
-                ) {
-                  newConsentStatus = false;
-                }
-              }
-
-              if (newConsentStatus !== undefined) {
-                await this.prisma.$transaction(async (tx) => {
-                  await tx.lead.update({
-                    where: { id: conversation.leadId },
-                    data: {
-                      mediaConsentGranted: newConsentStatus,
-                      mediaConsentSource: 'patient_message',
-                      mediaConsentGrantedAt: newConsentStatus
-                        ? new Date()
-                        : null,
-                      mediaConsentWithdrawnAt: newConsentStatus
-                        ? null
-                        : new Date(),
-                    },
-                  });
-
-                  if (newConsentStatus === false) {
-                    // Wipe all existing media URLs for this lead's conversations
-                    await tx.message.updateMany({
-                      where: {
-                        conversation: { leadId: conversation.leadId },
-                        mediaUrl: { not: null },
-                      },
-                      data: {
-                        mediaUrl: null,
-                        mediaExpiresAt: null,
-                        content: '[Patient withdrew consent - Media deleted]',
-                      },
-                    });
-                  }
-                });
-
-                await this.prisma.auditLog.create({
-                  data: {
-                    organizationId: channel.organizationId,
-                    actor: `patient:${conversation.leadId}`,
-                    action: newConsentStatus
-                      ? 'MEDIA_CONSENT_GRANTED'
-                      : 'MEDIA_CONSENT_WITHDRAWN',
-                    targetId: conversation.leadId,
-                    metadata: {
-                      messageId: message.id,
-                      source: 'patient_message',
-                      purpose:
-                        'Provide visual/audio information for AI assessment',
-                      timestamp: message.timestamp,
-                    },
-                  },
-                });
-              }
-
-              const consentGranted =
-                newConsentStatus !== undefined
-                  ? newConsentStatus
-                  : !!conversation?.lead?.mediaConsentGranted;
-
-              if (message.type === 'image' && message.image?.id) {
+              } else if (message.type === 'image' && message.image?.id) {
                 if (consentGranted && accessTokenForMedia) {
                   const base64 =
                     await this.whatsappMediaService.downloadMediaAsBase64(
@@ -395,56 +283,19 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
 
               // 2. Save the incoming message
               let wpMessage;
-              let updatedConv;
-              let outboxEvent;
               try {
-                // T14: Create message, increment stateVersion, and create scheduling outbox event atomically
-                const result = await this.prisma.$transaction(async (tx) => {
-                  const msg = await tx.message.create({
-                    data: {
-                      conversationId: conversation.id,
-                      metaMessageId: metaMessageId,
-                      content: messageContent,
-                      mediaUrl: mediaUrl,
-                      mediaExpiresAt: mediaUrl
-                        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-                        : null,
-                      type: mediaUrl ? 'LEAD_MEDIA' : 'LEAD_TEXT',
-                      handledBy: conversation.aiPaused ? 'HUMAN' : 'AI',
-                      status: 'PENDING',
-                    },
-                  });
-
-                  const updatedC = await tx.conversation.update({
-                    where: { id: conversation.id },
-                    data: {
-                      status: 'ACTIVE',
-                      updatedAt: new Date(),
-                      stateVersion: { increment: 1 },
-                    },
-                  });
-
-                  const outbox = await tx.outboxEvent.create({
-                    data: {
-                      topic: 'generate-reply',
-                      organizationId: organization.id,
-                      payload: {
-                        organizationId: organization.id,
-                        conversationId: conversation.id,
-                        customerPhone: customerPhone,
-                        messageId: msg.id,
-                        stateVersion: updatedC.stateVersion,
-                      },
-                      status: 'PENDING',
-                    },
-                  });
-
-                  return { msg, updatedC, outbox };
+                // metaMessageId is unique in the database. This catch closes the
+                // check/create race between simultaneous BullMQ workers.
+                wpMessage = await this.prisma.message.create({
+                  data: {
+                    conversationId: conversation.id,
+                    metaMessageId: metaMessageId,
+                    content: messageContent,
+                    mediaUrl: mediaUrl,
+                    type: 'LEAD_TEXT',
+                    handledBy: 'HUMAN',
+                  },
                 });
-
-                wpMessage = result.msg;
-                updatedConv = result.updatedC;
-                outboxEvent = result.outbox;
               } catch (error: any) {
                 if (error?.code === 'P2002') {
                   this.logger.warn(
@@ -455,7 +306,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 throw error;
               }
 
-              this.eventsGateway.broadcastNewMessage(
+              void this.eventsGateway.broadcastNewMessage(
                 organization.id,
                 wpMessage,
               );
@@ -464,12 +315,57 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 conversation.id,
               );
 
+              if (
+                messageContent.trim().toUpperCase() === 'I CONSENT' &&
+                conversation.leadId
+              ) {
+                await (this.prisma.lead as any).update({
+                  where: { id: conversation.leadId },
+                  data: {
+                    mediaConsentGranted: true,
+                    mediaConsentGrantedAt: new Date(),
+                    mediaConsentSource: 'patient_message',
+                    mediaConsentWithdrawnAt: null,
+                  },
+                });
+                this.logger.log(
+                  `Media consent granted by Conv: ${conversation.id}`,
+                );
+              } else if (
+                messageContent.trim().toUpperCase() === 'WITHDRAW CONSENT' &&
+                conversation.leadId
+              ) {
+                await (this.prisma.lead as any).update({
+                  where: { id: conversation.leadId },
+                  data: {
+                    mediaConsentGranted: false,
+                    mediaConsentWithdrawnAt: new Date(),
+                    mediaConsentSource: 'patient_message',
+                  },
+                });
+
+                // Clear mediaUrls for existing messages
+                await this.prisma.message.updateMany({
+                  where: {
+                    conversationId: conversation.id,
+                    mediaUrl: { not: null },
+                  },
+                  data: {
+                    mediaUrl: null,
+                    content: '[Media removed due to privacy rules]',
+                  },
+                });
+                this.logger.log(
+                  `Media consent withdrawn by Conv: ${conversation.id}`,
+                );
+              }
+
               if (this.isOptOut(messageContent)) {
                 // Consent is stored on the tenant-owned lead, not globally by
                 // phone number. This prevents one tenant's STOP from affecting
                 // another tenant that happens to know the same contact.
                 await this.prisma.$transaction([
-                  this.prisma.lead.updateMany({
+                  (this.prisma.lead as any).updateMany({
                     where: {
                       organizationId: organization.id,
                       phoneNumber: customerPhone,
@@ -482,7 +378,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                   }),
                   this.prisma.conversation.update({
                     where: { id: conversation.id },
-                    data: { aiPaused: true, stateVersion: { increment: 1 } },
+                    data: { aiPaused: true },
                   }),
                 ]);
                 await this.auditService.record({
@@ -500,12 +396,12 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 );
                 if (pendingReply) await pendingReply.remove();
                 this.logger.log(
-                  `Recorded opt-out for tenant ${organization.id}, contact ${customerPhone}.`,
+                  `Recorded opt-out for tenant ${organization.id}, contact [REDACTED].`,
                 );
                 continue;
               }
 
-              const leadConsent = await this.prisma.lead.findFirst({
+              const leadConsent = await (this.prisma.lead as any).findFirst({
                 where: {
                   organizationId: organization.id,
                   phoneNumber: customerPhone,
@@ -515,23 +411,13 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               });
               if (leadConsent?.optedOutAt) {
                 this.logger.log(
-                  `Outbound automation suppressed for opted-out contact ${customerPhone}.`,
+                  `Outbound automation suppressed for opted-out contact.`,
                 );
                 continue;
               }
 
-              if (this.isHandoffRequested(messageContent)) {
-                this.logger.log(
-                  `Explicit handoff requested in conversation ${conversation.id}.`,
-                );
-                await this.actionExecutor.handleHandoffToHuman(conversation, {
-                  reason: 'User requested to speak with a human.',
-                });
-                continue; // Stop AI from generating a reply
-              }
-
               this.logger.log(
-                `Saved new message for conversation ${conversation.id} (org: ${organization.name})`,
+                `Saved new message for organization ${organization.name}`,
               );
 
               if (conversation.aiPaused) {
@@ -561,14 +447,49 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 this.logger.log(
                   `AI execution bypassed for conversation ${conversation.id}. State: Paused.`,
                 );
-                continue; // Skip AI processing for this message, continue with others
+                return; // Terminate execution loop. AI will not reply.
               }
 
               // const autoReplyText = `Hello! We received your message: "${messageContent}". Our AI agent will process this shortly.`;
 
-              if (!channel) {
-                this.logger.warn(
-                  `Organization ${organization.id} is missing outbound WhatsApp credentials. Auto-reply skipped.`,
+              if (channel) {
+                const jobId = `reply-${conversation.id}`; // Unique ID for this conversation
+
+                // Look for an existing countdown timer
+                const existingJob = await this.aiReplyQueue.getJob(jobId);
+                let newMessageIds: string[] = [wpMessage.id];
+
+                if (existingJob) {
+                  // Merge message IDs from the existing job
+                  if (
+                    existingJob.data &&
+                    Array.isArray(existingJob.data.newMessageIds)
+                  ) {
+                    newMessageIds = [
+                      ...existingJob.data.newMessageIds,
+                      wpMessage.id,
+                    ];
+                  }
+                  await existingJob.remove();
+                  this.logger.log(
+                    `User is typing again... Resetting 25s timer for Conv: ${conversation.id}. Merged ${newMessageIds.length} messages.`,
+                  );
+                }
+
+                // Add a NEW 25-second timer
+                await this.aiReplyQueue.add(
+                  'generate-reply',
+                  {
+                    organizationId: organization.id,
+                    conversationId: conversation.id,
+                    customerPhone: customerPhone,
+                    newMessageIds: newMessageIds, // 🚀 NEW: Pass the array of IDs instead of inline media/text
+                  },
+                  {
+                    jobId: jobId, // This ensures we can find and delete it later
+                    delay: 7000, // Wait exactly 7 seconds
+                    removeOnComplete: true,
+                  },
                 );
               } else {
                 this.logger.warn(

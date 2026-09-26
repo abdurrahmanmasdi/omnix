@@ -650,6 +650,7 @@ model OutboxEvent {
   error          String?   @db.Text
   createdAt      DateTime  @default(now())
   processedAt    DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
 
   @@index([status, createdAt])
   @@map("outbox_events")

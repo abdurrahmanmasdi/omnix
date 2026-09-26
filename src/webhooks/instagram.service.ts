@@ -67,7 +67,11 @@ export class InstagramService implements IChannelProvider {
     organizationId: string,
     newPayload: any,
   ): Promise<void> {
-    await this.credentials.rotate(organizationId, credentialId, newPayload);
+    await this.credentials.rotate(
+      organizationId,
+      credentialId,
+      newPayload as Record<string, string>,
+    );
     await this.verifyCredentials(credentialId, organizationId);
   }
 
@@ -165,7 +169,7 @@ export class InstagramService implements IChannelProvider {
           ),
       );
 
-      this.logger.log(`Successfully sent message to ${payload.recipient.id}`);
+      this.logger.log(`Successfully sent message to [REDACTED_ID]`);
       return response.data as MetaMessageResponse;
     } catch (error: any) {
       this.logger.error(
