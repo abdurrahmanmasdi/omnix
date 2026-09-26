@@ -40,8 +40,8 @@ class DatabaseService:
         def _fetch():
             with SessionLocal() as db:
                 query = text("""
-                    SELECT sub.content, sub.type FROM (
-                        SELECT m.content, m.type, m."createdAt"
+                    SELECT sub.id, sub.content, sub.type FROM (
+                        SELECT m.id, m.content, m.type, m."createdAt"
                         FROM messages m
                         JOIN conversations c ON m."conversationId" = c.id
                         WHERE m."conversationId" = :conv_id AND c."organizationId" = :org_id

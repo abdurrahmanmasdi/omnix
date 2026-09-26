@@ -118,6 +118,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 state_data["messages"].append(SystemMessage(content=f"SYSTEM INSTRUCTION: This is a proactive follow-up. The customer has not responded in a while, or this is a scheduled follow-up. Generate a warm, non-pushy follow-up message based on this context: {follow_up_context}"))
 
             # 2. Fetch the last 120 messages VIA ASYNC INFRASTRUCTURE
+            new_message_ids = list(request.newMessageIds)
             history = await DatabaseService.get_conversation_history(conv_id, org_id, limit=120)
             
             for msg in history:
@@ -129,7 +130,6 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                     state_data["messages"].append(AIMessage(content=msg.content))
             
             # 3. Add the brand new messages
-            new_message_ids = list(request.newMessageIds)
             new_messages = await DatabaseService.get_messages_by_ids(new_message_ids, conv_id, org_id)
             
             combined_new_text = ""
