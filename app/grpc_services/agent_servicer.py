@@ -121,7 +121,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             history = await DatabaseService.get_conversation_history(conv_id, org_id, limit=120)
             
             for msg in history:
-                if msg.type in ['USER_TEXT', 'LEAD_TEXT']:
+                if str(msg.id) in new_message_ids:
+                    continue
+                if msg.type in ['USER_TEXT', 'LEAD_TEXT', 'LEAD_MEDIA']:
                     state_data["messages"].append(HumanMessage(content=msg.content))
                 elif msg.type == 'AI_TEXT':
                     state_data["messages"].append(AIMessage(content=msg.content))
