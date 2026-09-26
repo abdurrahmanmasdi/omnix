@@ -13,6 +13,7 @@ import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { ActionExecutorService } from './action-executor.service';
+import { PermissionService } from '../auth/permission.service';
 
 describe('WebhooksProcessor', () => {
   let processor: WebhooksProcessor;
@@ -95,6 +96,10 @@ describe('WebhooksProcessor', () => {
         {
           provide: ActionExecutorService,
           useValue: { executeActions: jest.fn() },
+        },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
         },
       ],
     }).compile();

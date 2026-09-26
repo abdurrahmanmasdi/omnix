@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrganizationsService } from './organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionService } from '../auth/permission.service';
 
 describe('OrganizationsService', () => {
   let provider: OrganizationsService;
@@ -10,6 +11,10 @@ describe('OrganizationsService', () => {
       providers: [
         OrganizationsService,
         { provide: PrismaService, useValue: { methodName: jest.fn() } },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
+        },
       ],
       controllers: [],
     }).compile();

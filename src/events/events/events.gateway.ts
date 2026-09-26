@@ -107,6 +107,16 @@ export class EventsGateway
             organizationId,
             'leads:read:all',
           );
+          const canReadPii = await this.permissionService.has(
+            userId,
+            organizationId,
+            'leads:read:pii',
+          );
+          const canReadMessages = await this.permissionService.has(
+            userId,
+            organizationId,
+            'leads:read:messages',
+          );
 
           // Store verified data on the client object
           socket.data = {
@@ -116,6 +126,8 @@ export class EventsGateway
             membershipId: membership.id,
             tokenExp: exp,
             canReadAll,
+            canReadPii,
+            canReadMessages,
           };
         });
 
@@ -185,19 +197,31 @@ export class EventsGateway
             }
 
             try {
-              const membership =
-                await this.prisma.organizationMembership.findFirst({
-                  where: {
-                    userId,
-                    organizationId,
-                    roleId,
-                    status: 'ACTIVE',
-                    deletedAt: null,
+              const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                include: {
+                  memberships: {
+                    where: {
+                      organizationId,
+                      roleId,
+                      status: 'ACTIVE',
+                      deletedAt: null,
+                    },
                   },
-                });
+                },
+              });
 
-              if (!membership)
+              if (
+                !user ||
+                user.status === 'PENDING' ||
+                user.status === 'SUSPENDED'
+              ) {
+                throw new Error('User account is not active');
+              }
+
+              if (user.memberships.length === 0) {
                 throw new Error('Membership inactive or role changed');
+              }
 
               const hasPermission = await this.permissionService.has(
                 userId,
@@ -210,6 +234,16 @@ export class EventsGateway
                 userId,
                 organizationId,
                 'leads:read:all',
+              );
+              socket.data.canReadPii = await this.permissionService.has(
+                userId,
+                organizationId,
+                'leads:read:pii',
+              );
+              socket.data.canReadMessages = await this.permissionService.has(
+                userId,
+                organizationId,
+                'leads:read:messages',
               );
             } catch (error: any) {
               this.logger.warn(
@@ -237,23 +271,58 @@ export class EventsGateway
     return conv?.lead?.assignedAgentId || null;
   }
 
+  private maskLeadPii(lead: any) {
+    const masked = { ...lead };
+    if (masked.phoneNumber) {
+      masked.phoneNumber = masked.phoneNumber.replace(/\d(?=\d{4})/g, '*');
+    }
+    if (masked.email) {
+      const [local, domain] = masked.email.split('@');
+      if (domain) masked.email = `${local.substring(0, 2)}***@${domain}`;
+    }
+    return masked;
+  }
+
+  private maskMessageContent(message: any) {
+    return {
+      ...message,
+      content: '[Message content hidden]',
+      mediaUrl: message.mediaUrl ? '[Media hidden]' : null,
+    };
+  }
+
   private async emitToAuthorized(
     organizationId: string,
     event: string,
     payload: any,
     assignedAgentId: string | null,
   ) {
-    if (!assignedAgentId) {
-      // If unassigned, anyone with view_conversations can see it (which they have if they connected)
-      this.server.to(organizationId).emit(event, payload);
-      return;
-    }
     const sockets = await this.server.in(organizationId).fetchSockets();
     for (const socket of sockets) {
-      const { canReadAll, userId } = socket.data;
-      if (canReadAll || userId === assignedAgentId) {
-        socket.emit(event, payload);
+      const { canReadAll, canReadPii, canReadMessages, userId } = socket.data;
+
+      const isAssigned = assignedAgentId && userId === assignedAgentId;
+      if (!canReadAll && !isAssigned) {
+        continue;
       }
+
+      let personalizedPayload = payload;
+
+      if (event === 'onLeadUpdate') {
+        if (!canReadPii) personalizedPayload = this.maskLeadPii(payload);
+      } else if (event === 'onNewMessage') {
+        if (!canReadMessages)
+          personalizedPayload = this.maskMessageContent(payload);
+      } else if (event === 'onConversationUpdate' && payload.lead) {
+        if (!canReadPii) {
+          personalizedPayload = {
+            ...payload,
+            lead: this.maskLeadPii(payload.lead),
+          };
+        }
+      }
+
+      socket.emit(event, personalizedPayload);
     }
   }
 

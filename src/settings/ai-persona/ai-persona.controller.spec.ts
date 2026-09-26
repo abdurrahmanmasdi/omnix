@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiPersonaController } from './ai-persona.controller';
 import { AiPersonaService } from './ai-persona.service';
+import { PermissionService } from '../../auth/permission.service';
 
 describe('AiPersonaController', () => {
   let provider: AiPersonaController;
@@ -10,6 +11,10 @@ describe('AiPersonaController', () => {
       providers: [
         AiPersonaController,
         { provide: AiPersonaService, useValue: { methodName: jest.fn() } },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
+        },
       ],
       controllers: [AiPersonaController],
     }).compile();

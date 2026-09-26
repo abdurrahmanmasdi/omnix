@@ -17,6 +17,14 @@ describe('JwtStrategy', () => {
   it('accepts an active membership and returns the verified tenant identity', async () => {
     const findFirst = jest.fn().mockResolvedValue({ id: 'membership-1' });
     const strategy = new JwtStrategy(config, {
+      user: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({
+            status: 'ACTIVE',
+            memberships: [{ id: 'membership-1' }],
+          }),
+      },
       organizationMembership: { findFirst },
     } as unknown as PrismaService);
 
@@ -26,11 +34,15 @@ describe('JwtStrategy', () => {
       organizationId: 'org-1',
       roleId: 'role-1',
     });
-    expect(findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a valid but stale membership token', async () => {
     const strategy = new JwtStrategy(config, {
+      user: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ status: 'ACTIVE', memberships: [] }),
+      },
       organizationMembership: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as PrismaService);
 

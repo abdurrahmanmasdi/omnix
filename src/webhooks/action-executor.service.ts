@@ -181,7 +181,10 @@ export class ActionExecutorService {
     return 'executed';
   }
 
-  private async handleUpdateLead(conversation: Conversation & { lead?: Lead | null }, payload: any) {
+  private async handleUpdateLead(
+    conversation: Conversation & { lead?: Lead | null },
+    payload: any,
+  ) {
     if (!conversation.leadId) {
       throw new Error(
         `Cannot UPDATE_LEAD: No lead linked to Conv ${conversation.id}`,
@@ -237,7 +240,9 @@ export class ActionExecutorService {
     }
   }
 
-  private async handlePauseConversation(conversation: Conversation & { lead?: Lead | null }) {
+  private async handlePauseConversation(
+    conversation: Conversation & { lead?: Lead | null },
+  ) {
     if (conversation.aiPaused) return;
 
     const updatedConversation = await this.prisma.conversation.update({
@@ -252,7 +257,10 @@ export class ActionExecutorService {
     this.logger.log(`✅ Conv ${conversation.id} paused.`);
   }
 
-  private async handleNotifyAgent(conversation: Conversation & { lead?: Lead | null }, payload: any) {
+  private async handleNotifyAgent(
+    conversation: Conversation & { lead?: Lead | null },
+    payload: any,
+  ) {
     const targetUserId = conversation.lead?.assignedAgentId;
 
     if (targetUserId) {
@@ -272,7 +280,11 @@ export class ActionExecutorService {
       this.logger.log(`✅ Notification sent to assigned agent ${targetUserId}`);
     } else {
       const memberships = await this.prisma.organizationMembership.findMany({
-        where: { organizationId: conversation.organizationId },
+        where: {
+          organizationId: conversation.organizationId,
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
       });
       for (const membership of memberships) {
         await this.notificationEmitter.send({
@@ -293,7 +305,10 @@ export class ActionExecutorService {
     }
   }
 
-  private async handleUpsertLead(conversation: Conversation & { lead?: Lead | null }, payload: any) {
+  private async handleUpsertLead(
+    conversation: Conversation & { lead?: Lead | null },
+    payload: any,
+  ) {
     const updateData = this.buildLeadUpdateData(
       payload,
       conversation.lead?.status,
@@ -344,7 +359,10 @@ export class ActionExecutorService {
     }
   }
 
-  public async handleHandoffToHuman(conversation: Conversation & { lead?: Lead | null }, payload: any) {
+  public async handleHandoffToHuman(
+    conversation: Conversation & { lead?: Lead | null },
+    payload: any,
+  ) {
     const reason =
       typeof payload.reason === 'string'
         ? payload.reason
@@ -380,7 +398,11 @@ export class ActionExecutorService {
     );
 
     const memberships = await this.prisma.organizationMembership.findMany({
-      where: { organizationId: organizationId },
+      where: {
+        organizationId: organizationId,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
     });
 
     if (memberships.length === 0) {
@@ -417,7 +439,10 @@ export class ActionExecutorService {
     );
   }
 
-  private async handleUpdateSummary(conversation: Conversation & { lead?: Lead | null }, payload: any) {
+  private async handleUpdateSummary(
+    conversation: Conversation & { lead?: Lead | null },
+    payload: any,
+  ) {
     const summary = payload.summary;
     if (!summary || typeof summary !== 'string') {
       throw new Error(`UPDATE_SUMMARY action missing or invalid 'summary'`);

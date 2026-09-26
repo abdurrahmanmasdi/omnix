@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PermissionService } from '../auth/permission.service';
 
 describe('AuthController', () => {
   let provider: AuthController;
@@ -10,6 +11,10 @@ describe('AuthController', () => {
       providers: [
         AuthController,
         { provide: AuthService, useValue: { methodName: jest.fn() } },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
+        },
       ],
       controllers: [AuthController],
     }).compile();

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { InstagramService } from '../webhooks/instagram.service';
 import { CredentialsService } from '../credentials/credentials.service';
+import { PermissionService } from '../auth/permission.service';
 
 describe('ChannelsService', () => {
   let provider: ChannelsService;
@@ -30,6 +31,16 @@ describe('ChannelsService', () => {
         {
           provide: CredentialsService,
           useValue: { create: jest.fn(), revoke: jest.fn() },
+        },
+        {
+          provide:
+            require('../modules/integration/crm/adapters/hubspot.adapter')
+              .HubspotAdapter,
+          useValue: {},
+        },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
         },
       ],
       controllers: [],

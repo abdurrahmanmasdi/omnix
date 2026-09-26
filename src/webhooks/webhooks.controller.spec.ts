@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { WebhooksController } from './webhooks.controller';
 import { ConfigService } from '@nestjs/config';
 import { WebhooksService } from './webhooks.service';
+import { PermissionService } from '../auth/permission.service';
 
 describe('WebhooksController', () => {
   let provider: WebhooksController;
@@ -19,6 +20,10 @@ describe('WebhooksController', () => {
           },
         },
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
+        },
       ],
       controllers: [WebhooksController],
     }).compile();

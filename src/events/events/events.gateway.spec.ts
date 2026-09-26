@@ -29,6 +29,11 @@ describe('EventsGateway', () => {
             organizationMembership: {
               findFirst: jest.fn().mockResolvedValue({ id: 'test' }),
             },
+            conversation: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValue({ lead: { assignedAgentId: null } }),
+            },
           },
         },
       ],
@@ -36,7 +41,25 @@ describe('EventsGateway', () => {
 
     gateway = module.get<EventsGateway>(EventsGateway);
     // Mock the WebSocket server
-    gateway.server = { to: mockTo, disconnectSockets: jest.fn() } as any;
+    gateway.server = {
+      to: mockTo,
+      disconnectSockets: jest.fn(),
+      in: jest.fn().mockReturnValue({
+        fetchSockets: jest.fn().mockResolvedValue([
+          {
+            emit: mockEmit,
+            data: {
+              userId: 'test-user',
+              canReadAll: true,
+              canReadPii: true,
+              canReadMessages: true,
+            },
+          },
+        ]),
+        disconnectSockets: jest.fn(),
+      }),
+      use: jest.fn(),
+    } as any;
   });
 
   afterEach(() => {
@@ -49,7 +72,7 @@ describe('EventsGateway', () => {
   });
 
   describe('Adversarial DTO Mapping', () => {
-    it('strips organization relations and tokens from lead broadcasts', () => {
+    it('strips organization relations and tokens from lead broadcasts', async () => {
       const maliciousLead = {
         id: 'lead-123',
         organizationId: 'org-456',
@@ -73,9 +96,8 @@ describe('EventsGateway', () => {
         socialLinks: { secretNote: 'hide this' }, // Not in DTO
       };
 
-      gateway.broadcastLeadUpdate('org-456', maliciousLead);
+      await gateway.broadcastLeadUpdate('org-456', maliciousLead);
 
-      expect(mockTo).toHaveBeenCalledWith('org-456');
       expect(mockEmit).toHaveBeenCalledWith('onLeadUpdate', expect.any(Object));
 
       const emittedDto = mockEmit.mock.calls[0][1];
@@ -113,7 +135,7 @@ describe('EventsGateway', () => {
       ).toBe(true);
     });
 
-    it('strips metadata and relations from message broadcasts', () => {
+    it('strips metadata and relations from message broadcasts', async () => {
       const maliciousMessage = {
         id: 'msg-1',
         conversationId: 'conv-1',
@@ -128,7 +150,7 @@ describe('EventsGateway', () => {
         conversation: { internalStatus: 'foo' },
       };
 
-      gateway.broadcastNewMessage('org-456', maliciousMessage);
+      await gateway.broadcastNewMessage('org-456', maliciousMessage);
 
       const emittedDto = mockEmit.mock.calls[0][1];
       expect(emittedDto).not.toHaveProperty('metadata');
@@ -136,7 +158,7 @@ describe('EventsGateway', () => {
       expect(emittedDto).not.toHaveProperty('conversation');
     });
 
-    it('strips unnecessary relations from conversation broadcasts', () => {
+    it('strips unnecessary relations from conversation broadcasts', async () => {
       const maliciousConversation = {
         id: 'conv-1',
         organizationId: 'org-456',
@@ -149,14 +171,17 @@ describe('EventsGateway', () => {
         messages: [{ content: 'secret content' }],
       };
 
-      gateway.broadcastConversationUpdate('org-456', maliciousConversation);
+      await gateway.broadcastConversationUpdate(
+        'org-456',
+        maliciousConversation,
+      );
 
       const emittedDto = mockEmit.mock.calls[0][1];
       expect(emittedDto).not.toHaveProperty('organization');
       expect(emittedDto).not.toHaveProperty('messages');
     });
 
-    it('strips internal fields from notification broadcasts', () => {
+    it('strips internal fields from notification broadcasts', async () => {
       const maliciousNotification = {
         id: 'notif-1',
         organizationId: 'org-1',

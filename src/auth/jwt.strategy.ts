@@ -38,18 +38,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
-    const membership = await this.prisma.organizationMembership.findFirst({
-      where: {
-        userId: payload.sub,
-        organizationId: payload.organizationId,
-        roleId: payload.roleId,
-        status: MembershipStatus.ACTIVE,
-        deletedAt: null,
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: {
+        memberships: {
+          where: {
+            organizationId: payload.organizationId,
+            roleId: payload.roleId,
+            status: MembershipStatus.ACTIVE,
+            deletedAt: null,
+          },
+        },
       },
-      select: { id: true },
     });
 
-    if (!membership) {
+    if (!user || user.status === 'PENDING' || user.status === 'SUSPENDED') {
+      throw new UnauthorizedException('User account is not active');
+    }
+
+    if (user.memberships.length === 0) {
       throw new UnauthorizedException('Organization membership is inactive');
     }
 

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { WebhooksService } from './webhooks.service';
 import { getQueueToken } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
+import { PermissionService } from '../auth/permission.service';
 
 describe('WebhooksService', () => {
   let provider: WebhooksService;
@@ -17,6 +18,10 @@ describe('WebhooksService', () => {
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('app-secret') },
+        },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
         },
       ],
       controllers: [],

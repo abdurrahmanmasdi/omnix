@@ -198,21 +198,37 @@ export class AuthService {
       });
 
       if (!user) return { error: 'User not found' };
+      if (user.status === 'PENDING' || user.status === 'SUSPENDED') {
+        return { error: 'User account is not active' };
+      }
 
       // Deterministic selection
       const activeMembership = user.memberships[0];
       const organizationId = activeMembership?.organizationId || null;
       const roleId = activeMembership?.roleId || null;
 
-      // Revoke old session atomically within the same tx
-      await tx.session.update({
-        where: { id: session.id },
+      // Revoke old session atomically using compare-and-set
+      const updateResult = await tx.session.updateMany({
+        where: { id: session.id, isRevoked: false },
         data: {
           isRevoked: true,
           revokedAt: new Date(),
           revokedReason: 'Rotated',
         },
       });
+
+      // If count is 0, someone else rotated it concurrently!
+      if (updateResult.count === 0) {
+        await tx.session.updateMany({
+          where: { familyId },
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            revokedReason: 'Concurrent reuse detected',
+          },
+        });
+        return { error: 'Session revoked due to concurrent token reuse' };
+      }
 
       // Generate new tokens (session creation also happens inside tx)
       return this.generateTokens(
@@ -306,12 +322,8 @@ export class AuthService {
       ) as any,
     });
 
-    // Parse expiration
-    const expiresInStr =
-      this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
-    const days = parseInt(expiresInStr) || 7;
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + days);
+    const decodedRefresh = this.jwtService.decode(refreshToken);
+    const expiresAt = new Date(decodedRefresh.exp * 1000);
 
     await tx.session.create({
       data: {

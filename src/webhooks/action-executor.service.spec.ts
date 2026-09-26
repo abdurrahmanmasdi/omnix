@@ -6,6 +6,7 @@ import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { LeadStatus, Priority } from '@prisma/client';
+import { PermissionService } from '../auth/permission.service';
 
 describe('ActionExecutorService', () => {
   let service: ActionExecutorService;
@@ -15,6 +16,10 @@ describe('ActionExecutorService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ActionExecutorService,
+        {
+          provide: require('../audit/audit.service').AuditService,
+          useValue: { log: jest.fn() },
+        },
         {
           provide: PrismaService,
           useValue: {
@@ -28,7 +33,14 @@ describe('ActionExecutorService', () => {
             },
             $transaction: jest.fn(),
             organizationMembership: {
-              findMany: jest.fn().mockResolvedValue([]),
+              findMany: jest
+                .fn()
+                .mockResolvedValue([
+                  {
+                    provide: PermissionService,
+                    useValue: { has: jest.fn().mockResolvedValue(true) },
+                  },
+                ]),
             },
           },
         },
@@ -95,7 +107,7 @@ describe('ActionExecutorService', () => {
       // Verify that it updated 'trusted-conv', ignoring 'other-conv'
       expect(prismaService.conversation.update).toHaveBeenCalledWith({
         where: { id: 'trusted-conv' },
-        data: { aiPaused: true },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
       });
     });
 

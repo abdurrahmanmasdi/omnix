@@ -3,6 +3,7 @@ import { ConversationsService } from './conversations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
+import { PermissionService } from '../auth/permission.service';
 
 describe('ConversationsService', () => {
   let provider: ConversationsService;
@@ -14,6 +15,10 @@ describe('ConversationsService', () => {
         { provide: PrismaService, useValue: { methodName: jest.fn() } },
         { provide: WhatsappService, useValue: { methodName: jest.fn() } },
         { provide: EventsGateway, useValue: { methodName: jest.fn() } },
+        {
+          provide: PermissionService,
+          useValue: { has: jest.fn().mockResolvedValue(true) },
+        },
       ],
       controllers: [],
     }).compile();
