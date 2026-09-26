@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTenantQueryKey } from "@/hooks/useTenantQueryKey";
 import type { CreateExperienceDto, UpdateExperienceDto } from "@/lib/api/model";
 import {
   getExperiencesControllerGetExperiencesQueryKey,
@@ -68,7 +67,6 @@ function normalizeExperiences(data: unknown): ExperienceRecord[] {
 
 export default function ExperiencesTable() {
   const queryClient = useQueryClient();
-  const scopeKey = useTenantQueryKey();
   const organizationId = useAuthStore((state) => state.user?.organizationId);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExperience, setEditingExperience] =
@@ -106,7 +104,7 @@ export default function ExperiencesTable() {
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({
-      queryKey: scopeKey(getExperiencesControllerGetExperiencesQueryKey()),
+      queryKey: getExperiencesControllerGetExperiencesQueryKey(),
     });
   };
 
@@ -158,7 +156,9 @@ export default function ExperiencesTable() {
       {experiencesMissingImageConsent.length > 0 && (
         <div className="border-b border-amber-400/30 bg-amber-400/10 px-6 py-3 text-sm text-amber-100">
           {experiencesMissingImageConsent.length} experience
-          {experiencesMissingImageConsent.length === 1 ? " has" : "s have"} patient images without recorded media consent. Do not use or share these images until consent is documented.
+          {experiencesMissingImageConsent.length === 1 ? " has" : "s have"}{" "}
+          patient images without recorded media consent. Do not use or share
+          these images until consent is documented.
         </div>
       )}
 
@@ -479,7 +479,8 @@ function ExperienceFormModal({
               disabled={isSaving}
             />
             <span>
-              I confirm the clinic has documented media consent for every patient image attached to this experience.
+              I confirm the clinic has documented media consent for every
+              patient image attached to this experience.
             </span>
           </label>
 

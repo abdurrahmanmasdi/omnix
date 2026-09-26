@@ -16,13 +16,11 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { axiosInstance } from "@/lib/api/axios-client";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTenantQueryKey } from "@/hooks/useTenantQueryKey";
 
 export default function IntegrationsSettingsPage() {
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
-  const scopeKey = useTenantQueryKey();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,9 +39,11 @@ export default function IntegrationsSettingsPage() {
       toast.success("HubSpot connected successfully.");
       setToken("");
       // Refresh channels so they appear
-      queryClient.invalidateQueries({ queryKey: scopeKey(["/channels"]) });
+      queryClient.invalidateQueries({ queryKey: ["/channels"] });
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Failed to connect HubSpot.");
+      toast.error(
+        error.response?.data?.message || "Failed to connect HubSpot.",
+      );
       console.error(error);
     } finally {
       setIsLoading(false);

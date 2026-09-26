@@ -1,58 +1,78 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
-import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
-import { 
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import {
   conversationsControllerGetMessages,
   useConversationsControllerSendMessage,
   useConversationsControllerToggleAi,
-} from '@/lib/api/generated/conversations/conversations';
+} from "@/lib/api/generated/conversations/conversations";
 import type {
   ConversationsControllerGetMessages200Item,
   ConversationsControllerGetConversations200Item,
-} from '@/lib/api/model';
-import Image from 'next/image';
-import { Card } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Send, User, Bot, Play, Pause, AlertTriangle, X, MessageSquare } from 'lucide-react';
-import { toast } from 'sonner';
+} from "@/lib/api/model";
+import Image from "next/image";
+import { Card } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Send,
+  User,
+  Bot,
+  Play,
+  Pause,
+  AlertTriangle,
+  X,
+  MessageSquare,
+} from "lucide-react";
+import { toast } from "sonner";
 
 interface LiveChatPaneProps {
   activeConversationId: string;
-  activeConversationData?: ConversationsControllerGetConversations200Item & { aiPaused?: boolean };
+  activeConversationData?: ConversationsControllerGetConversations200Item & {
+    aiPaused?: boolean;
+  };
   onClose: () => void;
   liveMessages: ConversationsControllerGetMessages200Item[]; // Real-time messages passed down from Orchestrator
 }
 
-export function LiveChatPane({ activeConversationId, activeConversationData, onClose }: Omit<LiveChatPaneProps, 'liveMessages'>) {
+export function LiveChatPane({
+  activeConversationId,
+  activeConversationData,
+  onClose,
+}: Omit<LiveChatPaneProps, "liveMessages">) {
   const queryClient = useQueryClient();
-  const scopeKey = useTenantQueryKey();
   const scrollRef = useRef<HTMLDivElement>(null);
-  
+
   // Historical messages with infinite scrolling
-  const { 
-    data: infiniteData, 
-    fetchNextPage, 
-    hasNextPage, 
-    isFetchingNextPage 
+  const {
+    data: infiniteData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: scopeKey(['/conversations', activeConversationId, 'messages']),
-    queryFn: ({ pageParam }) => conversationsControllerGetMessages(activeConversationId, { limit: "50", cursor: pageParam as string } as any),
+    queryKey: ["/conversations", activeConversationId, "messages"],
+    queryFn: ({ pageParam }) =>
+      conversationsControllerGetMessages(activeConversationId, {
+        limit: "50",
+        cursor: pageParam as string,
+      } as any),
     getNextPageParam: (lastPage: any) => lastPage.nextCursor || undefined,
     initialPageParam: undefined,
-    enabled: !!activeConversationId
+    enabled: !!activeConversationId,
   });
 
-  const activeMessages: ConversationsControllerGetMessages200Item[] = useMemo(() => {
-    if (!infiniteData) return [];
-    // Flatten all pages and reverse them (newest first -> chronological order for UI)
-    const allMessages = infiniteData.pages.flatMap((page: any) => page.data || []);
-    return [...allMessages].reverse();
-  }, [infiniteData]);
+  const activeMessages: ConversationsControllerGetMessages200Item[] =
+    useMemo(() => {
+      if (!infiniteData) return [];
+      // Flatten all pages and reverse them (newest first -> chronological order for UI)
+      const allMessages = infiniteData.pages.flatMap(
+        (page: any) => page.data || [],
+      );
+      return [...allMessages].reverse();
+    }, [infiniteData]);
 
   // Handle scroll to top for pagination
   const handleScroll = useCallback(() => {
@@ -63,7 +83,8 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
       const oldScrollHeight = scrollRef.current.scrollHeight;
       fetchNextPage().then(() => {
         if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight - oldScrollHeight;
+          scrollRef.current.scrollTop =
+            scrollRef.current.scrollHeight - oldScrollHeight;
         }
       });
     }
@@ -76,7 +97,7 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
       const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
       if (isNearBottom || infiniteData?.pages.length === 1) {
-         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
     }
   }, [activeMessages.length, infiniteData]);
@@ -100,7 +121,7 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           console.error("Failed to send message", err);
           toast.error("Failed to send message");
         },
-      }
+      },
     );
   };
 
@@ -120,9 +141,9 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
         onSuccess: () => {
           // The socket `onConversationUpdate` will catch this and update global state,
           // but we can invalidate just in case
-          queryClient.invalidateQueries({ queryKey: scopeKey(['/conversations']) });
-        }
-      }
+          queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+        },
+      },
     );
   };
 
@@ -138,40 +159,51 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           </Avatar>
           <div>
             <h3 className="font-bold text-brand-ice leading-none mb-1">
-              {activeConversationData?.lead?.name 
-                ? activeConversationData.lead.name.trim() 
-                : activeConversationData?.lead?.phoneNumber || 'Active Chat'}
+              {activeConversationData?.lead?.name
+                ? activeConversationData.lead.name.trim()
+                : activeConversationData?.lead?.phoneNumber || "Active Chat"}
             </h3>
             <p className="text-[10px] text-brand-ice/60 font-medium uppercase tracking-widest">
               ID: {activeConversationId.substring(0, 8)}
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${isAiPaused ? 'text-amber-500' : 'text-emerald-500'}`}>
-              {isAiPaused ? 'AI Paused' : 'AI Active'}
+            <span
+              className={`text-[10px] font-bold uppercase tracking-widest ${isAiPaused ? "text-amber-500" : "text-emerald-500"}`}
+            >
+              {isAiPaused ? "AI Paused" : "AI Active"}
             </span>
-            <Button 
-              variant={isAiPaused ? 'outline' : 'default'} 
-              size="sm" 
+            <Button
+              variant={isAiPaused ? "outline" : "default"}
+              size="sm"
               onClick={handleToggleAi}
               disabled={toggleAiMutation.isPending}
               className={`h-8 px-3 rounded-lg font-bold transition-all ${
-                !isAiPaused 
-                  ? 'bg-brand-cyan/100 hover:bg-emerald-600 text-white shadow-none shadow-emerald-500/20' 
-                  : 'border-amber-500/20 text-amber-400 bg-amber-500/20 hover:bg-amber-500/20'
+                !isAiPaused
+                  ? "bg-brand-cyan/100 hover:bg-emerald-600 text-white shadow-none shadow-emerald-500/20"
+                  : "border-amber-500/20 text-amber-400 bg-amber-500/20 hover:bg-amber-500/20"
               }`}
             >
-              {isAiPaused ? <Play size={12} className="mr-1.5" /> : <Pause size={12} className="mr-1.5" />}
-              {isAiPaused ? 'Resume AI' : 'Pause AI'}
+              {isAiPaused ? (
+                <Play size={12} className="mr-1.5" />
+              ) : (
+                <Pause size={12} className="mr-1.5" />
+              )}
+              {isAiPaused ? "Resume AI" : "Pause AI"}
             </Button>
           </div>
-          
+
           <div className="h-6 w-px bg-slate-200" />
-          
-          <Button variant="ghost" size="icon" onClick={onClose} className="text-brand-ice/60 hover:text-brand-ice/80 rounded-full hover:bg-[#01081A] transition-colors">
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-brand-ice/60 hover:text-brand-ice/80 rounded-full hover:bg-[#01081A] transition-colors"
+          >
             <X size={20} />
           </Button>
         </div>
@@ -185,7 +217,9 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           </div>
           <div className="flex-1">
             <p className="text-sm font-bold text-amber-900">AI Agent Paused</p>
-            <p className="text-xs font-medium text-amber-400">Human intervention required.</p>
+            <p className="text-xs font-medium text-amber-400">
+              Human intervention required.
+            </p>
           </div>
           <Button
             variant="outline"
@@ -215,22 +249,35 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           ) : (
             activeMessages.map((msg, idx) => {
               const isUser = msg.type?.startsWith("LEAD_");
-              const isSystemOrTool = msg.type === "SYSTEM_PROMPT" || msg.type === "TOOL_CALL" || msg.type === "TOOL_RESULT";
-              
+              const isSystemOrTool =
+                msg.type === "SYSTEM_PROMPT" ||
+                msg.type === "TOOL_CALL" ||
+                msg.type === "TOOL_RESULT";
+
               if (isSystemOrTool) return null; // Hide internal agent thinking from the UI
-              
-              const showAvatar = idx === activeMessages.length - 1 || activeMessages[idx + 1]?.type !== msg.type;
-              
+
+              const showAvatar =
+                idx === activeMessages.length - 1 ||
+                activeMessages[idx + 1]?.type !== msg.type;
+
               return (
                 <div
                   key={msg.id || idx}
                   className={`flex flex-col ${isUser ? "items-start" : "items-end"}`}
                 >
-                  <div className={`flex items-end space-x-2 max-w-[85%] ${isUser ? "flex-row" : "flex-row-reverse space-x-reverse"}`}>
+                  <div
+                    className={`flex items-end space-x-2 max-w-[85%] ${isUser ? "flex-row" : "flex-row-reverse space-x-reverse"}`}
+                  >
                     <div className="w-6 shrink-0 flex flex-col justify-end pb-1">
                       {showAvatar && (
                         <Avatar className="h-6 w-6 shadow-none border border-white/10">
-                          <AvatarFallback className={isUser ? "bg-transparent text-brand-ice/60 text-[10px]" : "bg-brand-electric text-white text-[10px]"}>
+                          <AvatarFallback
+                            className={
+                              isUser
+                                ? "bg-transparent text-brand-ice/60 text-[10px]"
+                                : "bg-brand-electric text-white text-[10px]"
+                            }
+                          >
                             {isUser ? <User size={12} /> : <Bot size={12} />}
                           </AvatarFallback>
                         </Avatar>
@@ -243,20 +290,32 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
                           : "bg-brand-electric text-white rounded-br-sm border border-blue-700"
                       }`}
                     >
-                      {(msg as ConversationsControllerGetMessages200Item & { mediaUrl?: string }).mediaUrl && (
-                        <Image 
-                          src={(msg as ConversationsControllerGetMessages200Item & { mediaUrl?: string }).mediaUrl!} 
-                          alt="Media" 
-                          width={320} 
+                      {(
+                        msg as ConversationsControllerGetMessages200Item & {
+                          mediaUrl?: string;
+                        }
+                      ).mediaUrl && (
+                        <Image
+                          src={
+                            (
+                              msg as ConversationsControllerGetMessages200Item & {
+                                mediaUrl?: string;
+                              }
+                            ).mediaUrl!
+                          }
+                          alt="Media"
+                          width={320}
                           height={320}
                           unoptimized
-                          className="max-w-xs rounded-lg mb-2" 
+                          className="max-w-xs rounded-lg mb-2"
                         />
                       )}
                       {msg.content}
                     </div>
                   </div>
-                  <span className={`text-[9px] font-bold text-brand-ice/60 mt-1 uppercase tracking-widest ${isUser ? "ml-10" : "mr-10"}`}>
+                  <span
+                    className={`text-[9px] font-bold text-brand-ice/60 mt-1 uppercase tracking-widest ${isUser ? "ml-10" : "mr-10"}`}
+                  >
                     {new Date(msg.createdAt || "").toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -273,8 +332,12 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
       <div className="p-4 bg-transparent border-t border-white/10 rounded-br-2xl shadow-[0_-4px_20px_-15px_rgba(0,0,0,0.1)] relative z-10">
         <div className="flex space-x-2">
           <Input
-            placeholder={isAiPaused ? "Type a manual reply..." : "Pause AI to type manually..."}
-            className={`flex-1 h-12 rounded-xl border-white/10 focus-visible:ring-blue-500 ${!isAiPaused && 'bg-[#051126] opacity-70'}`}
+            placeholder={
+              isAiPaused
+                ? "Type a manual reply..."
+                : "Pause AI to type manually..."
+            }
+            className={`flex-1 h-12 rounded-xl border-white/10 focus-visible:ring-blue-500 ${!isAiPaused && "bg-[#051126] opacity-70"}`}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -283,7 +346,11 @@ export function LiveChatPane({ activeConversationId, activeConversationData, onC
           <Button
             className="bg-brand-electric hover:bg-brand-electric/80 h-12 px-6 rounded-xl font-bold shadow-lg shadow-brand-electric/20 transition-all active:scale-95"
             onClick={handleSendMessage}
-            disabled={sendMessageMutation.isPending || !messageInput.trim() || !isAiPaused}
+            disabled={
+              sendMessageMutation.isPending ||
+              !messageInput.trim() ||
+              !isAiPaused
+            }
           >
             <Send size={16} className="mr-2" />
             {sendMessageMutation.isPending ? "Sending..." : "Send"}

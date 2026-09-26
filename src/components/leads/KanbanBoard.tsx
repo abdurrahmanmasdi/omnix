@@ -1,37 +1,42 @@
-'use client';
-import type { LeadResponseDto } from '@/lib/api/model';
+"use client";
+import type { LeadResponseDto } from "@/lib/api/model";
 
-
-import React, { useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
-import { 
-  DndContext, 
-  DragOverlay, 
-  closestCorners, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
+import React, { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
   useSensors,
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
-  defaultDropAnimationSideEffects
-} from '@dnd-kit/core';
-import { 
-  SortableContext, 
-  arrayMove, 
+  defaultDropAnimationSideEffects,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Loader2, MessageSquare, AlertCircle, Calendar, Phone, Mail } from 'lucide-react';
-import { usePipelineStagesControllerFindAll } from '@/lib/api/generated/pipeline-stages/pipeline-stages';
-import { useLeadsControllerUpdateStage } from '@/lib/api/generated/leads/leads';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Loader2,
+  MessageSquare,
+  AlertCircle,
+  Calendar,
+  Phone,
+  Mail,
+} from "lucide-react";
+import { usePipelineStagesControllerFindAll } from "@/lib/api/generated/pipeline-stages/pipeline-stages";
+import { useLeadsControllerUpdateStage } from "@/lib/api/generated/leads/leads";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 // --- Types ---
 
@@ -59,25 +64,42 @@ interface SortableLeadCardProps {
   onOpenConversation: (conversationId?: string) => void;
 }
 
-function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, ref, ...props }: SortableLeadCardProps & { isOverlay?: boolean, style?: React.CSSProperties, ref?: React.Ref<HTMLDivElement> }) {
-  const isHandedOff = lead.status === 'HANDED_OFF';
-  
+function LeadCard({
+  lead,
+  onViewProfile,
+  onOpenConversation,
+  isOverlay,
+  style,
+  ref,
+  ...props
+}: SortableLeadCardProps & {
+  isOverlay?: boolean;
+  style?: React.CSSProperties;
+  ref?: React.Ref<HTMLDivElement>;
+}) {
+  const isHandedOff = lead.status === "HANDED_OFF";
+
   return (
-    <div 
+    <div
       ref={ref}
       style={style}
-      className={`bg-[#051126] border rounded-lg p-3 shadow-none flex flex-col gap-2 cursor-grab active:cursor-grabbing hover:border-brand-electric transition-colors ${isOverlay ? 'shadow-none shadow-black/50 rotate-2 scale-105' : ''} ${isHandedOff ? 'border-brand-cyan/50 bg-brand-cyan/10' : 'border-white/10'}`}
+      className={`bg-[#051126] border rounded-lg p-3 shadow-none flex flex-col gap-2 cursor-grab active:cursor-grabbing hover:border-brand-electric transition-colors ${isOverlay ? "shadow-none shadow-black/50 rotate-2 scale-105" : ""} ${isHandedOff ? "border-brand-cyan/50 bg-brand-cyan/10" : "border-white/10"}`}
       {...props}
     >
       <div className="flex justify-between items-start">
-        <h4 className="font-semibold text-brand-ice text-sm">{lead.firstName} {lead.lastName}</h4>
+        <h4 className="font-semibold text-brand-ice text-sm">
+          {lead.firstName} {lead.lastName}
+        </h4>
         {isHandedOff && (
-          <Badge variant="outline" className="text-[10px] bg-brand-cyan/20 text-brand-cyan border-brand-cyan/50">
+          <Badge
+            variant="outline"
+            className="text-[10px] bg-brand-cyan/20 text-brand-cyan border-brand-cyan/50"
+          >
             HANDED OFF
           </Badge>
         )}
       </div>
-      
+
       <div className="flex flex-col gap-1 mt-1">
         {lead.phoneNumber && (
           <div className="flex items-center text-xs text-brand-ice/60">
@@ -98,20 +120,26 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
           {new Date(lead.createdAt).toLocaleDateString()}
         </div>
         <div className="flex gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-6 w-6 text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10"
-            onClick={(e) => { e.stopPropagation(); onViewProfile(lead.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewProfile(lead.id);
+            }}
             onPointerDown={(e) => e.stopPropagation()} // Prevent drag start when clicking button
           >
             <Calendar className="h-3 w-3" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className={`h-6 w-6 ${lead.conversation?.id ? 'text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10' : 'text-brand-ice/20 cursor-not-allowed'}`}
-            onClick={(e) => { e.stopPropagation(); onOpenConversation(lead.conversation?.id as string); }}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-6 w-6 ${lead.conversation?.id ? "text-brand-ice/40 hover:text-brand-cyan hover:bg-brand-cyan/10" : "text-brand-ice/20 cursor-not-allowed"}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenConversation(lead.conversation?.id as string);
+            }}
             onPointerDown={(e) => e.stopPropagation()}
             disabled={!lead.conversation?.id}
           >
@@ -123,7 +151,10 @@ function LeadCard({ lead, onViewProfile, onOpenConversation, isOverlay, style, r
   );
 }
 
-const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>(({ lead, onViewProfile, onOpenConversation }) => {
+const SortableLeadCard = React.forwardRef<
+  HTMLDivElement,
+  SortableLeadCardProps
+>(({ lead, onViewProfile, onOpenConversation }) => {
   const {
     attributes,
     listeners,
@@ -131,12 +162,12 @@ const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>
     transform,
     transition,
     isDragging,
-  } = useSortable({ 
+  } = useSortable({
     id: lead.id,
     data: {
-      type: 'Lead',
+      type: "Lead",
       lead,
-    }
+    },
   });
 
   const style = {
@@ -146,25 +177,30 @@ const SortableLeadCard = React.forwardRef<HTMLDivElement, SortableLeadCardProps>
   };
 
   return (
-    <LeadCard 
+    <LeadCard
       ref={setNodeRef}
       style={style}
-      lead={lead} 
-      onViewProfile={onViewProfile} 
+      lead={lead}
+      onViewProfile={onViewProfile}
       onOpenConversation={onOpenConversation}
       {...attributes}
       {...listeners}
     />
   );
 });
-SortableLeadCard.displayName = 'SortableLeadCard';
+SortableLeadCard.displayName = "SortableLeadCard";
 
 // --- Main Board Component ---
 
-export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversation }: KanbanBoardProps) {
+export function KanbanBoard({
+  leads,
+  isLoading,
+  onViewProfile,
+  onOpenConversation,
+}: KanbanBoardProps) {
   const queryClient = useQueryClient();
-  const scopeKey = useTenantQueryKey();
-  const { data: stagesData, isLoading: stagesLoading } = usePipelineStagesControllerFindAll();
+  const { data: stagesData, isLoading: stagesLoading } =
+    usePipelineStagesControllerFindAll();
   const updateStageMutation = useLeadsControllerUpdateStage();
 
   const [activeLead, setActiveLead] = useState<LeadResponseDto | null>(null);
@@ -175,7 +211,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
   // Sync local state when fresh leads come from props
   React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setLocalLeads(leads);
   }, [leads]);
 
@@ -194,7 +230,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   // Group leads by stage id
@@ -208,10 +244,10 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
         cols[lead.pipelineStageId].push(lead);
       } else if (stages.length > 0) {
         // Fallback: if lead has no valid stage, put it in the first stage (optional)
-        // cols[stages[0].id].push(lead); 
+        // cols[stages[0].id].push(lead);
       }
     });
-    
+
     // Sort leads inside columns by their internal order if needed, but for now we just keep array order
     return cols;
   }, [stages, localLeads]);
@@ -219,7 +255,7 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const activeData = active.data.current;
-    if (activeData?.type === 'Lead') {
+    if (activeData?.type === "Lead") {
       setActiveLead(activeData.lead);
     }
   };
@@ -233,16 +269,16 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
 
     if (activeId === overId) return;
 
-    const isActiveALead = active.data.current?.type === 'Lead';
-    const isOverALead = over.data.current?.type === 'Lead';
-    const isOverAColumn = over.data.current?.type === 'Column';
+    const isActiveALead = active.data.current?.type === "Lead";
+    const isOverALead = over.data.current?.type === "Lead";
+    const isOverAColumn = over.data.current?.type === "Column";
 
     if (!isActiveALead) return;
 
     setLocalLeads((prev) => {
       const activeItems = [...prev];
       const activeIndex = activeItems.findIndex((l) => l.id === activeId);
-      
+
       if (activeIndex === -1) return prev;
 
       let newStageId = activeItems[activeIndex].pipelineStageId;
@@ -250,15 +286,21 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
       if (isOverALead) {
         const overIndex = activeItems.findIndex((l) => l.id === overId);
         newStageId = activeItems[overIndex].pipelineStageId;
-        
+
         if (activeItems[activeIndex].pipelineStageId !== newStageId) {
-          activeItems[activeIndex] = { ...activeItems[activeIndex], pipelineStageId: newStageId };
+          activeItems[activeIndex] = {
+            ...activeItems[activeIndex],
+            pipelineStageId: newStageId,
+          };
           return arrayMove(activeItems, activeIndex, overIndex);
         }
       } else if (isOverAColumn) {
         newStageId = overId as string;
         if (activeItems[activeIndex].pipelineStageId !== newStageId) {
-          activeItems[activeIndex] = { ...activeItems[activeIndex], pipelineStageId: newStageId };
+          activeItems[activeIndex] = {
+            ...activeItems[activeIndex],
+            pipelineStageId: newStageId,
+          };
           return [...activeItems];
         }
       }
@@ -270,30 +312,36 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveLead(null);
     const { active, over } = event;
-    
+
     if (!over) return;
 
     const activeLeadId = active.id as string;
-    const activeLeadObj = leads.find(l => l.id === activeLeadId);
+    const activeLeadObj = leads.find((l) => l.id === activeLeadId);
     if (!activeLeadObj) return;
 
     const originalStageId = activeLeadObj.pipelineStageId;
-    
+
     // Find where it ended up in our local state
-    const currentLocalLead = localLeads.find(l => l.id === activeLeadId);
+    const currentLocalLead = localLeads.find((l) => l.id === activeLeadId);
     const newStageId = currentLocalLead?.pipelineStageId;
 
     if (newStageId && originalStageId !== newStageId) {
       // Optimistically update React Query Cache
-      queryClient.setQueryData(scopeKey(['/leads']), (oldData: unknown) => {
+      queryClient.setQueryData(["/leads"], (oldData: unknown) => {
         if (!oldData) return oldData;
-        const processItems = (items: LeadResponseDto[]) => items.map(item => 
-          item.id === activeLeadId ? { ...item, pipelineStageId: newStageId } : item
-        );
+        const processItems = (items: LeadResponseDto[]) =>
+          items.map((item) =>
+            item.id === activeLeadId
+              ? { ...item, pipelineStageId: newStageId }
+              : item,
+          );
 
         if (Array.isArray(oldData)) return processItems(oldData);
-        if (typeof oldData === 'object' && oldData !== null) {
-          const d = oldData as { items?: LeadResponseDto[], data?: LeadResponseDto[] };
+        if (typeof oldData === "object" && oldData !== null) {
+          const d = oldData as {
+            items?: LeadResponseDto[];
+            data?: LeadResponseDto[];
+          };
           if (d.items) return { ...d, items: processItems(d.items) };
           if (d.data) return { ...d, data: processItems(d.data) };
         }
@@ -301,20 +349,23 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
       });
 
       // Fire mutation
-      updateStageMutation.mutate({
-        id: activeLeadId,
-        data: { pipelineStageId: newStageId }
-      }, {
-        onSuccess: () => {
-          toast.success('Lead stage updated successfully');
+      updateStageMutation.mutate(
+        {
+          id: activeLeadId,
+          data: { pipelineStageId: newStageId },
         },
-        onError: () => {
-          toast.error('Failed to update lead stage');
-          // Revert local state and query cache on error
-          setLocalLeads(leads);
-          queryClient.invalidateQueries({ queryKey: scopeKey(['/leads']) });
-        }
-      });
+        {
+          onSuccess: () => {
+            toast.success("Lead stage updated successfully");
+          },
+          onError: () => {
+            toast.error("Failed to update lead stage");
+            // Revert local state and query cache on error
+            setLocalLeads(leads);
+            queryClient.invalidateQueries({ queryKey: ["/leads"] });
+          },
+        },
+      );
     }
   };
 
@@ -330,7 +381,9 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
     return (
       <div className="flex flex-col items-center justify-center h-[500px] text-brand-ice/40">
         <AlertCircle className="h-10 w-10 mb-4 text-brand-ice/20" />
-        <h3 className="text-lg font-semibold text-brand-ice">No Pipeline Stages</h3>
+        <h3 className="text-lg font-semibold text-brand-ice">
+          No Pipeline Stages
+        </h3>
         <p>You need to create pipeline stages before using the Kanban board.</p>
       </div>
     );
@@ -346,22 +399,26 @@ export function KanbanBoard({ leads, isLoading, onViewProfile, onOpenConversatio
         onDragEnd={handleDragEnd}
       >
         {stages.map((stage: Stage) => (
-          <KanbanColumn 
-            key={stage.id} 
-            stage={stage} 
-            leads={columns[stage.id] || []} 
+          <KanbanColumn
+            key={stage.id}
+            stage={stage}
+            leads={columns[stage.id] || []}
             onViewProfile={onViewProfile}
             onOpenConversation={onOpenConversation}
           />
         ))}
 
-        <DragOverlay dropAnimation={{
-          sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
-        }}>
+        <DragOverlay
+          dropAnimation={{
+            sideEffects: defaultDropAnimationSideEffects({
+              styles: { active: { opacity: "0.4" } },
+            }),
+          }}
+        >
           {activeLead ? (
-            <LeadCard 
-              lead={activeLead} 
-              isOverlay 
+            <LeadCard
+              lead={activeLead}
+              isOverlay
               onViewProfile={onViewProfile}
               onOpenConversation={onOpenConversation}
             />
@@ -379,21 +436,24 @@ interface KanbanColumnProps {
   onOpenConversation: (conversationId?: string) => void;
 }
 
-function KanbanColumn({ stage, leads, onViewProfile, onOpenConversation }: KanbanColumnProps) {
+function KanbanColumn({
+  stage,
+  leads,
+  onViewProfile,
+  onOpenConversation,
+}: KanbanColumnProps) {
   const { setNodeRef } = useSortable({
     id: stage.id,
     data: {
-      type: 'Column',
+      type: "Column",
       stage,
-    }
+    },
   });
 
-  const leadIds = useMemo(() => leads.map(l => l.id), [leads]);
+  const leadIds = useMemo(() => leads.map((l) => l.id), [leads]);
 
   return (
-    <div 
-      className="flex flex-col bg-brand-deep/50 rounded-xl border border-white/10 min-w-[320px] max-w-[320px] snap-center shrink-0 flex-1 overflow-hidden"
-    >
+    <div className="flex flex-col bg-brand-deep/50 rounded-xl border border-white/10 min-w-[320px] max-w-[320px] snap-center shrink-0 flex-1 overflow-hidden">
       <div className="p-4 bg-[#01081A]/50 border-b border-white/10 flex justify-between items-center sticky top-0 backdrop-blur-md z-10">
         <h3 className="font-bold text-brand-ice flex items-center gap-2">
           {stage.icon && <span className="text-lg">{stage.icon}</span>}
@@ -404,24 +464,26 @@ function KanbanColumn({ stage, leads, onViewProfile, onOpenConversation }: Kanba
         </Badge>
       </div>
 
-      <div 
+      <div
         ref={setNodeRef}
         className="flex-1 p-3 flex flex-col gap-3 overflow-y-auto min-h-[150px]"
       >
         <SortableContext items={leadIds} strategy={verticalListSortingStrategy}>
-          {leads.map(lead => (
-            <SortableLeadCard 
-              key={lead.id} 
-              lead={lead} 
+          {leads.map((lead) => (
+            <SortableLeadCard
+              key={lead.id}
+              lead={lead}
               onViewProfile={onViewProfile}
               onOpenConversation={onOpenConversation}
             />
           ))}
         </SortableContext>
-        
+
         {leads.length === 0 && (
           <div className="flex-1 border-2 border-dashed border-white/10 rounded-lg flex items-center justify-center">
-            <span className="text-sm font-medium text-brand-ice/40">Drop leads here</span>
+            <span className="text-sm font-medium text-brand-ice/40">
+              Drop leads here
+            </span>
           </div>
         )}
       </div>

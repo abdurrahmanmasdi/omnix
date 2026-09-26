@@ -1,10 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
-import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
-import { useSocket } from '@/hooks/useSocket';
+import { useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSocket } from "@/hooks/useSocket";
 import {
   useNotificationsControllerGetNotifications,
   useNotificationsControllerGetUnreadCount,
@@ -12,16 +11,16 @@ import {
   useNotificationsControllerMarkAllAsRead,
   getNotificationsControllerGetNotificationsQueryKey,
   getNotificationsControllerGetUnreadCountQueryKey,
-} from '@/lib/api/generated/notifications/notifications';
-import type { NotificationsControllerGetNotifications200Item } from '@/lib/api/model';
+} from "@/lib/api/generated/notifications/notifications";
+import type { NotificationsControllerGetNotifications200Item } from "@/lib/api/model";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Bell,
   CheckCheck,
@@ -31,33 +30,35 @@ import {
   FileText,
   AlertCircle,
   ExternalLink,
-} from 'lucide-react';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { toast } from "sonner";
 
 // ─── Helpers ────────────────────────────────────────────
 function getNotificationIcon(type?: string) {
   switch (type?.toUpperCase()) {
-    case 'LEAD':
+    case "LEAD":
       return <Users className="h-4 w-4 text-blue-500" />;
-    case 'CONVERSATION':
+    case "CONVERSATION":
       return <MessageSquare className="h-4 w-4 text-emerald-500" />;
-    case 'PIPELINE':
+    case "PIPELINE":
       return <Layers className="h-4 w-4 text-indigo-500" />;
-    case 'DOCUMENT':
+    case "DOCUMENT":
       return <FileText className="h-4 w-4 text-orange-500" />;
     default:
       return <AlertCircle className="h-4 w-4 text-slate-400" />;
   }
 }
 
-function getNotificationRoute(n: NotificationsControllerGetNotifications200Item): string | null {
+function getNotificationRoute(
+  n: NotificationsControllerGetNotifications200Item,
+): string | null {
   if (!n.referenceType || !n.referenceId) return null;
   switch (n.referenceType.toLowerCase()) {
-    case 'lead':
+    case "lead":
       return `/dashboard/leads?highlight=${n.referenceId}`;
-    case 'conversation':
+    case "conversation":
       return `/dashboard/conversations/${n.referenceId}`;
-    case 'pipeline-stage':
+    case "pipeline-stage":
       return `/dashboard/settings/pipeline-stages`;
     default:
       return null;
@@ -65,10 +66,10 @@ function getNotificationRoute(n: NotificationsControllerGetNotifications200Item)
 }
 
 function timeAgo(dateStr?: string): string {
-  if (!dateStr) return '';
+  if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -79,14 +80,14 @@ function timeAgo(dateStr?: string): string {
 export function NotificationBell() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const scopeKey = useTenantQueryKey();
   const { socket } = useSocket();
 
   // ─── Orval-generated hooks ────────────────────────────
-  const { data: notifications = [] } = useNotificationsControllerGetNotifications(
-    { limit: 20 },
-    { query: { refetchInterval: 60_000, staleTime: 30_000 } }
-  );
+  const { data: notifications = [] } =
+    useNotificationsControllerGetNotifications(
+      { limit: 20 },
+      { query: { refetchInterval: 60_000, staleTime: 30_000 } },
+    );
 
   const { data: unreadCount = 0 } = useNotificationsControllerGetUnreadCount({
     query: { refetchInterval: 30_000, staleTime: 15_000 },
@@ -99,28 +100,34 @@ export function NotificationBell() {
   useEffect(() => {
     if (!socket) return;
 
-    const handler = (payload: { title: string; body: string; type?: string }) => {
+    const handler = (payload: {
+      title: string;
+      body: string;
+      type?: string;
+    }) => {
       // Optimistically increment unread count
       queryClient.setQueryData<number>(
-        scopeKey(getNotificationsControllerGetUnreadCountQueryKey()),
-        (old) => (old ?? 0) + 1
+        getNotificationsControllerGetUnreadCountQueryKey(),
+        (old) => (old ?? 0) + 1,
       );
 
       // Invalidate the list to fetch the new item
       queryClient.invalidateQueries({
-        queryKey: scopeKey(getNotificationsControllerGetNotificationsQueryKey()),
+        queryKey: getNotificationsControllerGetNotificationsQueryKey(),
       });
 
-      if (payload.type === 'LEAD_HANDED_OFF') {
+      if (payload.type === "LEAD_HANDED_OFF") {
         toast.error(payload.title, {
           description: payload.body,
           duration: 10000,
         });
         // Attempt audio ping
         try {
-          const audio = new Audio('/sounds/ping.mp3');
+          const audio = new Audio("/sounds/ping.mp3");
           audio.volume = 0.5;
-          audio.play().catch(() => { /* silent failure if not interacted */ });
+          audio.play().catch(() => {
+            /* silent failure if not interacted */
+          });
         } catch {}
       } else {
         // Fire a system-wide toast
@@ -131,11 +138,11 @@ export function NotificationBell() {
       }
     };
 
-    socket.on('new_notification', handler);
+    socket.on("new_notification", handler);
     return () => {
-      socket.off('new_notification', handler);
+      socket.off("new_notification", handler);
     };
-  }, [socket, queryClient, scopeKey]);
+  }, [socket, queryClient]);
 
   // ─── Click → Mark Read + Route ────────────────────────
   const handleClickNotification = useCallback(
@@ -146,36 +153,36 @@ export function NotificationBell() {
           {
             onSuccess: () => {
               queryClient.invalidateQueries({
-                queryKey: scopeKey(getNotificationsControllerGetNotificationsQueryKey()),
+                queryKey: getNotificationsControllerGetNotificationsQueryKey(),
               });
               queryClient.invalidateQueries({
-                queryKey: scopeKey(getNotificationsControllerGetUnreadCountQueryKey()),
+                queryKey: getNotificationsControllerGetUnreadCountQueryKey(),
               });
             },
-          }
+          },
         );
       }
       const route = getNotificationRoute(notification);
       if (route) router.push(route);
     },
-    [markOneMutation, router, queryClient, scopeKey]
+    [markOneMutation, router, queryClient],
   );
 
   const handleMarkAllRead = useCallback(() => {
     markAllMutation.mutate(undefined, {
       onSuccess: () => {
         queryClient.invalidateQueries({
-          queryKey: scopeKey(getNotificationsControllerGetNotificationsQueryKey()),
+          queryKey: getNotificationsControllerGetNotificationsQueryKey(),
         });
         queryClient.setQueryData(
-          scopeKey(getNotificationsControllerGetUnreadCountQueryKey()),
-          0
+          getNotificationsControllerGetUnreadCountQueryKey(),
+          0,
         );
       },
     });
-  }, [markAllMutation, queryClient, scopeKey]);
+  }, [markAllMutation, queryClient]);
 
-  const count = typeof unreadCount === 'number' ? unreadCount : 0;
+  const count = typeof unreadCount === "number" ? unreadCount : 0;
 
   return (
     <Popover>
@@ -189,7 +196,7 @@ export function NotificationBell() {
           <Bell className="h-[18px] w-[18px] text-brand-ice/60" />
           {count > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-lg shadow-red-500/20 animate-in zoom-in duration-200">
-              {count > 99 ? '99+' : count}
+              {count > 99 ? "99+" : count}
             </span>
           )}
         </Button>
@@ -232,7 +239,9 @@ export function NotificationBell() {
                 <Bell className="h-5 w-5 text-slate-300" />
               </div>
               <p className="text-sm font-medium text-brand-ice/60">All quiet</p>
-              <p className="text-xs text-slate-400 mt-1">You have no notifications yet.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                You have no notifications yet.
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-white/5">
@@ -241,20 +250,28 @@ export function NotificationBell() {
                   key={n.id}
                   onClick={() => handleClickNotification(n)}
                   className={`w-full text-left px-5 py-3.5 flex items-start gap-3.5 hover:bg-[#051126]/80 transition-colors group ${
-                    !n.isRead ? 'bg-blue-50/30' : ''
+                    !n.isRead ? "bg-blue-50/30" : ""
                   }`}
                 >
-                  <div className={`mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    !n.isRead ? 'bg-transparent shadow-none border border-white/5' : 'bg-[#051126]'
-                  }`}>
+                  <div
+                    className={`mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${
+                      !n.isRead
+                        ? "bg-transparent shadow-none border border-white/5"
+                        : "bg-[#051126]"
+                    }`}
+                  >
                     {getNotificationIcon(n.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm leading-snug ${!n.isRead ? 'font-bold text-slate-900' : 'font-medium text-brand-ice/80'}`}>
+                    <p
+                      className={`text-sm leading-snug ${!n.isRead ? "font-bold text-slate-900" : "font-medium text-brand-ice/80"}`}
+                    >
                       {n.title}
                     </p>
                     {n.body && (
-                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{n.body}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
+                        {n.body}
+                      </p>
                     )}
                     <p className="text-[10px] font-medium text-slate-400 mt-1.5">
                       {timeAgo(n.createdAt)}
@@ -281,7 +298,7 @@ export function NotificationBell() {
                 variant="ghost"
                 size="sm"
                 className="text-xs font-bold text-brand-ice/60 hover:text-blue-600 h-8"
-                onClick={() => router.push('/dashboard/notifications')}
+                onClick={() => router.push("/dashboard/notifications")}
               >
                 View all notifications
               </Button>

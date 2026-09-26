@@ -1,18 +1,24 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useTenantQueryKey } from '@/hooks/useTenantQueryKey';
-import { Plus, Trash2, CheckCircle2, MessageCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  Plus,
+  Trash2,
+  CheckCircle2,
+  MessageCircle,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import {
   useChannelsControllerGetChannels,
   useChannelsControllerDeleteChannel,
-} from '@/lib/api/generated/channels/channels';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+} from "@/lib/api/generated/channels/channels";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -20,22 +26,32 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
-import { AddChannelModal } from '@/components/channels/AddChannelModal';
+import { AddChannelModal } from "@/components/channels/AddChannelModal";
 
 export default function ChannelsSettingsPage() {
   const queryClient = useQueryClient();
-  const scopeKey = useTenantQueryKey();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
 
   const { data: channelsData, isLoading } = useChannelsControllerGetChannels();
   const deleteChannelMutation = useChannelsControllerDeleteChannel();
 
-  const channels = (Array.isArray(channelsData) 
-    ? channelsData 
-    : (channelsData as unknown as { data?: unknown[]; items?: unknown[] })?.data || (channelsData as unknown as { data?: unknown[]; items?: unknown[] })?.items || []) as { id: string; provider: string; providerAccountId: string; createdAt: string }[];
+  const channels = (
+    Array.isArray(channelsData)
+      ? channelsData
+      : (channelsData as unknown as { data?: unknown[]; items?: unknown[] })
+          ?.data ||
+        (channelsData as unknown as { data?: unknown[]; items?: unknown[] })
+          ?.items ||
+        []
+  ) as {
+    id: string;
+    provider: string;
+    providerAccountId: string;
+    createdAt: string;
+  }[];
 
   const handleDelete = () => {
     if (!channelToDelete) return;
@@ -44,15 +60,15 @@ export default function ChannelsSettingsPage() {
       { id: channelToDelete },
       {
         onSuccess: () => {
-          toast.success('Channel disconnected successfully');
-          queryClient.invalidateQueries({ queryKey: scopeKey([`/channels`]) });
+          toast.success("Channel disconnected successfully");
+          queryClient.invalidateQueries({ queryKey: [`/channels`] });
           setChannelToDelete(null);
         },
         onError: () => {
-          toast.error('Failed to disconnect channel');
+          toast.error("Failed to disconnect channel");
           setChannelToDelete(null);
         },
-      }
+      },
     );
   };
 
@@ -88,9 +104,12 @@ export default function ChannelsSettingsPage() {
             <div className="h-16 w-16 bg-blue-100 text-brand-cyan rounded-2xl flex items-center justify-center mb-6 shadow-inner">
               <MessageCircle className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-bold text-brand-ice mb-2">No Channels Connected</h3>
+            <h3 className="text-xl font-bold text-brand-ice mb-2">
+              No Channels Connected
+            </h3>
             <p className="text-brand-ice/60 max-w-md font-medium mb-8">
-              Connect WhatsApp or other messaging platforms to allow your AI agent to communicate with leads instantly.
+              Connect WhatsApp or other messaging platforms to allow your AI
+              agent to communicate with leads instantly.
             </p>
             <Button
               onClick={() => setIsAddModalOpen(true)}
@@ -103,62 +122,86 @@ export default function ChannelsSettingsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {channels.map((channel: { id: string; provider: string; providerAccountId: string; createdAt: string }) => (
-            <Card key={channel.id} className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
-                      <MessageCircle className="h-5 w-5" />
+          {channels.map(
+            (channel: {
+              id: string;
+              provider: string;
+              providerAccountId: string;
+              createdAt: string;
+            }) => (
+              <Card
+                key={channel.id}
+                className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10"
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
+                        <MessageCircle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-brand-ice leading-none mb-1">
+                          {channel.provider}
+                        </h3>
+                        <Badge
+                          variant="outline"
+                          className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-wider"
+                        >
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Active
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mt-6 pt-6 border-t border-white/10">
+                    <div>
+                      <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
+                        Account ID
+                      </p>
+                      <p className="font-medium text-brand-ice/80 text-sm truncate">
+                        {channel.providerAccountId}
+                      </p>
                     </div>
                     <div>
-                      <h3 className="font-bold text-brand-ice leading-none mb-1">
-                        {channel.provider}
-                      </h3>
-                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-wider">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Active
-                      </Badge>
+                      <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
+                        Connected On
+                      </p>
+                      <p className="font-medium text-brand-ice/80 text-sm">
+                        {new Date(channel.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-3 mt-6 pt-6 border-t border-white/10">
-                  <div>
-                    <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">Account ID</p>
-                    <p className="font-medium text-brand-ice/80 text-sm truncate">{channel.providerAccountId}</p>
+                  <div className="mt-6 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      onClick={() => setChannelToDelete(channel.id)}
+                      className="text-red-400 hover:text-red-400 hover:bg-red-500/10 h-9 font-bold"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Disconnect
+                    </Button>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">Connected On</p>
-                    <p className="font-medium text-brand-ice/80 text-sm">{new Date(channel.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setChannelToDelete(channel.id)}
-                    className="text-red-400 hover:text-red-400 hover:bg-red-500/10 h-9 font-bold"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Disconnect
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ),
+          )}
         </div>
       )}
 
       {/* Add Modal */}
-      <AddChannelModal 
-        isOpen={isAddModalOpen} 
-        onOpenChange={setIsAddModalOpen} 
+      <AddChannelModal
+        isOpen={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
       />
 
       {/* Delete Confirmation Modal */}
-      <Dialog open={!!channelToDelete} onOpenChange={(open) => !open && setChannelToDelete(null)}>
+      <Dialog
+        open={!!channelToDelete}
+        onOpenChange={(open) => !open && setChannelToDelete(null)}
+      >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center text-red-400 font-bold text-xl">
@@ -166,7 +209,9 @@ export default function ChannelsSettingsPage() {
               Disconnect Channel
             </DialogTitle>
             <DialogDescription className="text-brand-ice/60 font-medium pt-2">
-              Are you sure you want to disconnect this channel? Your AI agent will no longer be able to send or receive messages through this provider. This action cannot be undone.
+              Are you sure you want to disconnect this channel? Your AI agent
+              will no longer be able to send or receive messages through this
+              provider. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6 gap-2">
@@ -192,7 +237,7 @@ export default function ChannelsSettingsPage() {
                   Disconnecting...
                 </>
               ) : (
-                'Disconnect'
+                "Disconnect"
               )}
             </Button>
           </DialogFooter>
