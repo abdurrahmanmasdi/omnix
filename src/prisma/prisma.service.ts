@@ -37,7 +37,7 @@ export class PrismaService
 
     const pool = new Pool({ connectionString: databaseUrl });
     super({
-      adapter: new PrismaPg(pool),
+      adapter: new PrismaPg(pool, { disposeExternalPool: true }),
     });
 
     const self = this;

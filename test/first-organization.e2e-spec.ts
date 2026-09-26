@@ -1,233 +1,482 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { Client } from 'pg';
+import type { Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import { AppModule } from './../src/app.module';
-import { PrismaService } from './../src/prisma/prisma.service';
+import { AuthModule } from '../src/auth/auth.module';
+import { InvitationsService } from '../src/auth/invitations.service';
+import { OrganizationsModule } from '../src/organizations/organizations.module';
+import { PrismaModule } from '../src/prisma/prisma.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { TenantMiddleware } from '../src/core/tenant/tenant.middleware';
+import { tenantStorage } from '../src/core/tenant/tenant.context';
+import { ChannelsController } from '../src/channels/channels.controller';
+import { ChannelsService } from '../src/channels/channels.service';
+import { WhatsappService } from '../src/webhooks/whatsapp.service';
+import { InstagramService } from '../src/webhooks/instagram.service';
+import { CredentialsService } from '../src/credentials/credentials.service';
+import { HubspotAdapter } from '../src/modules/integration/crm/adapters/hubspot.adapter';
+import { safeDeploy } from '../src/credentials/deploy-cli';
 
-describe('First Organization Onboarding (e2e)', () => {
-  let app: INestApplication;
-  let prisma: PrismaService;
-  let accessToken: string;
-  let userEmail: string;
+jest.setTimeout(120_000);
+const password = 'Synthetic-pilot-password-123';
+const operator = 'synthetic-operator';
+const root = resolve(__dirname, '..');
+let app: INestApplication<Server>;
+let prisma: PrismaService;
+let invitations: InvitationsService;
+let admin: Client;
+let dbName: string;
+const body = (token: string) => ({
+  token,
+  password,
+  firstName: 'Synthetic',
+  lastName: 'Founder',
+});
+const workspace = (slug = `clinic-${randomUUID()}`) => ({
+  name: 'Synthetic Clinic',
+  slug,
+});
+const system = <T>(fn: () => Promise<T>) =>
+  tenantStorage.run({ isSystemBypass: true }, async () => await fn());
 
-  beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-
-    // Match production bootstrap exactly
-    const cookieParser = require('cookie-parser');
-    app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-
-    await app.init();
-    prisma = app.get(PrismaService);
+beforeAll(async () => {
+  const adminUrl = process.env.UPGRADE_TEST_ADMIN_URL;
+  if (!adminUrl || new URL(adminUrl).hostname !== '127.0.0.1')
+    throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
+  admin = new Client({ connectionString: adminUrl });
+  await admin.connect();
+  dbName = `omnidesk_s03_${randomUUID().replaceAll('-', '')}`;
+  await admin.query(`CREATE DATABASE "${dbName}"`);
+  const url = new URL(adminUrl);
+  url.pathname = `/${dbName}`;
+  process.env.DATABASE_URL = url.toString();
+  process.env.JWT_ACCESS_SECRET = 'synthetic-access-secret';
+  process.env.JWT_REFRESH_SECRET = 'synthetic-refresh-secret';
+  process.env.JWT_ACCESS_EXPIRATION = '15m';
+  process.env.JWT_REFRESH_EXPIRATION = '7d';
+  await safeDeploy(root);
+  const module = await Test.createTestingModule({
+    imports: [
+      ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+      PrismaModule,
+      AuthModule,
+      OrganizationsModule,
+    ],
+    controllers: [ChannelsController],
+    providers: [
+      ChannelsService,
+      { provide: WhatsappService, useValue: {} },
+      { provide: InstagramService, useValue: {} },
+      { provide: CredentialsService, useValue: {} },
+      { provide: HubspotAdapter, useValue: {} },
+    ],
+  }).compile();
+  app = module.createNestApplication<INestApplication<Server>>({
+    logger: false,
   });
+  app.use(cookieParser());
+  const middleware = new TenantMiddleware();
+  app.use(middleware.use.bind(middleware));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  await app.init();
+  prisma = app.get(PrismaService);
+  invitations = app.get(InvitationsService);
+});
 
-  afterAll(async () => {
-    await app.close();
-  });
-
-  // Helper: sign up a new user and return the access token
-  async function signupUser(
-    email: string,
-    firstName = 'Test',
-    lastName = 'Founder',
-  ): Promise<string> {
-    const res = await request(app.getHttpServer())
-      .post('/auth/signup')
-      .send({
-        email,
-        password: 'password123',
-        firstName,
-        lastName,
-      })
-      .expect(201);
-
-    return res.body.access_token;
+afterAll(async () => {
+  if (app) await app.close();
+  if (admin) {
+    if (dbName && /^omnidesk_s03_[a-f0-9]{32}$/.test(dbName))
+      await admin.query(`DROP DATABASE "${dbName}" WITH (FORCE)`);
+    await admin.end();
   }
+});
 
-  it('should signup and get a token without an organization', async () => {
-    userEmail = `test-org-${Date.now()}@example.com`;
-    accessToken = await signupUser(userEmail);
-    expect(accessToken).toBeDefined();
+async function invited() {
+  const email = `${randomUUID()}@example.invalid`;
+  return { email, ...(await invitations.issue(email, operator)) };
+}
+async function active() {
+  const invitation = await invited();
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send(body(invitation.token))
+    .expect(200);
+  const login = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({ email: invitation.email, password })
+    .expect(200);
+  return { ...invitation, accessToken: login.body.access_token as string };
+}
 
-    // The token should have no organizationId (user has no org yet)
-    const payload = JSON.parse(
-      Buffer.from(accessToken.split('.')[1], 'base64').toString(),
-    );
-    expect(payload.organizationId).toBeNull();
-  });
+it('rejects public signup and the legacy reusable verification route without creating a user', async () => {
+  const count = await prisma.user.count();
+  const res = await request(app.getHttpServer())
+    .post('/auth/signup')
+    .send({
+      email: 'public@example.invalid',
+      password,
+      firstName: 'Synthetic',
+      lastName: 'Public',
+    })
+    .expect(403);
+  expect(res.headers['set-cookie']).toBeUndefined();
+  await request(app.getHttpServer())
+    .get('/auth/verify-email?token=synthetic')
+    .expect(410);
+  expect(await prisma.user.count()).toBe(count);
+});
 
-  it('should not be able to call a tenant endpoint without an organization', async () => {
-    // The JWT strategy (jwt-auth) rejects tokens that lack organizationId
+it('uses the operator CLI invitation → acceptance → login → workspace → tenant endpoint, without direct DB activation', async () => {
+  const email = `${randomUUID()}@example.invalid`;
+  const dir = mkdtempSync(join(tmpdir(), 'omnidesk-invite-test-'));
+  try {
+    const output = join(dir, 'invitation.txt');
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        '-r',
+        'ts-node/register',
+        'src/auth/invite-cli.ts',
+        '--email',
+        email,
+        '--operator',
+        operator,
+        '--origin',
+        'http://localhost:3001',
+        '--output',
+        output,
+      ],
+      { cwd: root, env: process.env, stdio: 'pipe' },
+    ).toString();
+    const link = new URL(readFileSync(output, 'utf8').trim());
+    const token = new URLSearchParams(link.hash.slice(1)).get('token')!;
+    expect(statSync(output).mode & 0o777).toBe(0o600);
+    expect(stdout.includes(token)).toBe(false);
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    expect(user.status).toBe('PENDING');
     await request(app.getHttpServer())
-      .get('/conversations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(401);
-  });
-
-  it('should reject organization creation for a PENDING user', async () => {
-    // Signup creates users with status=PENDING.
-    // UserJwtStrategy now enforces ACTIVE status.
-    await request(app.getHttpServer())
-      .post('/organizations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        name: 'Test Clinic',
-        slug: `test-clinic-pending-${Date.now()}`,
-        industry_category: 'MEDICAL',
-      })
-      .expect(401);
-  });
-
-  it('should create the first organization after email verification', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/organizations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        name: 'Test Clinic',
-        slug: `test-clinic-${Date.now()}`,
-        industry_category: 'MEDICAL',
-      })
-      .expect(201);
-
-    expect(res.body.organizationId).toBeDefined();
-    expect(res.body.access_token).toBeDefined();
-
-    // The new token should contain the organizationId
-    const payload = JSON.parse(
-      Buffer.from(res.body.access_token.split('.')[1], 'base64').toString(),
-    );
-    expect(payload.organizationId).toBe(res.body.organizationId);
-    expect(payload.roleId).toBeDefined();
-
-    // Use the newly returned access token for subsequent requests
-    accessToken = res.body.access_token;
-  });
-
-  it('should have provisioned roles, permissions, membership, and persona', async () => {
-    const payload = JSON.parse(
-      Buffer.from(accessToken.split('.')[1], 'base64').toString(),
-    );
-    const orgId = payload.organizationId;
-
-    // Verify the AI persona was created
-    const persona = await prisma.aiPersona.findUnique({
-      where: { organizationId: orgId },
-    });
-    expect(persona).not.toBeNull();
-    expect(persona!.clinicName).toBe('Test Clinic');
-
-    // Verify roles were provisioned (Super Admin, Manager, Agent)
-    const roles = await prisma.role.findMany({
-      where: { organizationId: orgId },
-      orderBy: { name: 'asc' },
-    });
-    const roleNames = roles.map((r) => r.name).sort();
-    expect(roleNames).toEqual(['Agent', 'Manager', 'Super Admin']);
-
-    // Verify the user has an ACTIVE membership with Super Admin role
-    const membership = await prisma.organizationMembership.findFirst({
-      where: {
-        userId: payload.sub,
-        organizationId: orgId,
-        status: 'ACTIVE',
-        deletedAt: null,
-      },
-      include: { role: true },
-    });
-    expect(membership).not.toBeNull();
-    expect(membership!.role.name).toBe('Super Admin');
-
-    // Verify role permissions were granted
-    const superAdminRole = roles.find((r) => r.name === 'Super Admin');
-    const rolePerms = await prisma.rolePermission.findMany({
-      where: { roleId: superAdminRole!.id },
-    });
-    expect(rolePerms.length).toBeGreaterThan(0);
-  });
-
-  it('should handle duplicate organization slugs by throwing conflict', async () => {
-    const userEmail2 = `test-org2-${Date.now()}@example.com`;
-    await signupUser(userEmail2);
-
-    // Re-login to get a fresh token (signup token was for PENDING status)
-    const loginRes2 = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: userEmail2, password: 'password123' })
+      .send({ email, password })
+      .expect(401);
+    const stored = await prisma.accountInvitation.findFirstOrThrow({
+      where: { userId: user.id },
+    });
+    expect(stored.tokenHash === token).toBe(false);
+    const accepted = await request(app.getHttpServer())
+      .post('/auth/accept-invitation')
+      .send(body(token))
       .expect(200);
-    const accessToken2 = loginRes2.body.access_token;
-
-    // user2 creates org with a known slug
-    const duplicateSlug = `test-clinic-duplicate-${Date.now()}`;
-    await request(app.getHttpServer())
-      .post('/organizations')
-      .set('Authorization', `Bearer ${accessToken2}`)
-      .send({
-        name: 'Test Clinic 2',
-        slug: duplicateSlug,
-        industry_category: 'MEDICAL',
-      })
-      .expect(201);
-
-    // user3 tries to create org with the same slug → 409 Conflict
-    const userEmail3 = `test-org3-${Date.now()}@example.com`;
-    await signupUser(userEmail3);
-
-    const loginRes3 = await request(app.getHttpServer())
+    expect(accepted.headers['set-cookie']).toBeUndefined();
+    expect(accepted.body.access_token).toBeUndefined();
+    const login = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: userEmail3, password: 'password123' })
+      .send({ email, password })
       .expect(200);
-    const accessToken3 = loginRes3.body.access_token;
+    expect(login.headers['set-cookie'][0]).toContain('HttpOnly');
+    await request(app.getHttpServer())
+      .get('/channels')
+      .auth(login.body.access_token as string, { type: 'bearer' })
+      .expect(401);
+    const created = await request(app.getHttpServer())
+      .post('/organizations')
+      .auth(login.body.access_token as string, { type: 'bearer' })
+      .send(workspace())
+      .expect(201);
+    const orgId = created.body.organizationId as string;
+    await request(app.getHttpServer())
+      .get('/channels')
+      .auth(created.body.access_token as string, { type: 'bearer' })
+      .expect(200, []);
+    await system(async () => {
+      expect(
+        await prisma.aiPersona.count({ where: { organizationId: orgId } }),
+      ).toBe(1);
+      const roles = await prisma.role.findMany({
+        where: { organizationId: orgId },
+      });
+      expect(roles.map((role) => role.name).sort()).toEqual([
+        'Agent',
+        'Manager',
+        'Super Admin',
+      ]);
+      expect(
+        await prisma.rolePermission.count({
+          where: { roleId: { in: roles.map((role) => role.id) } },
+        }),
+      ).toBeGreaterThan(0);
+      expect(
+        await prisma.organizationMembership.count({
+          where: { organizationId: orgId, userId: user.id, status: 'ACTIVE' },
+        }),
+      ).toBe(1);
+    });
+    expect(
+      (
+        await prisma.accountActivationEvent.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'asc' },
+        })
+      ).map((event) => event.action),
+    ).toEqual(['ISSUED', 'ACCEPTED']);
+    await request(app.getHttpServer())
+      .post('/auth/accept-invitation')
+      .send(body(token))
+      .expect(401);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
+it.each(['expired', 'revoked', 'wrong-purpose'] as const)(
+  'rejects a %s invitation without activating the account',
+  async (kind) => {
+    const invite = await invited();
+    if (kind === 'expired')
+      await prisma.accountInvitation.update({
+        where: { id: invite.invitationId },
+        data: { expiresAt: new Date(0) },
+      });
+    if (kind === 'revoked')
+      await invitations.revoke(invite.invitationId, operator);
+    if (kind === 'wrong-purpose')
+      await prisma.accountInvitation.update({
+        where: { id: invite.invitationId },
+        data: { purpose: 'EMAIL_VERIFICATION' },
+      });
+    await request(app.getHttpServer())
+      .post('/auth/accept-invitation')
+      .send(body(invite.token))
+      .expect(401);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: invite.userId } }))
+        .status,
+    ).toBe('PENDING');
+  },
+);
+
+it('rejects a forged token, malformed fields and an attempt to choose a different email', async () => {
+  const invite = await invited();
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send(body('0'.repeat(64)))
+    .expect(401);
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send({ ...body(invite.token), email: 'other@example.invalid' })
+    .expect(400);
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send({ ...body(invite.token), password: 'short' })
+    .expect(400);
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send({ ...body(invite.token), firstName: '   ' })
+    .expect(400);
+  expect(
+    (await prisma.user.findUniqueOrThrow({ where: { id: invite.userId } }))
+      .status,
+  ).toBe('PENDING');
+});
+
+it('accepts a capability exactly once under simultaneous requests', async () => {
+  const invite = await invited();
+  const responses = await Promise.all(
+    [1, 2].map(() =>
+      request(app.getHttpServer())
+        .post('/auth/accept-invitation')
+        .send(body(invite.token)),
+    ),
+  );
+  expect(responses.map((res) => res.status).sort()).toEqual([200, 401]);
+  expect(
+    await prisma.accountActivationEvent.count({
+      where: { invitationId: invite.invitationId, action: 'ACCEPTED' },
+    }),
+  ).toBe(1);
+});
+
+it('rate limits operator reissue, revokes old invitations and audits replacement', async () => {
+  const invite = await invited();
+  await expect(invitations.issue(invite.email, operator)).rejects.toThrow(
+    'INVITATION_ISSUE_RATE_LIMIT',
+  );
+  await prisma.accountInvitation.update({
+    where: { id: invite.invitationId },
+    data: { createdAt: new Date(Date.now() - 61_000) },
+  });
+  const replacement = await invitations.issue(invite.email, operator);
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send(body(invite.token))
+    .expect(401);
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send(body(replacement.token))
+    .expect(200);
+});
+
+it.each(['PENDING', 'SUSPENDED', 'DELETED'] as const)(
+  'rejects %s users at login and first-workspace authorization',
+  async (status) => {
+    const account = await active();
+    await prisma.user.update({
+      where: { id: account.userId },
+      data: status === 'DELETED' ? { deletedAt: new Date() } : { status },
+    });
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: account.email, password })
+      .expect(401);
     await request(app.getHttpServer())
       .post('/organizations')
-      .set('Authorization', `Bearer ${accessToken3}`)
-      .send({
-        name: 'Test Clinic 3',
-        slug: duplicateSlug,
-        industry_category: 'MEDICAL',
-      })
-      .expect(409);
+      .auth(account.accessToken, { type: 'bearer' })
+      .send(workspace())
+      .expect(401);
+  },
+);
+
+it('does not activate a suspended account with an older pending invitation', async () => {
+  const invite = await invited();
+  await prisma.user.update({
+    where: { id: invite.userId },
+    data: { status: 'SUSPENDED' },
   });
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send(body(invite.token))
+    .expect(401);
+  await expect(invitations.issue(invite.email, operator)).rejects.toThrow(
+    'INVITATION_ACCOUNT_NOT_PENDING',
+  );
+});
 
-  it('should call a protected tenant endpoint using the updated token', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/conversations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
+it('returns one workspace for simultaneous first-workspace requests and repeats', async () => {
+  const account = await active();
+  const responses = await Promise.all(
+    [1, 2].map(() =>
+      request(app.getHttpServer())
+        .post('/organizations')
+        .auth(account.accessToken, { type: 'bearer' })
+        .send(workspace()),
+    ),
+  );
+  expect(responses.map((res) => res.status)).toEqual([201, 201]);
+  expect(responses[0].body.organizationId).toBe(
+    responses[1].body.organizationId,
+  );
+  await system(async () =>
+    expect(
+      await prisma.organizationMembership.count({
+        where: { userId: account.userId },
+      }),
+    ).toBe(1),
+  );
+});
 
-    // The conversations endpoint returns an array (empty for a new org)
-    expect(Array.isArray(res.body)).toBeTruthy();
-  });
-
-  it('should not create duplicate membership on repeated workspace creation', async () => {
-    // user1 already has an org — calling createWorkspace again should return
-    // the existing organizationId (idempotent), not create a second membership.
-    const res = await request(app.getHttpServer())
-      .post('/organizations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        name: 'Another Clinic',
-        slug: `another-clinic-${Date.now()}`,
-        industry_category: 'MEDICAL',
-      })
-      .expect(201);
-
-    // Should return the same org ID (existing membership detected)
-    const payload = JSON.parse(
-      Buffer.from(accessToken.split('.')[1], 'base64').toString(),
+it('returns 409 for a competing slug and leaves the losing user unprovisioned', async () => {
+  const accounts = [await active(), await active()];
+  const dto = workspace();
+  const responses = await Promise.all(
+    accounts.map((account) =>
+      request(app.getHttpServer())
+        .post('/organizations')
+        .auth(account.accessToken, { type: 'bearer' })
+        .send(dto),
+    ),
+  );
+  expect(responses.map((res) => res.status).sort()).toEqual([201, 409]);
+  const loser = accounts[responses.findIndex((res) => res.status === 409)];
+  await system(async () => {
+    expect(await prisma.organization.count({ where: { slug: dto.slug } })).toBe(
+      1,
     );
-    expect(res.body.organizationId).toBe(payload.organizationId);
+    expect(
+      await prisma.organizationMembership.count({
+        where: { userId: loser.userId },
+      }),
+    ).toBe(0);
   });
+});
+
+it('rolls back organization, persona, roles and permissions when membership creation fails', async () => {
+  const account = await active();
+  const dto = workspace();
+  const before = await system(async () => ({
+    roles: await prisma.role.count(),
+    personas: await prisma.aiPersona.count(),
+    grants: await prisma.rolePermission.count(),
+  }));
+  await prisma.$executeRawUnsafe(
+    `CREATE FUNCTION reject_test_membership() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic provisioning failure'; END $$`,
+  );
+  await prisma.$executeRawUnsafe(
+    'CREATE TRIGGER reject_test_membership BEFORE INSERT ON organization_memberships FOR EACH ROW EXECUTE FUNCTION reject_test_membership()',
+  );
+  try {
+    await request(app.getHttpServer())
+      .post('/organizations')
+      .auth(account.accessToken, { type: 'bearer' })
+      .send(dto)
+      .expect(500);
+    await system(async () => {
+      expect(
+        await prisma.organization.count({ where: { slug: dto.slug } }),
+      ).toBe(0);
+      expect(
+        await prisma.organizationMembership.count({
+          where: { userId: account.userId },
+        }),
+      ).toBe(0);
+      expect(await prisma.role.count()).toBe(before.roles);
+      expect(await prisma.aiPersona.count()).toBe(before.personas);
+      expect(await prisma.rolePermission.count()).toBe(before.grants);
+    });
+  } finally {
+    await prisma.$executeRawUnsafe(
+      'DROP TRIGGER reject_test_membership ON organization_memberships',
+    );
+    await prisma.$executeRawUnsafe('DROP FUNCTION reject_test_membership()');
+  }
+});
+
+it('rejects a tenant token after membership revocation or account deletion', async () => {
+  const account = await active();
+  const created = await request(app.getHttpServer())
+    .post('/organizations')
+    .auth(account.accessToken, { type: 'bearer' })
+    .send(workspace())
+    .expect(201);
+  await system(() =>
+    prisma.organizationMembership.updateMany({
+      where: { userId: account.userId },
+      data: { deletedAt: new Date() },
+    }),
+  );
+  await request(app.getHttpServer())
+    .get('/channels')
+    .auth(created.body.access_token as string, { type: 'bearer' })
+    .expect(401);
+  await prisma.user.update({
+    where: { id: account.userId },
+    data: { deletedAt: new Date() },
+  });
+  await request(app.getHttpServer())
+    .get('/channels')
+    .auth(created.body.access_token as string, { type: 'bearer' })
+    .expect(401);
 });

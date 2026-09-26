@@ -25,3 +25,4 @@ prisma/*.db
 /.nyc_output
 
 /uploads
+.credential-deploy-*/

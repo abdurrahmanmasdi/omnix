@@ -5,20 +5,23 @@ import { NotificationEmitterService } from '../notifications/notification-emitte
 import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
-import { LeadStatus, Priority } from '@prisma/client';
-import { PermissionService } from '../auth/permission.service';
+import { LeadStatus } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { Logger } from '@nestjs/common';
 
 describe('ActionExecutorService', () => {
   let service: ActionExecutorService;
   let prismaService: PrismaService;
+  let eventsGateway: EventsGateway;
+  let auditService: AuditService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ActionExecutorService,
         {
-          provide: require('../audit/audit.service').AuditService,
-          useValue: { log: jest.fn() },
+          provide: AuditService,
+          useValue: { record: jest.fn().mockResolvedValue(undefined) },
         },
         {
           provide: PrismaService,
@@ -32,13 +35,11 @@ describe('ActionExecutorService', () => {
               create: jest.fn(),
             },
             $transaction: jest.fn(),
+            notification: {
+              create: jest.fn(),
+            },
             organizationMembership: {
-              findMany: jest.fn().mockResolvedValue([
-                {
-                  provide: PermissionService,
-                  useValue: { has: jest.fn().mockResolvedValue(true) },
-                },
-              ]),
+              findMany: jest.fn().mockResolvedValue([{ userId: 'staff-1' }]),
             },
           },
         },
@@ -51,6 +52,7 @@ describe('ActionExecutorService', () => {
           useValue: {
             broadcastLeadUpdate: jest.fn(),
             broadcastConversationUpdate: jest.fn(),
+            broadcastNotification: jest.fn(),
           },
         },
         {
@@ -66,14 +68,225 @@ describe('ActionExecutorService', () => {
 
     service = module.get<ActionExecutorService>(ActionExecutorService);
     prismaService = module.get<PrismaService>(PrismaService);
+    eventsGateway = module.get<EventsGateway>(EventsGateway);
+    auditService = module.get<AuditService>(AuditService);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('handoff contract', () => {
+    const conversation = {
+      id: 'trusted-conv',
+      organizationId: 'org-1',
+      leadId: 'lead-1',
+      lead: { id: 'lead-1', organizationId: 'org-1', status: LeadStatus.NEW },
+      aiPaused: false,
+    };
+
+    const handoff = (payload = '{}') =>
+      service.executeActions('org-1', 'trusted-conv', [
+        { type: 'HANDOFF_TO_HUMAN', payload },
+      ]);
+
+    beforeEach(() => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue(
+        conversation,
+      );
+      (prismaService.conversation.update as jest.Mock).mockResolvedValue({
+        ...conversation,
+        aiPaused: true,
+      });
+      (prismaService.lead.update as jest.Mock).mockResolvedValue({
+        ...conversation.lead,
+        status: LeadStatus.HANDED_OFF,
+      });
+      (prismaService.notification.create as jest.Mock).mockImplementation(
+        ({ data }) => Promise.resolve({ id: 'notification-1', ...data }),
+      );
+      (prismaService.$transaction as jest.Mock).mockImplementation((callback) =>
+        callback(prismaService),
+      );
+    });
+
+    it('persists the pause, lead state and notification together before broadcasting', async () => {
+      (eventsGateway.broadcastNotification as jest.Mock).mockImplementation(
+        () => {
+          expect(prismaService.notification.create).toHaveBeenCalledTimes(1);
+          expect(prismaService.$transaction).toHaveBeenCalledTimes(1);
+        },
+      );
+
+      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.conversation.update).toHaveBeenCalledWith({
+        where: { id: 'trusted-conv', organizationId: 'org-1' },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
+      });
+      expect(prismaService.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1', organizationId: 'org-1' },
+        data: { status: 'HANDED_OFF' },
+      });
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: {
+          organizationId: 'org-1',
+          userId: 'staff-1',
+          type: 'LEAD_HANDED_OFF',
+          title: 'Human Intervention Required',
+          body: 'Requires human attention',
+          referenceId: 'lead-1',
+          referenceType: 'LEAD',
+        },
+      });
+      expect(eventsGateway.broadcastNotification).toHaveBeenCalledWith(
+        'staff-1',
+        expect.objectContaining({ id: 'notification-1' }),
+      );
+      expect(auditService.record).not.toHaveBeenCalled();
+    });
+
+    it.each(['{', 'null', '[]', '"handoff"', 'true', '12'])(
+      'rejects malformed or non-object payload %s before writes',
+      async (payload) => {
+        expect(await handoff(payload)).toEqual({
+          executed: 0,
+          rejected: 1,
+          failed: 0,
+        });
+        expect(prismaService.$transaction).not.toHaveBeenCalled();
+        expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
+      },
+    );
+
+    it('cannot redirect a handoff using model-supplied tenant, lead or recipient IDs', async () => {
+      expect(
+        await handoff(
+          JSON.stringify({
+            organizationId: 'org-2',
+            conversationId: 'other-conv',
+            lead_id: 'other-lead',
+            userId: 'other-staff',
+            reason: 'Requested staff',
+          }),
+        ),
+      ).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.conversation.findFirst).toHaveBeenCalledWith({
+        where: { id: 'trusted-conv', organizationId: 'org-1' },
+        include: { lead: true },
+      });
+      expect(prismaService.lead.update).toHaveBeenCalledWith({
+        where: { id: 'lead-1', organizationId: 'org-1' },
+        data: { status: 'HANDED_OFF' },
+      });
+      expect(
+        prismaService.organizationMembership.findMany,
+      ).toHaveBeenCalledWith({
+        where: {
+          organizationId: 'org-1',
+          status: 'ACTIVE',
+          deletedAt: null,
+          user: { status: 'ACTIVE', deletedAt: null },
+        },
+        select: { userId: true },
+      });
+    });
+
+    it('does not hand off a conversation outside the worker tenant', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue(
+        null,
+      );
+      expect(await handoff()).toEqual({ executed: 0, rejected: 0, failed: 1 });
+      expect(prismaService.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cross-tenant linked lead before writes', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        ...conversation,
+        lead: { ...conversation.lead, organizationId: 'org-2' },
+      });
+      expect(await handoff()).toEqual({ executed: 0, rejected: 0, failed: 1 });
+      expect(prismaService.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('keeps AI paused and records the existing no-staff audit outcome', async () => {
+      (
+        prismaService.organizationMembership.findMany as jest.Mock
+      ).mockResolvedValue([]);
+      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.conversation.update).toHaveBeenCalled();
+      expect(prismaService.notification.create).not.toHaveBeenCalled();
+      expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
+      expect(auditService.record).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        action: 'ai.handoff_failed_no_staff',
+        targetId: 'trusted-conv',
+        actor: 'ai',
+        metadata: { reason: 'Requires human attention' },
+      });
+    });
+
+    it('uses the conversation reference when there is no linked lead', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        ...conversation,
+        leadId: null,
+        lead: null,
+      });
+      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.lead.update).not.toHaveBeenCalled();
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          referenceId: 'trusted-conv',
+          referenceType: 'CONVERSATION',
+        }),
+      });
+    });
+
+    it('reports synchronous and asynchronous broadcast failures without replaying committed actions', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      (eventsGateway.broadcastNotification as jest.Mock).mockImplementation(
+        () => {
+          throw new Error('Sensitive transport detail');
+        },
+      );
+      (eventsGateway.broadcastLeadUpdate as jest.Mock).mockRejectedValue(
+        new Error('Sensitive transport detail'),
+      );
+      (
+        eventsGateway.broadcastConversationUpdate as jest.Mock
+      ).mockRejectedValue(new Error('Sensitive transport detail'));
+      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      for (const event of ['notification', 'lead', 'conversation']) {
+        expect(warn).toHaveBeenCalledWith(
+          `ACTION_BROADCAST_FAILED event=${event} conversationId=trusted-conv`,
+        );
+      }
+      expect(warn).toHaveBeenCalledTimes(3);
+      expect(prismaService.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a transaction failure and does not emit a notification', async () => {
+      (prismaService.$transaction as jest.Mock).mockRejectedValue(
+        new Error('Transaction failed'),
+      );
+      expect(await handoff()).toEqual({ executed: 0, rejected: 0, failed: 1 });
+      expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
+      expect(eventsGateway.broadcastLeadUpdate).not.toHaveBeenCalled();
+      expect(eventsGateway.broadcastConversationUpdate).not.toHaveBeenCalled();
+    });
+
+    it('preserves duplicate handling for an already paused conversation', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        ...conversation,
+        aiPaused: true,
+      });
+      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.$transaction).not.toHaveBeenCalled();
+      expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
+    });
   });
 
   describe('executeActions', () => {
@@ -96,7 +309,17 @@ describe('ActionExecutorService', () => {
         aiPaused: false,
       });
 
-      await service.executeActions('org-1', 'trusted-conv', actions);
+      (prismaService.lead.update as jest.Mock).mockResolvedValue({
+        id: 'lead-1',
+        externalContactId: 'existing-contact',
+      });
+      expect(
+        await service.executeActions('org-1', 'trusted-conv', actions),
+      ).toEqual({
+        executed: 1,
+        rejected: 0,
+        failed: 0,
+      });
 
       expect(prismaService.lead.update).toHaveBeenCalledWith({
         where: { id: 'lead-1' },

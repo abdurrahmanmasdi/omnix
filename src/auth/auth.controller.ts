@@ -9,7 +9,6 @@ import {
   Get,
   UseGuards,
   Req,
-  Query,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
@@ -21,7 +20,6 @@ import {
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { SignupDto } from './dto/signup.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Authentication')
@@ -31,20 +29,14 @@ export class AuthController {
 
   @Post('signup')
   @ApiOperation({
-    summary: 'Register a new user account (No Organization yet)',
+    summary: 'Public signup is disabled during the invitation-only pilot',
   })
-  @ApiResponse({ status: 201, description: 'User created successfully.' })
-  @ApiResponse({ status: 409, description: 'Email already exists.' })
-  async signup(
-    @Body() signupDto: SignupDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const { accessToken, refreshToken, user } =
-      await this.authService.signup(signupDto);
-
-    res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
-
-    return { access_token: accessToken, user };
+  @ApiResponse({
+    status: 403,
+    description: 'An operator invitation is required.',
+  })
+  signup() {
+    return this.authService.signup();
   }
 
   @Post('login')
@@ -150,7 +142,7 @@ export class AuthController {
       );
 
       return { access_token: accessToken, user };
-    } catch (error) {
+    } catch {
       res.clearCookie(REFRESH_COOKIE_NAME, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -161,9 +153,12 @@ export class AuthController {
   }
 
   @Get('verify-email')
-  @ApiOperation({ summary: 'Verify user email using the token sent via email' })
-  async verifyEmail(@Query('token') token: string) {
-    return this.authService.verifyEmail(token);
+  @ApiOperation({
+    summary: 'Legacy email verification is disabled during the pilot',
+  })
+  @ApiResponse({ status: 410, description: 'Use an operator invitation.' })
+  async verifyEmail() {
+    return this.authService.verifyEmail();
   }
 
   @Get('me')

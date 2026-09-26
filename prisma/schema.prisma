@@ -100,6 +100,8 @@ model User {
   assignedLeads         Lead[]
   notifications         Notification[]
   sessions              Session[]
+  invitations           AccountInvitation[]
+  activationEvents      AccountActivationEvent[]
 
   @@map("users")
 }
@@ -653,6 +655,7 @@ model OutboxEvent {
   updatedAt      DateTime  @default(now()) @updatedAt
 
   @@index([status, createdAt])
+  @@index([status, updatedAt])
   @@map("outbox_events")
 }
 
@@ -671,6 +674,7 @@ model Session {
 
   @@index([userId])
   @@index([familyId])
+  @@index([expiresAt])
   @@map("sessions")
 }
 
@@ -678,4 +682,34 @@ enum UserStatus {
   PENDING
   ACTIVE
   SUSPENDED
+}
+
+model AccountInvitation {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  purpose    String   @default("PILOT_ACTIVATION")
+  issuedBy   String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("account_invitations")
+}
+
+model AccountActivationEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitationId String   @db.Uuid
+  action       String
+  actor        String
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("account_activation_events")
 }

@@ -7,10 +7,14 @@ import {
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { ConfigService } from '@nestjs/config';
 import { CredentialProvider, CredentialStatus } from '@prisma/client';
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-
-type SecretPayload = Record<string, string>;
+import {
+  credentialKey,
+  decryptCredential,
+  encryptCredential,
+  type SecretPayload,
+} from './credential-cipher';
 
 import { AuditService } from '../audit/audit.service';
 
@@ -24,33 +28,14 @@ export class CredentialsService implements OnModuleInit {
 
   async onModuleInit() {
     await tenantStorage.run({ isSystemBypass: true }, async () => {
-      // Encrypt any plaintext migrated tokens on boot instead of waiting for first read
-      const credentials = await this.prisma.credential.findMany({
+      this.key();
+      const legacyCount = await this.prisma.credential.count({
         where: { encryptedPayload: { startsWith: 'PLAINTEXT_MIGRATE:' } },
       });
-
-      for (const cred of credentials) {
-        const rawToken = cred.encryptedPayload.slice(
-          'PLAINTEXT_MIGRATE:'.length,
+      if (legacyCount !== 0) {
+        throw new Error(
+          'CREDENTIAL_REPAIR_REQUIRED: run npm run db:deploy before starting',
         );
-        const payload: SecretPayload = { accessToken: rawToken };
-        const encrypted = this.encrypt(payload);
-
-        await this.prisma.credential.update({
-          where: { id: cred.id },
-          data: { encryptedPayload: encrypted },
-        });
-
-        void this.audit.record({
-          organizationId: cred.organizationId,
-          action: 'credential.migrated_on_boot',
-          targetId: cred.id,
-          actor: 'system',
-          metadata: {
-            reason:
-              'Legacy plaintext token re-encrypted securely on application boot',
-          },
-        });
       }
     });
   }
@@ -84,30 +69,8 @@ export class CredentialsService implements OnModuleInit {
     });
     if (!credential) throw new NotFoundException('Active credential not found');
 
-    const MIGRATE_PREFIX = 'PLAINTEXT_MIGRATE:';
-    if (credential.encryptedPayload.startsWith(MIGRATE_PREFIX)) {
-      // Legacy credential backfilled by the SQL migration — the token was
-      // stored as plaintext with a prefix because SQL cannot replicate
-      // Node.js AES-256-GCM encryption. Re-encrypt on first read.
-      const rawToken = credential.encryptedPayload.slice(MIGRATE_PREFIX.length);
-      const payload: SecretPayload = { accessToken: rawToken };
-      const encrypted = this.encrypt(payload);
-
-      await this.prisma.credential.update({
-        where: { id },
-        data: { encryptedPayload: encrypted },
-      });
-
-      await this.audit.record({
-        organizationId,
-        action: 'credential.migrated',
-        targetId: id,
-        actor: 'system',
-        metadata: {
-          reason: 'Legacy plaintext token re-encrypted on first read',
-        },
-      });
-      return payload;
+    if (credential.encryptedPayload.startsWith('PLAINTEXT_MIGRATE:')) {
+      throw new InternalServerErrorException('CREDENTIAL_REPAIR_REQUIRED');
     }
 
     return this.decrypt(credential.encryptedPayload);
@@ -119,7 +82,7 @@ export class CredentialsService implements OnModuleInit {
     });
     if (!current) throw new NotFoundException('Active credential not found');
 
-    const newCredId = require('crypto').randomUUID();
+    const newCredId = randomUUID();
 
     const [, newCred] = await this.prisma.$transaction([
       this.prisma.credential.update({
@@ -225,35 +188,22 @@ export class CredentialsService implements OnModuleInit {
   }
 
   private key(): Buffer {
-    const encoded = this.config.get<string>('INTEGRATION_CREDENTIAL_KEY');
-    const key = encoded ? Buffer.from(encoded, 'base64') : undefined;
-    if (!key || key.length !== 32)
+    try {
+      return credentialKey(
+        this.config.get<string>('INTEGRATION_CREDENTIAL_KEY'),
+      );
+    } catch {
       throw new InternalServerErrorException(
         'INTEGRATION_CREDENTIAL_KEY must be a 32-byte base64 key',
       );
-    return key;
+    }
   }
 
   private encrypt(payload: SecretPayload): string {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.key(), iv);
-    const ciphertext = Buffer.concat([
-      cipher.update(JSON.stringify(payload), 'utf8'),
-      cipher.final(),
-    ]);
-    return `${iv.toString('base64')}.${cipher.getAuthTag().toString('base64')}.${ciphertext.toString('base64')}`;
+    return encryptCredential(payload, this.key());
   }
 
   private decrypt(value: string): SecretPayload {
-    const [iv, tag, ciphertext] = value
-      .split('.')
-      .map((part) => Buffer.from(part, 'base64'));
-    const decipher = createDecipheriv('aes-256-gcm', this.key(), iv);
-    decipher.setAuthTag(tag);
-    return JSON.parse(
-      Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString(
-        'utf8',
-      ),
-    ) as SecretPayload;
+    return decryptCredential(value, this.key());
   }
 }

@@ -1,4 +1,8 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { tenantStorage } from '../core/tenant/tenant.context';
@@ -10,12 +14,18 @@ export class OrganizationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createWorkspace(userId: string, dto: CreateOrganizationDto) {
-    // 1. Bypass RLS entirely for this provisioning transaction
+    // First-workspace provisioning has no tenant yet; scope it to a verified user.
     return tenantStorage.run({ isSystemBypass: true }, async () => {
       try {
         return await this.prisma.$transaction(
           async (tx) => {
-            // Lock or verify the user doesn't already have an active membership
+            // Serialize requests for this user. READ COMMITTED sees the first
+            // request's membership after waiting for its row lock to release.
+            await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+            const user = await tx.user.findUnique({ where: { id: userId } });
+            if (!user || user.status !== 'ACTIVE' || user.deletedAt) {
+              throw new UnauthorizedException('User account is not active');
+            }
             const existingMembership =
               await tx.organizationMembership.findFirst({
                 where: { userId, status: 'ACTIVE', deletedAt: null },
@@ -78,7 +88,7 @@ export class OrganizationsService {
             return { organizationId: org.id, roleId: superAdminRole.id };
           },
           {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
             maxWait: 5000,
             timeout: 10000,
           },

@@ -52,7 +52,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       },
     });
 
-    if (!user || user.status === 'PENDING' || user.status === 'SUSPENDED') {
+    if (!user || user.status !== 'ACTIVE' || user.deletedAt) {
       throw new UnauthorizedException('User account is not active');
     }
 

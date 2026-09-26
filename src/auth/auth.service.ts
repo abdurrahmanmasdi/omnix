@@ -1,7 +1,8 @@
 import {
   Injectable,
   UnauthorizedException,
-  ConflictException,
+  ForbiddenException,
+  GoneException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -9,8 +10,6 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
-import { SignupDto } from './dto/signup.dto';
-import type { JwtPayload } from './jwt.strategy';
 
 @Injectable()
 export class AuthService {
@@ -20,79 +19,17 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async signup(signupDto: SignupDto) {
-    return this.prisma.$transaction(async (tx) => {
-      // By using unique constraint, we don't necessarily need to check first, but we can.
-      const existingUser = await tx.user.findUnique({
-        where: { email: signupDto.email },
-      });
-
-      if (existingUser)
-        throw new ConflictException('A user with this email already exists');
-
-      const hashedPassword = await bcrypt.hash(signupDto.password, 10);
-      const user = await tx.user.create({
-        data: {
-          email: signupDto.email,
-          password_hash: hashedPassword,
-          firstName: signupDto.firstName,
-          lastName: signupDto.lastName,
-          status: 'PENDING',
-        },
-      });
-
-      // 1. Generate an Email Verification Token (Expires in 1 hour)
-      const emailVerificationToken = this.jwtService.sign(
-        { email: user.email },
-        {
-          secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-          expiresIn: '1h',
-        },
-      );
-
-      // 2. SIMULATE SENDING EMAIL (In production, use Resend, Sendgrid, AWS SES, etc.)
-      console.log(
-        `\n📧 [EMAIL SIMULATION] Verification email queued for user ${user.id}\n`,
-      );
-
-      return this.generateTokens(
-        user.id,
-        user.email,
-        null,
-        null,
-        user.firstName,
-        user.lastName,
-        undefined,
-        undefined,
-        undefined,
-        tx,
-      );
-    });
+  async signup(): Promise<never> {
+    throw new ForbiddenException(
+      'This pilot is invitation-only. Contact your pilot operator for access.',
+    );
   }
 
-  // --- NEW: Verify Email Method ---
-  async verifyEmail(token: string) {
-    try {
-      // 1. Decode and verify the token
-      const payload = this.jwtService.verify<{ email: string }>(token, {
-        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      });
-
-      // 2. Update the user in the database
-      const user = await this.prisma.user.findFirst({
-        where: { email: payload.email },
-      });
-      if (!user) throw new UnauthorizedException('User not found');
-
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { status: 'ACTIVE' },
-      });
-
-      return { message: 'Email successfully verified!' };
-    } catch (error) {
-      throw new UnauthorizedException('Invalid or expired verification token');
-    }
+  async verifyEmail(): Promise<never> {
+    // Legacy JWTs share an access-token secret and are not single-use capabilities.
+    throw new GoneException(
+      'Email verification is unavailable during the pilot. Use an operator invitation.',
+    );
   }
 
   async login(loginDto: LoginDto, userAgent?: string, ip?: string) {
@@ -107,7 +44,8 @@ export class AuthService {
       },
     });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.status !== 'ACTIVE' || user.deletedAt)
+      throw new UnauthorizedException('Invalid credentials');
 
     const isPasswordValid = await bcrypt.compare(
       loginDto.password,
@@ -134,18 +72,26 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string, userAgent?: string, ip?: string) {
-    let payload: any;
+    let payload: { familyId?: string; nonce?: string };
     try {
       // 1. Verify the token signature mathematically
-      payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      });
-    } catch (e) {
+      payload = this.jwtService.verify<{ familyId?: string; nonce?: string }>(
+        refreshToken,
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        },
+      );
+    } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     const { familyId, nonce } = payload;
-    if (!familyId || !nonce) {
+    if (
+      typeof familyId !== 'string' ||
+      !familyId ||
+      typeof nonce !== 'string' ||
+      !nonce
+    ) {
       throw new UnauthorizedException('Invalid refresh token payload');
     }
 
@@ -198,7 +144,7 @@ export class AuthService {
       });
 
       if (!user) return { error: 'User not found' };
-      if (user.status === 'PENDING' || user.status === 'SUSPENDED') {
+      if (user.status !== 'ACTIVE' || user.deletedAt) {
         return { error: 'User account is not active' };
       }
 
@@ -255,11 +201,19 @@ export class AuthService {
   async logout(refreshToken: string) {
     if (!refreshToken) return;
     try {
-      const payload = this.jwtService.verify(refreshToken, {
+      const payload = this.jwtService.verify<{
+        familyId?: string;
+        nonce?: string;
+      }>(refreshToken, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
       const { familyId, nonce } = payload;
-      if (familyId && nonce) {
+      if (
+        typeof familyId === 'string' &&
+        familyId &&
+        typeof nonce === 'string' &&
+        nonce
+      ) {
         const tokenHash = crypto
           .createHash('sha256')
           .update(nonce)
@@ -273,7 +227,7 @@ export class AuthService {
           },
         });
       }
-    } catch (e) {
+    } catch {
       // Ignore if token is already invalid
     }
   }

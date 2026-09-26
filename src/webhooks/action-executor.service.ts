@@ -131,6 +131,11 @@ export class ActionExecutorService {
       return 'rejected';
     }
 
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      this.logger.warn(`Rejected non-object payload for action ${action.type}`);
+      return 'rejected';
+    }
+
     // Do not log the raw action payload to avoid leaking PII!
     this.logger.log(`⚡ Executing: ${action.type} | Conv: ${conversation.id}`);
 
@@ -156,7 +161,9 @@ export class ActionExecutorService {
         break;
 
       case 'HANDOFF_TO_HUMAN':
-        await this.handleHandoffToHuman(conversation, payload);
+        // The model may supply a reason or legacy IDs. Neither is authority
+        // to choose a tenant, conversation, lead, or notification recipient.
+        await this.handleHandoffToHuman(conversation);
         break;
 
       case 'SCHEDULE_FOLLOW_UP':
@@ -205,9 +212,11 @@ export class ActionExecutorService {
       data: updateData,
     });
 
-    void void this.eventsGateway.broadcastLeadUpdate(
-      conversation.organizationId,
-      updatedLead,
+    await this.broadcastSafely('lead', conversation.id, () =>
+      this.eventsGateway.broadcastLeadUpdate(
+        conversation.organizationId,
+        updatedLead,
+      ),
     );
     this.logger.log(
       `✅ Lead ${conversation.leadId} updated for Conv: ${conversation.id}`,
@@ -250,9 +259,11 @@ export class ActionExecutorService {
       data: { aiPaused: true, stateVersion: { increment: 1 } },
     });
 
-    void this.eventsGateway.broadcastConversationUpdate(
-      conversation.organizationId,
-      updatedConversation,
+    await this.broadcastSafely('conversation', conversation.id, () =>
+      this.eventsGateway.broadcastConversationUpdate(
+        conversation.organizationId,
+        updatedConversation,
+      ),
     );
     this.logger.log(`✅ Conv ${conversation.id} paused.`);
   }
@@ -319,9 +330,11 @@ export class ActionExecutorService {
         where: { id: conversation.leadId },
         data: updateData,
       });
-      void void this.eventsGateway.broadcastLeadUpdate(
-        conversation.organizationId,
-        updatedLead,
+      await this.broadcastSafely('lead', conversation.id, () =>
+        this.eventsGateway.broadcastLeadUpdate(
+          conversation.organizationId,
+          updatedLead,
+        ),
       );
     } else {
       const newLead = await this.prisma.lead.create({
@@ -352,16 +365,27 @@ export class ActionExecutorService {
         where: { id: conversation.id },
         data: { leadId: newLead.id },
       });
-      void this.eventsGateway.broadcastLeadUpdate(
-        conversation.organizationId,
-        newLead,
+      await this.broadcastSafely('lead', conversation.id, () =>
+        this.eventsGateway.broadcastLeadUpdate(
+          conversation.organizationId,
+          newLead,
+        ),
       );
     }
   }
 
-  public async handleHandoffToHuman(
+  private async handleHandoffToHuman(
     conversation: Conversation & { lead?: Lead | null },
   ) {
+    if (
+      conversation.leadId &&
+      (!conversation.lead ||
+        conversation.lead.id !== conversation.leadId ||
+        conversation.lead.organizationId !== conversation.organizationId)
+    ) {
+      throw new Error('HANDOFF_LEAD_TENANT_MISMATCH');
+    }
+
     // Idempotency: if already paused, skip re-pausing and re-notifying, but consider it successful.
     if (conversation.aiPaused) {
       this.logger.log(
@@ -373,25 +397,26 @@ export class ActionExecutorService {
     const leadId = conversation.leadId;
     const organizationId = conversation.organizationId;
 
-    const memberships = await this.prisma.organizationMembership.findMany({
-      where: {
-        organizationId: organizationId,
-        status: 'ACTIVE',
-        deletedAt: null,
-      },
-    });
-
-    const [updatedConversation, updatedLead, createdNotifications] =
+    const { updatedConversation, updatedLead, createdNotifications } =
       await this.prisma.$transaction(async (tx) => {
+        const memberships = await tx.organizationMembership.findMany({
+          where: {
+            organizationId,
+            status: 'ACTIVE',
+            deletedAt: null,
+            user: { status: 'ACTIVE', deletedAt: null },
+          },
+          select: { userId: true },
+        });
         const conv = await tx.conversation.update({
-          where: { id: conversation.id },
+          where: { id: conversation.id, organizationId },
           data: { aiPaused: true, stateVersion: { increment: 1 } },
         });
 
-        let lead = null;
+        let lead: Lead | null = null;
         if (leadId) {
           lead = await tx.lead.update({
-            where: { id: leadId },
+            where: { id: leadId, organizationId },
             data: { status: 'HANDED_OFF' },
           });
         }
@@ -413,10 +438,14 @@ export class ActionExecutorService {
             notifications.push(notification);
           }
         }
-        return [conv, lead, notifications];
+        return {
+          updatedConversation: conv,
+          updatedLead: lead,
+          createdNotifications: notifications,
+        };
       });
 
-    if (memberships.length === 0) {
+    if (createdNotifications.length === 0) {
       this.logger.warn(`No staff found for Handoff in Org ${organizationId}`);
       await this.auditService.record({
         organizationId: organizationId,
@@ -428,23 +457,42 @@ export class ActionExecutorService {
     } else {
       // Safely emit to websockets since it's already durably stored
       for (const notification of createdNotifications) {
-        void void void void this.eventsGateway.broadcastNotification(
-          notification.userId,
-          notification,
+        await this.broadcastSafely('notification', conversation.id, () =>
+          this.eventsGateway.broadcastNotification(
+            notification.userId,
+            notification,
+          ),
         );
       }
     }
 
     if (updatedLead) {
-      void void this.eventsGateway.broadcastLeadUpdate(
-        organizationId,
-        updatedLead,
+      await this.broadcastSafely('lead', conversation.id, () =>
+        this.eventsGateway.broadcastLeadUpdate(organizationId, updatedLead),
       );
     }
-    void this.eventsGateway.broadcastConversationUpdate(
-      organizationId,
-      updatedConversation,
+    await this.broadcastSafely('conversation', conversation.id, () =>
+      this.eventsGateway.broadcastConversationUpdate(
+        organizationId,
+        updatedConversation,
+      ),
     );
+  }
+
+  private async broadcastSafely(
+    event: 'lead' | 'conversation' | 'notification',
+    conversationId: string,
+    broadcast: () => void | Promise<void>,
+  ): Promise<void> {
+    try {
+      await broadcast();
+    } catch {
+      // State and notifications have already committed. A live-delivery failure
+      // must not trigger action replay, and provider errors may contain PII.
+      this.logger.warn(
+        `ACTION_BROADCAST_FAILED event=${event} conversationId=${conversationId}`,
+      );
+    }
   }
 
   private async handleUpdateSummary(

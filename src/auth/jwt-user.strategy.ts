@@ -39,7 +39,7 @@ export class UserJwtStrategy extends PassportStrategy(Strategy, 'jwt-user') {
 
     if (user.status !== 'ACTIVE') {
       throw new UnauthorizedException(
-        'User account is not active. Please verify your email.',
+        'User account is not active. Please accept your pilot invitation.',
       );
     }
 
