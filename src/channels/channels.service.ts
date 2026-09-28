@@ -10,7 +10,6 @@ import { WhatsappService } from '../webhooks/whatsapp.service';
 import { InstagramService } from '../webhooks/instagram.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { HubspotAdapter } from '../modules/integration/crm/adapters/hubspot.adapter';
-import { CredentialProvider } from '@prisma/client';
 
 @Injectable()
 export class ChannelsService {

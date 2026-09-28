@@ -14,6 +14,7 @@ import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
+import { AGENT_CONTRACT_VERSION, isCompatibleAgentVersion } from './contracts/agent-contract';
 
 @Processor('ai-reply') // 🚀 Listens to the delay queue
 export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
@@ -145,6 +146,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
 
           let failed = false;
           try {
+            let handoffAfterSend = false;
             // Check if we already generated bubbles for this job
             let existingBubbles = await this.prisma.message.findMany({
               where: { idempotencyKey: { startsWith: `${batchKey}-` } },
@@ -179,10 +181,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                       lastMsg.metaMessageId,
                     );
                   }
-                } catch (e: any) {
-                  this.logger.warn(
-                    `Typing indicator failed (likely API version mismatch or expired msg): ${e.message}`,
-                  );
+                } catch {
+                  this.logger.warn(`TYPING_INDICATOR_FAILED conversationId=${conversationId}`);
                 }
               }
 
@@ -202,8 +202,11 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                   businessRulesJson: businessRulesJson,
                   totalMessageCount: totalMessageCount,
                   leadSummary: leadSummary,
+                  contractVersion: AGENT_CONTRACT_VERSION,
                 }),
               );
+              if (!isCompatibleAgentVersion(aiResponse.contractVersion))
+                throw new Error('AI_CONTRACT_VERSION_UNSUPPORTED');
 
               let { replyText, mediaUrl } = aiResponse;
               const { actions } = aiResponse;
@@ -231,26 +234,13 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                   conversationId,
                   actions,
                 );
-                if (actionResult.failed > 0) {
-                  throw new Error(
-                    `Critical action execution failure (${actionResult.failed} failed), aborting reply delivery to prevent patient inconsistency`,
-                  );
-                }
-                if (actionResult.rejected > 0) {
-                  // Non-transient error (malformed action). Provide safe fallback instead of retrying.
-                  this.logger.warn(
-                    `Actions were rejected (${actionResult.rejected}). Falling back to safe response.`,
-                  );
+                if (actionResult.outcomes?.some((item) => item.status !== 'EXECUTED') ||
+                    actionResult.rejected > 0 || actionResult.failed > 0) {
+                  this.logger.warn(`ACTION_FALLBACK_REQUIRED conversationId=${conversationId}`);
+                  handoffAfterSend = true;
                   replyText =
-                    "I'm having trouble processing that request right now, but I have alerted our staff to assist you shortly.";
+                    "I couldn't complete that request right now. A human coordinator can help with the next step.";
                   mediaUrl = undefined;
-
-                  // Alert staff
-                  await this.actionExecutor.executeActions(
-                    organization.id,
-                    conversationId,
-                    [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
-                  );
                 }
               }
 
@@ -282,7 +272,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                   });
                 if (revoked) {
                   this.logger.warn(
-                    `Blocked outbound transmission of revoked media URL: ${safeMediaUrl}`,
+                    `REVOKED_MEDIA_BLOCKED conversationId=${conversationId}`,
                   );
                   safeMediaUrl = undefined;
                   safeReplyText =
@@ -347,7 +337,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                 await this.prisma.message.createMany({
                   data: bubblesToCreate.map((bubble) => ({
                     ...bubble,
-                    metadata: { generationVersion: expectedVersion },
+                    metadata: { generationVersion: expectedVersion, pendingHandoff: handoffAfterSend },
                   })),
                 });
               }
@@ -357,6 +347,10 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                 orderBy: { createdAt: 'asc' },
               });
             } // end of if (existingBubbles.length === 0)
+
+            handoffAfterSend = handoffAfterSend || existingBubbles.some(
+              (bubble) => (bubble.metadata as { pendingHandoff?: boolean } | null)?.pendingHandoff === true,
+            );
 
             if (
               existingBubbles.some(
@@ -444,7 +438,10 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                 expectedVersion,
               );
               if (result === 'WAITING') throw new Error('OUTBOUND_UNRESOLVED');
-              if (result === 'FAILED' || result === 'CANCELLED') return;
+              if (result === 'FAILED' || result === 'CANCELLED') {
+                if (handoffAfterSend) throw new Error('ACTION_FALLBACK_SEND_FAILED');
+                return;
+              }
               const updatedBubble = await this.prisma.message.findUniqueOrThrow(
                 {
                   where: { id: bubble.id },
@@ -479,6 +476,20 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                 await new Promise((resolve) => setTimeout(resolve, 1500));
               }
             } // end of transmission loop
+
+            if (handoffAfterSend) {
+              const handoff = await this.actionExecutor.executeActions(
+                organization.id, conversationId,
+                [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
+              );
+              if (handoff.executed !== 1 || handoff.failed || handoff.rejected)
+                throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
+              await this.prisma.message.updateMany({
+                where: { id: { in: existingBubbles.map((bubble) => bubble.id) } },
+                data: { metadata: { generationVersion: expectedVersion, pendingHandoff: false } },
+              });
+              return;
+            }
 
             // A follow-up must not be scheduled for a reply whose provider
             // acceptance is still unknown. Replays can arrive after a crash.

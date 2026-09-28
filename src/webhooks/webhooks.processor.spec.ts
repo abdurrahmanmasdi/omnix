@@ -24,6 +24,7 @@ describe('WebhooksProcessor', () => {
       organizationId: 'org-1',
       accessToken: 'token-123',
       organization: { id: 'org-1' },
+      credentials: [{ metaAccessToken: 'token' }],
     });
     (prisma.lead.findFirst as jest.Mock).mockResolvedValue({
       id: 'lead-1',
@@ -67,7 +68,7 @@ describe('WebhooksProcessor', () => {
     expect(prisma.message.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          content: '[Patient Media - Consent Required]',
+          content: '[Media omitted: Awaiting consent. Consent request sent.]',
           mediaUrl: null,
         }),
       }),
@@ -81,6 +82,7 @@ describe('WebhooksProcessor', () => {
       organizationId: 'org-1',
       accessToken: 'token-123',
       organization: { id: 'org-1' },
+      credentials: [{ metaAccessToken: 'token' }],
     });
     (prisma.lead.findFirst as jest.Mock).mockResolvedValue({
       id: 'lead-1',
@@ -137,6 +139,7 @@ describe('WebhooksProcessor', () => {
       organizationId: 'org-1',
       accessToken: 'token-123',
       organization: { id: 'org-1' },
+      credentials: [{ metaAccessToken: 'token' }],
     });
     (prisma.lead.findFirst as jest.Mock).mockResolvedValue({
       id: 'lead-1',

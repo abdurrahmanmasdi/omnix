@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Notification, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionService } from '../auth/permission.service';
+import { tenantStorage } from '../core/tenant/tenant.context';
 
 interface NotificationDelegate {
   findMany(args: {
@@ -21,7 +23,10 @@ interface NotificationDelegate {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissionService: PermissionService,
+  ) {}
 
   // Used by the Frontend to get the dropdown list
   async getUserNotifications(
@@ -29,14 +34,57 @@ export class NotificationsService {
     userId: string,
     limit = 20,
   ): Promise<Notification[]> {
-    const prisma = this.prisma as PrismaService & {
-      notification: NotificationDelegate;
-    };
+    const canReadAll = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:all',
+    );
 
-    return await prisma.notification.findMany({
-      where: { organizationId, userId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
+    if (canReadAll) {
+      const prisma = this.prisma as PrismaService & {
+        notification: NotificationDelegate;
+      };
+      return await prisma.notification.findMany({
+        where: { organizationId, userId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+    }
+
+    return await tenantStorage.run({ isSystemBypass: true, organizationId }, async () => {
+      return await this.prisma.$queryRaw<Notification[]>`
+        SELECT n.*
+        FROM notifications n
+        WHERE n."organizationId" = ${organizationId}::uuid
+          AND n."userId" = ${userId}::uuid
+          AND (
+            n."referenceType" IS NULL
+            OR n."referenceType" NOT IN ('LEAD', 'CONVERSATION')
+            OR (
+              n."referenceType" = 'LEAD'
+              AND EXISTS (
+                SELECT 1 FROM leads l
+                WHERE l.id = n."referenceId"::uuid
+                  AND l."organizationId" = ${organizationId}::uuid
+                  AND l."assignedAgentId" = ${userId}::uuid
+                  AND l."deletedAt" IS NULL
+              )
+            )
+            OR (
+              n."referenceType" = 'CONVERSATION'
+              AND EXISTS (
+                SELECT 1 FROM conversations c
+                LEFT JOIN leads l ON c."leadId" = l.id
+                WHERE c.id = n."referenceId"::uuid
+                  AND c."organizationId" = ${organizationId}::uuid
+                  AND c."deletedAt" IS NULL
+                  AND (c."assignedAgentId" = ${userId}::uuid OR l."assignedAgentId" = ${userId}::uuid)
+              )
+            )
+          )
+        ORDER BY n."createdAt" DESC
+        LIMIT ${limit}
+      `;
     });
   }
 
@@ -45,12 +93,55 @@ export class NotificationsService {
     organizationId: string,
     userId: string,
   ): Promise<number> {
-    const prisma = this.prisma as PrismaService & {
-      notification: NotificationDelegate;
-    };
+    const canReadAll = await this.permissionService.has(
+      userId,
+      organizationId,
+      'leads:read:all',
+    );
 
-    return await prisma.notification.count({
-      where: { organizationId, userId, isRead: false },
+    if (canReadAll) {
+      const prisma = this.prisma as PrismaService & {
+        notification: NotificationDelegate;
+      };
+      return await prisma.notification.count({
+        where: { organizationId, userId, isRead: false },
+      });
+    }
+
+    return await tenantStorage.run({ isSystemBypass: true, organizationId }, async () => {
+      const result = await this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*) as count
+        FROM notifications n
+        WHERE n."organizationId" = ${organizationId}::uuid
+          AND n."userId" = ${userId}::uuid
+          AND n."isRead" = false
+          AND (
+            n."referenceType" IS NULL
+            OR n."referenceType" NOT IN ('LEAD', 'CONVERSATION')
+            OR (
+              n."referenceType" = 'LEAD'
+              AND EXISTS (
+                SELECT 1 FROM leads l
+                WHERE l.id = n."referenceId"::uuid
+                  AND l."organizationId" = ${organizationId}::uuid
+                  AND l."assignedAgentId" = ${userId}::uuid
+                  AND l."deletedAt" IS NULL
+              )
+            )
+            OR (
+              n."referenceType" = 'CONVERSATION'
+              AND EXISTS (
+                SELECT 1 FROM conversations c
+                LEFT JOIN leads l ON c."leadId" = l.id
+                WHERE c.id = n."referenceId"::uuid
+                  AND c."organizationId" = ${organizationId}::uuid
+                  AND c."deletedAt" IS NULL
+                  AND (c."assignedAgentId" = ${userId}::uuid OR l."assignedAgentId" = ${userId}::uuid)
+              )
+            )
+          )
+      `;
+      return Number(result[0].count);
     });
   }
 

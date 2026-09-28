@@ -50,11 +50,11 @@ export class CrmIntegrationService {
 
     // Step 1: Contact
     const externalContactId = await adapter.syncContact(lead);
-    this.logger.log(`Contact synced → externalContactId: ${externalContactId}`);
+    this.logger.log(`CRM_CONTACT_SYNCED leadId=${lead.id}`);
 
     // Step 2: Deal (linked to the contact we just created/updated)
     const externalDealId = await adapter.syncDeal(externalContactId, lead);
-    this.logger.log(`Deal synced → externalDealId: ${externalDealId}`);
+    this.logger.log(`CRM_DEAL_SYNCED leadId=${lead.id}`);
 
     return { externalContactId, externalDealId };
   }

@@ -56,12 +56,12 @@ export class WhatsappService implements IChannelProvider {
         true,
       );
       return true;
-    } catch (error) {
+    } catch {
       await this.credentials.recordVerification(
         organizationId,
         credentialId,
         false,
-        error instanceof Error ? error.message : 'Unknown error',
+        'WHATSAPP_CREDENTIAL_VERIFICATION_FAILED',
       );
       return false;
     }
@@ -198,14 +198,10 @@ export class WhatsappService implements IChannelProvider {
           ),
       );
 
-      this.logger.log(
-        `Successfully sent ${payload.type} message to [REDACTED_PHONE]`, // R11: Do not log patient phone numbers
-      );
+      this.logger.log('WHATSAPP_SEND_COMPLETE');
       return response.data as MetaMessageResponse;
     } catch (error: any) {
-      this.logger.error(
-        `Failed to send WhatsApp message. Provider code: ${error?.response?.status || 'UNKNOWN'}`, // R11: Provider bodies may contain patient data,
-      );
+      this.logger.error('WHATSAPP_SEND_FAILED');
 
       // If it's an auth error (401), record verification failure
       if (error?.response?.status === 401) {

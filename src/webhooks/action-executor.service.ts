@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Conversation, Lead } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { ToolAction } from './interfaces/agent.interface';
-import { LeadStatus, Priority, NotificationType } from '@prisma/client';
+import { ToolActionWire } from './interfaces/agent.interface';
+import { parseAgentAction } from './contracts/agent-contract';
+import { LeadStatus, Priority, NotificationType, Gender, Currency } from '@prisma/client';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
@@ -18,6 +19,21 @@ const CRM_SYNC_STATUSES: LeadStatus[] = [
   LeadStatus.QUALIFIED,
   LeadStatus.READY_TO_BOOK,
 ];
+
+export interface ActionOutcome {
+  index: number;
+  type: string;
+  status: 'EXECUTED' | 'REJECTED' | 'FAILED';
+  reasonCode: string;
+  retryable: boolean;
+}
+
+export interface ActionExecutionSummary {
+  executed: number;
+  rejected: number;
+  failed: number;
+  outcomes: ActionOutcome[];
+}
 
 const VALID_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   [LeadStatus.NEW]: [
@@ -83,9 +99,9 @@ export class ActionExecutorService {
   async executeActions(
     organizationId: string,
     conversationId: string,
-    actions: ToolAction[],
-  ): Promise<{ executed: number; rejected: number; failed: number }> {
-    const result = { executed: 0, rejected: 0, failed: 0 };
+    actions: ToolActionWire[],
+  ): Promise<ActionExecutionSummary> {
+    const result: ActionExecutionSummary = { executed: 0, rejected: 0, failed: 0, outcomes: [] };
     if (!actions || actions.length === 0) return result;
 
     this.logger.log(
@@ -102,20 +118,51 @@ export class ActionExecutorService {
         `executeActions aborted: conversation ${conversationId} not found in org ${organizationId}`,
       );
       result.failed = actions.length;
+      actions.forEach((action, index) => result.outcomes.push({
+        index,
+        type: action.type,
+        status: 'FAILED',
+        reasonCode: 'CONVERSATION_NOT_FOUND',
+        retryable: false,
+      }));
       return result;
     }
 
-    for (const action of actions) {
+    for (const [index, action] of actions.entries()) {
       try {
         const outcome = await this.handleAction(conversation, action);
-        if (outcome === 'executed') result.executed++;
-        else if (outcome === 'rejected') result.rejected++;
+        if (outcome === 'executed') {
+          result.executed++;
+          result.outcomes.push({ index, type: action.type, status: 'EXECUTED', reasonCode: 'OK', retryable: false });
+        } else {
+          result.rejected++;
+          result.outcomes.push({ index, type: action.type, status: 'REJECTED', reasonCode: 'ACTION_INVALID', retryable: false });
+        }
       } catch (error: any) {
-        this.logger.error(
-          `Failed to execute action ${action.type}: ${error.message}`,
-          error.stack,
-        );
+        this.logger.error(`ACTION_EXECUTION_FAILED conversationId=${conversationId}`);
         result.failed++;
+        const code = error instanceof Error ? error.message : '';
+        const permanent = /^(HANDOFF_LEAD_TENANT_MISMATCH|INVALID_|Invalid |Cannot |UPDATE_|NO_UPDATEABLE_FIELDS)/.test(code);
+        result.outcomes.push({
+          index,
+          type: action.type,
+          status: 'FAILED',
+          reasonCode: code === 'NO_ELIGIBLE_STAFF' ? code : permanent ? 'ACTION_VALIDATION_FAILED' : 'ACTION_WRITE_FAILED',
+          retryable: !permanent,
+        });
+        if (code === 'NO_ELIGIBLE_STAFF') {
+          try {
+            await this.auditService.record({
+              organizationId,
+              action: 'ai.handoff_failed_no_staff',
+              targetId: conversationId,
+              actor: 'ai',
+              metadata: { reason: 'NO_ELIGIBLE_STAFF' },
+            });
+          } catch {
+            this.logger.warn(`HANDOFF_FAILURE_AUDIT_FAILED conversationId=${conversationId}`);
+          }
+        }
       }
     }
     return result;
@@ -123,27 +170,19 @@ export class ActionExecutorService {
 
   private async handleAction(
     conversation: Conversation & { lead?: Lead | null },
-    action: ToolAction,
+    action: ToolActionWire,
   ): Promise<'executed' | 'rejected'> {
-    let payload: Record<string, any>;
-    try {
-      payload = JSON.parse(action.payload);
-    } catch {
-      this.logger.error(
-        `Rejected malformed JSON payload for action ${action.type}`,
-      );
+    const parsed = parseAgentAction(action);
+    if (!parsed) {
+      this.logger.warn(`ACTION_CONTRACT_INVALID conversationId=${conversation.id}`);
       return 'rejected';
     }
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      this.logger.warn(`Rejected non-object payload for action ${action.type}`);
-      return 'rejected';
-    }
+    const payload: Record<string, unknown> = parsed.payload;
 
     // Do not log the raw action payload to avoid leaking PII!
-    this.logger.log(`⚡ Executing: ${action.type} | Conv: ${conversation.id}`);
+    this.logger.log(`ACTION_EXECUTE conversationId=${conversation.id}`);
 
-    switch (action.type) {
+    switch (parsed.type) {
       case 'CREATE_LEAD':
         await this.handleUpsertLead(conversation, payload);
         break;
@@ -172,21 +211,23 @@ export class ActionExecutorService {
 
       case 'SCHEDULE_FOLLOW_UP':
         if (
-          !payload.scheduledAt ||
-          isNaN(new Date(payload.scheduledAt as string).getTime())
+          typeof payload.scheduledAt !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(payload.scheduledAt) ||
+          isNaN(new Date(payload.scheduledAt).getTime()) ||
+          (payload.context !== undefined && (typeof payload.context !== 'string' || payload.context.length > 500))
         ) {
-          throw new Error('Invalid or missing scheduledAt date');
+          throw new Error('INVALID_FOLLOW_UP_ARGUMENTS');
         }
         await this.followUpService.scheduleAiFollowUp(
           conversation.organizationId,
           conversation.id,
-          new Date(payload.scheduledAt as string),
-          (payload.context as string) || '',
+          new Date(String(payload.scheduledAt)),
+          typeof payload.context === 'string' ? payload.context : '',
         );
         break;
 
       default:
-        this.logger.warn(`Rejected unknown action type: "${action.type}"`);
+        this.logger.warn(`ACTION_TYPE_INVALID conversationId=${conversation.id}`);
         return 'rejected';
     }
     return 'executed';
@@ -244,11 +285,8 @@ export class ActionExecutorService {
             data: { externalContactId, externalDealId },
           });
         }
-      } catch (crmError: any) {
-        this.logger.error(
-          `CRM sync failed for Lead ${updatedLead.id}: ${crmError.message}`,
-          crmError.stack,
-        );
+      } catch {
+        this.logger.error(`CRM_SYNC_FAILED leadId=${updatedLead.id}`);
       }
     }
   }
@@ -279,7 +317,7 @@ export class ActionExecutorService {
     const targetUserId = conversation.lead?.assignedAgentId;
 
     if (targetUserId) {
-      await this.notificationEmitter.send({
+      const notification = await this.notificationEmitter.send({
         organizationId: conversation.organizationId,
         userId: targetUserId,
         type: NotificationType.LEAD_HANDED_OFF,
@@ -292,7 +330,8 @@ export class ActionExecutorService {
         referenceId: conversation.leadId || conversation.id,
         referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
       });
-      this.logger.log(`✅ Notification sent to assigned agent ${targetUserId}`);
+      if (!notification) throw new Error('NO_ELIGIBLE_STAFF');
+      this.logger.log(`NOTIFICATION_INTENT_COMMITTED userId=${targetUserId}`);
     } else {
       const memberships = await this.prisma.organizationMembership.findMany({
         where: {
@@ -301,8 +340,11 @@ export class ActionExecutorService {
           deletedAt: null,
         },
       });
+      let sent = 0;
+      let failed = false;
       for (const membership of memberships) {
-        await this.notificationEmitter.send({
+        try {
+          const notification = await this.notificationEmitter.send({
           organizationId: conversation.organizationId,
           userId: membership.userId,
           type: NotificationType.LEAD_HANDED_OFF,
@@ -314,9 +356,14 @@ export class ActionExecutorService {
               : 'A conversation has been escalated by the AI.',
           referenceId: conversation.leadId || conversation.id,
           referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
-        });
+          });
+          if (notification) sent++;
+        } catch {
+          failed = true;
+        }
       }
-      this.logger.log(`✅ Notification sent to ${memberships.length} admin(s)`);
+      if (sent === 0) throw new Error(failed ? 'NOTIFICATION_DELIVERY_FAILED' : 'NO_ELIGIBLE_STAFF');
+      this.logger.log(`NOTIFICATION_INTENT_COMMITTED count=${sent}`);
     }
   }
 
@@ -390,8 +437,16 @@ export class ActionExecutorService {
       throw new Error('HANDOFF_LEAD_TENANT_MISMATCH');
     }
 
-    // Idempotency: if already paused, skip re-pausing and re-notifying, but consider it successful.
+    // A prior pause only counts as a handoff if staff notification is durable.
     if (conversation.aiPaused) {
+      const existing = await this.prisma.notification.count({
+        where: {
+          organizationId: conversation.organizationId,
+          type: 'LEAD_HANDED_OFF',
+          referenceId: conversation.leadId ?? conversation.id,
+        },
+      });
+      if (existing === 0) throw new Error('NO_ELIGIBLE_STAFF');
       this.logger.log(
         `Handoff already processed for Conv: ${conversation.id}. Ignoring duplicate.`,
       );
@@ -401,7 +456,7 @@ export class ActionExecutorService {
     const leadId = conversation.leadId;
     const organizationId = conversation.organizationId;
 
-    const { updatedConversation, updatedLead, createdNotifications } =
+    const { updatedConversation, updatedLead } =
       await this.prisma.$transaction(async (tx) => {
         const memberships = await tx.organizationMembership.findMany({
           where: {
@@ -412,6 +467,13 @@ export class ActionExecutorService {
           },
           include: MEMBERSHIP_GRANTS_INCLUDE,
         });
+        const eligible = memberships.filter((membership) =>
+          membershipHasPermission(membership, 'notifications:view') &&
+          (membership.userId === conversation.lead?.assignedAgentId ||
+            membership.userId === conversation.assignedAgentId ||
+            membershipHasPermission(membership, 'leads:read:all')),
+        );
+        if (eligible.length === 0) throw new Error('NO_ELIGIBLE_STAFF');
         const conv = await tx.conversation.update({
           where: { id: conversation.id, organizationId },
           data: { aiPaused: true, stateVersion: { increment: 1 } },
@@ -425,16 +487,8 @@ export class ActionExecutorService {
           });
         }
 
-        const notifications = [];
-        if (memberships.length > 0) {
-          for (const membership of memberships) {
-            if (
-              !membershipHasPermission(membership, 'notifications:view') ||
-              (membership.userId !== lead?.assignedAgentId &&
-                membership.userId !== conv.assignedAgentId &&
-                !membershipHasPermission(membership, 'leads:read:all'))
-            )
-              continue;
+        if (eligible.length > 0) {
+          for (const membership of eligible) {
             const notification = await tx.notification.create({
               data: {
                 organizationId: organizationId,
@@ -446,36 +500,22 @@ export class ActionExecutorService {
                 referenceType: lead ? 'LEAD' : 'CONVERSATION',
               },
             });
-            notifications.push(notification);
+            await tx.outboxEvent.create({
+              data: {
+                organizationId,
+                topic: 'notification.broadcast',
+                payload: { organizationId, notificationId: notification.id },
+              },
+            });
           }
         }
         return {
           updatedConversation: conv,
           updatedLead: lead,
-          createdNotifications: notifications,
         };
       });
 
-    if (createdNotifications.length === 0) {
-      this.logger.warn(`No staff found for Handoff in Org ${organizationId}`);
-      await this.auditService.record({
-        organizationId: organizationId,
-        action: 'ai.handoff_failed_no_staff',
-        targetId: conversation.id,
-        actor: 'ai',
-        metadata: { reason: 'Requires human attention' },
-      });
-    } else {
-      // Safely emit to websockets since it's already durably stored
-      for (const notification of createdNotifications) {
-        await this.broadcastSafely('notification', conversation.id, () =>
-          this.eventsGateway.broadcastNotification(
-            notification.userId,
-            notification,
-          ),
-        );
-      }
-    }
+    // Notification rows and their delivery intents committed atomically.
 
     if (updatedLead) {
       await this.broadcastSafely('lead', conversation.id, () =>
@@ -563,15 +603,20 @@ export class ActionExecutorService {
       'phoneNumber',
       'country',
       'primaryLanguage',
+      'preferredLanguage',
       'gender',
       'timezone',
       'currency',
     ];
     for (const field of stringFields) {
       if (payload[field] !== undefined) {
-        if (typeof payload[field] !== 'string') {
+        if (typeof payload[field] !== 'string' || !payload[field].trim() || payload[field].length > 500) {
           throw new Error(`Invalid type for ${field}, expected string`);
         }
+        if (field === 'gender' && !Object.values(Gender).includes(payload[field] as Gender))
+          throw new Error('INVALID_GENDER');
+        if (field === 'currency' && !Object.values(Currency).includes(payload[field] as Currency))
+          throw new Error('INVALID_CURRENCY');
         updateData[field] = payload[field];
       }
     }

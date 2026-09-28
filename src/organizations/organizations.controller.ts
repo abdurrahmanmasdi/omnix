@@ -1,11 +1,9 @@
 import {
   Controller,
   Post,
-  Patch,
   Body,
   UseGuards,
   Res,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,14 +11,9 @@ import {
   ApiBearerAuth,
   ApiResponse,
 } from '@nestjs/swagger';
-import axios from 'axios';
 import type { Response } from 'express';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
-import { UpdateCrmTokenDto } from './dto/update-crm-token.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { JwtUserGuard } from '../auth/guards/jwt-user.guard';
 import { AuthService } from '../auth/auth.service';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';

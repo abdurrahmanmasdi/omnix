@@ -231,9 +231,7 @@ export class LeadsService {
     // Broadcast the update so UI reacts in real-time
     await this.eventsGateway
       .broadcastLeadUpdate(organizationId, updatedLead)
-      .catch((error: unknown) =>
-        this.logger.warn('Lead update live broadcast failed', error),
-      );
+      .catch(() => this.logger.warn('LEAD_LIVE_BROADCAST_FAILED'));
 
     return toLeadResponse(
       updatedLead,

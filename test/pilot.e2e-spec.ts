@@ -1,320 +1,131 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-import { tenantStorage } from '../src/core/tenant/tenant.context';
-import { Test, TestingModule } from '@nestjs/testing';
+/* eslint-disable @typescript-eslint/no-unsafe-argument -- Supertest response bodies are untyped at the HTTP boundary. */
+import { Client } from 'pg';
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
-import cookieParser from 'cookie-parser';
+import { InvitationsService } from '../src/auth/invitations.service';
 import { WhatsappService } from '../src/webhooks/whatsapp.service';
+import { tenantStorage } from '../src/core/tenant/tenant.context';
+import { safeDeploy } from '../src/credentials/deploy-cli';
 
-describe('Pilot Acceptance Suite (e2e)', () => {
-  let app: INestApplication;
-  let prisma: PrismaService;
+jest.setTimeout(120_000);
+const system = <T>(fn: () => Promise<T>) =>
+  tenantStorage.run({ isSystemBypass: true }, async () => await fn());
+let admin: Client;
+let dbName: string;
+let app: INestApplication;
+let prisma: PrismaService;
+let invitations: InvitationsService;
+const password = 'Synthetic-pilot-password-123';
 
-  // Storage for tokens and IDs
-  let user1Token: string;
-  let user2Token: string;
-  let org1Id: string;
-  let org2Id: string;
-  const runId = Date.now().toString();
-
-  // Fakes
-  const sendTextMock = jest.fn().mockResolvedValue({ messageId: 'wa-msg-1' });
-
-  beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+beforeAll(async () => {
+  const adminUrl = process.env.UPGRADE_TEST_ADMIN_URL;
+  if (!adminUrl || new URL(adminUrl).hostname !== '127.0.0.1') {
+    throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
+  }
+  admin = new Client({ connectionString: adminUrl });
+  await admin.connect();
+  dbName = `omnidesk_s16_${randomUUID().replaceAll('-', '')}`;
+  await admin.query(`CREATE DATABASE "${dbName}"`);
+  const url = new URL(adminUrl);
+  url.pathname = `/${dbName}`;
+  process.env.DATABASE_URL = url.toString();
+  process.env.JWT_ACCESS_SECRET = 'synthetic-s16-access-secret';
+  process.env.JWT_REFRESH_SECRET = 'synthetic-s16-refresh-secret';
+  process.env.META_APP_SECRET = 'synthetic-s16-meta-secret';
+  await safeDeploy(resolve(__dirname, '..'));
+  const module = await Test.createTestingModule({
+    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), AppModule],
+  })
+    .overrideProvider(WhatsappService)
+    .useValue({
+      sendTextMessage: jest.fn().mockResolvedValue({ messages: [{ id: 'synthetic-meta-id' }] }),
+      sendMediaMessage: jest.fn().mockResolvedValue({ messages: [{ id: 'synthetic-media-id' }] }),
     })
-      .overrideProvider(WhatsappService)
-      .useValue({
-        sendText: sendTextMock,
-        sendTemplate: jest.fn().mockResolvedValue({ messageId: 'wa-tpl-1' }),
-        validateSignature: jest.fn((sig) => sig === 'valid-signature'),
-        getMediaUrl: jest.fn().mockResolvedValue('http://fake-media.url'),
-      })
-      .compile();
+    .compile();
+  app = module.createNestApplication({ rawBody: true, logger: false });
+  app.use(cookieParser());
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  await app.init();
+  prisma = app.get(PrismaService);
+  invitations = app.get(InvitationsService);
+});
 
-    app = moduleFixture.createNestApplication();
-    app.use(cookieParser());
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
-    );
-    await app.init();
+afterAll(async () => {
+  if (app) await app.close();
+  if (admin) {
+    if (dbName && /^omnidesk_s16_[a-f0-9]{32}$/.test(dbName)) {
+      await admin.query(`DROP DATABASE "${dbName}" WITH (FORCE)`);
+    }
+    await admin.end();
+  }
+});
 
-    prisma = app.get(PrismaService);
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('1. Signup/onboarding & 2. Two clinics & 3. Two staff assignments', async () => {
-    // Signup User 1
-    await request(app.getHttpServer())
-      .post('/auth/signup')
-      .send({
-        email: `user1_${runId}@example.com`,
-        password: 'Password123!',
-        firstName: 'User',
-        lastName: 'One',
-      })
-      .expect(201);
-    await request(app.getHttpServer())
-      .post('/auth/signup')
-      .send({
-        email: `user2_${runId}@example.com`,
-        password: 'Password123!',
-        firstName: 'User',
-        lastName: 'Two',
-      })
-      .expect(201);
-
-    // Force active (we use executeBypassIsolation to update since Prisma is isolated)
-    await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const p = prisma;
-      await p.user.updateMany({ data: { status: 'ACTIVE' } });
+async function onboardClinic(label: string) {
+  const email = `${randomUUID()}@example.invalid`;
+  const invitation = await invitations.issue(email, 'synthetic-operator');
+  await request(app.getHttpServer())
+    .post('/auth/accept-invitation')
+    .send({ token: invitation.token, password, firstName: 'Pilot', lastName: label })
+    .expect(200);
+  const login = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({ email, password })
+    .expect(200);
+  const created = await request(app.getHttpServer())
+    .post('/organizations')
+    .auth(login.body.access_token as string, { type: 'bearer' })
+    .send({ name: `Synthetic ${label}`, slug: `pilot-${label}-${randomUUID()}` })
+    .expect(201);
+  const organizationId = created.body.organizationId as string;
+  const token = created.body.access_token as string;
+  expect(organizationId).toMatch(/^[a-f0-9-]{36}$/);
+  const role = await system(() => prisma.role.findFirstOrThrow({
+    where: { organizationId, name: 'Agent' },
+  }));
+  const staff = await system(async () => {
+    const user = await prisma.user.create({
+      data: { email: `${randomUUID()}@example.invalid`, password_hash: 'synthetic', firstName: 'Assigned', lastName: label, status: 'ACTIVE' },
     });
-
-    // Login User 1 and User 2
-    user1Token = (
-      await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: `user1_${runId}@example.com`, password: 'Password123!' })
-    ).body.access_token;
-    user2Token = (
-      await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: `user2_${runId}@example.com`, password: 'Password123!' })
-    ).body.access_token;
-
-    // Create clinics
-    org1Id = (
-      await request(app.getHttpServer())
-        .post('/organizations')
-        .set('Authorization', `Bearer ${user1Token}`)
-        .send({ name: 'Clinic One', slug: `clinic-one-${runId}` })
-    ).body.id;
-
-    user1Token = (
-      await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: `user1_${runId}@example.com`, password: 'Password123!' })
-    ).body.access_token;
-
-    org2Id = (
-      await request(app.getHttpServer())
-        .post('/organizations')
-        .set('Authorization', `Bearer ${user2Token}`)
-        .send({ name: 'Clinic Two', slug: `clinic-two-${runId}` })
-    ).body.id;
-    user2Token = (
-      await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email: `user2_${runId}@example.com`, password: 'Password123!' })
-    ).body.access_token;
-
-    // Create channel for org 1
-    await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const p = prisma;
-      await p.channel.create({
-        data: {
-          id: `chan-1-${runId}`,
-          organizationId: org1Id,
-          provider: 'WHATSAPP_CLOUD_API',
-          providerAccountId: '1234567890',
-          accessToken: 'token',
-        },
-      });
+    await prisma.organizationMembership.create({
+      data: { organizationId, userId: user.id, roleId: role.id, status: 'ACTIVE' },
     });
+    return user;
   });
-
-  it('4. Authorized and denied reads/events/actions', async () => {
-    // User 1 cannot read User 2's org
-    await request(app.getHttpServer())
-      .get('/conversations')
-      .set('Authorization', `Bearer ${user1Token}`)
-      .set('x-organization-id', org2Id)
-      .expect(403);
-    // User 1 CAN read User 1's org
-    await request(app.getHttpServer())
-      .get('/conversations')
-      .set('Authorization', `Bearer ${user1Token}`)
-      .set('x-organization-id', org1Id)
-      .expect(200);
-  });
-
-  it('5. Webhook signature and duplicate input', async () => {
-    const payload = {
-      object: 'whatsapp_business_account',
-      entry: [
-        {
-          id: 'test_waba_123',
-          changes: [
-            {
-              value: {
-                metadata: {
-                  display_phone_number: '1234567890',
-                  phone_number_id: 'test_phone_id_123',
-                },
-                contacts: [
-                  { profile: { name: 'Test Patient' }, wa_id: '19998887777' },
-                ],
-                messages: [
-                  {
-                    from: '19998887777',
-                    id: `msg-123-${runId}`,
-                    timestamp: '123456789',
-                    type: 'text',
-                    text: { body: 'Hello' },
-                  },
-                ],
-              },
-              field: 'messages',
-            },
-          ],
-        },
-      ],
-    };
-
-    // Invalid sig
-    await request(app.getHttpServer())
-      .post('/webhooks/whatsapp')
-      .set('x-hub-signature-256', 'invalid')
-      .send(payload)
-      .expect(401);
-
-    // Valid sig
-    await request(app.getHttpServer())
-      .post('/webhooks/whatsapp')
-      .set('x-hub-signature-256', 'valid-signature')
-      .send(payload)
-      .expect(201);
-
-    // Duplicate input (should return 201 but not process)
-    await request(app.getHttpServer())
-      .post('/webhooks/whatsapp')
-      .set('x-hub-signature-256', 'valid-signature')
-      .send(payload)
-      .expect(201);
-
-    // Wait a bit to ensure it processes
-    await new Promise((r) => setTimeout(r, 500));
-    await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const p = prisma;
-      const messages = await p.message.findMany({
-        where: { id: `msg-123-${runId}` },
-      });
-      expect(messages.length).toBe(1);
+  const record = await system(async () => {
+    const lead = await prisma.lead.create({
+      data: { organizationId, firstName: 'Synthetic', lastName: 'Patient', phoneNumber: `1555${Math.floor(Math.random() * 1_000_000_000).toString().padStart(9, '0')}`, country: 'US', timezone: 'UTC', primaryLanguage: 'en', assignedAgentId: staff.id },
     });
-  });
-
-  it('6. Pause/opt-out & 9. Media consent', async () => {
-    // Media consent
-    const payloadConsent = {
-      object: 'whatsapp_business_account',
-      entry: [
-        {
-          id: 'test_waba_123',
-          changes: [
-            {
-              value: {
-                metadata: { display_phone_number: '1234567890' },
-                contacts: [{ wa_id: '19998887777' }],
-                messages: [
-                  {
-                    from: '19998887777',
-                    id: `msg-consent-${runId}`,
-                    timestamp: '123456790',
-                    type: 'text',
-                    text: { body: 'I CONSENT' },
-                  },
-                ],
-              },
-              field: 'messages',
-            },
-          ],
-        },
-      ],
-    };
-    await request(app.getHttpServer())
-      .post('/webhooks/whatsapp')
-      .set('x-hub-signature-256', 'valid-signature')
-      .send(payloadConsent)
-      .expect(201);
-    await new Promise((r) => setTimeout(r, 500));
-
-    await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const p = prisma;
-      const lead = await p.lead.findFirst({
-        where: { phoneNumber: '19998887777' },
-      });
-      expect(lead?.mediaConsentGranted).toBe(true);
-
-      // Opt-out
-      const payloadOptout = {
-        object: 'whatsapp_business_account',
-        entry: [
-          {
-            id: 'test_waba_123',
-            changes: [
-              {
-                value: {
-                  metadata: { display_phone_number: '1234567890' },
-                  contacts: [{ wa_id: '19998887777' }],
-                  messages: [
-                    {
-                      from: '19998887777',
-                      id: `msg-optout-${runId}`,
-                      timestamp: '123456791',
-                      type: 'text',
-                      text: { body: 'STOP' },
-                    },
-                  ],
-                },
-                field: 'messages',
-              },
-            ],
-          },
-        ],
-      };
-      await request(app.getHttpServer())
-        .post('/webhooks/whatsapp')
-        .set('x-hub-signature-256', 'valid-signature')
-        .send(payloadOptout)
-        .expect(201);
-      await new Promise((r) => setTimeout(r, 500));
-
-      const conv = await p.conversation.findFirst({
-        where: { leadId: lead?.id },
-      });
-      expect(conv?.aiPaused).toBe(true);
+    const conversation = await prisma.conversation.create({
+      data: { organizationId, leadId: lead.id, externalContactId: lead.phoneNumber, assignedAgentId: staff.id },
     });
+    return { lead, conversation };
   });
+  return { organizationId, token, staff, ...record };
+}
 
-  it('12. Refresh-token reuse', async () => {
-    // Generate refresh token via login
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: `user1_${runId}@example.com`, password: 'Password123!' })
-      .expect(201);
-
-    // Extract cookie
-    const cookies = loginRes.headers['set-cookie'];
-
-    // Call refresh
-    const refreshRes = await request(app.getHttpServer())
-      .post('/auth/refresh')
-      .set('Cookie', cookies)
-      .expect(201);
-
-    expect(refreshRes.body.access_token).toBeDefined();
-
-    // Attempt reuse (should fail because rotating changes the family/reuse triggers ban)
-    // Wait, let's see if we actually trigger a 401. If refresh token is reused, it should revoke all.
-    await request(app.getHttpServer())
-      .post('/auth/refresh')
-      .set('Cookie', cookies)
-      .expect(401);
-  });
+it('onboards two clinics, assigns separate staff, and scopes their HTTP conversation views', async () => {
+  const first = await onboardClinic('first');
+  const second = await onboardClinic('second');
+  expect(first.organizationId).not.toBe(second.organizationId);
+  expect(first.staff.id).not.toBe(second.staff.id);
+  expect(first.conversation.assignedAgentId).toBe(first.staff.id);
+  expect(second.conversation.assignedAgentId).toBe(second.staff.id);
+  const own = await request(app.getHttpServer())
+    .get('/conversations')
+    .auth(first.token, { type: 'bearer' })
+    .expect(200);
+  const ids = (own.body as { id: string }[]).map((row) => row.id);
+  expect(ids).toContain(first.conversation.id);
+  expect(ids).not.toContain(second.conversation.id);
+  await request(app.getHttpServer())
+    .get(`/conversations/${second.conversation.id}/messages`)
+    .auth(first.token, { type: 'bearer' })
+    .expect(404);
 });

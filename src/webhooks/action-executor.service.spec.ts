@@ -37,7 +37,9 @@ describe('ActionExecutorService', () => {
             $transaction: jest.fn(),
             notification: {
               create: jest.fn(),
+              count: jest.fn().mockResolvedValue(1),
             },
+            outboxEvent: { create: jest.fn().mockResolvedValue({ id: 'outbox-1' }) },
             organizationMembership: {
               findMany: jest.fn().mockResolvedValue([
                 {
@@ -125,15 +127,8 @@ describe('ActionExecutorService', () => {
       );
     });
 
-    it('persists the pause, lead state and notification together before broadcasting', async () => {
-      (eventsGateway.broadcastNotification as jest.Mock).mockImplementation(
-        () => {
-          expect(prismaService.notification.create).toHaveBeenCalledTimes(1);
-          expect(prismaService.$transaction).toHaveBeenCalledTimes(1);
-        },
-      );
-
-      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+    it('persists the pause, lead state, notification and relay intent together', async () => {
+      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
       expect(prismaService.conversation.update).toHaveBeenCalledWith({
         where: { id: 'trusted-conv', organizationId: 'org-1' },
         data: { aiPaused: true, stateVersion: { increment: 1 } },
@@ -153,17 +148,21 @@ describe('ActionExecutorService', () => {
           referenceType: 'LEAD',
         },
       });
-      expect(eventsGateway.broadcastNotification).toHaveBeenCalledWith(
-        'staff-1',
-        expect.objectContaining({ id: 'notification-1' }),
-      );
+      expect(prismaService.outboxEvent.create).toHaveBeenCalledWith({
+        data: {
+          organizationId: 'org-1',
+          topic: 'notification.broadcast',
+          payload: { organizationId: 'org-1', notificationId: 'notification-1' },
+        },
+      });
+      expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
       expect(auditService.record).not.toHaveBeenCalled();
     });
 
     it.each(['{', 'null', '[]', '"handoff"', 'true', '12'])(
       'rejects malformed or non-object payload %s before writes',
       async (payload) => {
-        expect(await handoff(payload)).toEqual({
+        expect(await handoff(payload)).toMatchObject({
           executed: 0,
           rejected: 1,
           failed: 0,
@@ -173,7 +172,7 @@ describe('ActionExecutorService', () => {
       },
     );
 
-    it('cannot redirect a handoff using model-supplied tenant, lead or recipient IDs', async () => {
+    it('rejects model-supplied tenant, lead or recipient IDs', async () => {
       expect(
         await handoff(
           JSON.stringify({
@@ -184,36 +183,23 @@ describe('ActionExecutorService', () => {
             reason: 'Requested staff',
           }),
         ),
-      ).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      ).toMatchObject({ executed: 0, rejected: 1, failed: 0 });
       expect(prismaService.conversation.findFirst).toHaveBeenCalledWith({
         where: { id: 'trusted-conv', organizationId: 'org-1' },
         include: { lead: true },
       });
-      expect(prismaService.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1', organizationId: 'org-1' },
-        data: { status: 'HANDED_OFF' },
-      });
-      expect(
-        prismaService.organizationMembership.findMany,
-      ).toHaveBeenCalledWith({
-        where: {
-          organizationId: 'org-1',
-          status: 'ACTIVE',
-          deletedAt: null,
-          user: { status: 'ACTIVE', deletedAt: null },
-        },
-        include: expect.objectContaining({
-          role: expect.any(Object),
-          permissionOverrides: expect.any(Object),
-        }),
-      });
+      expect(prismaService.lead.update).not.toHaveBeenCalled();
+      expect(prismaService.organizationMembership.findMany).not.toHaveBeenCalled();
     });
 
     it('does not hand off a conversation outside the worker tenant', async () => {
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue(
         null,
       );
-      expect(await handoff()).toEqual({ executed: 0, rejected: 0, failed: 1 });
+      expect(await handoff()).toMatchObject({
+        executed: 0, rejected: 0, failed: 1,
+        outcomes: [{ reasonCode: 'CONVERSATION_NOT_FOUND', retryable: false }],
+      });
       expect(prismaService.$transaction).not.toHaveBeenCalled();
     });
 
@@ -222,16 +208,19 @@ describe('ActionExecutorService', () => {
         ...conversation,
         lead: { ...conversation.lead, organizationId: 'org-2' },
       });
-      expect(await handoff()).toEqual({ executed: 0, rejected: 0, failed: 1 });
+      expect(await handoff()).toMatchObject({ executed: 0, rejected: 0, failed: 1 });
       expect(prismaService.$transaction).not.toHaveBeenCalled();
     });
 
-    it('keeps AI paused and records the existing no-staff audit outcome', async () => {
+    it('rejects a handoff with no eligible staff before pausing', async () => {
       (
         prismaService.organizationMembership.findMany as jest.Mock
       ).mockResolvedValue([]);
-      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
-      expect(prismaService.conversation.update).toHaveBeenCalled();
+      expect(await handoff()).toMatchObject({
+        executed: 0, rejected: 0, failed: 1,
+        outcomes: [{ reasonCode: 'NO_ELIGIBLE_STAFF', retryable: true }],
+      });
+      expect(prismaService.conversation.update).not.toHaveBeenCalled();
       expect(prismaService.notification.create).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
       expect(auditService.record).toHaveBeenCalledWith({
@@ -239,7 +228,7 @@ describe('ActionExecutorService', () => {
         action: 'ai.handoff_failed_no_staff',
         targetId: 'trusted-conv',
         actor: 'ai',
-        metadata: { reason: 'Requires human attention' },
+        metadata: { reason: 'NO_ELIGIBLE_STAFF' },
       });
     });
 
@@ -255,7 +244,7 @@ describe('ActionExecutorService', () => {
           permissionOverrides: [],
         },
       ]);
-      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({ executed: 0, rejected: 0, failed: 1 });
       expect(prismaService.notification.create).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
     });
@@ -266,7 +255,7 @@ describe('ActionExecutorService', () => {
         leadId: null,
         lead: null,
       });
-      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
       expect(prismaService.lead.update).not.toHaveBeenCalled();
       expect(prismaService.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -276,7 +265,7 @@ describe('ActionExecutorService', () => {
       });
     });
 
-    it('reports synchronous and asynchronous broadcast failures without replaying committed actions', async () => {
+    it('reports lead and conversation broadcast failures without replaying committed actions', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
       (eventsGateway.broadcastNotification as jest.Mock).mockImplementation(
         () => {
@@ -289,13 +278,13 @@ describe('ActionExecutorService', () => {
       (
         eventsGateway.broadcastConversationUpdate as jest.Mock
       ).mockRejectedValue(new Error('Sensitive transport detail'));
-      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
-      for (const event of ['notification', 'lead', 'conversation']) {
+      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
+      for (const event of ['lead', 'conversation']) {
         expect(warn).toHaveBeenCalledWith(
           `ACTION_BROADCAST_FAILED event=${event} conversationId=trusted-conv`,
         );
       }
-      expect(warn).toHaveBeenCalledTimes(3);
+      expect(warn).toHaveBeenCalledTimes(2);
       expect(prismaService.notification.create).toHaveBeenCalledTimes(1);
     });
 
@@ -303,7 +292,7 @@ describe('ActionExecutorService', () => {
       (prismaService.$transaction as jest.Mock).mockRejectedValue(
         new Error('Transaction failed'),
       );
-      expect(await handoff()).toEqual({ executed: 0, rejected: 0, failed: 1 });
+      expect(await handoff()).toMatchObject({ executed: 0, rejected: 0, failed: 1 });
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastLeadUpdate).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastConversationUpdate).not.toHaveBeenCalled();
@@ -314,7 +303,7 @@ describe('ActionExecutorService', () => {
         ...conversation,
         aiPaused: true,
       });
-      expect(await handoff()).toEqual({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
       expect(prismaService.$transaction).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
     });
@@ -346,22 +335,11 @@ describe('ActionExecutorService', () => {
       });
       expect(
         await service.executeActions('org-1', 'trusted-conv', actions),
-      ).toEqual({
-        executed: 1,
-        rejected: 0,
-        failed: 0,
-      });
-
-      expect(prismaService.lead.update).toHaveBeenCalledWith({
-        where: { id: 'lead-1' },
-        data: expect.not.objectContaining({
-          mediaConsentGranted: expect.anything(),
-          mediaConsentSource: expect.anything(),
-        }),
-      });
+      ).toMatchObject({ executed: 0, rejected: 1, failed: 0 });
+      expect(prismaService.lead.update).not.toHaveBeenCalled();
     });
 
-    it('An action containing a different conversation ID cannot update that conversation', async () => {
+    it('rejects an action containing a model-supplied conversation ID', async () => {
       // The model returns an action with a different conversationId in payload
       const actions = [
         {
@@ -383,14 +361,11 @@ describe('ActionExecutorService', () => {
         'trusted-conv',
         actions,
       );
-      expect(result.executed).toBe(1);
+      expect(result.executed).toBe(0);
+      expect(result.rejected).toBe(1);
       expect(result.failed).toBe(0);
 
-      // Verify that it updated 'trusted-conv', ignoring 'other-conv'
-      expect(prismaService.conversation.update).toHaveBeenCalledWith({
-        where: { id: 'trusted-conv' },
-        data: { aiPaused: true, stateVersion: { increment: 1 } },
-      });
+      expect(prismaService.conversation.update).not.toHaveBeenCalled();
     });
 
     it('An action cannot mutate a lead from another organization', async () => {
@@ -442,9 +417,12 @@ describe('ActionExecutorService', () => {
         actions,
       );
 
-      // The action itself fails due to validation
+      // The contract boundary rejects the action before invoking Prisma.
       expect(result.executed).toBe(0);
-      expect(result.failed).toBe(1);
+      expect(result.rejected).toBe(1);
+      expect(result.outcomes[0]).toMatchObject({
+        reasonCode: 'ACTION_INVALID', retryable: false,
+      });
 
       // Verify Prisma was never called for update
       expect(prismaService.lead.update).not.toHaveBeenCalled();
@@ -481,6 +459,21 @@ describe('ActionExecutorService', () => {
       expect(prismaService.lead.update).toHaveBeenCalledWith({
         where: { id: 'lead-1' },
         data: { status: LeadStatus.QUALIFYING },
+      });
+    });
+
+    it('classifies a rejected database lead update as retryable', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        id: 'trusted-conv', organizationId: 'org-1', leadId: 'lead-1',
+        lead: { status: LeadStatus.NEW },
+      });
+      (prismaService.lead.update as jest.Mock).mockRejectedValue(new Error('synthetic database outage'));
+      const result = await service.executeActions('org-1', 'trusted-conv', [
+        { type: 'UPDATE_LEAD', payload: JSON.stringify({ status: LeadStatus.QUALIFYING }) },
+      ]);
+      expect(result).toMatchObject({
+        executed: 0, rejected: 0, failed: 1,
+        outcomes: [{ reasonCode: 'ACTION_WRITE_FAILED', retryable: true }],
       });
     });
 

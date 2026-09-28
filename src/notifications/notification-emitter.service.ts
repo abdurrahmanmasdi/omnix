@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EventsGateway } from '../events/events/events.gateway';
 import { NotificationType } from '@prisma/client';
 import { PermissionService } from '../auth/permission.service';
 
@@ -16,10 +15,8 @@ export interface SendNotificationDto {
 
 @Injectable()
 export class NotificationEmitterService {
-  private readonly logger = new Logger(NotificationEmitterService.name);
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eventsGateway: EventsGateway, // Your existing WebSocket gateway
     private readonly permissions: PermissionService,
   ) {}
 
@@ -107,26 +104,26 @@ export class NotificationEmitterService {
         ? data.body
         : 'Open the inbox to view details.';
     // 1. Save to Database (Persistence)
-    const notification = await this.prisma.notification.create({
-      data: {
-        organizationId: data.organizationId,
-        userId: data.userId,
-        type: data.type,
-        title,
-        body,
-        referenceId: data.referenceId,
-        referenceType: data.referenceType,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const notification = await tx.notification.create({
+        data: {
+          organizationId: data.organizationId,
+          userId: data.userId,
+          type: data.type,
+          title,
+          body,
+          referenceId: data.referenceId,
+          referenceType: data.referenceType,
+        },
+      });
+      await tx.outboxEvent.create({
+        data: {
+          organizationId: data.organizationId,
+          topic: 'notification.broadcast',
+          payload: { organizationId: data.organizationId, notificationId: notification.id },
+        },
+      });
+      return notification;
     });
-
-    // 2. Emit via WebSocket in Real-Time
-    // The eventsGateway will map it to a strict DTO and emit to the user's room
-    await this.eventsGateway
-      .broadcastNotification(data.userId, notification)
-      .catch((error: unknown) =>
-        this.logger.warn('Notification live broadcast failed', error),
-      );
-
-    return notification;
   }
 }

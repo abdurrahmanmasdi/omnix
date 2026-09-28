@@ -1,5 +1,4 @@
 import {
-  toPublicMessageDto,
   toPublicLeadDto,
   toPublicConversationDto,
   toPublicNotificationDto,

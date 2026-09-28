@@ -189,9 +189,7 @@ export class ConversationsService {
     // 5. Broadcast to the frontend using your exact working format!
     await this.eventsGateway
       .broadcastNewMessage(organizationId, newMessage)
-      .catch((error: unknown) =>
-        this.logger.warn('Manual-message live broadcast failed', error),
-      );
+      .catch(() => this.logger.warn('MANUAL_MESSAGE_BROADCAST_FAILED'));
 
     return newMessage;
   }

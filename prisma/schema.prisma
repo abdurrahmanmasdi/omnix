@@ -252,6 +252,10 @@ model Lead {
   mediaConsentGrantedAt   DateTime?
   mediaConsentSource      String?
   mediaConsentWithdrawnAt DateTime?
+  mediaConsentPurpose     String?
+  mediaConsentText        String?
+  mediaConsentResponseId  String?
+  mediaConsentChannel     String?
   externalCrmType     ExternalCrmType @default(NONE)
   externalContactId   String?
   externalDealId      String?

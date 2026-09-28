@@ -1,12 +1,20 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'node:crypto';
 
 @Module({
   imports: [
     PinoLoggerModule.forRoot({
       pinoHttp: {
+        autoLogging: false,
+        genReqId: () => randomUUID(),
         redact: {
           paths: [
+            'req.url',
+            'req.query',
+            'req.body',
+            'req.rawBody',
+            'req.headers',
             'req.headers.authorization',
             'req.headers.cookie',
             'req.body.password',

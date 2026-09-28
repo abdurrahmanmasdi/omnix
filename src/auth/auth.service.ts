@@ -54,10 +54,22 @@ export class AuthService {
     if (!isPasswordValid)
       throw new UnauthorizedException('Invalid credentials');
 
-    // Deterministic organization selection: oldest active membership
-    const activeMembership = user.memberships[0];
-    const organizationId = activeMembership?.organizationId || null;
-    const roleId = activeMembership?.roleId || null;
+
+    let organizationId: string | null = null;
+    let roleId: string | null = null;
+
+    if (loginDto.organizationId) {
+      const requestedMembership = user.memberships.find(m => m.organizationId === loginDto.organizationId);
+      if (!requestedMembership) {
+        throw new UnauthorizedException('Membership not found or inactive');
+      }
+      organizationId = requestedMembership.organizationId;
+      roleId = requestedMembership.roleId;
+    } else if (user.memberships.length === 1) {
+      organizationId = user.memberships[0].organizationId;
+      roleId = user.memberships[0].roleId;
+    }
+
 
     return this.generateTokens(
       user.id,
@@ -71,11 +83,11 @@ export class AuthService {
     );
   }
 
-  async refreshTokens(refreshToken: string, userAgent?: string, ip?: string) {
-    let payload: { familyId?: string; nonce?: string };
+  async refreshTokens(refreshToken: string, userAgent?: string, ip?: string, requestedOrganizationId?: string) {
+    let payload: { familyId?: string; nonce?: string; org?: string | null };
     try {
       // 1. Verify the token signature mathematically
-      payload = this.jwtService.verify<{ familyId?: string; nonce?: string }>(
+      payload = this.jwtService.verify<{ familyId?: string; nonce?: string; org?: string | null }>(
         refreshToken,
         {
           secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
@@ -85,7 +97,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const { familyId, nonce } = payload;
+    const { familyId, nonce, org } = payload;
     if (
       typeof familyId !== 'string' ||
       !familyId ||
@@ -139,19 +151,33 @@ export class AuthService {
           memberships: {
             where: { status: 'ACTIVE', deletedAt: null },
             orderBy: { createdAt: 'asc' },
+            include: { role: true },
           },
         },
       });
 
-      if (!user) return { error: 'User not found' };
-      if (user.status !== 'ACTIVE' || user.deletedAt) {
+      if (!user || user.status !== 'ACTIVE' || user.deletedAt) {
         return { error: 'User account is not active' };
       }
 
-      // Deterministic selection
-      const activeMembership = user.memberships[0];
-      const organizationId = activeMembership?.organizationId || null;
-      const roleId = activeMembership?.roleId || null;
+      let organizationId: string | null = null;
+      let roleId: string | null = null;
+
+      const targetOrgId = requestedOrganizationId !== undefined ? requestedOrganizationId : org;
+
+      if (targetOrgId) {
+        const mem = user.memberships.find(m => m.organizationId === targetOrgId);
+        if (mem) {
+          organizationId = mem.organizationId;
+          roleId = mem.roleId;
+        } else if (requestedOrganizationId !== undefined) {
+          return { error: 'Requested organization not found or inactive' };
+        }
+        // If they didn't request a new one and the old one is inactive, we fall back to null
+      } else if (user.memberships.length === 1 && requestedOrganizationId === undefined) {
+        organizationId = user.memberships[0].organizationId;
+        roleId = user.memberships[0].roleId;
+      }
 
       // Revoke old session atomically using compare-and-set
       const updateResult = await tx.session.updateMany({
@@ -266,6 +292,7 @@ export class AuthService {
     const refreshPayload = {
       familyId,
       nonce,
+      org: organizationId,
     };
 
     const refreshToken = this.jwtService.sign(refreshPayload, {

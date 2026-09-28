@@ -165,26 +165,29 @@ export class OutboxProcessor {
           try {
             await this.outboxRelayQueue.add(event.topic, event.payload, {
               jobId: `outbox-${event.id}`,
-              removeOnComplete: true,
+              attempts: event.topic === 'notification.broadcast' ? 5 : 1,
+              backoff: { type: 'exponential', delay: 2000 },
+              removeOnComplete: { age: 86400, count: 10000 },
               removeOnFail: false,
             });
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
               data: { status: 'PROCESSED', processedAt: new Date() },
             });
-          } catch (error: any) {
-            this.logger.error(
-              `Failed to process outbox event ${event.id}: ${error.message}`,
-            );
+          } catch {
+            this.logger.error(`OUTBOX_RELAY_FAILED eventId=${event.id}`);
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
-              data: { status: 'FAILED', error: error.message },
+              data: {
+                status: event.topic === 'notification.broadcast' ? 'PENDING' : 'FAILED',
+                error: 'OUTBOX_RELAY_FAILED',
+              },
             });
           }
         }
       });
-    } catch (err) {
-      this.logger.error('Error during outbox polling', err);
+    } catch {
+      this.logger.error('OUTBOX_POLL_FAILED');
     } finally {
       this.isProcessing = false;
     }

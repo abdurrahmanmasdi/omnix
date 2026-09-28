@@ -1,10 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { tenantStorage } from '../core/tenant/tenant.context';
 import axios from 'axios';
 
 @Injectable()
-export class WhatsappMediaService {
+export class WhatsappMediaService implements OnModuleInit {
+  async onModuleInit() {
+    await this.cleanupExpiredMedia();
+  }
   private readonly logger = new Logger(WhatsappMediaService.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -13,23 +17,41 @@ export class WhatsappMediaService {
   async cleanupExpiredMedia() {
     this.logger.log('Running cleanup for expired patient media...');
     try {
-      const result = await this.prisma.message.updateMany({
-        where: {
-          mediaExpiresAt: { lte: new Date() },
-          mediaUrl: { not: null },
-        },
-        data: {
-          mediaUrl: null,
-          content: '[Patient Media - Expired and Deleted]',
-        },
-      });
-      if (result.count > 0) {
+      await tenantStorage.run({ isSystemBypass: true }, async () => {
+        const messages = await this.prisma.message.findMany({
+          where: {
+            mediaExpiresAt: { lte: new Date() },
+            mediaUrl: { not: null },
+          },
+          include: { conversation: true },
+        });
+
+        if (messages.length === 0) return;
+
+        for (const message of messages) {
+           await this.prisma.message.update({
+             where: { id: message.id },
+             data: {
+               mediaUrl: null,
+               content: '[Patient Media - Expired and Deleted]',
+             }
+           });
+           await this.prisma.auditLog.create({
+             data: {
+               organizationId: message.conversation.organizationId,
+               actor: 'system',
+               action: 'media.expired_deleted',
+               targetId: message.id,
+               metadata: { deletedMessageId: message.id },
+             }
+           });
+        }
         this.logger.log(
-          `Successfully deleted media for ${result.count} expired messages.`,
+          `Successfully deleted media for ${messages.length} expired messages.`,
         );
-      }
-    } catch (error) {
-      this.logger.error('Failed to cleanup expired media', error);
+      });
+    } catch {
+      this.logger.error('MEDIA_CLEANUP_FAILED');
     }
   }
 
@@ -58,9 +80,7 @@ export class WhatsappMediaService {
       const mediaUrl = metadataResponse.data?.url;
 
       if (!mediaUrl) {
-        this.logger.error(
-          `No media URL found in response for mediaId: ${mediaId}`,
-        );
+        this.logger.error('MEDIA_URL_MISSING');
         return null;
       }
 
@@ -75,10 +95,8 @@ export class WhatsappMediaService {
       // Step 3: Convert the binary data buffer to a Base64 string
       const base64Media = Buffer.from(mediaResponse.data).toString('base64');
       return base64Media;
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to download media (ID: ${mediaId}): ${error.response?.data?.error?.message || error.message}`,
-      );
+    } catch {
+      this.logger.error('MEDIA_DOWNLOAD_FAILED');
       return null; // Return null gracefully on failure
     }
   }

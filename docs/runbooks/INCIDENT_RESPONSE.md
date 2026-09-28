@@ -1,52 +1,33 @@
-# Incident Response & Operations Runbook
+# Incident response and recovery
 
-This document outlines the standard operating procedures for handling production incidents, performing database rollbacks, and managing day-to-day operations for the OmniDesk backend.
+Owner assignment and alert delivery are pending S17 staging verification. Do not assume that a `/metrics` endpoint means it is scraped or paged. Record every incident in the restricted operations log with UTC times, environment, tenant, incident owner, and sanitized event IDs. Never paste credentials, patient messages, media, provider payloads, or full database URLs into tickets.
 
-## 1. Observability & Alerting
+## First response
 
-The system is configured with `nestjs-pino` for structured logging and `@willsoto/nestjs-prometheus` for metrics.
+1. The on-call owner acknowledges the alert, identifies the affected tenant and first failing component, and records the time. If real patient data or a possible disclosure is involved, stop automation for the affected clinic and follow the agreed clinic incident contact process.
+2. Check the backend process, Python worker/gRPC health, Postgres, Redis/BullMQ, provider status, and outbox age. Confirm whether sends are `PENDING`, `ACCEPTED`, `UNKNOWN`, or confirmed failed before taking action.
+3. For an ambiguous Meta send, wait for callback reconciliation or perform provider-side review using the restricted evidence store. **Do not blindly resend** an `UNKNOWN` or accepted attempt: it may duplicate a patient message.
+4. Record the root cause, affected window, recovery action, and verification result. Notify the clinic owner through the agreed channel when required.
 
-- **Metrics Endpoint:** `GET /metrics` exposes Prometheus metrics.
-- **Logs:** Logs are emitted in JSON format in production. Local development uses `pino-pretty` for readability.
+## Queue backlog, stuck outbox, provider failure, worker down
 
-## 2. Database Restore & Rollback
+- Queue backlog: verify worker availability and database/Redis health; compare oldest pending age and processing rate. Pause new automation if it cannot catch up safely. Re-enable only after a synthetic message completes end to end.
+- Stuck outbox: inspect tenant-scoped event state and the related outbound attempt. Confirm the event is retryable and its provider result is known before moving a failed event back to pending. There is no public replay endpoint; a reviewed operator action must target explicit IDs for one tenant.
+- Provider failure: check provider status and credential state. Confirmed rejection may be retried under the existing bounded policy. Ambiguous acceptance requires callback/provider reconciliation.
+- Worker down: restore worker health, then verify that leases expire/recover and no accepted outbound message is sent again. Capture queue age before and after.
 
-### Point-in-Time Recovery (PITR)
+Alert thresholds, escalation destination, and named owner are not configured or verified here. S17 requires firing each alert in staging and recording receipt in `docs/STAGING_VERIFICATION_2026-09-28.md`.
 
-If data corruption occurs (e.g., accidental mass deletion), use your database provider's (e.g., AWS RDS, Supabase) Point-in-Time Recovery feature to restore the database to a state exactly before the incident.
+## Backup and restore exercise
 
-### Reverting Migrations
+1. Record the staging backup timestamp and restore start. Use a separately named, isolated database and the matching original credential encryption key. Restrict network access and use synthetic contacts only.
+2. Restore using the database provider's documented procedure. Inspect migration status before starting the application against the restore. Never run `prisma db push --accept-data-loss` or drop tables as an incident shortcut.
+3. Point a separate staging application instance to the restored database. Verify login, one organization membership, one lead, one conversation, one message, and credential decryption without sending any provider traffic.
+4. Record backup age as observed RPO and elapsed restore-to-working-login as observed RTO. Keep the restored instance isolated, then retire it under the retention policy.
+5. If a schema rollback is necessary, review a forward migration and application compatibility with the engineering owner. Prisma does not provide a safe automatic down migration.
 
-If a deployment introduces a bad schema change:
+No backup restore, RPO/RTO, or alert receipt has yet been observed. Keep real patient traffic disabled until the staging matrix and operations sign-off are complete.
 
-1. Stop the application servers to prevent further writes.
-2. If the migration was additive (e.g., new tables), it may be safe to roll back the application version without reverting the database.
-3. To manually revert a migration, run the down-migration script or manually execute `DROP TABLE` / `ALTER TABLE` commands. Prisma does not have a native `migrate down` command, so schema changes must be pushed forward (e.g., create a new migration that reverts the changes).
+## Credential incident
 
-### Resolving Duplicate Constraints
-
-If a unique constraint (like `organizationId_phoneNumber` on leads) fails due to duplicate data during a migration:
-
-1. Run `npx ts-node cleanup_duplicates.ts` to identify and remove soft-deleted or duplicate rows.
-2. Re-apply the schema with `npx prisma db push --accept-data-loss` (or `migrate dev`).
-
-## 3. Webhook Failures & Outbox Replay
-
-The system uses a Transactional Outbox pattern to ensure message delivery. If an external provider (e.g., Meta) is down, messages will fail to send and be marked as `FAILED` in the `outbox_events` table.
-
-### How to Replay Failed Events
-
-If you notice `FAILED` events in the database, you can replay them once the external service is restored:
-
-1. Connect to the server or database.
-2. Identify the affected organization and event IDs. After confirming the underlying cause is resolved, use an operator-controlled, tenant-scoped update of only those `FAILED` rows to `PENDING`. There is no public replay endpoint.
-3. The background cron job (`OutboxProcessor`) will automatically pick up the events and attempt to relay them again.
-
-## 4. Credential Leaks & Rotation
-
-If a tenant's Meta or HubSpot credentials are leaked:
-
-1. Immediately revoke the credential in the external provider's dashboard.
-2. Use the `CredentialsService.revoke(organizationId, credentialId)` method to mark it as `REVOKED` in the database. This instantly stops all outbound API calls using that credential.
-3. Instruct the tenant to re-authenticate and provide a new set of credentials.
-4. (Optional) Use `CredentialsService.operatorRecovery` to force rotate or clear error states if the provider was temporarily unreachable.
+Revoke the credential at Meta or HubSpot first. Mark the tenant credential revoked through `CredentialsService`, confirm outbound calls stop, rotate to a new least-privilege credential, and verify only the affected tenant resumes. Preserve the audit trail and follow the clinic incident contact process if exposure is suspected.

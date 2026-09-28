@@ -38,7 +38,9 @@ export class WebhooksService {
     );
     // A status-only webhook has no message id; use a hash-sized stable value
     // derived from the payload rather than treating it as a delivery candidate.
-    const jobId = `inbound-${ids.sort().join('-') || createHmac('sha256', 'webhook').update(JSON.stringify(payload)).digest('hex')}`;
+    const jobId = `inbound-${createHmac('sha256', 'webhook')
+      .update(ids.length ? ids.sort().join('\0') : JSON.stringify(payload))
+      .digest('hex')}`;
     await this.messageQueue.add('process-webhook', payload, {
       jobId,
       removeOnComplete: { age: 86400, count: 10000 },

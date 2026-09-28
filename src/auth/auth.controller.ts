@@ -20,6 +20,7 @@ import {
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Authentication')
@@ -112,6 +113,7 @@ export class AuthController {
   async refreshTokens(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
+    @Body() refreshDto: RefreshDto,
   ) {
     const refreshToken = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
 
@@ -132,6 +134,7 @@ export class AuthController {
         refreshToken,
         req.headers['user-agent'],
         req.ip,
+        refreshDto.organizationId,
       );
 
       // Rotate the refresh token for maximum security

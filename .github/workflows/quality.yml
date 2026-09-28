@@ -1,0 +1,49 @@
+name: Cross-service quality
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      frontend_ref:
+        description: Frontend branch or commit for a coordinated contract release
+        required: false
+        default: main
+      python_ref:
+        description: Python branch or commit for a coordinated contract release
+        required: false
+        default: main
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: backend-v2
+      - uses: actions/checkout@v4
+        with:
+          repository: abdurrahmanmasdi/wp_crm_FE
+          path: frontend-v2
+          ref: ${{ inputs.frontend_ref || 'main' }}
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN || github.token }}
+      - uses: actions/checkout@v4
+        with:
+          repository: abdurrahmanmasdi/degital_sales_employee_python
+          path: python-ai-service-v2
+          ref: ${{ inputs.python_ref || 'main' }}
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: backend-v2/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend-v2/package-lock.json
+            frontend-v2/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            python-ai-service-v2/requirements.txt
+            python-ai-service-v2/requirements-dev.txt
+      - name: Run quality gate
+        run: bash backend-v2/scripts/quality-gate.sh

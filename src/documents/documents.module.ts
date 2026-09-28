@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
-import { join } from 'path';
 import { PrismaModule } from '../prisma/prisma.module';
 import { GRPC_CONFIG } from '../config/grpc.constants';
 

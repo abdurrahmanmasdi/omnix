@@ -62,12 +62,12 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         true,
       );
       return true;
-    } catch (error) {
+    } catch {
       await this.credentials.recordVerification(
         organizationId,
         credentialId,
         false,
-        error instanceof Error ? error.message : 'Unknown error',
+        'HUBSPOT_CREDENTIAL_VERIFICATION_FAILED',
       );
       return false;
     }
@@ -132,7 +132,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
       return response.data;
     } catch (error: any) {
       this.logger.error(
-        `Failed to fetch contact from HubSpot: ${error?.response?.data?.message || error.message}`,
+        'HUBSPOT_CONTACT_FETCH_FAILED',
       );
       throw error;
     }
@@ -185,7 +185,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
       );
 
       this.logger.log(
-        `Created HubSpot contact: ${data.id} for Org: ${lead.organizationId}`,
+        `HUBSPOT_CONTACT_CREATED organizationId=${lead.organizationId}`,
       );
       return data.id;
     } catch (error: any) {
@@ -201,7 +201,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         );
       }
       this.logger.error(
-        `HubSpot syncContact failed: ${error.response?.data?.message || error.message}`,
+        'HUBSPOT_CONTACT_SYNC_FAILED',
       );
       throw error;
     }
@@ -222,7 +222,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
     }
 
     this.logger.log(
-      `Contact already exists in HubSpot (ID: ${existingId}). Updating...`,
+      'HUBSPOT_CONTACT_CONFLICT_UPDATE',
     );
 
     await firstValueFrom(
@@ -310,7 +310,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
       );
 
       this.logger.log(
-        `Created HubSpot deal: ${data.id} for Org: ${lead.organizationId}`,
+        `HUBSPOT_DEAL_CREATED organizationId=${lead.organizationId}`,
       );
       return data.id;
     } catch (error: any) {
@@ -323,7 +323,7 @@ export class HubspotAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         );
       }
       this.logger.error(
-        `HubSpot syncDeal failed: ${error.response?.data?.message || error.message}`,
+        'HUBSPOT_DEAL_SYNC_FAILED',
       );
       throw error;
     }

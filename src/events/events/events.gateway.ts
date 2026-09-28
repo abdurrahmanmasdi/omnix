@@ -16,7 +16,11 @@ import {
   toPublicMessageDto,
   toPublicLeadDto,
   toPublicConversationDto,
+  type MessageSource,
+  type LeadSource,
+  type ConversationSource,
 } from '../dto/public-events.dto';
+import type { NotificationInvalidationPayload } from '../dto/socket-events.generated';
 
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
@@ -140,8 +144,8 @@ export class EventsGateway
         });
 
         next();
-      } catch (error: any) {
-        this.logger.error(`Socket handshake rejected: ${error.message}`);
+      } catch {
+        this.logger.warn('SOCKET_HANDSHAKE_REJECTED');
         next(new Error('UnauthorizedException'));
       }
     });
@@ -253,17 +257,17 @@ export class EventsGateway
                 organizationId,
                 'leads:read:messages',
               );
-            } catch (error: any) {
+            } catch {
               this.logger.warn(
-                `Disconnecting ${socket.id} due to revalidation failure: ${error.message}`,
+                `SOCKET_ACCESS_REVOKED socketId=${socket.id}`,
               );
               socket.disconnect(true);
             }
           }
         });
       }
-    } catch (err) {
-      this.logger.error('Error during socket revalidation', err);
+    } catch {
+      this.logger.error('SOCKET_REVALIDATION_FAILED');
     } finally {
       this.isRevalidating = false;
     }
@@ -410,10 +414,10 @@ export class EventsGateway
   }
 
   // 🚀 Broadcast methods (Public events)
-  async broadcastNewMessage(organizationId: string, messageData: any) {
+  async broadcastNewMessage(organizationId: string, messageData: MessageSource) {
     const safeDto = toPublicMessageDto(messageData);
     const assignedAgentId = await this.getAssignedAgentForConversation(
-      messageData.conversationId as string,
+      messageData.conversationId,
     );
     await this.emitToAuthorized(
       organizationId,
@@ -423,40 +427,43 @@ export class EventsGateway
     );
   }
 
-  async broadcastLeadUpdate(organizationId: string, leadData: any) {
+  async broadcastLeadUpdate(organizationId: string, leadData: LeadSource) {
     const safeDto = toPublicLeadDto(leadData);
     const assignedAgentId = leadData.assignedAgentId || null;
     await this.emitToAuthorized(
       organizationId,
       'onLeadUpdate',
       safeDto,
-      assignedAgentId as string,
+      assignedAgentId,
     );
   }
 
   async broadcastConversationUpdate(
     organizationId: string,
-    conversationData: any,
+    conversationData: ConversationSource,
   ) {
     const safeDto = toPublicConversationDto(conversationData);
+    const lead = conversationData.lead;
+    const leadAgentId = lead && typeof lead === 'object' &&
+      'assignedAgentId' in lead && typeof lead.assignedAgentId === 'string'
+      ? lead.assignedAgentId : null;
     const assignedAgentId =
-      conversationData.lead?.assignedAgentId ||
+      leadAgentId ||
       (await this.getAssignedAgentForConversation(
-        conversationData.id as string,
+        conversationData.id,
       ));
     await this.emitToAuthorized(
       organizationId,
       'onConversationUpdate',
       safeDto,
-      assignedAgentId as string,
+      assignedAgentId,
     );
   }
 
-  async broadcastNotification(userId: string, notificationData: any) {
-    const organizationId = notificationData.organizationId as
-      | string
-      | undefined;
-    if (!organizationId) return;
+  async broadcastNotification(userId: string, notificationData: { id?: string; organizationId?: string; title?: string; body?: string }) {
+    const organizationId = notificationData.organizationId;
+    const notificationId = notificationData.id;
+    if (!organizationId || !notificationId) return;
     const sockets = await this.server.in(`user_${userId}`).fetchSockets();
     await tenantStorage.run({ organizationId }, async () => {
       for (const socket of sockets) {
@@ -466,13 +473,14 @@ export class EventsGateway
           'notifications:view',
         );
         if (!access || access.userId !== userId) continue;
-        socket.emit('new_notification', {
-          id: notificationData.id,
+        const payload: NotificationInvalidationPayload = {
+          id: notificationId,
           organizationId,
           type: 'UPDATE',
           title: 'New notification',
           body: 'Open notifications to view details.',
-        });
+        };
+        socket.emit('new_notification', payload);
       }
     });
   }

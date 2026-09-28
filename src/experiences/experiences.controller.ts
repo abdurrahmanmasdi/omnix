@@ -136,10 +136,7 @@ export class ExperiencesController {
         throw error;
       }
 
-      this.logger.error(
-        `Error creating experience for user ${user.id}:`,
-        error,
-      );
+      this.logger.error(`EXPERIENCE_CREATE_FAILED userId=${user.id}`);
 
       throw new InternalServerErrorException(
         'Failed to create experience. Please try again later.',
@@ -219,10 +216,7 @@ export class ExperiencesController {
         throw error;
       }
 
-      this.logger.error(
-        `Error fetching experiences for user ${user.id}:`,
-        error,
-      );
+      this.logger.error(`EXPERIENCE_LIST_FAILED userId=${user.id}`);
 
       throw new InternalServerErrorException(
         'Failed to fetch experiences. Please try again later.',
@@ -363,7 +357,7 @@ export class ExperiencesController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error updating experience ${id}:`, error);
+      this.logger.error(`EXPERIENCE_UPDATE_FAILED experienceId=${id}`);
       throw new InternalServerErrorException(
         'Failed to update experience. Please try again later.',
       );
@@ -436,7 +430,7 @@ export class ExperiencesController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error deleting experience ${id}:`, error);
+      this.logger.error(`EXPERIENCE_DELETE_FAILED experienceId=${id}`);
       throw new InternalServerErrorException(
         'Failed to delete experience. Please try again later.',
       );

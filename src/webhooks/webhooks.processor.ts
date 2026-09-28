@@ -89,7 +89,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
 
             if (!organization) {
               this.logger.warn(
-                `No organization found for Meta Account ID: ${receivingPhoneNumberId}. Dropping message.`,
+                'Webhook organization lookup failed.',
               );
               continue;
             }
@@ -116,7 +116,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 organization.id,
                 channel.credentialId,
               );
-              accessTokenForMedia = activeCred.accessToken;
+              accessTokenForMedia = activeCred.metaAccessToken || activeCred.accessToken;
             }
 
             // Process each incoming message
@@ -273,7 +273,16 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                   if (base64) mediaUrl = `data:image/jpeg;base64,${base64}`;
                   messageContent = '[Image message]';
                 } else {
-                  messageContent = '[Patient Media - Consent Required]';
+                  if (channel.credentialId && conversation.lead?.phoneNumber) {
+                    await this.whatsappService.sendTextMessage(
+                      channel.credentialId,
+                      organization.id,
+                      conversation.lead.phoneNumber,
+                      "OmniDesk Clinic needs your consent to process and store your images and audio securely for AI analysis and staff review. Reply 'I CONSENT' to grant permission, or 'WITHDRAW CONSENT' anytime to revoke it. (Purpose: Patient Media Analysis v1.0)",
+                      channel.providerAccountId,
+                    );
+                  }
+                  messageContent = '[Media omitted: Awaiting consent. Consent request sent.]';
                 }
               } else if (
                 (message.type === 'audio' && message.audio?.id) ||
@@ -289,7 +298,16 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                   if (base64) mediaUrl = `data:audio/ogg;base64,${base64}`;
                   messageContent = '[Audio message]';
                 } else {
-                  messageContent = '[Patient Media - Consent Required]';
+                  if (channel.credentialId && conversation.lead?.phoneNumber) {
+                    await this.whatsappService.sendTextMessage(
+                      channel.credentialId,
+                      organization.id,
+                      conversation.lead.phoneNumber,
+                      "OmniDesk Clinic needs your consent to process and store your images and audio securely for AI analysis and staff review. Reply 'I CONSENT' to grant permission, or 'WITHDRAW CONSENT' anytime to revoke it. (Purpose: Patient Media Analysis v1.0)",
+                      channel.providerAccountId,
+                    );
+                  }
+                  messageContent = '[Media omitted: Awaiting consent. Consent request sent.]';
                 }
               }
 
@@ -298,9 +316,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               });
 
               if (existingMessage) {
-                this.logger.warn(
-                  `Duplicate webhook detected for Message ID: ${metaMessageId}. Terminating execution.`,
-                );
+                this.logger.warn(`INBOUND_DUPLICATE jobId=${job.id}`);
                 continue; // A batch can contain other, non-duplicate messages.
               }
 
@@ -378,9 +394,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 });
               } catch (error: any) {
                 if (error?.code === 'P2002') {
-                  this.logger.warn(
-                    `Duplicate inbound message ${metaMessageId} rejected atomically.`,
-                  );
+                  this.logger.warn(`INBOUND_DUPLICATE jobId=${job.id}`);
                   continue;
                 }
                 throw error;
@@ -399,14 +413,20 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 messageContent.trim().toUpperCase() === 'I CONSENT' &&
                 conversation.leadId
               ) {
-                await (this.prisma.lead as any).update({
-                  where: { id: conversation.leadId },
-                  data: {
-                    mediaConsentGranted: true,
-                    mediaConsentGrantedAt: new Date(),
-                    mediaConsentSource: 'patient_message',
-                    mediaConsentWithdrawnAt: null,
-                  },
+                await tenantStorage.run({ isSystemBypass: true }, async () => {
+                  await this.prisma.lead.update({
+                    where: { id: conversation.leadId! },
+                    data: {
+                      mediaConsentGranted: true,
+                      mediaConsentGrantedAt: new Date(),
+                      mediaConsentSource: 'patient_message',
+                      mediaConsentWithdrawnAt: null,
+                      mediaConsentPurpose: 'Patient Media Analysis v1.0',
+                      mediaConsentText: 'I CONSENT',
+                      mediaConsentResponseId: metaMessageId,
+                      mediaConsentChannel: 'whatsapp',
+                    },
+                  });
                 });
                 this.logger.log(
                   `Media consent granted by Conv: ${conversation.id}`,
@@ -415,25 +435,28 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
                 messageContent.trim().toUpperCase() === 'WITHDRAW CONSENT' &&
                 conversation.leadId
               ) {
-                await (this.prisma.lead as any).update({
-                  where: { id: conversation.leadId },
-                  data: {
-                    mediaConsentGranted: false,
-                    mediaConsentWithdrawnAt: new Date(),
-                    mediaConsentSource: 'patient_message',
-                  },
-                });
+                await tenantStorage.run({ isSystemBypass: true }, async () => {
+                  await this.prisma.lead.update({
+                    where: { id: conversation.leadId! },
+                    data: {
+                      mediaConsentGranted: false,
+                      mediaConsentWithdrawnAt: new Date(),
+                      mediaConsentSource: 'patient_message',
+                      mediaConsentPurpose: null,
+                    },
+                  });
 
-                // Clear mediaUrls for existing messages
-                await this.prisma.message.updateMany({
-                  where: {
-                    conversationId: conversation.id,
-                    mediaUrl: { not: null },
-                  },
-                  data: {
-                    mediaUrl: null,
-                    content: '[Media removed due to privacy rules]',
-                  },
+                  // Clear mediaUrls for existing messages
+                  await this.prisma.message.updateMany({
+                    where: {
+                      conversationId: conversation.id,
+                      mediaUrl: { not: null },
+                    },
+                    data: {
+                      mediaUrl: null,
+                      content: '[Media removed due to privacy rules]',
+                    },
+                  });
                 });
                 this.logger.log(
                   `Media consent withdrawn by Conv: ${conversation.id}`,
@@ -497,7 +520,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
               }
 
               this.logger.log(
-                `Saved new message for organization ${organization.name}`,
+                `INBOUND_SAVED conversationId=${conversation.id}`,
               );
 
               if (conversation.aiPaused) {
@@ -538,12 +561,7 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
           }
         }
       } catch (error) {
-        if (error instanceof Error) {
-          this.logger.error(
-            `Failed to process webhook payload: ${error.message}`,
-            error.stack,
-          );
-        }
+        this.logger.error(`WEBHOOK_PROCESS_FAILED jobId=${job.id}`);
         throw error; // Throwing the error tells BullMQ to retry the job later based on our backoff strategy
       }
     });

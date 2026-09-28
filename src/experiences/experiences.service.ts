@@ -93,7 +93,7 @@ export class ExperiencesService implements OnModuleInit {
 
       this.logger.log(`Experience created successfully: ${experience.id}`);
 
-      console.log(`Firing gRPC to embed experience ${experience.id}...`);
+      this.logger.log(`EXPERIENCE_EMBED_STARTED experienceId=${experience.id}`);
       const response = await lastValueFrom(
         this.ragService!.EmbedExperience({
           experienceId: experience.id,
@@ -102,9 +102,9 @@ export class ExperiencesService implements OnModuleInit {
       );
 
       if (!response.success) {
-        console.error('Python failed to embed experience:', response.message);
+        this.logger.error(`EXPERIENCE_EMBED_FAILED experienceId=${experience.id}`);
       } else {
-        console.log('✅ Python successfully embedded the experience.');
+        this.logger.log(`EXPERIENCE_EMBED_COMPLETE experienceId=${experience.id}`);
       }
 
       return experience;
@@ -112,7 +112,7 @@ export class ExperiencesService implements OnModuleInit {
       // Handle Prisma-specific errors
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         this.logger.error(
-          `Prisma error creating experience: ${error.code} - ${error.message}`,
+          `EXPERIENCE_CREATE_DATABASE_FAILED code=${error.code}`,
         );
 
         if (error.code === 'P2003') {
@@ -135,10 +135,7 @@ export class ExperiencesService implements OnModuleInit {
       }
 
       // Log unexpected errors
-      this.logger.error(
-        `Unexpected error creating experience for org ${organizationId}:`,
-        error,
-      );
+      this.logger.error(`EXPERIENCE_CREATE_FAILED organizationId=${organizationId}`);
 
       throw new InternalServerErrorException(
         'Failed to create experience. An unexpected error occurred.',
@@ -190,7 +187,7 @@ export class ExperiencesService implements OnModuleInit {
       // Handle Prisma-specific errors
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         this.logger.error(
-          `Prisma error fetching experiences: ${error.code} - ${error.message}`,
+          `EXPERIENCE_LIST_DATABASE_FAILED code=${error.code}`,
         );
 
         throw new InternalServerErrorException(
@@ -207,10 +204,7 @@ export class ExperiencesService implements OnModuleInit {
       }
 
       // Log unexpected errors
-      this.logger.error(
-        `Unexpected error fetching experiences for org ${organizationId}:`,
-        error,
-      );
+      this.logger.error(`EXPERIENCE_LIST_FAILED organizationId=${organizationId}`);
 
       throw new InternalServerErrorException(
         'Failed to fetch experiences. An unexpected error occurred.',
@@ -265,9 +259,7 @@ export class ExperiencesService implements OnModuleInit {
       (dto.title || dto.storyText || dto.patientCountry || dto.procedureType) &&
       dto.consentObtained === true
     ) {
-      console.log(
-        `Text changed for ${experienceId}. Re-firing gRPC to update vector...`,
-      );
+      this.logger.log(`EXPERIENCE_EMBED_RETRY experienceId=${experienceId}`);
       try {
         const response = await lastValueFrom(
           this.ragService!.EmbedExperience({
@@ -276,9 +268,9 @@ export class ExperiencesService implements OnModuleInit {
           }),
         );
         if (!response.success)
-          console.error('Python failed to re-embed:', response.message);
-      } catch (error) {
-        console.error('gRPC Error updating vector:', error);
+          this.logger.error(`EXPERIENCE_EMBED_FAILED experienceId=${experienceId}`);
+      } catch {
+        this.logger.error(`EXPERIENCE_EMBED_FAILED experienceId=${experienceId}`);
       }
     }
 

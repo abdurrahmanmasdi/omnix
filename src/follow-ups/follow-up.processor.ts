@@ -14,6 +14,8 @@ import { NotificationEmitterService } from '../notifications/notification-emitte
 import { DeliveryAuthService } from '../webhooks/delivery-auth.service';
 import { OutboundAttemptService } from '../webhooks/outbound-attempt.service';
 import { randomUUID } from 'node:crypto';
+import { AGENT_CONTRACT_VERSION, isCompatibleAgentVersion } from '../webhooks/contracts/agent-contract';
+import { MEMBERSHIP_GRANTS_INCLUDE, membershipHasPermission } from '../auth/permission.service';
 
 @Processor('follow-up')
 export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
@@ -186,35 +188,52 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
               `Auto follow-up attempt ${followUp.attempt} for Conv ${conversation.id}. Notifying human.`,
             );
 
-            await this.prisma.scheduledFollowUp.update({
-              where: { id: followUp.id },
-              data: { status: FollowUpStatus.SENT, sentAt: new Date() }, // Mark as sent/handled
-            });
-
-            // Notify human agent
             const lead = conversation.lead;
-            if (lead) {
-              const memberships =
-                await this.prisma.organizationMembership.findMany({
-                  where: {
+            if (!lead) throw new Error('FOLLOW_UP_LEAD_MISSING');
+            await this.prisma.$transaction(async (tx) => {
+              const claimed = await tx.scheduledFollowUp.updateMany({
+                where: { id: followUp.id, status: FollowUpStatus.PENDING, processingOwner: owner },
+                data: { status: FollowUpStatus.SENT, sentAt: new Date() },
+              });
+              if (claimed.count !== 1) throw new Error('FOLLOW_UP_LEASE_LOST');
+              const memberships = await tx.organizationMembership.findMany({
+                where: {
+                  organizationId: organization.id,
+                  status: 'ACTIVE',
+                  deletedAt: null,
+                  user: { status: 'ACTIVE', deletedAt: null },
+                },
+                include: MEMBERSHIP_GRANTS_INCLUDE,
+              });
+              const eligible = memberships.filter((membership) =>
+                membershipHasPermission(membership, 'notifications:view') &&
+                (membership.userId === lead.assignedAgentId ||
+                  membershipHasPermission(membership, 'leads:read:all')),
+              );
+              if (eligible.length === 0) throw new Error('NO_ELIGIBLE_STAFF');
+              for (const membership of eligible) {
+                const notification = await tx.notification.create({
+                  data: {
                     organizationId: organization.id,
-                    status: 'ACTIVE',
-                    deletedAt: null,
+                    userId: membership.userId,
+                    type: NotificationType.SYSTEM_ALERT,
+                    title: 'Unresponsive Lead',
+                    body: membershipHasPermission(membership, 'leads:read:pii')
+                      ? `${lead.firstName || 'A lead'} has not responded to AI follow-ups. Human intervention recommended.`
+                      : 'A lead needs human attention.',
+                    referenceId: lead.id,
+                    referenceType: 'LEAD',
                   },
                 });
-
-              for (const membership of memberships) {
-                await this.notificationEmitter.send({
-                  organizationId: organization.id,
-                  userId: membership.userId,
-                  type: NotificationType.SYSTEM_ALERT,
-                  title: 'Unresponsive Lead',
-                  body: `${lead.firstName || 'A lead'} has not responded to AI follow-ups. Human intervention recommended.`,
-                  referenceId: lead.id,
-                  referenceType: 'LEAD',
+                await tx.outboxEvent.create({
+                  data: {
+                    organizationId: organization.id,
+                    topic: 'notification.broadcast',
+                    payload: { organizationId: organization.id, notificationId: notification.id },
+                  },
                 });
               }
-            }
+            });
             return;
           }
 
@@ -286,6 +305,9 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
               },
               orderBy: { createdAt: 'asc' },
             });
+            let handoffAfterSend = existingBubbles.some(
+              (bubble) => (bubble.metadata as { pendingHandoff?: boolean } | null)?.pendingHandoff === true,
+            );
 
             if (existingBubbles.length === 0) {
               // Backward compatibility check for old single message row
@@ -312,10 +334,14 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                   leadSummary,
                   isFollowUp: true,
                   followUpContext: contextMsg,
+                  contractVersion: AGENT_CONTRACT_VERSION,
                 }),
               );
+              if (!isCompatibleAgentVersion(aiResponse.contractVersion))
+                throw new Error('AI_CONTRACT_VERSION_UNSUPPORTED');
 
-              const { replyText, mediaUrl, actions } = aiResponse;
+              let { replyText, mediaUrl } = aiResponse;
+              const { actions } = aiResponse;
 
               if (actions && actions.length > 0) {
                 const actionResult = await this.actionExecutor.executeActions(
@@ -323,10 +349,12 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                   conversation.id,
                   actions,
                 );
-                if (actionResult.failed > 0) {
-                  throw new Error(
-                    `Critical action execution failure (${actionResult.failed} failed), aborting follow-up delivery to prevent inconsistency`,
-                  );
+                if (actionResult.outcomes?.some((item) => item.status !== 'EXECUTED') ||
+                    actionResult.rejected > 0 || actionResult.failed > 0) {
+                  handoffAfterSend = true;
+                  // A rejected model action cannot support the original follow-up claim.
+                  replyText = "I couldn't complete that request right now. A human coordinator can help with the next step.";
+                  mediaUrl = undefined;
                 }
               }
 
@@ -361,9 +389,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                     },
                   });
                 if (revoked) {
-                  this.logger.warn(
-                    `Blocked outbound transmission of revoked media URL: ${safeMediaUrl}`,
-                  );
+                  this.logger.warn(`REVOKED_MEDIA_BLOCKED followUpId=${followUp.id}`);
                   safeMediaUrl = undefined;
                   safeReplyText =
                     '[Media removed due to privacy rules] ' +
@@ -405,7 +431,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                 await this.prisma.message.createMany({
                   data: bubblesToCreate.map((bubble) => ({
                     ...bubble,
-                    metadata: { generationVersion: conversation.stateVersion },
+                    metadata: { generationVersion: conversation.stateVersion, pendingHandoff: handoffAfterSend },
                   })),
                 });
               }
@@ -456,15 +482,15 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
 
               const lead = (conversation as any).lead;
               if (lead?.assignedAgentId) {
-                void this.eventsGateway.broadcastNotification(
-                  lead.assignedAgentId as string,
-                  {
+                await this.notificationEmitter.send({
+                    organizationId: organization.id,
+                    userId: lead.assignedAgentId as string,
                     title: 'Draft Follow-Up Ready',
                     body: `AI generated a draft follow-up for ${lead.firstName} ${lead.lastName}.`,
                     referenceId: conversation.id,
-                    type: 'SYSTEM_ALERT',
-                  },
-                );
+                    referenceType: 'CONVERSATION',
+                    type: NotificationType.SYSTEM_ALERT,
+                  });
               }
 
               for (const bubble of existingBubbles) {
@@ -544,6 +570,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                 if (result === 'WAITING')
                   throw new Error('OUTBOUND_UNRESOLVED');
                 if (result === 'FAILED' || result === 'CANCELLED') {
+                  if (handoffAfterSend) throw new Error('ACTION_FALLBACK_SEND_FAILED');
                   await this.prisma.scheduledFollowUp.update({
                     where: { id: followUp.id },
                     data: {
@@ -567,6 +594,19 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                 }
               }
 
+              if (handoffAfterSend) {
+                const handoff = await this.actionExecutor.executeActions(
+                  organization.id, conversation.id,
+                  [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
+                );
+                if (handoff.executed !== 1 || handoff.failed || handoff.rejected)
+                  throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
+                await this.prisma.message.updateMany({
+                  where: { id: { in: existingBubbles.map((bubble) => bubble.id) } },
+                  data: { metadata: { generationVersion: conversation.stateVersion, pendingHandoff: false } },
+                });
+              }
+
               await this.prisma.conversation.update({
                 where: { id: conversation.id },
                 data: { updatedAt: new Date() },
@@ -583,10 +623,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
               throw error;
             }
           } catch (error) {
-            this.logger.error(
-              `Failed to process follow-up: ${error instanceof Error ? error.message : 'Unknown'}`,
-            );
-            this.logger.debug(error);
+            this.logger.error(`FOLLOW_UP_PROCESS_FAILED followUp=${followUp.id}`);
             throw error;
           }
         } finally {

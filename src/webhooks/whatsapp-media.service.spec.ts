@@ -16,8 +16,11 @@ describe('WhatsappMediaService', () => {
         {
           provide: PrismaService,
           useValue: {
+            auditLog: { create: jest.fn() },
             message: {
               updateMany: jest.fn().mockResolvedValue({ count: 5 }),
+              findMany: jest.fn().mockResolvedValue([{ id: 'msg-1', metaMessageId: 'meta-1', conversation: { organizationId: 'org-1' } }]),
+              update: jest.fn().mockResolvedValue({}),
             },
           },
         },
@@ -56,16 +59,21 @@ describe('WhatsappMediaService', () => {
   describe('cleanupExpiredMedia', () => {
     it('should delete mediaUrls for expired media', async () => {
       await service.cleanupExpiredMedia();
-      expect(prisma.message.updateMany).toHaveBeenCalledWith({
+      expect(prisma.message.findMany).toHaveBeenCalledWith({
         where: {
           mediaExpiresAt: { lte: expect.any(Date) },
           mediaUrl: { not: null },
         },
+        include: { conversation: true },
+      });
+      expect(prisma.message.update).toHaveBeenCalledWith({
+        where: { id: 'msg-1' },
         data: {
           mediaUrl: null,
           content: '[Patient Media - Expired and Deleted]',
         },
       });
+      expect(prisma.auditLog.create).toHaveBeenCalled();
     });
   });
 });

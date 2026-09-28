@@ -51,12 +51,12 @@ export class InstagramService implements IChannelProvider {
         true,
       );
       return true;
-    } catch (error) {
+    } catch {
       await this.credentials.recordVerification(
         organizationId,
         credentialId,
         false,
-        error instanceof Error ? error.message : 'Unknown error',
+        'INSTAGRAM_CREDENTIAL_VERIFICATION_FAILED',
       );
       return false;
     }
@@ -172,9 +172,7 @@ export class InstagramService implements IChannelProvider {
       this.logger.log(`Successfully sent message to [REDACTED_ID]`);
       return response.data as MetaMessageResponse;
     } catch (error: any) {
-      this.logger.error(
-        `Failed to send Instagram message: ${error?.response?.data?.error?.message || error.message}`,
-      );
+      this.logger.error('INSTAGRAM_SEND_FAILED');
 
       if (error?.response?.status === 401) {
         await this.credentials.recordVerification(

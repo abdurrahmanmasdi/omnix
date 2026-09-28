@@ -225,10 +225,8 @@ export class FollowUpService {
           if (job) {
             await job.remove();
           }
-        } catch (error) {
-          this.logger.warn(
-            `Failed to remove BullMQ job ${record.bullJobId}: ${error.message}`,
-          );
+        } catch {
+          this.logger.warn(`FOLLOW_UP_QUEUE_REMOVE_FAILED followUp=${record.id}`);
         }
       }
     }

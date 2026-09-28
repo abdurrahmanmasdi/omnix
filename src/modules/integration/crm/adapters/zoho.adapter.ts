@@ -61,12 +61,12 @@ export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         true,
       );
       return true;
-    } catch (error) {
+    } catch {
       await this.credentials.recordVerification(
         organizationId,
         credentialId,
         false,
-        error instanceof Error ? error.message : 'Unknown error',
+        'ZOHO_CREDENTIAL_VERIFICATION_FAILED',
       );
       return false;
     }
@@ -130,7 +130,7 @@ export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
       return response.data;
     } catch (error: any) {
       this.logger.error(
-        `Failed to fetch contact from Zoho: ${error?.response?.data?.message || error.message}`,
+        'ZOHO_CONTACT_FETCH_FAILED',
       );
       throw error;
     }
@@ -182,7 +182,7 @@ export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
 
       const contactId = data.data?.[0]?.details?.id;
       this.logger.log(
-        `Created Zoho contact: ${contactId} for Org: ${lead.organizationId}`,
+        `ZOHO_CONTACT_CREATED organizationId=${lead.organizationId}`,
       );
       return contactId;
     } catch (error: any) {
@@ -195,7 +195,7 @@ export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         );
       }
       this.logger.error(
-        `Zoho syncContact failed: ${error.response?.data?.message || error.message}`,
+        'ZOHO_CONTACT_SYNC_FAILED',
       );
       throw error;
     }
@@ -252,7 +252,7 @@ export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
 
       const dealId = data.data?.[0]?.details?.id;
       this.logger.log(
-        `Created Zoho deal: ${dealId} for Org: ${lead.organizationId}`,
+        `ZOHO_DEAL_CREATED organizationId=${lead.organizationId}`,
       );
       return dealId;
     } catch (error: any) {
@@ -265,7 +265,7 @@ export class ZohoAdapter implements CrmAdapter, ICrmProvider, OnModuleInit {
         );
       }
       this.logger.error(
-        `Zoho syncDeal failed: ${error.response?.data?.message || error.message}`,
+        'ZOHO_DEAL_SYNC_FAILED',
       );
       throw error;
     }

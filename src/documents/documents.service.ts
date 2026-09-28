@@ -76,7 +76,7 @@ export class DocumentsService implements OnModuleInit {
       // 2. Call Python via gRPC to process the vectors
       const absolutePath = join(process.cwd(), file.path);
 
-      this.logger.log(`🤖 Telling Python to ingest ${file.originalname}...`);
+      this.logger.log(`DOCUMENT_INGEST_STARTED documentId=${doc.id}`);
 
       const fileBuffer = await fs.readFile(absolutePath);
 
@@ -99,7 +99,7 @@ export class DocumentsService implements OnModuleInit {
         data: { status: 'PROCESSED' },
       });
     } catch (error: any) {
-      this.logger.error(`Failed to process document: ${error.message}`);
+      this.logger.error(`DOCUMENT_INGEST_FAILED documentId=${doc.id}`);
       // Mark as error so the user knows it failed
       await this.prisma.organizationDocumentation.update({
         where: { id: doc.id },
@@ -122,8 +122,8 @@ export class DocumentsService implements OnModuleInit {
     // 1. Delete physical file
     try {
       await fs.unlink(join(process.cwd(), doc.filePath));
-    } catch (e) {
-      this.logger.warn(`File ${doc.filePath} already missing from disk.`);
+    } catch {
+      this.logger.warn(`DOCUMENT_FILE_MISSING documentId=${doc.id}`);
     }
 
     // 2. Tell Python to delete the vectors (just in case Prisma Cascade fails or isn't used)
@@ -134,7 +134,7 @@ export class DocumentsService implements OnModuleInit {
           fileName: doc.fileName,
         }),
       );
-    } catch (e) {
+    } catch {
       this.logger.warn(
         `Failed to call Python deletion, relying on Prisma Cascade.`,
       );

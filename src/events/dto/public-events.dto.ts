@@ -1,112 +1,73 @@
-export interface PublicMessageDto {
-  id: string;
-  conversationId: string;
-  senderId: string | null;
-  content: string;
-  mediaUrl: string | null;
-  type: string;
-  handledBy: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Conversation, Lead, Message, Notification } from '@prisma/client';
+import type {
+  LiveMessagePayload, LeadUpdatePayload, ConversationUpdatePayload,
+} from './socket-events.generated';
 
-export function toPublicMessageDto(message: any): PublicMessageDto {
+export type PublicMessageDto = LiveMessagePayload;
+export type PublicLeadDto = LeadUpdatePayload;
+export type PublicConversationDto = ConversationUpdatePayload;
+
+export type MessageSource = Pick<Message, 'id' | 'conversationId' | 'content' | 'createdAt' | 'updatedAt'> &
+  { senderId?: string | null; mediaUrl?: string | null; type?: string; handledBy?: string; status?: string };
+export type LeadSource = Pick<Lead, 'id' | 'firstName' | 'lastName' | 'createdAt' | 'updatedAt'> &
+  { organizationId?: string; assignedAgentId?: string | null; email?: string | null;
+    phoneNumber?: string; country?: string; timezone?: string; primaryLanguage?: string;
+    status?: string; priority?: string; summary?: string | null };
+export type ConversationSource = Pick<Conversation, 'id' | 'createdAt' | 'updatedAt'> &
+  Partial<Pick<Conversation, 'organizationId' | 'externalContactId' | 'status' |
+    'leadId' | 'aiPaused' | 'assignedAgentId'>> &
+  { lead?: unknown };
+type NotificationSource = Pick<Notification, 'id' | 'title' | 'body' | 'createdAt'> & { type: string } &
+  Partial<Pick<Notification, 'organizationId' | 'userId' | 'isRead' | 'referenceId' | 'referenceType'>>;
+
+const iso = (value: Date | string) => new Date(value).toISOString();
+
+export function toPublicMessageDto(message: MessageSource): PublicMessageDto {
   return {
     id: message.id,
     conversationId: message.conversationId,
-    senderId: message.senderId || null,
+    senderId: message.senderId ?? null,
     content: message.content,
-    mediaUrl: message.mediaUrl || null,
-    type: message.type,
-    handledBy: message.handledBy,
-    status: message.status,
-    createdAt:
-      message.createdAt instanceof Date
-        ? message.createdAt.toISOString()
-        : new Date(message.createdAt).toISOString(),
-    updatedAt:
-      message.updatedAt instanceof Date
-        ? message.updatedAt.toISOString()
-        : new Date(message.updatedAt).toISOString(),
+    mediaUrl: message.mediaUrl ?? null,
+    type: message.type ?? 'USER_TEXT',
+    handledBy: message.handledBy ?? 'AI',
+    status: message.status ?? 'PENDING',
+    createdAt: iso(message.createdAt),
+    updatedAt: iso(message.updatedAt),
   };
 }
 
-export interface PublicLeadDto {
-  id: string;
-  organizationId: string;
-  assignedAgentId: string | null;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phoneNumber: string;
-  country: string;
-  timezone: string;
-  primaryLanguage: string;
-  status: string;
-  priority: string;
-  createdAt: string;
-  updatedAt: string;
-  summary: string | null;
-}
-
-export function toPublicLeadDto(lead: any): PublicLeadDto {
+export function toPublicLeadDto(lead: LeadSource): PublicLeadDto {
   return {
     id: lead.id,
-    organizationId: lead.organizationId,
-    assignedAgentId: lead.assignedAgentId || null,
+    organizationId: lead.organizationId ?? '',
+    assignedAgentId: lead.assignedAgentId ?? null,
     firstName: lead.firstName,
     lastName: lead.lastName,
-    email: lead.email || null,
-    phoneNumber: lead.phoneNumber,
-    country: lead.country,
-    timezone: lead.timezone,
-    primaryLanguage: lead.primaryLanguage,
-    status: lead.status,
-    priority: lead.priority,
-    summary: lead.summary || null,
-    createdAt:
-      lead.createdAt instanceof Date
-        ? lead.createdAt.toISOString()
-        : new Date(lead.createdAt).toISOString(),
-    updatedAt:
-      lead.updatedAt instanceof Date
-        ? lead.updatedAt.toISOString()
-        : new Date(lead.updatedAt).toISOString(),
+    email: lead.email ?? null,
+    phoneNumber: lead.phoneNumber ?? '',
+    country: lead.country ?? '',
+    timezone: lead.timezone ?? '',
+    primaryLanguage: lead.primaryLanguage ?? '',
+    status: lead.status ?? 'NEW',
+    priority: lead.priority ?? 'WARM',
+    summary: lead.summary ?? null,
+    createdAt: iso(lead.createdAt),
+    updatedAt: iso(lead.updatedAt),
   };
 }
 
-export interface PublicConversationDto {
-  id: string;
-  organizationId: string;
-  externalContactId: string | null;
-  status: string;
-  leadId: string | null;
-  aiPaused: boolean;
-  assignedAgentId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export function toPublicConversationDto(
-  conversation: any,
-): PublicConversationDto {
+export function toPublicConversationDto(conversation: ConversationSource): PublicConversationDto {
   return {
     id: conversation.id,
-    organizationId: conversation.organizationId,
-    externalContactId: conversation.externalContactId || null,
-    status: conversation.status,
-    leadId: conversation.leadId || null,
-    aiPaused: !!conversation.aiPaused,
-    assignedAgentId: conversation.assignedAgentId || null,
-    createdAt:
-      conversation.createdAt instanceof Date
-        ? conversation.createdAt.toISOString()
-        : new Date(conversation.createdAt).toISOString(),
-    updatedAt:
-      conversation.updatedAt instanceof Date
-        ? conversation.updatedAt.toISOString()
-        : new Date(conversation.updatedAt).toISOString(),
+    organizationId: conversation.organizationId ?? '',
+    externalContactId: conversation.externalContactId ?? null,
+    status: conversation.status ?? 'ACTIVE',
+    leadId: conversation.leadId ?? null,
+    aiPaused: conversation.aiPaused ?? false,
+    assignedAgentId: conversation.assignedAgentId ?? null,
+    createdAt: iso(conversation.createdAt),
+    updatedAt: iso(conversation.updatedAt),
   };
 }
 
@@ -123,22 +84,17 @@ export interface PublicNotificationDto {
   createdAt: string;
 }
 
-export function toPublicNotificationDto(
-  notification: any,
-): PublicNotificationDto {
+export function toPublicNotificationDto(notification: NotificationSource): PublicNotificationDto {
   return {
     id: notification.id,
-    organizationId: notification.organizationId,
-    userId: notification.userId,
+    organizationId: notification.organizationId ?? '',
+    userId: notification.userId ?? '',
     type: notification.type,
     title: notification.title,
     body: notification.body,
-    isRead: !!notification.isRead,
-    referenceId: notification.referenceId || null,
-    referenceType: notification.referenceType || null,
-    createdAt:
-      notification.createdAt instanceof Date
-        ? notification.createdAt.toISOString()
-        : new Date(notification.createdAt).toISOString(),
+    isRead: notification.isRead ?? false,
+    referenceId: notification.referenceId ?? null,
+    referenceType: notification.referenceType ?? null,
+    createdAt: iso(notification.createdAt),
   };
 }
