@@ -38,7 +38,7 @@ class RAGRetriever:
 
         if not results:
             logger.warning("No relevant context found for org %s", org_id)
-            return "No specific clinic documentation found."
+            return "UNVERIFIED: No clinic documentation was found for this question."
 
         logger.info("Found %d relevant chunks for org %s", len(results), org_id)
         return "\n\n---\n\n".join(results)

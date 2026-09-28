@@ -34,9 +34,9 @@ def compliance_router(state: ConversationState) -> str:
         stage = state.get("current_stage")
         if stage == "OBJECTION_HANDLING":
             return "objection_handler_node"
-        elif stage == "PITCHING":
+        elif stage == "VALUE_PITCH":
             return "value_pitch_node"
-        elif stage == "NURTURING":
+        elif stage == "GENERAL_QA":
             return "general_qa_node"
         elif stage == "QUALIFYING":
             return "qualification_node"

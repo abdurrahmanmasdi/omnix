@@ -10,8 +10,8 @@ from dataclasses import dataclass
 
 
 SAFE_HANDOFF_MESSAGE = (
-    "I’m connecting you with our human medical coordinator so they can help "
-    "you safely and accurately. They will message you here shortly."
+    "I can't safely answer that here. A human medical coordinator can help "
+    "you with accurate information."
 )
 
 
@@ -35,6 +35,7 @@ class DeliverySafetyPolicy:
     # by a coordinator handoff.  Do not depend on prompts/model self-reporting.
     OUTPUT_PATTERNS = {
         "guarantee": r"\b(?:guarantee(?:d)?|risk[- ]free|100%|always successful|permanent results?)\b",
+        "unsupported_outcome_claim": r"\b(?:many successful cases|high success rate|premium quality|best clinic|top[- ]rated)\b",
         "medical_diagnosis_or_treatment": r"\b(?:diagnos(?:e|is)|prescri(?:be|ption)|dosage|take \d|infection|medication|you have (?:cancer|diabetes|disease|a condition|an infection)|you need (?:surgery|treatment|antibiotics|medicine)|you should (?:take|stop|avoid|rest))\b",
         "pii_or_secret_exfiltration": r"(?:data:image|base64|-----BEGIN|\b(?:api[_ -]?key|authorization|bearer token|password)\b)",
         "false_urgency_or_unauthorized_discount": r"\b(?:expires today|limited time|act now|only \d+ left|discount|% off|coupon|voucher|special offer|price drop|sale ends|buy now or)\b",

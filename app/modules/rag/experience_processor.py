@@ -29,7 +29,7 @@ class ExperienceProcessor:
                 logger.error("Experience %s not found in DB", experience_id)
                 return False
 
-            logger.info("Generating vector for story: %s", experience.title)
+            logger.info("EXPERIENCE_EMBED_STARTED experience_id=%s", experience_id)
 
             text_to_embed = f"""
             Title: {experience.title}
@@ -46,8 +46,8 @@ class ExperienceProcessor:
             logger.info("Saved %d-dim vector for Experience %s", EMBEDDING_DIMENSIONS, experience_id)
             return True
 
-        except Exception as e:
-            logger.error("Error embedding experience: %s", e)
+        except Exception:
+            logger.error("EXPERIENCE_EMBED_FAILED experience_id=%s", experience_id)
             db.rollback()
             return False
         finally:

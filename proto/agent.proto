@@ -26,6 +26,7 @@ message AgentRequest {
   string leadSummary = 10;
   bool isFollowUp = 11;
   string followUpContext = 12;
+  uint32 contractVersion = 13;
 }
 
 // What Python sends back to NestJS
@@ -39,6 +40,7 @@ message AgentReply {
 
   // 🚀 New: Tool Call instructions for NestJS to handle
   repeated ToolAction actions = 5;
+  uint32 contractVersion = 6;
 }
 
 message ToolAction {

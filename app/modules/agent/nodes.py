@@ -1,49 +1,52 @@
 import json
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from app.modules.agent.state import ConversationState
+from app.modules.agent.actions import parse_virtual_action
+from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE
 
-async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions):
-    from langchain_core.messages import ToolMessage
-    import json
-    from app.modules.agent.tools import search_clinic_knowledge, fetch_social_proof, fetch_battlecard, escalate_to_human
-
-    for tool_call in getattr(response, "tool_calls", []):
-        tool_name = tool_call.get("name")
-        tool_args = tool_call.get("args", {})
-        tool_id = tool_call.get("id")
-        
-        config = {"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}}
-        
-        if tool_name == "search_clinic_knowledge":
-            tool_result = await search_clinic_knowledge.ainvoke(tool_args, config=config)
-        elif tool_name == "fetch_social_proof":
-            tool_result = await fetch_social_proof.ainvoke(tool_args, config=config)
-        elif tool_name == "fetch_battlecard":
-            tool_result = await fetch_battlecard.ainvoke(tool_args, config=config)
+async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions) -> bool:
+    """Return True when a tool result cannot support a patient-facing answer."""
+    tools_by_name = {
+        "search_clinic_knowledge": search_clinic_knowledge,
+        "fetch_social_proof": fetch_social_proof,
+        "fetch_battlecard": fetch_battlecard,
+        "escalate_to_human": escalate_to_human,
+    }
+    config = {"configurable": {
+        "organization_id": state["organization_id"],
+        "conversation_id": state["conversation_id"],
+    }}
+    for call in getattr(response, "tool_calls", []):
+        if not isinstance(call, dict):
+            return True
+        tool_name, tool_args, tool_id = call.get("name"), call.get("args"), call.get("id")
+        if (tool_name not in tools_by_name or not isinstance(tool_args, dict)
+                or not isinstance(tool_id, str) or not 1 <= len(tool_id) <= 128):
+            return True
+        try:
+            result = await tools_by_name[tool_name].ainvoke(tool_args, config=config)
+        except Exception:
+            return True
+        content = result.content if isinstance(result, ToolMessage) else str(result)
+        if not isinstance(content, str) or content.startswith("UNVERIFIED:"):
+            return True
+        try:
+            decoded = json.loads(content)
+        except (TypeError, ValueError):
+            decoded = None
+        if isinstance(decoded, dict) and "action" in decoded:
+            action = parse_virtual_action(decoded)
+            if action is None:
+                return True
+            new_pending_actions.append(json.dumps({"action": action[0], "payload": action[1]}))
         elif tool_name == "escalate_to_human":
-            tool_result = await escalate_to_human.ainvoke(tool_args, config=config)
-        else:
-            tool_result = {"error": f"Unknown tool: {tool_name}"}
-
-        # Preserve structured LangChain tool results
-        if isinstance(tool_result, ToolMessage):
-            tool_msg = tool_result
-        else:
-            tool_msg = ToolMessage(tool_call_id=tool_id, content=json.dumps(tool_result) if isinstance(tool_result, dict) else str(tool_result), name=tool_name)
-            
+            return True
+        tool_msg = ToolMessage(tool_call_id=tool_id, content=content, name=tool_name)
         messages.append(tool_msg)
         new_messages.append(tool_msg)
-        
-        try:
-            parsed = json.loads(tool_msg.content)
-            if isinstance(parsed, dict) and "action" in parsed:
-                new_pending_actions.append(tool_msg.content)
-        except Exception:
-            pass
+    return False
 
-    return messages, new_messages, new_pending_actions
-
-from app.modules.agent.state import ConversationState
 from app.modules.agent.prompts import (
     EXTRACTOR_SYSTEM_PROMPT, VISION_PROMPT, HANDOFF_PROMPT, 
     OUT_OF_DOMAIN_PROMPT, SUMMARIZER_PROMPT, COMPLIANCE_CHECKER_PROMPT
@@ -189,35 +192,21 @@ async def objection_handler_node(state: ConversationState):
     node_updates = {"messages": new_messages, "current_stage": "OBJECTION_HANDLING"}
     new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, "tool_calls") and response.tool_calls:
+    if getattr(response, "tool_calls", None):
         messages.append(response)
-        for tool_call in response.tool_calls:
-            if tool_call["name"] == "fetch_social_proof":
-                tool_result = await fetch_social_proof.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "fetch_battlecard":
-                tool_result = await fetch_battlecard.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "search_clinic_knowledge":
-                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "escalate_to_human":
-                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
-            else:
-                tool_result = "Error: Tool not found."
-                
-            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-            messages.append(tool_msg)
-            new_messages.append(tool_msg)
-            
-            try:
-                parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and "action" in parsed:
-                    new_pending_actions.append(json.dumps(parsed))
-            except Exception:
-                pass
-                
-        flagship_llm = LLMFactory.get_flagship_llm()
-        final_response = await flagship_llm.ainvoke(messages)
-        new_messages.append(final_response)
-        
+        unverified = await _execute_tool_calls(
+            state, response, messages, new_messages, new_pending_actions
+        )
+        if unverified:
+            new_pending_actions.append(json.dumps({
+                "action": "HANDOFF_TO_HUMAN",
+                "payload": {"reason": "tool_result_unverified"},
+            }))
+            new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
+        else:
+            final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
+            new_messages.append(final_response)
+
     if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
         node_updates["pending_crm_actions"] = new_pending_actions
         
@@ -252,7 +241,7 @@ Your goal is to build rapport, answer the user's questions, and gently guide the
 
 CRITICAL SALES RULE (Acknowledge -> Answer -> Pivot):
 1. ALWAYS start by warmly acknowledging what the user just said or asked.
-2. If they asked a direct question (e.g. 'how much is it?'), answer it naturally or give an estimated range. Do NOT ignore their questions.
+2. If they asked a direct question (e.g. 'how much is it?'), answer only with verified clinic information. If no verified price is available, say staff can confirm it.
 3. Finally, PIVOT gracefully by asking a conversational question to gather missing info.
 
 The patient is currently missing: {missing_str}.
@@ -288,40 +277,23 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
     node_updates = {"messages": new_messages, "current_stage": "QUALIFYING"}
     new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, "tool_calls") and response.tool_calls:
+    if getattr(response, "tool_calls", None):
         messages.append(response)
-        for tool_call in response.tool_calls:
-            if tool_call["name"] == "search_clinic_knowledge":
-                from app.modules.agent.tools import search_clinic_knowledge
-                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "fetch_social_proof":
-                from app.modules.agent.tools import fetch_social_proof
-                tool_result = await fetch_social_proof.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "fetch_battlecard":
-                from app.modules.agent.tools import fetch_battlecard
-                tool_result = await fetch_battlecard.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "escalate_to_human":
-                from app.modules.agent.tools import escalate_to_human
-                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
-            else:
-                tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-            messages.append(tool_msg)
-            new_messages.append(tool_msg)
-            
-            try:
-                parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and "action" in parsed:
-                    new_pending_actions.append(json.dumps(parsed))
-            except Exception:
-                pass
-                
-        flagship_llm = LLMFactory.get_flagship_llm()
-        final_response = await flagship_llm.ainvoke(messages)
-        new_messages.append(final_response)
-        
+        unverified = await _execute_tool_calls(
+            state, response, messages, new_messages, new_pending_actions
+        )
+        if unverified:
+            new_pending_actions.append(json.dumps({
+                "action": "HANDOFF_TO_HUMAN",
+                "payload": {"reason": "tool_result_unverified"},
+            }))
+            new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
+        else:
+            final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
+            new_messages.append(final_response)
+
     if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
-        node_updates[pending_crm_actions] = new_pending_actions
+        node_updates["pending_crm_actions"] = new_pending_actions
         
     return node_updates
 
@@ -340,7 +312,7 @@ async def value_pitch_node(state: ConversationState):
     clinic_name = state.get("clinic_name", "our clinic")
     prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is asking for pricing or service details.
     Use the search_clinic_knowledge tool to find real prices and info. NEVER invent prices. 
-    Use the 'Value Sandwich' technique: [State high quality] -> [Give the price from tool] -> [Highlight pain-free/warranty].
+    Describe only verified service details and prices from the tool. Never imply pain-free treatment, a warranty, or a guaranteed outcome unless approved evidence explicitly supports it.
     Keep it conversational (WhatsApp style) and end with a Call-To-Action (e.g., free consultation check)."""
     
     prompt += "\n" + HANDOFF_PROMPT
@@ -364,34 +336,23 @@ async def value_pitch_node(state: ConversationState):
     node_updates = {"messages": new_messages, "current_stage": "VALUE_PITCH"}
     new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, "tool_calls") and response.tool_calls:
+    if getattr(response, "tool_calls", None):
         messages.append(response)
-        for tool_call in response.tool_calls:
-            if tool_call["name"] == "search_clinic_knowledge":
-                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "fetch_social_proof":
-                tool_result = await fetch_social_proof.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "escalate_to_human":
-                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
-            else:
-                tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-            messages.append(tool_msg)
-            new_messages.append(tool_msg)
-            
-            try:
-                parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and "action" in parsed:
-                    new_pending_actions.append(json.dumps(parsed))
-            except Exception:
-                pass
-                
-        flagship_llm = LLMFactory.get_flagship_llm()
-        final_response = await flagship_llm.ainvoke(messages)
-        new_messages.append(final_response)
-        
+        unverified = await _execute_tool_calls(
+            state, response, messages, new_messages, new_pending_actions
+        )
+        if unverified:
+            new_pending_actions.append(json.dumps({
+                "action": "HANDOFF_TO_HUMAN",
+                "payload": {"reason": "tool_result_unverified"},
+            }))
+            new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
+        else:
+            final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
+            new_messages.append(final_response)
+
     if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
-        node_updates[pending_crm_actions] = new_pending_actions
+        node_updates["pending_crm_actions"] = new_pending_actions
         
     return node_updates
 
@@ -433,34 +394,23 @@ async def closing_node(state: ConversationState):
     node_updates = {"messages": new_messages, "current_stage": "CLOSING"}
     new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, "tool_calls") and response.tool_calls:
+    if getattr(response, "tool_calls", None):
         messages.append(response)
-        for tool_call in response.tool_calls:
-            if tool_call["name"] == "search_clinic_knowledge":
-                from app.modules.agent.tools import search_clinic_knowledge
-                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "escalate_to_human":
-                from app.modules.agent.tools import escalate_to_human
-                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
-            else:
-                tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-            messages.append(tool_msg)
-            new_messages.append(tool_msg)
-            
-            try:
-                parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and "action" in parsed:
-                    new_pending_actions.append(json.dumps(parsed))
-            except Exception:
-                pass
-                
-        flagship_llm = LLMFactory.get_flagship_llm()
-        final_response = await flagship_llm.ainvoke(messages)
-        new_messages.append(final_response)
-        
+        unverified = await _execute_tool_calls(
+            state, response, messages, new_messages, new_pending_actions
+        )
+        if unverified:
+            new_pending_actions.append(json.dumps({
+                "action": "HANDOFF_TO_HUMAN",
+                "payload": {"reason": "tool_result_unverified"},
+            }))
+            new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
+        else:
+            final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
+            new_messages.append(final_response)
+
     if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
-        node_updates[pending_crm_actions] = new_pending_actions
+        node_updates["pending_crm_actions"] = new_pending_actions
         
     return node_updates
 
@@ -508,32 +458,23 @@ async def general_qa_node(state: ConversationState):
     node_updates = {"messages": new_messages, "current_stage": "GENERAL_QA"}
     new_pending_actions = list(state.get("pending_crm_actions", []))
     
-    if hasattr(response, "tool_calls") and response.tool_calls:
+    if getattr(response, "tool_calls", None):
         messages.append(response)
-        for tool_call in response.tool_calls:
-            if tool_call["name"] == "search_clinic_knowledge":
-                tool_result = await search_clinic_knowledge.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"]}})
-            elif tool_call["name"] == "escalate_to_human":
-                tool_result = await escalate_to_human.ainvoke(tool_call, config={"configurable": {"organization_id": state["organization_id"], "conversation_id": state["conversation_id"]}})
-            else:
-                tool_result = "Error: Tool not found."
-            tool_msg = ToolMessage(tool_call_id=tool_call["id"], content=str(tool_result), name=tool_call["name"])
-            messages.append(tool_msg)
-            new_messages.append(tool_msg)
-            
-            try:
-                parsed = json.loads(str(tool_result))
-                if isinstance(parsed, dict) and "action" in parsed:
-                    new_pending_actions.append(json.dumps(parsed))
-            except Exception:
-                pass
-                
-        flagship_llm = LLMFactory.get_flagship_llm()
-        final_response = await flagship_llm.ainvoke(messages)
-        new_messages.append(final_response)
-        
+        unverified = await _execute_tool_calls(
+            state, response, messages, new_messages, new_pending_actions
+        )
+        if unverified:
+            new_pending_actions.append(json.dumps({
+                "action": "HANDOFF_TO_HUMAN",
+                "payload": {"reason": "tool_result_unverified"},
+            }))
+            new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
+        else:
+            final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
+            new_messages.append(final_response)
+
     if len(new_pending_actions) > len(state.get("pending_crm_actions", [])):
-        node_updates[pending_crm_actions] = new_pending_actions
+        node_updates["pending_crm_actions"] = new_pending_actions
         
     return node_updates
 

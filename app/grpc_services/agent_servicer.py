@@ -2,6 +2,7 @@ import json
 import base64
 import io
 import logging
+import re
 
 import agent_pb2
 import agent_pb2_grpc
@@ -10,14 +11,42 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
+from app.modules.agent.actions import parse_virtual_action, CONTRACT_VERSION
 from app.modules.safety.policy import DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE
 
 logger = logging.getLogger(__name__)
+
+SAFE_STYLE_WORDS = {
+    "professional", "empathetic", "warm", "friendly", "concise", "clear",
+    "calm", "respectful", "formal", "casual", "patient", "gentle",
+}
+
+
+def _safe_persona(tone: str, rules_json: str) -> tuple[str, str]:
+    words = re.findall(r"[a-z]+", str(tone).lower())[:20]
+    safe_tone = " ".join(word for word in words if word in SAFE_STYLE_WORDS)
+    if not safe_tone:
+        safe_tone = "professional empathetic"
+    try:
+        rules = json.loads(rules_json)
+    except (TypeError, ValueError):
+        rules = {}
+    if not isinstance(rules, dict):
+        rules = {}
+    safe_rules = {}
+    if type(rules.get("maxSentences")) is int and 1 <= rules["maxSentences"] <= 4:
+        safe_rules["maxSentences"] = rules["maxSentences"]
+    if isinstance(rules.get("formality"), str) and rules["formality"] in {"formal", "neutral", "casual"}:
+        safe_rules["formality"] = rules["formality"]
+    if isinstance(rules.get("preferredLanguage"), str) and rules["preferredLanguage"] in {"en", "tr", "de", "es", "fr", "ar"}:
+        safe_rules["preferredLanguage"] = rules["preferredLanguage"]
+    return safe_tone, json.dumps(safe_rules)
 
 
 def _blocked_reply(reason: str):
     """Return the only safe reply and an explicit NestJS handoff action."""
     return agent_pb2.AgentReply(
+        contractVersion=CONTRACT_VERSION,
         replyText=SAFE_HANDOFF_MESSAGE,
         actions=[agent_pb2.ToolAction(
             type="HANDOFF_TO_HUMAN",
@@ -28,6 +57,8 @@ def _blocked_reply(reason: str):
 
 class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
     async def GenerateReply(self, request, context):
+        if getattr(request, "contractVersion", 0) not in (0, CONTRACT_VERSION):
+            return _blocked_reply("incompatible_contract_version")
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
         conv_id = getattr(request, 'conversationId', getattr(request, 'conversation_id', None))
         latest_msg = getattr(request, 'latestMessage', getattr(request, 'latest_message', None))
@@ -35,6 +66,10 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         clinic_name = getattr(request, 'clinicName', getattr(request, 'clinic_name', 'our clinic'))
         agent_tone = getattr(request, 'agentTone', getattr(request, 'agent_tone', 'Professional and empathetic'))
         business_rules = getattr(request, 'businessRulesJson', getattr(request, 'business_rules_json', '{}'))
+        agent_tone, business_rules = _safe_persona(agent_tone, business_rules)
+        if (not isinstance(clinic_name, str) or len(clinic_name) > 80
+                or "\n" in clinic_name or re.search(r"\b(?:ignore|override|instructions|prompt|guarantee)\b", clinic_name, re.IGNORECASE)):
+            clinic_name = "the clinic"
         total_count = getattr(request, 'totalMessageCount', getattr(request, 'total_message_count', 0))
         lead_summary = getattr(request, 'leadSummary', getattr(request, 'lead_summary', ''))
         is_follow_up = getattr(request, 'isFollowUp', getattr(request, 'is_follow_up', False))
@@ -65,7 +100,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 logger.info("Audio transcription success for Conv %s", conv_id)
                 latest_msg = f"🎙️ [Voice Note Transcription]: {transcribed_text}"
             except Exception as e:
-                logger.error("Audio transcription failed for Conv %s: %s", conv_id, e)
+                logger.error("AUDIO_TRANSCRIPTION_FAILED conversation_id=%s", conv_id)
                 latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
 
         logger.info("GenerateReply called for Conv: %s", conv_id)
@@ -76,7 +111,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
             if not res:
                 logger.warning("Conversation %s not found in DB", conv_id)
-                return agent_pb2.AgentReply(replyText="System error: Conversation not found.")
+                return agent_pb2.AgentReply(contractVersion=CONTRACT_VERSION, replyText="System error: Conversation not found.")
 
             # res is a tuple-like object from SQLAlchemy execute
             # (conv_id, lead_id, firstName, lastName, gender, country, status, priority, externalContactId)
@@ -151,8 +186,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 import json
                 input_decision = DeliverySafetyPolicy.check_input(combined_new_text)
                 if not input_decision.allowed:
-                    logger.warning("Blocked unsafe input for Conv %s: %s", conv_id, input_decision.reason)
+                    logger.warning("INPUT_POLICY_BLOCKED conversation_id=%s", conv_id)
                     return agent_pb2.AgentReply(
+                        contractVersion=CONTRACT_VERSION,
                         replyText=SAFE_HANDOFF_MESSAGE,
                         actions=[agent_pb2.ToolAction(
                             type="HANDOFF_TO_HUMAN",
@@ -179,64 +215,41 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             ai_reply_text = ai_reply_msg.content
             output_decision = DeliverySafetyPolicy.check_output(ai_reply_text)
             if not output_decision.allowed:
-                logger.warning("Blocked unsafe generated output for Conv %s: %s", conv_id, output_decision.reason)
+                logger.warning("OUTPUT_POLICY_BLOCKED conversation_id=%s", conv_id)
                 return _blocked_reply(output_decision.reason or "unsafe_output")
             
             reply_parts = [p.strip() for p in ai_reply_text.split("|||") if p.strip()]
             
             media_url = ""
             if "Photos:" in ai_reply_text:
-                import re
                 urls = re.findall(r'(https?://\S+)', ai_reply_text)
                 if urls:
                     media_url = urls[0]
             
-            # 6. Extract Tool Actions for NestJS (Only from structured accumulator)
-            from pydantic import BaseModel, ValidationError
-            from enum import Enum
-            from typing import Any
-
-            class ActionType(str, Enum):
-                CREATE_LEAD = "CREATE_LEAD"
-                UPDATE_LEAD = "UPDATE_LEAD"
-                UPDATE_SUMMARY = "UPDATE_SUMMARY"
-                HANDOFF_TO_HUMAN = "HANDOFF_TO_HUMAN"
-                SCHEDULE_FOLLOW_UP = "SCHEDULE_FOLLOW_UP"
-
-            class StructuredAction(BaseModel):
-                action: ActionType
-                payload: dict[str, Any] | None = None
-                parameters: dict[str, Any] | None = None
-
+            # 6. Send only validated virtual actions to NestJS.
             tool_actions = []
-            
             for action_str in final_state.get("pending_crm_actions", []):
-                try:
-                    action_obj = json.loads(action_str)
-                    structured_action = StructuredAction(**action_obj)
-                    tool_actions.append(agent_pb2.ToolAction(
-                        type=structured_action.action.value,
-                        payload=json.dumps(structured_action.payload or structured_action.parameters or {})
-                    ))
-                except (ValidationError, ValueError, TypeError) as e:
-                    action_type_safe = "UNKNOWN"
-                    if isinstance(action_str, str) and '"action"' in action_str:
-                        try:
-                            # Try to just extract the action name safely
-                            action_type_safe = json.loads(action_str).get("action", "UNKNOWN")
-                            if not isinstance(action_type_safe, str):
-                                action_type_safe = "UNKNOWN"
-                        except Exception:
-                            pass
-                    logger.warning("Rejected invalid action type '%s' in Conv %s", action_type_safe, conv_id)
-                except Exception:
-                    logger.warning("Error parsing action from state in Conv %s", conv_id)
+                action = parse_virtual_action(action_str)
+                if action is None:
+                    logger.warning("ACTION_TYPE_REJECTED conversation_id=%s", conv_id)
+                    return _blocked_reply("invalid_tool_action")
+                tool_actions.append(agent_pb2.ToolAction(
+                    type=action[0], payload=json.dumps(action[1])
+                ))
+
+            if final_state.get("tool_failure"):
+                return _blocked_reply("tool_failure")
+
+            if not any(action.type == "HANDOFF_TO_HUMAN" for action in tool_actions):
+                if re.search(r"\b(?:transferr?ing|connecting|alerted|notified)\b.{0,60}\b(?:staff|team|coordinator|human|agent)\b", ai_reply_text, re.IGNORECASE):
+                    return _blocked_reply("handoff_without_action")
 
             final_reply_to_send = "\n\n|||\n\n".join(reply_parts)
 
             logger.info("Sending %d message(s) for Conv %s", len(reply_parts), conv_id)
             
             return agent_pb2.AgentReply(
+                contractVersion=CONTRACT_VERSION,
                 replyText=final_reply_to_send,
                 mediaUrl=media_url,
                 actions=tool_actions
@@ -244,9 +257,10 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
         except Exception as e:
             error_type = e.__class__.__name__
-            logger.error("Error generating AI reply for Conv %s: %s - %s", conv_id, error_type, str(e))
+            logger.error("AGENT_REPLY_FAILED conversation_id=%s error_type=%s", conv_id, error_type)
             import json
             return agent_pb2.AgentReply(
+                contractVersion=CONTRACT_VERSION,
                 replyText=SAFE_HANDOFF_MESSAGE,
                 actions=[agent_pb2.ToolAction(
                     type="HANDOFF_TO_HUMAN",

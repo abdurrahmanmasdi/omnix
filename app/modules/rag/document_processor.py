@@ -18,7 +18,7 @@ class DocumentService:
         self.client = AsyncOpenAI(api_key=api_key)
 
     async def process_and_save_pdf(self, org_id: str, documentation_id: str, file_name: str, file_content: bytes) -> int:
-        logger.info("Processing PDF: %s", file_name)
+        logger.info("DOCUMENT_PROCESS_STARTED documentation_id=%s", documentation_id)
         
         doc = fitz.open(stream=file_content, filetype="pdf")
         full_text = "\n".join([page.get_text() for page in doc])
@@ -55,11 +55,11 @@ class DocumentService:
             chunks_saved += 1
 
         self.db.commit()
-        logger.info("Saved %d vectorized chunks for %s", chunks_saved, file_name)
+        logger.info("DOCUMENT_PROCESS_COMPLETE documentation_id=%s chunks=%d", documentation_id, chunks_saved)
         return chunks_saved
     
     async def delete_file_knowledge(self, org_id: str, file_name: str) -> int:
-        logger.info("Deleting knowledge vectors for %s", file_name)
+        logger.info("DOCUMENT_VECTORS_DELETE_STARTED organization_id=%s", org_id)
         
         stmt = delete(OrganizationKnowledge).where(
             OrganizationKnowledge.organizationId == org_id,
@@ -70,5 +70,5 @@ class DocumentService:
         self.db.commit()
         
         deleted_count = result.rowcount
-        logger.info("Deleted %d vector chunks for %s", deleted_count, file_name)
+        logger.info("DOCUMENT_VECTORS_DELETE_COMPLETE organization_id=%s chunks=%d", org_id, deleted_count)
         return deleted_count

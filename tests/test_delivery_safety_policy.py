@@ -17,6 +17,8 @@ def test_blocks_unsafe_input(message):
     "Only 2 slots left this week, and the special discount ends tomorrow.",
     "You have an infection and should take 500mg.",
     "Here is data:image/png;base64,secret",
+    "We have many successful cases and a high success rate.",
+    "Our premium quality sets us apart.",
 ])
 def test_blocks_unsafe_output(reply):
     assert not DeliverySafetyPolicy.check_output(reply).allowed

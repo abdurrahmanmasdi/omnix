@@ -28,9 +28,9 @@ async def search_clinic_knowledge(search_query: str, config: RunnableConfig) -> 
         retriever = RAGRetriever(db_session=db, api_key=settings.OPENAI_API_KEY)
         context = await retriever.get_relevant_context(org_id, search_query)
         return context
-    except Exception as e:
-        logger.error("Knowledge base search error: %s", e)
-        return "I'm sorry, I couldn't access the clinic records at this moment."
+    except Exception:
+        logger.error("KNOWLEDGE_SEARCH_FAILED")
+        return "UNVERIFIED: Clinic information is unavailable. A staff member can confirm it."
     finally:
         db.close()
 
@@ -46,7 +46,6 @@ async def create_lead(
     currency: str = "USD",
     preferred_language: str = None,
     primary_language: str = None,
-    social_links: dict = None
 ) -> str:
     """
     Creates a new patient profile in the CRM with full enrichment.
@@ -62,9 +61,7 @@ async def create_lead(
         "currency": currency,
         "preferredLanguage": preferred_language,
         "primaryLanguage": primary_language,
-        "socialLinks": social_links or {"whatsapp": phone_number},
         "status": "NEW",
-        "pipelineStageId": "INQUIRY", # Fixed field name
         "priority": "COLD"
     }
     payload = {k: v for k, v in data.items() if v is not None}
@@ -102,7 +99,7 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
         result = db.execute(sql, {"org_id": org_id, "vector": str(query_vector)}).fetchone()
         
         if not result:
-            return "We have many successful cases! I can tell you more about our procedure's high success rate."
+            return "UNVERIFIED: No approved patient story was found. A staff member can help with references."
 
         # Safely format the image URLs if they exist in the DB
         photos_str = ""
@@ -121,9 +118,9 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
         """
         return proof
 
-    except Exception as e:
-        logger.error("Social proof tool error: %s", e)
-        return "I cannot verify specific success rates at this moment, but I can escalate you to a medical coordinator for patient references."
+    except Exception:
+        logger.error("SOCIAL_PROOF_SEARCH_FAILED")
+        return "UNVERIFIED: Patient stories are unavailable. A staff member can help with approved references."
     finally:
         db.close()
 
@@ -156,7 +153,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
         result = db.execute(sql, {"org_id": org_id, "vector": str(query_vector)}).fetchone()
         
         if not result:
-            return "Our clinic provides premium quality and guaranteed results that set us apart from standard options."
+            return "UNVERIFIED: No approved comparison was found. A staff member can explain the options."
 
         proof = f"""
         COMPETITOR BATTLECARD FOUND:
@@ -166,9 +163,9 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
         """
         return proof
 
-    except Exception as e:
-        logger.error("Battlecard tool error: %s", e)
-        return "I cannot provide specific comparisons right now, but I can connect you with a coordinator to discuss our exact pricing and procedures."
+    except Exception:
+        logger.error("BATTLECARD_SEARCH_FAILED")
+        return "UNVERIFIED: Comparisons are unavailable. A staff member can explain the options."
     finally:
         db.close()
 
@@ -187,46 +184,18 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
 
     logger.info("[TOOL] Escalating Conv: %s to Human [Reason redacted]", conv_id)
 
-    db = SessionLocal()
-    try:
-        # READ-ONLY: Fetch Lead context and the assigned human agent
-        query = text("""
-            SELECT l.id, l."assignedAgentId", l."firstName"
-            FROM conversations c
-            LEFT JOIN leads l ON c."leadId" = l.id
-            WHERE c.id = :conv_id AND c."organizationId" = :org_id
-        """)
-        result = db.execute(query, {"conv_id": conv_id, "org_id": org_id}).fetchone()
-
-        if not result or not result[0]:
-            return "Error: Could not find associated lead to escalate."
-
-        lead_id = str(result[0])
-        agent_id = str(result[1]) if result[1] else None
-        first_name = result[2] or "Patient"
-
-        # Build virtual action for NestJS to execute
-        action = {
-            "action": "HANDOFF_TO_HUMAN",
-            "payload": {
-                "lead_id": lead_id,
-                "reason": reason
-            }
-        }
-        return json.dumps(action)
-
-    except Exception as e:
-        logger.error("Escalation error: %s", e)
-        return "Failed to escalate."
-    finally:
-        db.close()
+    if not isinstance(org_id, str) or not isinstance(conv_id, str) or not org_id or not conv_id:
+        return "UNVERIFIED: Handoff context is unavailable."
+    return json.dumps({
+        "action": "HANDOFF_TO_HUMAN",
+        "payload": {"reason": reason[:500]},
+    })
 
 @tool
 async def update_patient_profile(
     first_name: str = None,
     gender: str = None,
     country: str = None,
-    service_interested: str = None,
 ) -> str:
     """
     Updates the patient's CRM profile with newly discovered demographic or preference info.
@@ -241,8 +210,6 @@ async def update_patient_profile(
         data["gender"] = gender.upper()
     if country:
         data["country"] = country
-    if service_interested:
-        data["serviceInterested"] = service_interested
         
     if data:
         logger.info("[VIRTUAL TOOL] Update Patient Profile (redacted)")
@@ -271,7 +238,7 @@ async def schedule_follow_up(
         "scheduledAt": scheduled_at,
         "context": context,
     }
-    logger.info("[VIRTUAL TOOL] Schedule Follow Up at %s [Context redacted]", scheduled_at)
+    logger.info("FOLLOW_UP_ACTION_PREPARED")
     return json.dumps({
         "action": "SCHEDULE_FOLLOW_UP",
         "payload": payload

@@ -18,7 +18,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         file_name = getattr(request, 'fileName', getattr(request, 'file_name', None))
         file_content = getattr(request, 'fileContent', getattr(request, 'file_content', None))
 
-        logger.info("IngestPdf called for: %s", file_name)
+        logger.info("DOCUMENT_INGEST_STARTED document_id=%s", doc_id)
         
         db = SessionLocal()
         try:
@@ -33,9 +33,9 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
             
             return rag_pb2.IngestResponse(success=True, chunksProcessed=chunks)
         except Exception as e:
-            logger.error("Error processing PDF %s: %s", file_name, e, exc_info=True)
+            logger.error("DOCUMENT_INGEST_FAILED document_id=%s", doc_id)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
+            context.set_details("DOCUMENT_INGEST_FAILED")
             return rag_pb2.IngestResponse(success=False, chunksProcessed=0)
         finally:
             db.close()
@@ -59,7 +59,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
             )
 
     async def DeleteFile(self, request, context):
-        logger.info("DeleteFile called for: %s", request.fileName)
+        logger.info("DOCUMENT_DELETE_STARTED organization_id=%s", request.organizationId)
         
         db = SessionLocal()
         try:
@@ -70,9 +70,9 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
             )
             return rag_pb2.DeleteResponse(success=True, chunksDeleted=deleted_count)
         except Exception as e:
-            logger.error("Error deleting vectors for %s: %s", request.fileName, e, exc_info=True)
+            logger.error("DOCUMENT_DELETE_FAILED organization_id=%s", request.organizationId)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
+            context.set_details("DOCUMENT_DELETE_FAILED")
             return rag_pb2.DeleteResponse(success=False, chunksDeleted=0)
         finally:
             db.close()
