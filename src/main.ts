@@ -4,19 +4,19 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
-import { json, urlencoded } from 'express';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   // Preserve the exact bytes Meta signed. JSON parsing changes whitespace/key
   // ordering, so verification must never be performed against @Body().
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     bufferLogs: true,
   });
 
   // Limit JSON and urlencoded payloads to 2MB (prevents DoS on webhook endpoints)
-  app.use(json({ limit: '2mb' }));
-  app.use(urlencoded({ extended: true, limit: '2mb' }));
+  app.useBodyParser('json', { limit: '2mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '2mb' });
 
   // Use Pino as the default logger
   app.enableShutdownHooks();
