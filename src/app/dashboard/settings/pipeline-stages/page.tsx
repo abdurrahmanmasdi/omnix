@@ -59,7 +59,6 @@ export default function PipelineStagesPage() {
       const d = data as { items?: PipelineStage[]; data?: PipelineStage[] } | PipelineStage[];
       const arr = Array.isArray(d) ? d : d?.items || d?.data || [];
       const sorted = [...arr].sort((a: PipelineStage, b: PipelineStage) => a.orderIndex - b.orderIndex);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalStages(sorted);
     }
   }, [data]);
@@ -152,7 +151,7 @@ export default function PipelineStagesPage() {
       {/* Reorder hint */}
       <div className="flex items-center space-x-3 px-5 py-3 bg-brand-electric/10/60 border border-indigo-100 rounded-xl text-[11px] font-bold text-brand-cyan">
         <GripVertical className="h-4 w-4 text-indigo-400 shrink-0" />
-        <span>Drag the handle on each row to reorder pipeline stages. Changes are saved instantly.</span>
+        <span>Drag the handle on each row to reorder pipeline stages. Check the order after saving.</span>
       </div>
 
       {/* Table */}

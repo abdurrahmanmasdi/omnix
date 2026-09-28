@@ -22,11 +22,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AcceptInvitationDto,
   AuthControllerLogout200,
   AuthControllerRefreshTokens200,
-  AuthControllerVerifyEmailParams,
   LoginDto,
-  SignupDto,
+  RefreshDto,
 } from "../../model";
 
 import { customFetch } from "../../axios-client";
@@ -34,21 +34,14 @@ import { customFetch } from "../../axios-client";
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * @summary Register a new user account (No Organization yet)
+ * @summary Public signup is disabled during the invitation-only pilot
  */
 export const authControllerSignup = (
-  signupDto: SignupDto,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
-    {
-      url: `/auth/signup`,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      data: signupDto,
-      signal,
-    },
+  return customFetch<unknown>(
+    { url: `/auth/signup`, method: "POST", signal },
     options,
   );
 };
@@ -60,14 +53,14 @@ export const getAuthControllerSignupMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof authControllerSignup>>,
     TError,
-    { data: SignupDto },
+    void,
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof authControllerSignup>>,
   TError,
-  { data: SignupDto },
+  void,
   TContext
 > => {
   const mutationKey = ["authControllerSignup"];
@@ -81,11 +74,9 @@ export const getAuthControllerSignupMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof authControllerSignup>>,
-    { data: SignupDto }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return authControllerSignup(data, requestOptions);
+    void
+  > = () => {
+    return authControllerSignup(requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -94,18 +85,18 @@ export const getAuthControllerSignupMutationOptions = <
 export type AuthControllerSignupMutationResult = NonNullable<
   Awaited<ReturnType<typeof authControllerSignup>>
 >;
-export type AuthControllerSignupMutationBody = SignupDto;
+
 export type AuthControllerSignupMutationError = void;
 
 /**
- * @summary Register a new user account (No Organization yet)
+ * @summary Public signup is disabled during the invitation-only pilot
  */
 export const useAuthControllerSignup = <TError = void, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof authControllerSignup>>,
       TError,
-      { data: SignupDto },
+      void,
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
@@ -114,7 +105,7 @@ export const useAuthControllerSignup = <TError = void, TContext = unknown>(
 ): UseMutationResult<
   Awaited<ReturnType<typeof authControllerSignup>>,
   TError,
-  { data: SignupDto },
+  void,
   TContext
 > => {
   const mutationOptions = getAuthControllerSignupMutationOptions(options);
@@ -292,11 +283,18 @@ export const useAuthControllerLogout = <TError = unknown, TContext = unknown>(
  * @summary Refresh access token using HTTP-only cookie
  */
 export const authControllerRefreshTokens = (
+  refreshDto: RefreshDto,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
   return customFetch<AuthControllerRefreshTokens200>(
-    { url: `/auth/refresh`, method: "POST", signal },
+    {
+      url: `/auth/refresh`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: refreshDto,
+      signal,
+    },
     options,
   );
 };
@@ -308,14 +306,14 @@ export const getAuthControllerRefreshTokensMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof authControllerRefreshTokens>>,
     TError,
-    void,
+    { data: RefreshDto },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof authControllerRefreshTokens>>,
   TError,
-  void,
+  { data: RefreshDto },
   TContext
 > => {
   const mutationKey = ["authControllerRefreshTokens"];
@@ -329,9 +327,11 @@ export const getAuthControllerRefreshTokensMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof authControllerRefreshTokens>>,
-    void
-  > = () => {
-    return authControllerRefreshTokens(requestOptions);
+    { data: RefreshDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return authControllerRefreshTokens(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -340,7 +340,7 @@ export const getAuthControllerRefreshTokensMutationOptions = <
 export type AuthControllerRefreshTokensMutationResult = NonNullable<
   Awaited<ReturnType<typeof authControllerRefreshTokens>>
 >;
-
+export type AuthControllerRefreshTokensMutationBody = RefreshDto;
 export type AuthControllerRefreshTokensMutationError = unknown;
 
 /**
@@ -354,7 +354,7 @@ export const useAuthControllerRefreshTokens = <
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof authControllerRefreshTokens>>,
       TError,
-      void,
+      { data: RefreshDto },
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
@@ -363,7 +363,7 @@ export const useAuthControllerRefreshTokens = <
 ): UseMutationResult<
   Awaited<ReturnType<typeof authControllerRefreshTokens>>,
   TError,
-  void,
+  { data: RefreshDto },
   TContext
 > => {
   const mutationOptions =
@@ -372,49 +372,43 @@ export const useAuthControllerRefreshTokens = <
   return useMutation(mutationOptions, queryClient);
 };
 /**
- * @summary Verify user email using the token sent via email
+ * @summary Legacy email verification is disabled during the pilot
  */
 export const authControllerVerifyEmail = (
-  params: AuthControllerVerifyEmailParams,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
-    { url: `/auth/verify-email`, method: "GET", params, signal },
+  return customFetch<unknown>(
+    { url: `/auth/verify-email`, method: "GET", signal },
     options,
   );
 };
 
-export const getAuthControllerVerifyEmailQueryKey = (
-  params?: AuthControllerVerifyEmailParams,
-) => {
-  return [`/auth/verify-email`, ...(params ? [params] : [])] as const;
+export const getAuthControllerVerifyEmailQueryKey = () => {
+  return [`/auth/verify-email`] as const;
 };
 
 export const getAuthControllerVerifyEmailQueryOptions = <
   TData = Awaited<ReturnType<typeof authControllerVerifyEmail>>,
-  TError = unknown,
->(
-  params: AuthControllerVerifyEmailParams,
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof authControllerVerifyEmail>>,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
+  TError = void,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof authControllerVerifyEmail>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getAuthControllerVerifyEmailQueryKey(params);
+    queryOptions?.queryKey ?? getAuthControllerVerifyEmailQueryKey();
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof authControllerVerifyEmail>>
-  > = ({ signal }) => authControllerVerifyEmail(params, requestOptions, signal);
+  > = ({ signal }) => authControllerVerifyEmail(requestOptions, signal);
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof authControllerVerifyEmail>>,
@@ -426,13 +420,12 @@ export const getAuthControllerVerifyEmailQueryOptions = <
 export type AuthControllerVerifyEmailQueryResult = NonNullable<
   Awaited<ReturnType<typeof authControllerVerifyEmail>>
 >;
-export type AuthControllerVerifyEmailQueryError = unknown;
+export type AuthControllerVerifyEmailQueryError = void;
 
 export function useAuthControllerVerifyEmail<
   TData = Awaited<ReturnType<typeof authControllerVerifyEmail>>,
-  TError = unknown,
+  TError = void,
 >(
-  params: AuthControllerVerifyEmailParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -457,9 +450,8 @@ export function useAuthControllerVerifyEmail<
 };
 export function useAuthControllerVerifyEmail<
   TData = Awaited<ReturnType<typeof authControllerVerifyEmail>>,
-  TError = unknown,
+  TError = void,
 >(
-  params: AuthControllerVerifyEmailParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -484,9 +476,8 @@ export function useAuthControllerVerifyEmail<
 };
 export function useAuthControllerVerifyEmail<
   TData = Awaited<ReturnType<typeof authControllerVerifyEmail>>,
-  TError = unknown,
+  TError = void,
 >(
-  params: AuthControllerVerifyEmailParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -502,14 +493,13 @@ export function useAuthControllerVerifyEmail<
   queryKey: DataTag<QueryKey, TData, TError>;
 };
 /**
- * @summary Verify user email using the token sent via email
+ * @summary Legacy email verification is disabled during the pilot
  */
 
 export function useAuthControllerVerifyEmail<
   TData = Awaited<ReturnType<typeof authControllerVerifyEmail>>,
-  TError = unknown,
+  TError = void,
 >(
-  params: AuthControllerVerifyEmailParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -524,10 +514,7 @@ export function useAuthControllerVerifyEmail<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
-  const queryOptions = getAuthControllerVerifyEmailQueryOptions(
-    params,
-    options,
-  );
+  const queryOptions = getAuthControllerVerifyEmailQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,
@@ -690,3 +677,96 @@ export function useAuthControllerGetProfile<
 
   return query;
 }
+
+/**
+ * @summary Activate a pilot account using a single-use operator invitation
+ */
+export const invitationsControllerAccept = (
+  acceptInvitationDto: AcceptInvitationDto,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<void>(
+    {
+      url: `/auth/accept-invitation`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: acceptInvitationDto,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getInvitationsControllerAcceptMutationOptions = <
+  TError = void,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof invitationsControllerAccept>>,
+    TError,
+    { data: AcceptInvitationDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof invitationsControllerAccept>>,
+  TError,
+  { data: AcceptInvitationDto },
+  TContext
+> => {
+  const mutationKey = ["invitationsControllerAccept"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof invitationsControllerAccept>>,
+    { data: AcceptInvitationDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return invitationsControllerAccept(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InvitationsControllerAcceptMutationResult = NonNullable<
+  Awaited<ReturnType<typeof invitationsControllerAccept>>
+>;
+export type InvitationsControllerAcceptMutationBody = AcceptInvitationDto;
+export type InvitationsControllerAcceptMutationError = void;
+
+/**
+ * @summary Activate a pilot account using a single-use operator invitation
+ */
+export const useInvitationsControllerAccept = <
+  TError = void,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof invitationsControllerAccept>>,
+      TError,
+      { data: AcceptInvitationDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof invitationsControllerAccept>>,
+  TError,
+  { data: AcceptInvitationDto },
+  TContext
+> => {
+  const mutationOptions =
+    getInvitationsControllerAcceptMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};

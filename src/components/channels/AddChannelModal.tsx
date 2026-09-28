@@ -20,7 +20,7 @@ import {
   createChannelSchema,
   type CreateChannelInput,
 } from "@/lib/validations/channel";
-import { useChannelsControllerCreateChannel } from "@/lib/api/generated/channels/channels";
+import { useChannelsControllerCreateChannel, getChannelsControllerGetChannelsQueryKey } from "@/lib/api/generated/channels/channels";
 
 interface AddChannelModalProps {
   isOpen: boolean;
@@ -54,7 +54,7 @@ export function AddChannelModal({
       {
         onSuccess: () => {
           toast.success("WhatsApp Channel connected successfully!");
-          queryClient.invalidateQueries({ queryKey: [`/channels`] });
+          queryClient.invalidateQueries({ queryKey: getChannelsControllerGetChannelsQueryKey() });
           reset();
           onOpenChange(false);
         },

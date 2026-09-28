@@ -7,6 +7,9 @@
  */
 
 export type ConversationsControllerGetMessagesParams = {
-  cursor: string;
-  limit: string;
+  cursor?: string;
+  /**
+   * @maximum 100
+   */
+  limit?: number;
 };

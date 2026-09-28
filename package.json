@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint",
+    "lint:baseline": "node scripts/check-lint-baseline.mjs .",
     "format": "prettier --write .",
     "lint:fix": "eslint --fix .",
     "generate:api": "orval --config ./orval.config.ts",
-    "generate:api:local": "OPENAPI_SPEC_URL=http://localhost:3000/docs-json orval --config ./orval.config.ts",
+    "generate:api:local": "orval --config ./orval.config.ts",
     "test": "vitest run"
   },
   "dependencies": {
@@ -42,10 +43,11 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
-    "@types/node": "^20",
+    "@types/node": "^22.20.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

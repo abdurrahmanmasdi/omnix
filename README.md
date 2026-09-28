@@ -1,36 +1,13 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OmniX frontend
 
-## Getting Started
+This Next.js app is the invitation-only pilot UI. Public signup is disabled. The operator invitation flow is exercised in `../backend-v2/test/first-organization.e2e-spec.ts`.
 
-First, run the development server:
+## Local development
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Use Node 22 (`nvm use`), then `npm ci` and `npm run dev`. Next's default dev port is 3000; if the Nest backend is also running locally, set a different frontend port and `NEXT_PUBLIC_API_URL` to the backend's browser-reachable address. The repository-root Compose stack maps Nest to `http://localhost:3000` and Next to `http://localhost:3001` (the Next container sets `PORT=3001`). These are development addresses, not staging endpoints.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+For a Railway frontend Docker deployment, set `NEXT_PUBLIC_API_URL` to the browser-reachable backend HTTPS origin on the frontend service **before building** and rebuild when it changes. The Dockerfile declares it as a builder-stage `ARG`; a runtime-only value cannot change a URL already embedded in the browser bundle. See [Railway Docker build variables](https://docs.railway.com/builds/dockerfiles) and [Next environment variables](https://nextjs.org/docs/app/guides/environment-variables). This configuration change does not by itself verify the current Railway deployment.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Run `npm run build`, `npm run lint`, and `npx vitest run` before review. Fonts are bundled locally; the production build does not fetch Google Fonts. The generated API client comes from the checked-in `openapi.json`; use `npm run generate:api` and the backend contract check when changing the API.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Public copy is tracked in `../docs/CLAIMS_REVIEW_2026-09-28.md`. The example chat is illustrative, and clinic-specific privacy/terms wording still needs product/privacy owner approval before publication.

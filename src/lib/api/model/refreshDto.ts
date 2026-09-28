@@ -6,11 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface LoginDto {
-  /** The email address of the user */
-  email: string;
-  /** The user password (min 6 characters) */
-  password: string;
+export interface RefreshDto {
   /** The target organization to select (for multi-tenant users) */
   organizationId?: string;
 }

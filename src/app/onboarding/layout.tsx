@@ -16,7 +16,7 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
       if (!accessToken) {
         try {
           await axiosInstance.get('/auth/me');
-        } catch (err) {
+        } catch {
           if (mounted) router.push('/login');
         }
       }

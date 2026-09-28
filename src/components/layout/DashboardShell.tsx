@@ -26,7 +26,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         try {
           // This will trigger a 401, which axios interceptor will catch and attempt a silent refresh
           await axiosInstance.get('/auth/me');
-        } catch (err) {
+        } catch {
           if (mounted) router.push('/login');
         }
       }

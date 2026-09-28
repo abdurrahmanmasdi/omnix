@@ -306,11 +306,11 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                     </div>
 
                     <div className="pt-4">
-                      <Button className="w-full h-14 bg-brand-deep hover:bg-black text-white shadow-2xl rounded-2xl font-black uppercase tracking-widest transition-all active:scale-[0.98]">
-                        Intercept AI Conversation
+                      <Button disabled className="w-full h-14 bg-brand-deep text-white shadow-2xl rounded-2xl font-black uppercase tracking-widest">
+                        Manual override unavailable here
                         <ExternalLink className="ml-3 h-4 w-4" />
                       </Button>
-                      <p className="text-[10px] text-center text-brand-ice/60 font-bold uppercase tracking-widest mt-4 italic opacity-60">Manual override will pause the autonomous agent.</p>
+                      <p className="text-[10px] text-center text-brand-ice/60 font-bold uppercase tracking-widest mt-4 italic opacity-60">Use the conversation view to pause AI replies.</p>
                     </div>
                   </TabsContent>
 
@@ -321,8 +321,8 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                           placeholder="Log a clinical or sales observation..." 
                           className="min-h-[160px] rounded-3xl border-white/10 focus:ring-blue-500/10 shadow-none resize-none p-6 text-sm font-medium leading-relaxed transition-all group-hover:border-brand-electric/50" 
                         />
-                        <Button size="sm" className="absolute bottom-4 right-4 bg-brand-electric hover:bg-brand-electric/80 h-10 px-6 rounded-xl shadow-none shadow-brand-electric/20 font-black text-[10px] uppercase tracking-widest">
-                          COMMIT NOTE
+                        <Button disabled size="sm" className="absolute bottom-4 right-4 bg-brand-electric h-10 px-6 rounded-xl shadow-none font-black text-[10px] uppercase tracking-widest">
+                          Notes unavailable
                         </Button>
                       </div>
 
@@ -338,7 +338,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                             </div>
                           </div>
                           <p className="text-sm text-brand-ice/80 leading-relaxed font-medium">
-                            Patient is concerned about the recovery time for a full-arch dental implant. I provided the &quot;7-day recovery protocol&quot; PDF and mentioned our 5-year clinical guarantee. The lead is now in `READY_TO_PAY` status.
+                            Example only: a patient asked about treatment details. Staff should review and respond with clinic-approved information.
                           </p>
                         </div>
                       </div>
@@ -352,10 +352,9 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                           <Paperclip size={40} />
                         </div>
                         <div className="text-center">
-                          <p className="font-black text-sm text-brand-ice uppercase tracking-widest">Secure File Vault</p>
-                          <p className="text-xs text-brand-ice/60 mt-2 max-w-[240px] font-medium leading-relaxed">Upload medical X-Rays, Scans, or Identity Passports for clinical review.</p>
+                          <p className="font-black text-sm text-brand-ice uppercase tracking-widest">Attachments unavailable in this pilot view</p>
+                          <p className="text-xs text-brand-ice/60 mt-2 max-w-[240px] font-medium leading-relaxed">Do not upload medical images or identity documents here.</p>
                         </div>
-                        <Button variant="outline" size="sm" className="bg-transparent border-white/10 rounded-xl h-10 px-8 font-black text-[10px] uppercase tracking-[0.2em] shadow-none hover:bg-brand-navy">ACCESS LOCAL DISK</Button>
                       </div>
                     </div>
                   </TabsContent>

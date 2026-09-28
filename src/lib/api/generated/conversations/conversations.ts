@@ -38,7 +38,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
  * @summary Get a list of conversations for the organization
  */
 export const conversationsControllerGetConversations = (
-  params: ConversationsControllerGetConversationsParams,
+  params?: ConversationsControllerGetConversationsParams,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
@@ -58,7 +58,7 @@ export const getConversationsControllerGetConversationsQueryOptions = <
   TData = Awaited<ReturnType<typeof conversationsControllerGetConversations>>,
   TError = unknown,
 >(
-  params: ConversationsControllerGetConversationsParams,
+  params?: ConversationsControllerGetConversationsParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -97,7 +97,7 @@ export function useConversationsControllerGetConversations<
   TData = Awaited<ReturnType<typeof conversationsControllerGetConversations>>,
   TError = unknown,
 >(
-  params: ConversationsControllerGetConversationsParams,
+  params: undefined | ConversationsControllerGetConversationsParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -124,7 +124,7 @@ export function useConversationsControllerGetConversations<
   TData = Awaited<ReturnType<typeof conversationsControllerGetConversations>>,
   TError = unknown,
 >(
-  params: ConversationsControllerGetConversationsParams,
+  params?: ConversationsControllerGetConversationsParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -151,7 +151,7 @@ export function useConversationsControllerGetConversations<
   TData = Awaited<ReturnType<typeof conversationsControllerGetConversations>>,
   TError = unknown,
 >(
-  params: ConversationsControllerGetConversationsParams,
+  params?: ConversationsControllerGetConversationsParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -174,7 +174,7 @@ export function useConversationsControllerGetConversations<
   TData = Awaited<ReturnType<typeof conversationsControllerGetConversations>>,
   TError = unknown,
 >(
-  params: ConversationsControllerGetConversationsParams,
+  params?: ConversationsControllerGetConversationsParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -209,7 +209,7 @@ export function useConversationsControllerGetConversations<
  */
 export const conversationsControllerGetMessages = (
   id: string,
-  params: ConversationsControllerGetMessagesParams,
+  params?: ConversationsControllerGetMessagesParams,
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
@@ -234,7 +234,7 @@ export const getConversationsControllerGetMessagesQueryOptions = <
   TError = unknown,
 >(
   id: string,
-  params: ConversationsControllerGetMessagesParams,
+  params?: ConversationsControllerGetMessagesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -279,7 +279,7 @@ export function useConversationsControllerGetMessages<
   TError = unknown,
 >(
   id: string,
-  params: ConversationsControllerGetMessagesParams,
+  params: undefined | ConversationsControllerGetMessagesParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -307,7 +307,7 @@ export function useConversationsControllerGetMessages<
   TError = unknown,
 >(
   id: string,
-  params: ConversationsControllerGetMessagesParams,
+  params?: ConversationsControllerGetMessagesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -335,7 +335,7 @@ export function useConversationsControllerGetMessages<
   TError = unknown,
 >(
   id: string,
-  params: ConversationsControllerGetMessagesParams,
+  params?: ConversationsControllerGetMessagesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -359,7 +359,7 @@ export function useConversationsControllerGetMessages<
   TError = unknown,
 >(
   id: string,
-  params: ConversationsControllerGetMessagesParams,
+  params?: ConversationsControllerGetMessagesParams,
   options?: {
     query?: Partial<
       UseQueryOptions<

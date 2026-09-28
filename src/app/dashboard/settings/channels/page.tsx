@@ -108,8 +108,8 @@ export default function ChannelsSettingsPage() {
               No Channels Connected
             </h3>
             <p className="text-brand-ice/60 max-w-md font-medium mb-8">
-              Connect WhatsApp or other messaging platforms to allow your AI
-              agent to communicate with leads instantly.
+              Connect a WhatsApp channel for the supervised pilot. Other
+              messaging platforms need separate setup and verification.
             </p>
             <Button
               onClick={() => setIsAddModalOpen(true)}

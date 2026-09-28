@@ -1,5 +1,6 @@
 "use client";
 
+import { getConversationsControllerGetConversationsQueryKey } from "@/lib/api/generated/conversations/conversations";
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -141,7 +142,7 @@ export function LiveChatPane({
         onSuccess: () => {
           // The socket `onConversationUpdate` will catch this and update global state,
           // but we can invalidate just in case
-          queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+          queryClient.invalidateQueries({ queryKey: getConversationsControllerGetConversationsQueryKey() });
         },
       },
     );

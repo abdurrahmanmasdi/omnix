@@ -4,7 +4,6 @@ import {
   addRef,
   releaseRef,
   disconnectSocket,
-  getSocketGeneration,
   getGlobalSocket,
 } from "../socket-runtime";
 import { io } from "socket.io-client";
@@ -72,7 +71,7 @@ describe("socket-runtime", () => {
 
     disconnectSocket();
 
-    const { socket: newSocket, generation: newGen } =
+    const { generation: newGen } =
       getOrCreateSocket("token2");
     addRef();
 

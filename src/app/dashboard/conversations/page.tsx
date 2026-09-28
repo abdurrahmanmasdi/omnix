@@ -1,5 +1,6 @@
 "use client";
 
+import { getLeadsControllerFindAllQueryKey } from "@/lib/api/generated/leads/leads";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSocket, LiveMessagePayload } from "@/hooks/useSocket";
@@ -8,9 +9,8 @@ import type {
   LeadUpdatePayload,
 } from "@/hooks/useSocket";
 import { useLeadsControllerFindAll } from "@/lib/api/generated/leads/leads";
-import { useConversationsControllerGetConversations } from "@/lib/api/generated/conversations/conversations";
+import { useConversationsControllerGetConversations, getConversationsControllerGetConversationsQueryKey } from "@/lib/api/generated/conversations/conversations";
 import type {
-  ConversationsControllerGetMessages200Item,
   ConversationsControllerGetConversations200Item,
 } from "@/lib/api/model";
 import { toast } from "sonner";
@@ -40,7 +40,7 @@ export default function ConversationsPage() {
 
   // We also need conversation data to get `aiPaused` state. We can fetch conversations and map them.
   const { data: conversations, refetch: refetchConversations } =
-    useConversationsControllerGetConversations({ page: "1", limit: "100" });
+    useConversationsControllerGetConversations({ page: 1, limit: 100 });
 
   const activeConversationData = (
     conversations as ConversationsControllerGetConversations200Item[]
@@ -91,7 +91,7 @@ export default function ConversationsPage() {
 
     // --- Conversation Update (AI Paused) Listener ---
     const handleConversationUpdate = (data: ConversationUpdatePayload) => {
-      queryClient.invalidateQueries({ queryKey: ["/conversations"] });
+      queryClient.invalidateQueries({ queryKey: getConversationsControllerGetConversationsQueryKey() });
 
       if (data.aiPaused) {
         toast.warning("AI has been paused", {
@@ -111,7 +111,7 @@ export default function ConversationsPage() {
       console.log("[Socket] onLeadUpdate received in Orchestrator:", data.id);
       await queryClient.cancelQueries({ queryKey: ["/leads"] });
       // Invalidate leads so the Kanban board physically moves the card if the stage changed on the backend
-      queryClient.invalidateQueries({ queryKey: ["/leads"] });
+      queryClient.invalidateQueries({ queryKey: getLeadsControllerFindAllQueryKey() });
     };
 
     socket.on("onNewMessage", handleNewMessage);
@@ -141,7 +141,7 @@ export default function ConversationsPage() {
           </h1>
           <p className="text-brand-ice/60 font-medium mt-1 text-sm">
             Manage your patient pipeline visually and take over AI conversations
-            instantly.
+            when needed.
           </p>
         </div>
         <div className="flex items-center space-x-2 bg-[#051126] px-3 py-1.5 rounded-full border border-white/10 shadow-none">

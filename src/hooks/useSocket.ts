@@ -16,48 +16,10 @@ import {
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
 
-// ─── Payload Types (re-exported for consumers) ─────────
-export interface LiveMessagePayload {
-  id: string;
-  conversationId: string;
-  senderId: string | null;
-  content: string;
-  mediaUrl: string | null;
-  type: string;
-  handledBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LeadUpdatePayload {
-  id: string;
-  organizationId: string;
-  assignedAgentId: string | null;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phoneNumber: string;
-  country: string;
-  timezone: string;
-  primaryLanguage: string;
-  status: string;
-  priority: string;
-  summary: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ConversationUpdatePayload {
-  id: string;
-  organizationId: string;
-  externalContactId: string | null;
-  status: string;
-  leadId: string | null;
-  aiPaused: boolean;
-  assignedAgentId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type {
+  LiveMessagePayload, LeadUpdatePayload, ConversationUpdatePayload,
+  NotificationInvalidationPayload,
+} from '@/lib/contracts/socket-events.generated';
 
 // ─── Public Hook ────────────────────────────────────────
 /**
@@ -95,7 +57,6 @@ export function useSocket(): { socket: Socket | null; isConnected: boolean } {
     };
 
     const { socket: newSocket, generation } = getOrCreateSocket(accessToken, onConnectError);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocket(newSocket);
     addRef();
 

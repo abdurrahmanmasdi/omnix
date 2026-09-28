@@ -63,22 +63,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   COLD: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
 };
 
-interface Lead {
-  id: string;
-  firstName: string;
-  lastName: string;
-  country: string;
-  phoneNumber: string;
-  status: string;
-  priority: string;
-  estimatedValue: number;
-  currency?: string;
-  sourceId?: string;
-  conversation?: { id: string };
-  [key: string]: unknown;
-}
-
-
 interface LeadsTableProps {
   leads: LeadResponseDto[];
   sources: (CreateLeadSourceDto & { id: string })[];
@@ -151,8 +135,8 @@ export function LeadsTable({
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm font-bold text-brand-ice uppercase tracking-widest">Decrypting Records...</span>
-                    <p className="text-xs text-brand-ice/60 font-medium italic">Fetching secure patient data from gRPC pipeline.</p>
+                    <span className="text-sm font-bold text-brand-ice uppercase tracking-widest">Loading leads...</span>
+                    <p className="text-xs text-brand-ice/60 font-medium italic">Retrieving your clinic&apos;s lead list.</p>
                   </div>
                 </div>
               </TableCell>

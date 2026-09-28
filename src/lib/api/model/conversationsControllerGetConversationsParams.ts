@@ -7,6 +7,9 @@
  */
 
 export type ConversationsControllerGetConversationsParams = {
-  page: string;
-  limit: string;
+  page?: number;
+  /**
+   * @maximum 100
+   */
+  limit?: number;
 };

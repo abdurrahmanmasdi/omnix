@@ -113,12 +113,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Metric 4: AI Conversion Rate */}
+        {/* Share of leads in READY_TO_BOOK or WON pipeline status. */}
         <Card className="border-white/10 shadow-none hover:shadow-none transition-shadow relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-bold text-brand-ice/60 uppercase tracking-wide">
-              AI Conversion
+              Pipeline progress
             </CardTitle>
             <div className="h-8 w-8 bg-brand-electric/10 rounded-lg flex items-center justify-center">
               <TrendingUp className="h-4 w-4 text-indigo-600" />
@@ -126,7 +126,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black text-brand-ice">{summary.aiConversionRate}%</div>
-            <p className="text-xs font-medium text-brand-ice/60 mt-1">Leads progressed by AI</p>
+            <p className="text-xs font-medium text-brand-ice/60 mt-1">Ready to book or won; not confirmed revenue</p>
           </CardContent>
         </Card>
       </div>

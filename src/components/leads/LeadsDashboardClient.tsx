@@ -1,5 +1,7 @@
 "use client";
 
+import { getLeadsControllerFindAllQueryKey } from "@/lib/api/generated/leads/leads";
+import { getPipelineStagesControllerFindAllQueryKey } from "@/lib/api/generated/pipeline-stages/pipeline-stages";
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
@@ -153,10 +155,10 @@ export function LeadsDashboardClient() {
       await queryClient.cancelQueries({ queryKey: ["/pipeline-stages"] });
 
       // Invalidate all leads queries (list, individual, any filtered view)
-      queryClient.invalidateQueries({ queryKey: ["/leads"] });
+      queryClient.invalidateQueries({ queryKey: getLeadsControllerFindAllQueryKey() });
 
       // Invalidate pipeline stages since lead stage assignments may have changed
-      queryClient.invalidateQueries({ queryKey: ["/pipeline-stages"] });
+      queryClient.invalidateQueries({ queryKey: getPipelineStagesControllerFindAllQueryKey() });
     };
 
     socket.on("onLeadUpdate", handleLeadUpdate);

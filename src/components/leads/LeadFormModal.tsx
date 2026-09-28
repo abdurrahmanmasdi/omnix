@@ -305,7 +305,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-[10px] text-brand-ice/60 font-medium italic">Accurate source tracking improves AI conversion models.</p>
+                    <p className="text-[10px] text-brand-ice/60 font-medium italic">A source helps staff understand where this enquiry came from.</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-6 pt-2">

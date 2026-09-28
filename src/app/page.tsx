@@ -37,13 +37,13 @@ export default function LandingPage() {
               href="#rag"
               className="hover:text-brand-glow transition-colors"
             >
-              RAG Engine
+              Knowledge
             </Link>
             <Link
               href="#demo"
               className="hover:text-brand-glow transition-colors"
             >
-              Chat Demo
+              Example Chat
             </Link>
           </div>
           <Link
@@ -67,19 +67,20 @@ export default function LandingPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-glow opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-glow"></span>
             </span>
-            OMNIX v2.0 is now live
+            Invitation-only pilot
           </div>
 
           <h1 className="font-montserrat text-5xl md:text-7xl font-bold leading-tight mb-6 max-w-4xl">
-            Autonomous AI Sales for the <br className="hidden md:block" />
+            WhatsApp enquiry support for <br className="hidden md:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-electric via-brand-cyan to-brand-violet">
-              Modern Enterprise
+              Dental clinics
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-brand-ice/60 max-w-2xl mb-12 leading-relaxed">
-            Deploy an intelligent WhatsApp agent that qualifies leads, handles
-            objections, and schedules appointments 24/7 with a human-like touch.
+            Help your team respond to enquiries, collect booking requests, and
+            hand conversations to staff when human help is needed. Pilot access
+            is by invitation.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4">
@@ -91,10 +92,10 @@ export default function LandingPage() {
               <ArrowRight className="w-4 h-4 relative z-10 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
-              href="/demo"
+              href="#demo"
               className="px-8 py-4 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-semibold flex items-center justify-center cursor-pointer"
             >
-              Book a Demo
+              View Example
             </Link>
           </div>
         </div>
@@ -121,7 +122,7 @@ export default function LandingPage() {
               Powerful Capabilities
             </h2>
             <p className="text-brand-ice/60">
-              Built for high-ticket sales and lead conversion.
+              Tools for a supervised clinic pilot.
             </p>
           </div>
 
@@ -130,22 +131,22 @@ export default function LandingPage() {
               {
                 icon: MessageSquare,
                 title: "WhatsApp Native",
-                desc: "Seamlessly integrates with WhatsApp to engage customers where they already are.",
+                desc: "Connect a clinic WhatsApp channel to receive enquiries and send replies after setup.",
               },
               {
                 icon: Bot,
-                title: "Objection Handling",
-                desc: "Trained on real sales scripts to gracefully pivot from objections to closed deals.",
+                title: "Clinic information",
+                desc: "Use clinic-provided information to answer routine questions; uncertain or medical questions can be handed to staff.",
               },
               {
                 icon: Shield,
-                title: "Enterprise Grade",
-                desc: "SOC2 compliant architecture ensuring your data and conversations remain secure.",
+                title: "Staff handoff",
+                desc: "Pause automated replies and notify eligible staff when a conversation needs their attention.",
               },
               {
                 icon: RefreshCw,
-                title: "CRM Sync",
-                desc: "Qualifies leads and seamlessly transitions them into CRM platforms like HubSpot.",
+                title: "CRM connection",
+                desc: "A HubSpot connection is available for pilot setup; live sync and credential recovery still require staging verification.",
               },
             ].map((feat, i) => (
               <div
@@ -175,19 +176,19 @@ export default function LandingPage() {
               <Database className="w-4 h-4" /> Vector RAG Engine
             </div>
             <h2 className="font-montserrat text-4xl md:text-5xl font-bold leading-tight">
-              Instant Answers from your{" "}
+              Answers informed by your{" "}
               <span className="text-brand-glow">Knowledge Base</span>
             </h2>
             <p className="text-lg text-brand-ice/60 leading-relaxed">
-              Upload your PDFs, price lists, and past successful chats. Our
-              Retrieval-Augmented Generation (RAG) engine instantly injects
-              accurate, verifiable context into every response.
+              Add approved clinic documents to help the assistant answer routine
+              questions. If the information is missing or uncertain, staff can
+              take over. Responses and source quality need pilot review.
             </p>
             <ul className="space-y-4 text-brand-ice/80">
               {[
-                "Auto-syncs with your latest documents",
-                "Prevents LLM hallucinations",
-                "Cite sources in real-time",
+                "Clinic-approved documents can be added",
+                "Unverified answers can be routed to staff",
+                "Staff review remains part of the pilot",
               ].map((item, i) => (
                 <li key={i} className="flex items-center gap-3">
                   <div className="w-6 h-6 rounded-full bg-brand-cyan/20 flex items-center justify-center text-brand-cyan">
@@ -226,20 +227,19 @@ export default function LandingPage() {
               </div>
               <div className="space-y-4 font-mono text-sm">
                 <div className="text-brand-ice/40">
-                  # Simulating semantic search...
+                  # Illustrative example only
                 </div>
                 <div className="text-brand-cyan">
-                  await RAG.search(&quot;Dental Implant Pricing 2026&quot;)
+                  search(&quot;Clinic consultation information&quot;)
                 </div>
                 <div className="bg-brand-navy p-4 rounded-xl border border-white/5 text-brand-ice">
                   <span className="text-brand-glow font-bold">
-                    Match (98.4%):
+                    Sample source:
                   </span>{" "}
-                  &quot;Full arch implants start at $12,000 with a lifetime
-                  warranty. Dr. Smith handles all cases.&quot;
+                  &quot;Consultation availability and prices are confirmed by the clinic.&quot;
                 </div>
                 <div className="text-brand-violet font-semibold animate-pulse">
-                  Action: Injecting context to LangGraph...
+                  If details are unavailable, ask staff to confirm.
                 </div>
               </div>
             </div>
@@ -254,8 +254,9 @@ export default function LandingPage() {
       >
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="font-montserrat text-4xl font-bold mb-12">
-            See it in Action
+            Example conversation
           </h2>
+          <p className="text-brand-ice/60 mb-6">Illustrative text, not a live clinic response or medical advice.</p>
           <div className="bg-[#051126] border border-brand-electric/30 rounded-3xl overflow-hidden shadow-[0_0_80px_rgba(15,118,236,0.15)] flex flex-col text-left">
             <div className="bg-brand-navy p-4 border-b border-brand-electric/20 flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-brand-deep/20 flex items-center justify-center overflow-hidden border border-brand-electric/30 shrink-0">
@@ -269,7 +270,7 @@ export default function LandingPage() {
               </div>
               <div>
                 <h3 className="font-bold text-white">OMNIX Agent</h3>
-                <p className="text-xs text-brand-glow">Online</p>
+                <p className="text-xs text-brand-glow">Illustrative conversation</p>
               </div>
             </div>
             <div className="p-6 space-y-6 flex-1 min-h-[300px]">
@@ -291,13 +292,9 @@ export default function LandingPage() {
                   />
                 </div>
                 <div className="bg-brand-deep/20 border border-brand-electric/30 p-4 rounded-2xl rounded-tr-sm text-brand-ice max-w-[80%]">
-                  Hello! I completely understand that cost is a big factor. Our
-                  veneers start at $800 per tooth, and we offer 0% financing for
-                  12 months. <br />
-                  <br />
-                  Many of our patients find the monthly plan makes it very
-                  manageable! Would you like me to check our schedule for a free
-                  consultation?
+                  I can share the clinic&apos;s approved information about veneers.
+                  A staff member can confirm prices, financing, and consultation
+                  availability. Would you like me to ask them to follow up?
                 </div>
               </div>
             </div>
@@ -311,26 +308,7 @@ export default function LandingPage() {
           <p className="text-brand-ice/40 text-sm">
             © 2026 OMNIX AI. All rights reserved.
           </p>
-          <div className="flex gap-6 text-sm text-brand-ice/40">
-            <Link
-              href="/privacy"
-              className="hover:text-brand-glow transition-colors"
-            >
-              Privacy Policy
-            </Link>
-            <Link
-              href="/terms"
-              className="hover:text-brand-glow transition-colors"
-            >
-              Terms of Service
-            </Link>
-            <Link
-              href="/contact"
-              className="hover:text-brand-glow transition-colors"
-            >
-              Contact Us
-            </Link>
-          </div>
+          <p className="text-sm text-brand-ice/40">Pilot access is coordinated directly with each clinic.</p>
         </div>
       </footer>
     </div>

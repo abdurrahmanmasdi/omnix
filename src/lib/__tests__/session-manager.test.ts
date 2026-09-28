@@ -174,7 +174,7 @@ describe('session-manager', () => {
       });
 
       // Fire two resets concurrently
-      const [r1, r2] = await Promise.all([resetSession(), resetSession()]);
+      await Promise.all([resetSession(), resetSession()]);
 
       // cancelQueries should only be called once (the second call shares the promise)
       expect(mockCancelQueries).toHaveBeenCalledTimes(1);

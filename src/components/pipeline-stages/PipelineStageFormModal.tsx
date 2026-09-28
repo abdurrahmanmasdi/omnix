@@ -55,7 +55,6 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
     control,
     formState: { errors },
   } = useForm<PipelineStageFormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(pipelineStageSchema) as any,
     defaultValues: { name: '', mappedStatus: 'UNMAPPED' },
   });
@@ -123,7 +122,6 @@ export function PipelineStageFormModal({ stageId, isOpen, onClose, onSuccess }: 
             <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
           </div>
         ) : (
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           <form onSubmit={handleSubmit(onSubmit as any)} className="flex-1 flex flex-col">
             <div className="p-8 space-y-5">
               <div className="space-y-2">

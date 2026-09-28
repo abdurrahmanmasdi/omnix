@@ -1,4 +1,5 @@
 "use client";
+import { getLeadsControllerFindAllQueryKey } from "@/lib/api/generated/leads/leads";
 import type { LeadResponseDto } from "@/lib/api/model";
 
 import React, { useMemo, useState } from "react";
@@ -29,23 +30,6 @@ import { usePipelineStagesControllerFindAll } from "@/lib/api/generated/pipeline
 import { useLeadsControllerUpdateStage } from "@/lib/api/generated/leads/leads";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-
-// --- Types ---
-interface Lead {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  email?: string;
-  status?: string;
-  pipelineStageId?: string;
-  conversationId?: string;
-  conversation?: {
-    id: string;
-  };
-  createdAt: string;
-  [key: string]: unknown;
-}
 
 interface Stage {
   id: string;
@@ -371,7 +355,7 @@ export function LiveKanbanBoard({
           onError: () => {
             toast.error("Failed to update lead stage");
             setLocalLeads(leads);
-            queryClient.invalidateQueries({ queryKey: ["/leads"] });
+            queryClient.invalidateQueries({ queryKey: getLeadsControllerFindAllQueryKey() });
           },
         },
       );

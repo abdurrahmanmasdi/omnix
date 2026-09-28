@@ -2,7 +2,7 @@ import { defineConfig } from 'orval';
 
 export default defineConfig({
   api: {
-    input: 'http://localhost:3000/api-json', // Your NestJS Swagger JSON
+    input: './openapi.json',
     output: {
       mode: 'tags-split',
       target: 'src/lib/api/generated',

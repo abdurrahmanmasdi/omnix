@@ -1,4 +1,5 @@
 "use client";
+import { getLeadsControllerFindAllQueryKey } from "@/lib/api/generated/leads/leads";
 import type { LeadResponseDto } from "@/lib/api/model";
 
 import React, { useMemo, useState } from "react";
@@ -362,7 +363,7 @@ export function KanbanBoard({
             toast.error("Failed to update lead stage");
             // Revert local state and query cache on error
             setLocalLeads(leads);
-            queryClient.invalidateQueries({ queryKey: ["/leads"] });
+            queryClient.invalidateQueries({ queryKey: getLeadsControllerFindAllQueryKey() });
           },
         },
       );
