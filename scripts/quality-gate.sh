@@ -26,6 +26,8 @@ if [[ "${SKIP_INSTALL:-0}" != "1" ]]; then
   "$python_service/.venv/bin/python" -m pip install -r "$python_service/requirements-dev.txt"
 fi
 
+(cd "$backend" && npx prisma generate)
+
 if [[ "${SKIP_GENERATED_CHECK:-0}" != "1" ]]; then
   (cd "$backend" && npx ts-node scripts/export-openapi.ts "$frontend/openapi.json")
   (cd "$frontend" && npm run generate:api)
@@ -35,6 +37,6 @@ if [[ "${SKIP_GENERATED_CHECK:-0}" != "1" ]]; then
   fi
 fi
 
-(cd "$backend" && npx prisma generate && npx tsc --noEmit --incremental false && npm run build && npm test -- --runInBand --watchman=false && npm run lint && npm run lint:baseline)
+(cd "$backend" && npx tsc --noEmit --incremental false && npm run build && npm test -- --runInBand --watchman=false && npm run lint && npm run lint:baseline)
 (cd "$frontend" && npx tsc --noEmit && npm run build && npx vitest run && npm run lint && npm run lint:baseline)
 (cd "$python_service" && OPENAI_API_KEY=synthetic-test-key DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic ./.venv/bin/python -m pytest -q)
