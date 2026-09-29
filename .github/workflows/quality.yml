@@ -47,3 +47,5 @@ jobs:
             python-ai-service-v2/requirements-dev.txt
       - name: Run quality gate
         run: bash backend-v2/scripts/quality-gate.sh
+      - name: Run database acceptance suite
+        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|inbound-claim|media-consent|auth-refresh-concurrency'

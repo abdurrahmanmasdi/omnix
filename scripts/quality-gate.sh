@@ -11,8 +11,8 @@ if [[ "$node_major" != "22" ]]; then
   echo "Node 22 is required; current major is $node_major" >&2
   exit 1
 fi
-if ! "$python_bin" -c 'import sys; assert sys.version_info[:2] == (3, 13)' 2>/dev/null; then
-  echo "Python 3.13 is required (set PYTHON_BIN to its executable)." >&2
+if ! "$python_bin" -c 'import sys; assert sys.version_info[:2] >= (3, 13)' 2>/dev/null; then
+  echo "Python 3.13 or newer is required (set PYTHON_BIN to its executable)." >&2
   exit 1
 fi
 python3 "$backend/scripts/check-cross-repo-contracts.py"
