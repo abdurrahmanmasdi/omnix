@@ -11,6 +11,7 @@ pairs = [
     (backend / 'src/webhooks/contracts/agent-actions.v1.json', python / 'app/modules/agent/agent-actions.v1.json'),
     (backend / 'src/webhooks/contracts/agent-actions.v1.fixtures.json', python / 'tests/agent-actions.v1.fixtures.json'),
     (backend / 'src/proto/agent.proto', python / 'proto/agent.proto'),
+    (backend / 'src/proto/rag.proto', python / 'proto/rag.proto'),
     (backend / 'src/events/dto/socket-events.generated.ts', frontend / 'src/lib/contracts/socket-events.generated.ts'),
     (backend / 'src/events/dto/socket-events.v1.fixtures.json', frontend / 'src/lib/contracts/socket-events.v1.fixtures.json'),
 ]

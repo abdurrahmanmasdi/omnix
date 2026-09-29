@@ -462,6 +462,23 @@ describe('ActionExecutorService', () => {
       });
     });
 
+    
+    it('ensures a failed action cannot generate a success promise', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        id: 'trusted-conv', organizationId: 'org-1', leadId: 'lead-1',
+        lead: { status: 'NEW' },
+      });
+      (prismaService.lead.update as jest.Mock).mockRejectedValue(new Error('Synthetic DB Error'));
+      
+      const result = await service.executeActions('org-1', 'trusted-conv', [
+        { type: 'UPDATE_LEAD', payload: JSON.stringify({ status: 'QUALIFYING' }) },
+      ]);
+      expect(result.executed).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(result.outcomes[0].status).toBe('FAILED');
+      expect(result.outcomes[0].retryable).toBe(true);
+    });
+
     it('classifies a rejected database lead update as retryable', async () => {
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
         id: 'trusted-conv', organizationId: 'org-1', leadId: 'lead-1',
