@@ -29,8 +29,12 @@ fi
 (cd "$backend" && npx prisma generate)
 
 if [[ "${SKIP_GENERATED_CHECK:-0}" != "1" ]]; then
-  (cd "$backend" && npx ts-node scripts/export-openapi.ts "$frontend/openapi.json")
-  (cd "$frontend" && npm run generate:api)
+  (cd "$backend" && \
+    DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic \
+    JWT_ACCESS_SECRET=synthetic-ci-only-jwt-secret \
+    REDIS_URL=redis://127.0.0.1:1 \
+    npx ts-node scripts/export-openapi.ts "$frontend/openapi.json")
+  (cd "$frontend" && ./node_modules/.bin/prettier --write openapi.json && npm run generate:api)
   if [[ -n "$(git -C "$frontend" status --porcelain -- openapi.json src/lib/api/generated src/lib/api/model)" ]]; then
     echo "Generated frontend API contract is stale; regenerate and commit it." >&2
     exit 1
