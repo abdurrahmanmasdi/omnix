@@ -33,6 +33,10 @@ done
 if [ "$ready" != true ]; then echo 'DISPOSABLE_REDIS_NOT_READY' >&2; exit 1; fi
 redis_port="$(docker port "$redis_name" 6379/tcp)"
 export REDIS_URL="redis://127.0.0.1:${redis_port##*:}"
+export JWT_ACCESS_SECRET=synthetic-e2e-access-secret
+export JWT_REFRESH_SECRET=synthetic-e2e-refresh-secret
+export JWT_ACCESS_EXPIRATION=15m
+export JWT_REFRESH_EXPIRATION=7d
 mapped_port="$(docker port "$container_name" 5432/tcp)"
 export UPGRADE_TEST_ADMIN_URL="postgresql://postgres:synthetic-test-only@127.0.0.1:${mapped_port##*:}/postgres"
 export INTEGRATION_CREDENTIAL_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')"
