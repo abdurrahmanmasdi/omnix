@@ -3,9 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 node -e 'if (Number(process.versions.node.split(".")[0]) < 22) { console.error("Node 22 or newer is required; run nvm use first"); process.exit(1); }'
 container_name="omnidesk-s02-$(node -e 'process.stdout.write(require("crypto").randomUUID())')"
+redis_name="omnidesk-s02-redis-$(node -e 'process.stdout.write(require("crypto").randomUUID())')"
 cleanup() {
   case "$container_name" in
     omnidesk-s02-????????-????-????-????-????????????) docker rm -f "$container_name" >/dev/null 2>&1 || true ;;
+  esac
+  case "$redis_name" in
+    omnidesk-s02-redis-????????-????-????-????-????????????) docker rm -f "$redis_name" >/dev/null 2>&1 || true ;;
   esac
 }
 trap cleanup EXIT
@@ -20,6 +24,15 @@ for attempt in {1..60}; do
   sleep 1
 done
 if [ "$ready" != true ]; then echo 'DISPOSABLE_POSTGRES_NOT_READY' >&2; exit 1; fi
+docker run --rm -d --name "$redis_name" -p 127.0.0.1::6379 redis:7-alpine >/dev/null
+ready=false
+for attempt in {1..60}; do
+  if [ "$(docker exec "$redis_name" redis-cli ping 2>/dev/null)" = PONG ]; then ready=true; break; fi
+  sleep 1
+done
+if [ "$ready" != true ]; then echo 'DISPOSABLE_REDIS_NOT_READY' >&2; exit 1; fi
+redis_port="$(docker port "$redis_name" 6379/tcp)"
+export REDIS_URL="redis://127.0.0.1:${redis_port##*:}"
 mapped_port="$(docker port "$container_name" 5432/tcp)"
 export UPGRADE_TEST_ADMIN_URL="postgresql://postgres:synthetic-test-only@127.0.0.1:${mapped_port##*:}/postgres"
 export INTEGRATION_CREDENTIAL_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')"
