@@ -10,7 +10,9 @@
             "description": ""
           }
         },
-        "tags": ["App"]
+        "tags": [
+          "App"
+        ]
       }
     },
     "/metrics": {
@@ -22,7 +24,9 @@
             "description": ""
           }
         },
-        "tags": ["Prometheus"]
+        "tags": [
+          "Prometheus"
+        ]
       }
     },
     "/webhooks/whatsapp": {
@@ -59,7 +63,9 @@
             "description": ""
           }
         },
-        "tags": ["Webhooks"]
+        "tags": [
+          "Webhooks"
+        ]
       },
       "post": {
         "operationId": "WebhooksController_receiveMessage",
@@ -69,7 +75,9 @@
             "description": ""
           }
         },
-        "tags": ["Webhooks"]
+        "tags": [
+          "Webhooks"
+        ]
       }
     },
     "/auth/signup": {
@@ -82,7 +90,9 @@
           }
         },
         "summary": "Public signup is disabled during the invitation-only pilot",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/auth/login": {
@@ -108,7 +118,9 @@
           }
         },
         "summary": "Log in and receive access/refresh tokens",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/auth/logout": {
@@ -133,7 +145,9 @@
           }
         },
         "summary": "Log out and clear cookies",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/auth/refresh": {
@@ -189,7 +203,9 @@
           }
         },
         "summary": "Refresh access token using HTTP-only cookie",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/auth/verify-email": {
@@ -202,7 +218,9 @@
           }
         },
         "summary": "Legacy email verification is disabled during the pilot",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/auth/me": {
@@ -220,7 +238,9 @@
           }
         ],
         "summary": "Get the currently logged-in user profile",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/auth/accept-invitation": {
@@ -246,7 +266,64 @@
           }
         },
         "summary": "Activate a pilot account using a single-use operator invitation",
-        "tags": ["Authentication"]
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/invitations/clinic": {
+      "post": {
+        "operationId": "InvitationsController_issueClinic",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueClinicInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Issue a clinic invitation to a new or existing user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/auth/invitations/clinic/accept": {
+      "post": {
+        "operationId": "InvitationsController_acceptClinic",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptClinicInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Accept a clinic invitation",
+        "tags": [
+          "Authentication"
+        ]
       }
     },
     "/organizations": {
@@ -281,7 +358,11 @@
                       "type": "string"
                     }
                   },
-                  "required": ["message", "organizationId", "access_token"]
+                  "required": [
+                    "message",
+                    "organizationId",
+                    "access_token"
+                  ]
                 }
               }
             }
@@ -293,7 +374,9 @@
           }
         ],
         "summary": "Create a new organization and get updated tokens",
-        "tags": ["Organizations"]
+        "tags": [
+          "Organizations"
+        ]
       }
     },
     "/conversations": {
@@ -382,7 +465,9 @@
           }
         ],
         "summary": "Get a list of conversations for the organization",
-        "tags": ["Conversations"]
+        "tags": [
+          "Conversations"
+        ]
       }
     },
     "/conversations/{id}/messages": {
@@ -453,7 +538,9 @@
           }
         ],
         "summary": "Get paginated messages for a specific conversation",
-        "tags": ["Conversations"]
+        "tags": [
+          "Conversations"
+        ]
       },
       "post": {
         "operationId": "ConversationsController_sendMessage",
@@ -488,7 +575,9 @@
           }
         ],
         "summary": "Send a manual message to a conversation",
-        "tags": ["Conversations"]
+        "tags": [
+          "Conversations"
+        ]
       }
     },
     "/conversations/{id}/toggle-ai": {
@@ -530,7 +619,9 @@
           }
         ],
         "summary": "Toggle the AI auto-reply state for a conversation",
-        "tags": ["Conversations"]
+        "tags": [
+          "Conversations"
+        ]
       }
     },
     "/documents": {
@@ -543,7 +634,9 @@
           }
         },
         "summary": "Get all knowledge base documents for the organization",
-        "tags": ["Documents"]
+        "tags": [
+          "Documents"
+        ]
       }
     },
     "/documents/upload": {
@@ -566,7 +659,9 @@
           }
         },
         "summary": "Upload a new PDF to train the AI",
-        "tags": ["Documents"]
+        "tags": [
+          "Documents"
+        ]
       }
     },
     "/documents/{id}": {
@@ -588,7 +683,9 @@
           }
         },
         "summary": "Delete a document and its associated vectors",
-        "tags": ["Documents"]
+        "tags": [
+          "Documents"
+        ]
       }
     },
     "/experiences": {
@@ -677,7 +774,9 @@
           }
         ],
         "summary": "Create a new patient experience (social proof)",
-        "tags": ["Experiences"]
+        "tags": [
+          "Experiences"
+        ]
       },
       "get": {
         "description": "Retrieves all patient experiences/testimonials for the organization. Results are sorted by creation date (newest first).",
@@ -724,7 +823,9 @@
           }
         ],
         "summary": "Get all experiences for the authenticated organization",
-        "tags": ["Experiences"]
+        "tags": [
+          "Experiences"
+        ]
       }
     },
     "/experiences/{id}": {
@@ -792,7 +893,9 @@
           }
         ],
         "summary": "Get a specific experience by ID",
-        "tags": ["Experiences"]
+        "tags": [
+          "Experiences"
+        ]
       },
       "patch": {
         "description": "Updates a patient experience. Any text field changes will trigger re-embedding for AI matching.",
@@ -862,7 +965,9 @@
           }
         ],
         "summary": "Update an existing experience",
-        "tags": ["Experiences"]
+        "tags": [
+          "Experiences"
+        ]
       },
       "delete": {
         "description": "Permanently deletes a patient experience from the system.",
@@ -921,7 +1026,9 @@
           }
         ],
         "summary": "Delete an experience",
-        "tags": ["Experiences"]
+        "tags": [
+          "Experiences"
+        ]
       }
     },
     "/lead-sources": {
@@ -973,7 +1080,9 @@
           }
         ],
         "summary": "Create a new lead source",
-        "tags": ["Lead Sources"]
+        "tags": [
+          "Lead Sources"
+        ]
       },
       "get": {
         "description": "Retrieves all active and inactive lead sources",
@@ -1022,7 +1131,9 @@
           }
         ],
         "summary": "Get all lead sources for organization",
-        "tags": ["Lead Sources"]
+        "tags": [
+          "Lead Sources"
+        ]
       }
     },
     "/lead-sources/{id}": {
@@ -1083,7 +1194,9 @@
           }
         ],
         "summary": "Get a specific lead source by ID",
-        "tags": ["Lead Sources"]
+        "tags": [
+          "Lead Sources"
+        ]
       },
       "patch": {
         "operationId": "LeadSourcesController_update",
@@ -1143,7 +1256,9 @@
           }
         ],
         "summary": "Update a specific lead source",
-        "tags": ["Lead Sources"]
+        "tags": [
+          "Lead Sources"
+        ]
       },
       "delete": {
         "operationId": "LeadSourcesController_remove",
@@ -1185,7 +1300,9 @@
           }
         ],
         "summary": "Soft delete a lead source",
-        "tags": ["Lead Sources"]
+        "tags": [
+          "Lead Sources"
+        ]
       }
     },
     "/leads": {
@@ -1290,7 +1407,9 @@
           }
         ],
         "summary": "Create a new lead",
-        "tags": ["Leads"]
+        "tags": [
+          "Leads"
+        ]
       },
       "get": {
         "description": "Retrieves all leads with support for filters, sorting, and pagination via AST query builder",
@@ -1364,7 +1483,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["HOT", "WARM", "COLD"]
+              "enum": [
+                "HOT",
+                "WARM",
+                "COLD"
+              ]
             }
           }
         ],
@@ -1392,7 +1515,9 @@
           }
         ],
         "summary": "Get leads with dynamic filtering and sorting",
-        "tags": ["Leads"]
+        "tags": [
+          "Leads"
+        ]
       }
     },
     "/leads/{id}": {
@@ -1468,7 +1593,9 @@
           }
         ],
         "summary": "Get a specific lead by ID",
-        "tags": ["Leads"]
+        "tags": [
+          "Leads"
+        ]
       },
       "patch": {
         "operationId": "LeadsController_update",
@@ -1530,7 +1657,9 @@
           }
         ],
         "summary": "Update a specific lead",
-        "tags": ["Leads"]
+        "tags": [
+          "Leads"
+        ]
       },
       "delete": {
         "operationId": "LeadsController_remove",
@@ -1572,7 +1701,9 @@
           }
         ],
         "summary": "Soft delete a lead",
-        "tags": ["Leads"]
+        "tags": [
+          "Leads"
+        ]
       }
     },
     "/leads/{id}/stage": {
@@ -1622,7 +1753,9 @@
           }
         ],
         "summary": "Update the pipeline stage and optionally the status of a lead",
-        "tags": ["Leads"]
+        "tags": [
+          "Leads"
+        ]
       }
     },
     "/notifications": {
@@ -1728,7 +1861,9 @@
           }
         ],
         "summary": "Get the authenticated user notifications",
-        "tags": ["Notifications"]
+        "tags": [
+          "Notifications"
+        ]
       }
     },
     "/notifications/unread-count": {
@@ -1757,7 +1892,9 @@
           }
         ],
         "summary": "Get unread notification count",
-        "tags": ["Notifications"]
+        "tags": [
+          "Notifications"
+        ]
       }
     },
     "/notifications/{id}/read": {
@@ -1801,7 +1938,9 @@
           }
         ],
         "summary": "Mark a notification as read",
-        "tags": ["Notifications"]
+        "tags": [
+          "Notifications"
+        ]
       }
     },
     "/notifications/read-all": {
@@ -1835,7 +1974,9 @@
           }
         ],
         "summary": "Mark all unread notifications as read",
-        "tags": ["Notifications"]
+        "tags": [
+          "Notifications"
+        ]
       }
     },
     "/pipeline-stages": {
@@ -1887,7 +2028,9 @@
           }
         ],
         "summary": "Create a new pipeline stage (Kanban column)",
-        "tags": ["Pipeline Stages"]
+        "tags": [
+          "Pipeline Stages"
+        ]
       },
       "get": {
         "description": "Retrieves all pipeline stages for the organization in order",
@@ -1945,7 +2088,9 @@
           }
         ],
         "summary": "Get all pipeline stages ordered by index",
-        "tags": ["Pipeline Stages"]
+        "tags": [
+          "Pipeline Stages"
+        ]
       }
     },
     "/pipeline-stages/{id}": {
@@ -2006,7 +2151,9 @@
           }
         ],
         "summary": "Get a specific pipeline stage",
-        "tags": ["Pipeline Stages"]
+        "tags": [
+          "Pipeline Stages"
+        ]
       },
       "patch": {
         "operationId": "PipelineStagesController_update",
@@ -2066,7 +2213,9 @@
           }
         ],
         "summary": "Update a pipeline stage name or index",
-        "tags": ["Pipeline Stages"]
+        "tags": [
+          "Pipeline Stages"
+        ]
       },
       "delete": {
         "operationId": "PipelineStagesController_remove",
@@ -2108,7 +2257,9 @@
           }
         ],
         "summary": "Soft delete a pipeline stage",
-        "tags": ["Pipeline Stages"]
+        "tags": [
+          "Pipeline Stages"
+        ]
       }
     },
     "/pipeline-stages/reorder": {
@@ -2172,7 +2323,9 @@
           }
         ],
         "summary": "Bulk reorder pipeline stages (Drag & Drop)",
-        "tags": ["Pipeline Stages"]
+        "tags": [
+          "Pipeline Stages"
+        ]
       }
     },
     "/settings/ai-persona": {
@@ -2193,7 +2346,9 @@
           }
         ],
         "summary": "Get AI Persona configuration for the organization",
-        "tags": ["AI Persona Settings"]
+        "tags": [
+          "AI Persona Settings"
+        ]
       },
       "post": {
         "operationId": "AiPersonaController_upsertPersona",
@@ -2222,7 +2377,9 @@
           }
         ],
         "summary": "Create or update the AI Persona configuration",
-        "tags": ["AI Persona Settings"]
+        "tags": [
+          "AI Persona Settings"
+        ]
       }
     },
     "/channels": {
@@ -2245,7 +2402,9 @@
           }
         },
         "summary": "Connect a new communication channel (e.g., WhatsApp)",
-        "tags": ["Channels"]
+        "tags": [
+          "Channels"
+        ]
       },
       "get": {
         "operationId": "ChannelsController_getChannels",
@@ -2256,7 +2415,9 @@
           }
         },
         "summary": "Get all connected channels for the organization",
-        "tags": ["Channels"]
+        "tags": [
+          "Channels"
+        ]
       }
     },
     "/channels/{id}": {
@@ -2278,7 +2439,9 @@
           }
         },
         "summary": "Disconnect a channel",
-        "tags": ["Channels"]
+        "tags": [
+          "Channels"
+        ]
       }
     },
     "/analytics/summary": {
@@ -2298,7 +2461,9 @@
           }
         },
         "summary": "Get aggregated analytics for the dashboard",
-        "tags": ["Analytics"]
+        "tags": [
+          "Analytics"
+        ]
       }
     }
   },
@@ -2337,7 +2502,10 @@
             "description": "The target organization to select (for multi-tenant users)"
           }
         },
-        "required": ["email", "password"]
+        "required": [
+          "email",
+          "password"
+        ]
       },
       "RefreshDto": {
         "type": "object",
@@ -2371,7 +2539,56 @@
             "maxLength": 100
           }
         },
-        "required": ["token", "password", "firstName", "lastName"]
+        "required": [
+          "token",
+          "password",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "IssueClinicInvitationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address of the staff to invite"
+          },
+          "roleId": {
+            "type": "string",
+            "description": "Role ID to grant upon acceptance"
+          }
+        },
+        "required": [
+          "email",
+          "roleId"
+        ]
+      },
+      "AcceptClinicInvitationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Single-use clinic invitation token",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 72
+          },
+          "firstName": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "token"
+        ]
       },
       "CreateOrganizationDto": {
         "type": "object",
@@ -2403,7 +2620,10 @@
             "description": "JSON payload containing business rules for the AI"
           }
         },
-        "required": ["name", "slug"]
+        "required": [
+          "name",
+          "slug"
+        ]
       },
       "SendMessageDto": {
         "type": "object",
@@ -2413,7 +2633,9 @@
             "example": "Hello! I am taking over this chat."
           }
         },
-        "required": ["content"]
+        "required": [
+          "content"
+        ]
       },
       "UploadDocumentDto": {
         "type": "object",
@@ -2424,7 +2646,9 @@
             "description": "The PDF file to upload to the knowledge base"
           }
         },
-        "required": ["file"]
+        "required": [
+          "file"
+        ]
       },
       "CreateExperienceDto": {
         "type": "object",
@@ -2446,7 +2670,9 @@
             "example": true
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "UpdateLeadSourceDto": {
         "type": "object",
@@ -2509,7 +2735,12 @@
           },
           "gender": {
             "type": "string",
-            "enum": ["MALE", "FEMALE", "OTHER", "UNKNOWN"]
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER",
+              "UNKNOWN"
+            ]
           },
           "sourceId": {
             "type": "string"
@@ -2537,7 +2768,11 @@
           },
           "priority": {
             "type": "string",
-            "enum": ["HOT", "WARM", "COLD"],
+            "enum": [
+              "HOT",
+              "WARM",
+              "COLD"
+            ],
             "default": "WARM"
           },
           "estimatedValue": {
@@ -2545,7 +2780,12 @@
           },
           "currency": {
             "type": "string",
-            "enum": ["USD", "TRY", "EUR", "GBP"],
+            "enum": [
+              "USD",
+              "TRY",
+              "EUR",
+              "GBP"
+            ],
             "default": "USD"
           },
           "expectedServiceDate": {
@@ -2633,14 +2873,23 @@
           },
           "priority": {
             "type": "string",
-            "enum": ["HOT", "WARM", "COLD"]
+            "enum": [
+              "HOT",
+              "WARM",
+              "COLD"
+            ]
           },
           "estimatedValue": {
             "type": "number"
           },
           "currency": {
             "type": "string",
-            "enum": ["USD", "TRY", "EUR", "GBP"]
+            "enum": [
+              "USD",
+              "TRY",
+              "EUR",
+              "GBP"
+            ]
           },
           "expectedServiceDate": {
             "type": "string"
@@ -2689,7 +2938,10 @@
             "type": "object"
           }
         },
-        "required": ["data", "meta"]
+        "required": [
+          "data",
+          "meta"
+        ]
       },
       "UpdateLeadStageDto": {
         "type": "object",
@@ -2714,7 +2966,9 @@
             "description": "Optional status update when moving stage"
           }
         },
-        "required": ["pipelineStageId"]
+        "required": [
+          "pipelineStageId"
+        ]
       },
       "UpdateLeadDto": {
         "type": "object",
@@ -2764,7 +3018,12 @@
           },
           "gender": {
             "type": "string",
-            "enum": ["MALE", "FEMALE", "OTHER", "UNKNOWN"]
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER",
+              "UNKNOWN"
+            ]
           },
           "sourceId": {
             "type": "string"
@@ -2792,7 +3051,11 @@
           },
           "priority": {
             "type": "string",
-            "enum": ["HOT", "WARM", "COLD"],
+            "enum": [
+              "HOT",
+              "WARM",
+              "COLD"
+            ],
             "default": "WARM"
           },
           "estimatedValue": {
@@ -2800,7 +3063,12 @@
           },
           "currency": {
             "type": "string",
-            "enum": ["USD", "TRY", "EUR", "GBP"],
+            "enum": [
+              "USD",
+              "TRY",
+              "EUR",
+              "GBP"
+            ],
             "default": "USD"
           },
           "expectedServiceDate": {
@@ -2840,7 +3108,9 @@
             "description": "Optional: Map this stage to a core AI state."
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "ReorderStageItemDto": {
         "type": "object",
@@ -2852,7 +3122,10 @@
             "type": "number"
           }
         },
-        "required": ["id", "orderIndex"]
+        "required": [
+          "id",
+          "orderIndex"
+        ]
       },
       "BulkReorderStagesDto": {
         "type": "object",
@@ -2864,7 +3137,9 @@
             }
           }
         },
-        "required": ["stages"]
+        "required": [
+          "stages"
+        ]
       },
       "UpdatePipelineStageDto": {
         "type": "object",
@@ -2922,14 +3197,19 @@
             "description": "Dynamic workflow rules (JSON)"
           }
         },
-        "required": ["clinicName"]
+        "required": [
+          "clinicName"
+        ]
       },
       "CreateChannelDto": {
         "type": "object",
         "properties": {
           "provider": {
             "type": "string",
-            "enum": ["WHATSAPP_CLOUD_API", "INSTAGRAM_GRAPH_API"]
+            "enum": [
+              "WHATSAPP_CLOUD_API",
+              "INSTAGRAM_GRAPH_API"
+            ]
           },
           "providerAccountId": {
             "type": "string",
@@ -2940,7 +3220,11 @@
             "description": "The Access Token or Secret for the provider"
           }
         },
-        "required": ["provider", "providerAccountId", "accessToken"]
+        "required": [
+          "provider",
+          "providerAccountId",
+          "accessToken"
+        ]
       },
       "RecentActivityDto": {
         "type": "object",

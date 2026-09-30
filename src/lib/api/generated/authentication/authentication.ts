@@ -22,9 +22,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AcceptClinicInvitationDto,
   AcceptInvitationDto,
   AuthControllerLogout200,
   AuthControllerRefreshTokens200,
+  IssueClinicInvitationDto,
   LoginDto,
   RefreshDto,
 } from "../../model";
@@ -767,6 +769,192 @@ export const useInvitationsControllerAccept = <
 > => {
   const mutationOptions =
     getInvitationsControllerAcceptMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary Issue a clinic invitation to a new or existing user
+ */
+export const invitationsControllerIssueClinic = (
+  issueClinicInvitationDto: IssueClinicInvitationDto,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<void>(
+    {
+      url: `/auth/invitations/clinic`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: issueClinicInvitationDto,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getInvitationsControllerIssueClinicMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof invitationsControllerIssueClinic>>,
+    TError,
+    { data: IssueClinicInvitationDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof invitationsControllerIssueClinic>>,
+  TError,
+  { data: IssueClinicInvitationDto },
+  TContext
+> => {
+  const mutationKey = ["invitationsControllerIssueClinic"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof invitationsControllerIssueClinic>>,
+    { data: IssueClinicInvitationDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return invitationsControllerIssueClinic(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InvitationsControllerIssueClinicMutationResult = NonNullable<
+  Awaited<ReturnType<typeof invitationsControllerIssueClinic>>
+>;
+export type InvitationsControllerIssueClinicMutationBody =
+  IssueClinicInvitationDto;
+export type InvitationsControllerIssueClinicMutationError = unknown;
+
+/**
+ * @summary Issue a clinic invitation to a new or existing user
+ */
+export const useInvitationsControllerIssueClinic = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof invitationsControllerIssueClinic>>,
+      TError,
+      { data: IssueClinicInvitationDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof invitationsControllerIssueClinic>>,
+  TError,
+  { data: IssueClinicInvitationDto },
+  TContext
+> => {
+  const mutationOptions =
+    getInvitationsControllerIssueClinicMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary Accept a clinic invitation
+ */
+export const invitationsControllerAcceptClinic = (
+  acceptClinicInvitationDto: AcceptClinicInvitationDto,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<void>(
+    {
+      url: `/auth/invitations/clinic/accept`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: acceptClinicInvitationDto,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getInvitationsControllerAcceptClinicMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof invitationsControllerAcceptClinic>>,
+    TError,
+    { data: AcceptClinicInvitationDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof invitationsControllerAcceptClinic>>,
+  TError,
+  { data: AcceptClinicInvitationDto },
+  TContext
+> => {
+  const mutationKey = ["invitationsControllerAcceptClinic"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof invitationsControllerAcceptClinic>>,
+    { data: AcceptClinicInvitationDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return invitationsControllerAcceptClinic(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InvitationsControllerAcceptClinicMutationResult = NonNullable<
+  Awaited<ReturnType<typeof invitationsControllerAcceptClinic>>
+>;
+export type InvitationsControllerAcceptClinicMutationBody =
+  AcceptClinicInvitationDto;
+export type InvitationsControllerAcceptClinicMutationError = unknown;
+
+/**
+ * @summary Accept a clinic invitation
+ */
+export const useInvitationsControllerAcceptClinic = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof invitationsControllerAcceptClinic>>,
+      TError,
+      { data: AcceptClinicInvitationDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof invitationsControllerAcceptClinic>>,
+  TError,
+  { data: AcceptClinicInvitationDto },
+  TContext
+> => {
+  const mutationOptions =
+    getInvitationsControllerAcceptClinicMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
