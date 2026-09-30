@@ -19,7 +19,10 @@ import rag_pb2_grpc
 from app.grpc_services.agent_servicer import SalesAgentServicer
 from app.grpc_services.document_servicer import DocumentProcessorServicer
 
-_grpc_server = grpc.aio.server()
+from app.grpc_services.auth_interceptor import AuthInterceptor
+from app.core.config import settings
+
+_grpc_server = grpc.aio.server(interceptors=[AuthInterceptor(settings.INTERNAL_RPC_SECRET)])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,7 +32,13 @@ async def lifespan(app: FastAPI):
     # Register the Document Processor
     rag_pb2_grpc.add_DocumentProcessorServicer_to_server(DocumentProcessorServicer(), _grpc_server)
     
-    _grpc_server.add_insecure_port('[::]:50051')
+    if settings.ENVIRONMENT == "production":
+        # Note: server certificates should be loaded appropriately in production
+        # This is a placeholder for the explicit production transport
+        server_credentials = grpc.ssl_server_credentials([])
+        _grpc_server.add_secure_port('[::]:50051', server_credentials)
+    else:
+        _grpc_server.add_insecure_port('[::]:50051')
     await _grpc_server.start()
     logger.info("gRPC Server running on port 50051")
     

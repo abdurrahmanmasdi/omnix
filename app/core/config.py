@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     # Required keys — must be supplied per environment (Railway sets these).
     OPENAI_API_KEY: str
     DATABASE_URL: str
+    INTERNAL_RPC_SECRET: str
+    ENVIRONMENT: str = "development"
 
     # This tells Pydantic to read from your .env file
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
