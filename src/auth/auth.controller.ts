@@ -23,9 +23,13 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
+@UseGuards(CustomThrottlerGuard)
+@Throttle({ auth: { limit: 10, ttl: 60000 } })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

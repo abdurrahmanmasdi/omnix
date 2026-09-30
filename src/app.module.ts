@@ -27,6 +27,11 @@ import { OutboxModule } from './core/outbox/outbox.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from './core/logger/logger.module';
 import { MetricsModule } from './core/metrics/metrics.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { APP_GUARD } from '@nestjs/core';
+import { CustomThrottlerGuard } from './core/guards/custom-throttler.guard';
+import { CsrfGuard } from './core/guards/csrf.guard';
 
 @Module({
   imports: [
@@ -43,6 +48,25 @@ import { MetricsModule } from './core/metrics/metrics.module';
         },
       }),
       inject: [ConfigService],
+    }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: 60000,
+            limit: 100,
+          },
+          {
+            name: 'auth',
+            ttl: 300000,
+            limit: 10,
+          }
+        ],
+        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL')!),
+      }),
     }),
     LoggerModule,
     MetricsModule,
@@ -66,7 +90,13 @@ import { MetricsModule } from './core/metrics/metrics.module';
     OutboxModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: CsrfGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   // Apply the TenantMiddleware globally

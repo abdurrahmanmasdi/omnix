@@ -14,6 +14,9 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
+  // Trust proxy so rate limiting IP is correct (e.g. via nginx)
+  app.set('trust proxy', 1);
+
   // Limit JSON and urlencoded payloads to 2MB (prevents DoS on webhook endpoints)
   app.useBodyParser('json', { limit: '2mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '2mb' });

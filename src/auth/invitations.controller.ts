@@ -10,9 +10,13 @@ import { PermissionsGuard } from './guards/permissions.guard';
 import { RequirePermissions } from './decorators/require-permissions.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthenticatedUser } from './decorators/current-user.decorator';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
+@UseGuards(CustomThrottlerGuard)
+@Throttle({ auth: { limit: 10, ttl: 60000 } })
 export class InvitationsController {
   constructor(private readonly invitations: InvitationsService) {}
 
