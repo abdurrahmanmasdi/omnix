@@ -243,6 +243,31 @@
         ]
       }
     },
+    "/auth/recovery/consume": {
+      "post": {
+        "operationId": "AuthController_consumeRecovery",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumeRecoveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password reset successfully"
+          }
+        },
+        "summary": "Reset password using a recovery token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/auth/accept-invitation": {
       "post": {
         "operationId": "InvitationsController_accept",
@@ -2515,6 +2540,21 @@
             "description": "The target organization to select (for multi-tenant users)"
           }
         }
+      },
+      "ConsumeRecoveryDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "newPassword"
+        ]
       },
       "AcceptInvitationDto": {
         "type": "object",

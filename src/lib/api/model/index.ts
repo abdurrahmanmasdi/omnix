@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0
  */
 
+export * from "./acceptClinicInvitationDto";
 export * from "./acceptInvitationDto";
 export * from "./analyticsSummaryDto";
 export * from "./authControllerLogout200";
@@ -34,6 +35,7 @@ export * from "./createOrganizationDto";
 export * from "./createOrganizationDtoBusinessRules";
 export * from "./createPipelineStageDto";
 export * from "./createPipelineStageDtoMappedStatus";
+export * from "./issueClinicInvitationDto";
 export * from "./leadResponseDto";
 export * from "./leadResponseDtoConversation";
 export * from "./leadResponseDtoCurrency";
@@ -75,5 +77,4 @@ export * from "./uploadDocumentDto";
 export * from "./upsertAiPersonaDto";
 export * from "./upsertAiPersonaDtoBusinessRules";
 export * from "./webhooksControllerVerifyWebhookParams";
-export * from "./acceptClinicInvitationDto";
-export * from "./issueClinicInvitationDto";
+export * from "./consumeRecoveryDto";

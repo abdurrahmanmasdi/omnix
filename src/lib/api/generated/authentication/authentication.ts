@@ -26,6 +26,7 @@ import type {
   AcceptInvitationDto,
   AuthControllerLogout200,
   AuthControllerRefreshTokens200,
+  ConsumeRecoveryDto,
   IssueClinicInvitationDto,
   LoginDto,
   RefreshDto,
@@ -680,6 +681,98 @@ export function useAuthControllerGetProfile<
   return query;
 }
 
+/**
+ * @summary Reset password using a recovery token
+ */
+export const authControllerConsumeRecovery = (
+  consumeRecoveryDto: ConsumeRecoveryDto,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<void>(
+    {
+      url: `/auth/recovery/consume`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: consumeRecoveryDto,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getAuthControllerConsumeRecoveryMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authControllerConsumeRecovery>>,
+    TError,
+    { data: ConsumeRecoveryDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof authControllerConsumeRecovery>>,
+  TError,
+  { data: ConsumeRecoveryDto },
+  TContext
+> => {
+  const mutationKey = ["authControllerConsumeRecovery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof authControllerConsumeRecovery>>,
+    { data: ConsumeRecoveryDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return authControllerConsumeRecovery(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthControllerConsumeRecoveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof authControllerConsumeRecovery>>
+>;
+export type AuthControllerConsumeRecoveryMutationBody = ConsumeRecoveryDto;
+export type AuthControllerConsumeRecoveryMutationError = unknown;
+
+/**
+ * @summary Reset password using a recovery token
+ */
+export const useAuthControllerConsumeRecovery = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof authControllerConsumeRecovery>>,
+      TError,
+      { data: ConsumeRecoveryDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof authControllerConsumeRecovery>>,
+  TError,
+  { data: ConsumeRecoveryDto },
+  TContext
+> => {
+  const mutationOptions =
+    getAuthControllerConsumeRecoveryMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
 /**
  * @summary Activate a pilot account using a single-use operator invitation
  */
