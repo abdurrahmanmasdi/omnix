@@ -96,6 +96,7 @@ model User {
   createdAt             DateTime                 @default(now())
   deletedAt             DateTime?
   status                UserStatus               @default(PENDING)
+  securityVersion       Int                      @default(1)
   assignedConversations Conversation[]           @relation("ConversationAgent")
   sentMessages          Message[]                @relation("SentMessages")
   memberships           OrganizationMembership[]

@@ -11,6 +11,7 @@ export interface JwtPayload {
   email: string;
   organizationId: string | null;
   roleId: string | null;
+  securityVersion?: number;
 }
 
 @Injectable()
@@ -54,6 +55,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user || user.status !== 'ACTIVE' || user.deletedAt) {
       throw new UnauthorizedException('User account is not active');
+    }
+
+    if (payload.securityVersion && user.securityVersion !== payload.securityVersion) {
+      throw new UnauthorizedException('Session revoked due to security changes');
     }
 
     if (user.memberships.length === 0) {

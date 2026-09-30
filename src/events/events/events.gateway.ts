@@ -79,11 +79,15 @@ export class EventsGateway
         // Check if user is still active globally (fixes R06)
         const user = await this.prisma.user.findFirst({
           where: { id: userId, status: 'ACTIVE', deletedAt: null },
-          select: { id: true },
+          select: { id: true, securityVersion: true },
         });
 
         if (!user) {
           throw new Error('User account is inactive or deleted');
+        }
+
+        if (payload.securityVersion && user.securityVersion !== payload.securityVersion) {
+          throw new Error('Session revoked due to security changes');
         }
 
         // Authorize membership and permissions inside the Tenant Context
@@ -137,6 +141,7 @@ export class EventsGateway
             roleId,
             membershipId: membership.id,
             tokenExp: exp,
+            securityVersion: payload.securityVersion || user.securityVersion,
             canReadAll,
             canReadPii,
             canReadMessages,
@@ -323,7 +328,7 @@ export class EventsGateway
     const [user, membership] = await Promise.all([
       this.prisma.user.findFirst({
         where: { id: userId, status: 'ACTIVE', deletedAt: null },
-        select: { id: true },
+        select: { id: true, securityVersion: true },
       }),
       this.prisma.organizationMembership.findFirst({
         where: {
@@ -336,8 +341,13 @@ export class EventsGateway
         select: { id: true },
       }),
     ]);
+
+    const payloadSecVer = Number(socket.data?.securityVersion);
+    const validSecVer = isNaN(payloadSecVer) || (user?.securityVersion === payloadSecVer);
+
     if (
       !user ||
+      !validSecVer ||
       !membership ||
       !(await this.permissionService.has(
         userId,

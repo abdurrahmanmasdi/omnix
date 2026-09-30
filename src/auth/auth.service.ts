@@ -9,7 +9,9 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { tenantStorage } from '../core/tenant/tenant.context';
 import { LoginDto } from './dto/login.dto';
+import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 
 @Injectable()
 export class AuthService {
@@ -81,6 +83,84 @@ export class AuthService {
       userAgent,
       ip,
     );
+  }
+
+
+  async issueRecovery(email: string, operator: string) {
+    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    if (!user || user.deletedAt || user.status !== 'ACTIVE') {
+      throw new Error('Account is not active or suspended. Cannot issue recovery token.');
+    }
+    const tokenBytes = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(`PASSWORD_RECOVERY:${tokenBytes}`).digest('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
+    
+    await this.prisma.accountInvitation.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        purpose: 'PASSWORD_RECOVERY',
+        issuedBy: operator,
+        expiresAt,
+      }
+    });
+    return { token: tokenBytes };
+  }
+
+
+  async consumeRecovery(dto: ConsumeRecoveryDto) {
+    const tokenHash = crypto.createHash('sha256').update(`PASSWORD_RECOVERY:${dto.token}`).digest('hex');
+    
+    await tenantStorage.run({ isSystemBypass: true }, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        const invitation = await tx.accountInvitation.findUnique({
+          where: { tokenHash },
+          include: { user: true }
+        });
+        if (!invitation || invitation.purpose !== 'PASSWORD_RECOVERY' || invitation.consumedAt || invitation.revokedAt || invitation.expiresAt < new Date()) {
+          throw new UnauthorizedException('Recovery token is invalid, expired, or already used.');
+        }
+        if (invitation.user.deletedAt || invitation.user.status !== 'ACTIVE') {
+          throw new UnauthorizedException('Account is suspended or deleted.');
+        }
+        
+        const password_hash = await bcrypt.hash(dto.newPassword, 12);
+        
+        await tx.user.update({
+          where: { id: invitation.userId },
+          data: {
+            password_hash,
+            securityVersion: { increment: 1 }
+          }
+        });
+        
+        await tx.session.updateMany({
+          where: { userId: invitation.userId, isRevoked: false },
+          data: { isRevoked: true, revokedAt: new Date(), revokedReason: 'Password Reset' }
+        });
+        
+        await tx.accountInvitation.update({
+          where: { id: invitation.id },
+          data: { consumedAt: new Date() }
+        });
+        
+        const activeMemberships = await tx.organizationMembership.findMany({
+          where: { userId: invitation.userId, status: 'ACTIVE', deletedAt: null }
+        });
+        
+        if (activeMemberships.length > 0) {
+          await tx.auditLog.createMany({
+            data: activeMemberships.map(m => ({
+              organizationId: m.organizationId,
+              action: 'ACCOUNT_RECOVERY',
+              actor: invitation.userId,
+              metadata: { issuedBy: invitation.issuedBy }
+            }))
+          });
+        }
+      });
+    });
   }
 
   async refreshTokens(refreshToken: string, userAgent?: string, ip?: string, requestedOrganizationId?: string) {
@@ -271,11 +351,14 @@ export class AuthService {
     txClient?: any,
   ) {
     const tx = txClient || this.prisma;
+    const userRow = await tx.user.findUnique({ where: { id: userId }, select: { securityVersion: true } });
+    
     const payload = {
       sub: userId,
       email,
       organizationId,
       roleId,
+      securityVersion: userRow?.securityVersion ?? 1,
     };
 
     const accessToken = this.jwtService.sign(payload, {

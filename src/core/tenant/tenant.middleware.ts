@@ -11,7 +11,8 @@ export class TenantMiddleware implements NestMiddleware {
     if (
       req.path.startsWith('/webhooks/whatsapp') ||
       req.path.startsWith('/auth/accept-invitation') ||
-      req.path.startsWith('/auth/invitations/clinic/accept')
+      req.path.startsWith('/auth/invitations/clinic/accept') ||
+      req.path.startsWith('/auth/recovery/consume')
     ) {
       return tenantStorage.run({ isSystemBypass: true }, () => next());
     }

@@ -21,6 +21,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Authentication')
@@ -175,4 +176,16 @@ export class AuthController {
       user: req.user,
     };
   }
+
+  @Post('recovery/consume')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Reset password using a recovery token' })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Password reset successfully',
+  })
+  async consumeRecovery(@Body() dto: ConsumeRecoveryDto): Promise<void> {
+    await this.authService.consumeRecovery(dto);
+  }
+
 }
