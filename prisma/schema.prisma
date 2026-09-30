@@ -78,6 +78,7 @@ model Organization {
   crmSyncLogs        CrmSyncLog[]
   credentials        Credential[]
   outboundAttempts   OutboundAttempt[]
+  accountInvitations AccountInvitation[]
 
   @@map("organizations")
 }
@@ -156,17 +157,18 @@ model Permission {
 }
 
 model Role {
-  id                String                   @id @default(uuid()) @db.Uuid
-  organizationId    String?                  @db.Uuid
-  name              String
-  name_translations Json?
-  is_system         Boolean                  @default(false)
-  slug              String?
-  createdAt         DateTime                 @default(now())
-  deletedAt         DateTime?
-  memberships       OrganizationMembership[]
-  rolePermissions   RolePermission[]
-  organization      Organization?            @relation(fields: [organizationId], references: [id])
+  id                 String                   @id @default(uuid()) @db.Uuid
+  organizationId     String?                  @db.Uuid
+  name               String
+  name_translations  Json?
+  is_system          Boolean                  @default(false)
+  slug               String?
+  createdAt          DateTime                 @default(now())
+  deletedAt          DateTime?
+  memberships        OrganizationMembership[]
+  rolePermissions    RolePermission[]
+  organization       Organization?            @relation(fields: [organizationId], references: [id])
+  accountInvitations AccountInvitation[]
 
   @@index([organizationId])
   @@map("roles")
@@ -223,31 +225,31 @@ enum ExternalCrmType {
 }
 
 model Lead {
-  id                  String          @id @default(uuid()) @db.Uuid
-  organizationId      String          @db.Uuid
-  pipelineStageId     String?         @db.Uuid
-  assignedAgentId     String?         @db.Uuid
-  sourceId            String?         @db.Uuid
-  firstName           String
-  lastName            String
-  nativeName          String?
-  gender              Gender          @default(UNKNOWN)
-  email               String?
-  phoneNumber         String
-  country             String
-  timezone            String
-  primaryLanguage     String
-  preferredLanguage   String?
-  socialLinks         Json?
-  summary             String?         @db.Text
-  status              LeadStatus      @default(NEW)
-  priority            Priority        @default(WARM)
-  estimatedValue      Decimal?
-  currency            Currency        @default(USD)
-  expectedServiceDate DateTime?
-  nextFollowUpAt      DateTime?
-  optedOutAt          DateTime?
-  optOutReason        String?
+  id                      String          @id @default(uuid()) @db.Uuid
+  organizationId          String          @db.Uuid
+  pipelineStageId         String?         @db.Uuid
+  assignedAgentId         String?         @db.Uuid
+  sourceId                String?         @db.Uuid
+  firstName               String
+  lastName                String
+  nativeName              String?
+  gender                  Gender          @default(UNKNOWN)
+  email                   String?
+  phoneNumber             String
+  country                 String
+  timezone                String
+  primaryLanguage         String
+  preferredLanguage       String?
+  socialLinks             Json?
+  summary                 String?         @db.Text
+  status                  LeadStatus      @default(NEW)
+  priority                Priority        @default(WARM)
+  estimatedValue          Decimal?
+  currency                Currency        @default(USD)
+  expectedServiceDate     DateTime?
+  nextFollowUpAt          DateTime?
+  optedOutAt              DateTime?
+  optOutReason            String?
   mediaConsentGranted     Boolean         @default(false)
   mediaConsentGrantedAt   DateTime?
   mediaConsentSource      String?
@@ -256,17 +258,17 @@ model Lead {
   mediaConsentText        String?
   mediaConsentResponseId  String?
   mediaConsentChannel     String?
-  externalCrmType     ExternalCrmType @default(NONE)
-  externalContactId   String?
-  externalDealId      String?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  deletedAt           DateTime?
-  assignedAgent       User?           @relation(fields: [assignedAgentId], references: [id])
-  organization        Organization    @relation(fields: [organizationId], references: [id])
-  source              LeadSource?     @relation(fields: [sourceId], references: [id])
-  pipelineStage       PipelineStage?  @relation(fields: [pipelineStageId], references: [id])
-  conversation        Conversation?   @relation("LeadConversation")
+  externalCrmType         ExternalCrmType @default(NONE)
+  externalContactId       String?
+  externalDealId          String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  deletedAt               DateTime?
+  assignedAgent           User?           @relation(fields: [assignedAgentId], references: [id])
+  organization            Organization    @relation(fields: [organizationId], references: [id])
+  source                  LeadSource?     @relation(fields: [sourceId], references: [id])
+  pipelineStage           PipelineStage?  @relation(fields: [pipelineStageId], references: [id])
+  conversation            Conversation?   @relation("LeadConversation")
 
   @@unique([organizationId, phoneNumber])
   @@index([organizationId])
@@ -342,21 +344,21 @@ enum MessageStatus {
 }
 
 model Conversation {
-  id                String    @id @default(uuid()) @db.Uuid
-  organizationId    String    @db.Uuid
-  externalContactId String?
-  status            String    @default("ACTIVE") // ACTIVE, CLOSED, ESCALATED
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  deletedAt         DateTime?
-  leadId            String?   @unique @db.Uuid
-  aiPaused          Boolean   @default(false)
-  aiDisclosureSent  Boolean   @default(false)
-  stateVersion      Int       @default(1)
-  generationOwner String?
+  id                   String    @id @default(uuid()) @db.Uuid
+  organizationId       String    @db.Uuid
+  externalContactId    String?
+  status               String    @default("ACTIVE") // ACTIVE, CLOSED, ESCALATED
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+  leadId               String?   @unique @db.Uuid
+  aiPaused             Boolean   @default(false)
+  aiDisclosureSent     Boolean   @default(false)
+  stateVersion         Int       @default(1)
+  generationOwner      String?
   generationLeaseUntil DateTime?
-  assignedAgentId   String?   @db.Uuid
-  channelId         String?   @db.Uuid
+  assignedAgentId      String?   @db.Uuid
+  channelId            String?   @db.Uuid
 
   lead               Lead?               @relation("LeadConversation", fields: [leadId], references: [id])
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -372,27 +374,27 @@ model Conversation {
 }
 
 model Message {
-  id             String        @id @default(uuid())
-  conversationId String        @db.Uuid
-  senderId       String?       @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
-  content        String
-  mediaUrl       String? // For Voice Notes, Images, etc.
-  mediaExpiresAt DateTime? // Defines short-lived storage for patient media
-  type           MessageType   @default(USER_TEXT)
-  metadata       Json? // To store Tool Call JSON, execution times, token counts
-  handledBy      ActiveHandler @default(AI) // Determines if AI or Human
-  status         MessageStatus @default(PENDING)
-  processingOwner String?
+  id                   String        @id @default(uuid())
+  conversationId       String        @db.Uuid
+  senderId             String?       @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
+  content              String
+  mediaUrl             String? // For Voice Notes, Images, etc.
+  mediaExpiresAt       DateTime? // Defines short-lived storage for patient media
+  type                 MessageType   @default(USER_TEXT)
+  metadata             Json? // To store Tool Call JSON, execution times, token counts
+  handledBy            ActiveHandler @default(AI) // Determines if AI or Human
+  status               MessageStatus @default(PENDING)
+  processingOwner      String?
   processingLeaseUntil DateTime?
-  recoveryQueuedAt DateTime?
-  metaMessageId  String?       @unique // WhatsApp's specific message ID
-  idempotencyKey String?       @unique // To prevent duplicate outbound sends
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deletedAt      DateTime?
+  recoveryQueuedAt     DateTime?
+  metaMessageId        String?       @unique // WhatsApp's specific message ID
+  idempotencyKey       String?       @unique // To prevent duplicate outbound sends
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  deletedAt            DateTime?
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User?        @relation("SentMessages", fields: [senderId], references: [id])
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User?            @relation("SentMessages", fields: [senderId], references: [id])
   outboundAttempt OutboundAttempt?
 
   @@index([status, processingLeaseUntil])
@@ -409,21 +411,21 @@ enum OutboundAttemptStatus {
 }
 
 model OutboundAttempt {
-  id             String                @id @default(uuid()) @db.Uuid
-  organizationId String                @db.Uuid
-  conversationId String                @db.Uuid
-  messageId      String                @unique
-  dedupeKey      String                @unique
-  conversationVersion Int              @default(0)
-  purpose        String                @default("reply")
-  status         OutboundAttemptStatus @default(PENDING)
-  providerId     String?               @unique
-  attemptCount   Int                   @default(0)
-  startedAt      DateTime?
-  acceptedAt     DateTime?
-  lastErrorCode  String?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @default(now()) @updatedAt
+  id                  String                @id @default(uuid()) @db.Uuid
+  organizationId      String                @db.Uuid
+  conversationId      String                @db.Uuid
+  messageId           String                @unique
+  dedupeKey           String                @unique
+  conversationVersion Int                   @default(0)
+  purpose             String                @default("reply")
+  status              OutboundAttemptStatus @default(PENDING)
+  providerId          String?               @unique
+  attemptCount        Int                   @default(0)
+  startedAt           DateTime?
+  acceptedAt          DateTime?
+  lastErrorCode       String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now()) @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -616,8 +618,8 @@ model Channel {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  credential   Credential?  @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential    Credential?    @relation(fields: [credentialId], references: [id], onDelete: SetNull)
   conversations Conversation[]
 
   @@unique([organizationId, provider, providerAccountId])
@@ -669,22 +671,22 @@ enum FollowUpStatus {
 }
 
 model ScheduledFollowUp {
-  id             String         @id @default(uuid()) @db.Uuid
-  conversationId String         @db.Uuid
-  organizationId String         @db.Uuid
-  type           FollowUpType
-  status         FollowUpStatus @default(PENDING)
-  attempt        Int            @default(1)
-  scheduledAt    DateTime
-  bullJobId      String?
-  processingOwner String?
+  id                   String         @id @default(uuid()) @db.Uuid
+  conversationId       String         @db.Uuid
+  organizationId       String         @db.Uuid
+  type                 FollowUpType
+  status               FollowUpStatus @default(PENDING)
+  attempt              Int            @default(1)
+  scheduledAt          DateTime
+  bullJobId            String?
+  processingOwner      String?
   processingLeaseUntil DateTime?
-  recoveryQueuedAt DateTime?
-  aiContext      String?        @db.Text
-  sentAt         DateTime?
-  cancelledAt    DateTime?
-  cancelReason   String?
-  createdAt      DateTime       @default(now())
+  recoveryQueuedAt     DateTime?
+  aiContext            String?        @db.Text
+  sentAt               DateTime?
+  cancelledAt          DateTime?
+  cancelReason         String?
+  createdAt            DateTime       @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -738,16 +740,20 @@ enum UserStatus {
 }
 
 model AccountInvitation {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  purpose    String   @default("PILOT_ACTIVATION")
-  issuedBy   String
-  createdAt  DateTime @default(now())
-  expiresAt  DateTime
-  consumedAt DateTime?
-  revokedAt  DateTime?
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?       @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roleId         String?       @db.Uuid
+  role           Role?         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tokenHash      String        @unique
+  purpose        String        @default("PILOT_ACTIVATION")
+  issuedBy       String
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  revokedAt      DateTime?
 
   @@index([userId, createdAt])
   @@index([expiresAt])

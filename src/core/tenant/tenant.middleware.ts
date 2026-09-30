@@ -7,7 +7,12 @@ import { tenantStorage } from './tenant.context';
 export class TenantMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // The webhook controller verifies Meta's signature before it queues work.
-    if (req.path === '/webhooks/whatsapp') {
+    // Auth endpoints that accept invitations discover their own tenant.
+    if (
+      req.path.startsWith('/webhooks/whatsapp') ||
+      req.path.startsWith('/auth/accept-invitation') ||
+      req.path.startsWith('/auth/invitations/clinic/accept')
+    ) {
       return tenantStorage.run({ isSystemBypass: true }, () => next());
     }
 
