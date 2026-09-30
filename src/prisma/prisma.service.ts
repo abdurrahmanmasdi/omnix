@@ -36,10 +36,10 @@ export class PrismaService
   private readonly extendedClient: unknown;
 
   constructor() {
-    const databaseUrl = process.env['DATABASE_URL'];
+    const databaseUrl = process.env['RUNTIME_DATABASE_URL'] || process.env['DATABASE_URL'];
 
     if (!databaseUrl) {
-      throw new Error('DATABASE_URL is not set');
+      throw new Error('DATABASE_URL or RUNTIME_DATABASE_URL is not set');
     }
 
     const pool = new Pool({ connectionString: databaseUrl });

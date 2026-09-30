@@ -58,17 +58,7 @@ import { AuditModule } from '../audit/audit.module';
         removeOnFail: false,
       },
     }),
-    ClientsModule.register([
-      {
-        name: 'AI_AGENT_PACKAGE',
-        transport: Transport.GRPC,
-        options: {
-          package: 'agent', // Matches the 'package' in proto file
-          protoPath: GRPC_CONFIG.PROTO_PATHS.AGENT,
-          url: GRPC_CONFIG.PYTHON_SERVER_URL,
-        },
-      },
-    ]),
+
   ],
   controllers: [WebhooksController],
   providers: [

@@ -264,7 +264,6 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
       outbound,
       { getService: () => ({ generateReply }) } as any,
     );
-    processor.onModuleInit();
     await expect(processor.process({ id: randomUUID(), data: aiAdd.mock.calls[0][1] } as any))
       .rejects.toThrow('OUTBOUND_UNRESOLVED');
     expect(generateReply).toHaveBeenCalledTimes(1);
@@ -457,7 +456,6 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
     outbound,
     { getService: () => ({ generateReply }) } as any,
   );
-  ai.onModuleInit();
   const aiJob = {
     id: randomUUID(),
     data: {
@@ -504,7 +502,6 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
     outbound,
     { getService: () => ({ generateReply }) } as any,
   );
-  followUpWorker.onModuleInit();
   const followUpJob = { data: { followUpId: followUp.id } } as any;
   await expect(followUpWorker.process(followUpJob))
     .rejects.toThrow('ACTION_FALLBACK_HANDOFF_FAILED');
@@ -533,7 +530,6 @@ it('rejects an incompatible AI contract version before actions or patient delive
       actions: [{ type: 'UPDATE_LEAD', payload: '{"status":"QUALIFIED"}' }],
     }) }) } as any,
   );
-  ai.onModuleInit();
   await expect(ai.process({ id: randomUUID(), data: {
     organizationId: f.org.id, conversationId: f.conv.id, newMessageIds: [inbound.id],
   } } as any)).rejects.toThrow('AI_CONTRACT_VERSION_UNSUPPORTED');
@@ -825,7 +821,6 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
     { sendBubble } as any,
     { getService: () => ({ generateReply: jest.fn() }) } as any,
   );
-  processor.onModuleInit();
   await processor.process({
     id: randomUUID(),
     data: {
@@ -1398,7 +1393,6 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
     outbound,
     { getService: () => ({ generateReply }) } as any,
   );
-  processor.onModuleInit();
   const job = { data: { followUpId: followUp.id } } as any;
   await expect(processor.process(job)).rejects.toThrow('OUTBOUND_UNRESOLVED');
   expect(

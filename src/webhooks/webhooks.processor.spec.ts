@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Test, TestingModule } from '@nestjs/testing';
 import { WebhooksProcessor } from './webhooks.processor';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { WhatsappService } from './whatsapp.service';
@@ -291,7 +292,7 @@ describe('WebhooksProcessor', () => {
           provide: OutboundAttemptService,
           useValue: { reconcileStatus: jest.fn() },
         },
-        { provide: 'AI_AGENT_PACKAGE', useValue: mockClientGrpc },
+        { provide: GrpcClientService, useValue: { generateReply: jest.fn() } },
         { provide: getQueueToken('ai-reply'), useValue: mockQueue },
         {
           provide: ActionExecutorService,
@@ -309,7 +310,6 @@ describe('WebhooksProcessor', () => {
     aiReplyQueue = module.get(getQueueToken('ai-reply'));
 
     // Simulate OnModuleInit
-    processor.onModuleInit();
   });
 
   afterEach(() => {

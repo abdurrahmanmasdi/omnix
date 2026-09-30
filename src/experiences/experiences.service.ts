@@ -7,7 +7,7 @@ import {
   OnModuleInit,
   Inject,
 } from '@nestjs/common';
-import type { ClientGrpc } from '@nestjs/microservices';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { lastValueFrom, Observable } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
@@ -24,19 +24,14 @@ interface DocumentProcessorService {
 }
 
 @Injectable()
-export class ExperiencesService implements OnModuleInit {
-  private ragService: DocumentProcessorService | undefined;
+export class ExperiencesService {
   private readonly logger = new Logger(ExperiencesService.name);
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject('RAG_PACKAGE') private readonly client: ClientGrpc,
+    private readonly grpcClient: GrpcClientService,
   ) {}
 
-  onModuleInit() {
-    this.ragService =
-      this.client.getService<DocumentProcessorService>('DocumentProcessor');
-  }
 
   async createExperience(
     organizationId: string,
@@ -94,12 +89,11 @@ export class ExperiencesService implements OnModuleInit {
       this.logger.log(`Experience created successfully: ${experience.id}`);
 
       this.logger.log(`EXPERIENCE_EMBED_STARTED experienceId=${experience.id}`);
-      const response = await lastValueFrom(
-        this.ragService!.EmbedExperience({
+      const response = await 
+        this.grpcClient.EmbedExperience({
           experienceId: experience.id,
           organizationId: organizationId,
-        }),
-      );
+        });
 
       if (!response.success) {
         this.logger.error(`EXPERIENCE_EMBED_FAILED experienceId=${experience.id}`);
@@ -261,12 +255,11 @@ export class ExperiencesService implements OnModuleInit {
     ) {
       this.logger.log(`EXPERIENCE_EMBED_RETRY experienceId=${experienceId}`);
       try {
-        const response = await lastValueFrom(
-          this.ragService!.EmbedExperience({
+        const response = await 
+          this.grpcClient.EmbedExperience({
             experienceId: experienceId,
             organizationId: organizationId,
-          }),
-        );
+          });
         if (!response.success)
           this.logger.error(`EXPERIENCE_EMBED_FAILED experienceId=${experienceId}`);
       } catch {

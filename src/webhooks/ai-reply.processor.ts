@@ -7,7 +7,7 @@ import { WhatsappService } from './whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
-import type { SalesAgentService } from './interfaces/agent.interface';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { ActionExecutorService } from './action-executor.service';
 import { DeliveryAuthService } from './delivery-auth.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
@@ -17,9 +17,9 @@ import { OutboundAttemptService } from './outbound-attempt.service';
 import { AGENT_CONTRACT_VERSION, isCompatibleAgentVersion } from './contracts/agent-contract';
 
 @Processor('ai-reply') // 🚀 Listens to the delay queue
-export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
+export class AiReplyProcessor extends WorkerHost {
   private readonly logger = new Logger(AiReplyProcessor.name);
-  private salesAgentService: SalesAgentService | undefined;
+  
 
   private buildDisclosure(
     template: string | null | undefined,
@@ -45,15 +45,11 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
     private readonly deliveryAuth: DeliveryAuthService,
     private readonly inboundClaims: InboundClaimService,
     private readonly outboundAttempts: OutboundAttemptService,
-    @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
+    private readonly grpcClient: GrpcClientService,
   ) {
     super();
   }
 
-  onModuleInit() {
-    this.salesAgentService =
-      this.client.getService<SalesAgentService>('SalesAgent');
-  }
 
   private async recordCancellation(
     conversationId: string,
@@ -192,8 +188,8 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                 : '{}';
 
               // THE MAGIC BRIDGE: Call Python over gRPC!
-              const aiResponse = await lastValueFrom(
-                this.salesAgentService!.generateReply({
+              const aiResponse = await 
+                this.grpcClient.generateReply({
                   organizationId: organization.id,
                   conversationId: conversationId,
                   newMessageIds: claimedMessageIds,
@@ -203,8 +199,7 @@ export class AiReplyProcessor extends WorkerHost implements OnModuleInit {
                   totalMessageCount: totalMessageCount,
                   leadSummary: leadSummary,
                   contractVersion: AGENT_CONTRACT_VERSION,
-                }),
-              );
+                });
               if (!isCompatibleAgentVersion(aiResponse.contractVersion))
                 throw new Error('AI_CONTRACT_VERSION_UNSUPPORTED');
 

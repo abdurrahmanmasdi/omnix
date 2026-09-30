@@ -8,7 +8,7 @@ import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
-import type { SalesAgentService } from '../webhooks/interfaces/agent.interface';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { ActionExecutorService } from '../webhooks/action-executor.service';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { DeliveryAuthService } from '../webhooks/delivery-auth.service';
@@ -18,9 +18,9 @@ import { AGENT_CONTRACT_VERSION, isCompatibleAgentVersion } from '../webhooks/co
 import { MEMBERSHIP_GRANTS_INCLUDE, membershipHasPermission } from '../auth/permission.service';
 
 @Processor('follow-up')
-export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
+export class FollowUpProcessor extends WorkerHost {
   private readonly logger = new Logger(FollowUpProcessor.name);
-  private salesAgentService: SalesAgentService | undefined;
+  
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,15 +30,11 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
     private readonly notificationEmitter: NotificationEmitterService,
     private readonly deliveryAuth: DeliveryAuthService,
     private readonly outboundAttempts: OutboundAttemptService,
-    @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
+    private readonly grpcClient: GrpcClientService,
   ) {
     super();
   }
 
-  onModuleInit() {
-    this.salesAgentService =
-      this.client.getService<SalesAgentService>('SalesAgent');
-  }
 
   private async recordCancellation(
     conversationId: string,
@@ -322,8 +318,8 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                 return;
               }
 
-              const aiResponse = await lastValueFrom(
-                this.salesAgentService!.generateReply({
+              const aiResponse = await 
+                this.grpcClient.generateReply({
                   organizationId: organization.id,
                   conversationId: conversation.id,
                   newMessageIds: [],
@@ -335,8 +331,7 @@ export class FollowUpProcessor extends WorkerHost implements OnModuleInit {
                   isFollowUp: true,
                   followUpContext: contextMsg,
                   contractVersion: AGENT_CONTRACT_VERSION,
-                }),
-              );
+                });
               if (!isCompatibleAgentVersion(aiResponse.contractVersion))
                 throw new Error('AI_CONTRACT_VERSION_UNSUPPORTED');
 

@@ -1,4 +1,5 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { GrpcClientModule } from './grpc-client/grpc-client.module';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -29,6 +30,7 @@ import { MetricsModule } from './core/metrics/metrics.module';
 
 @Module({
   imports: [
+    GrpcClientModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

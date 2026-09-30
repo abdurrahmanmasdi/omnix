@@ -8,7 +8,7 @@ import { WhatsappService } from './whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
-import type { SalesAgentService } from './interfaces/agent.interface';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { NotificationType } from '@prisma/client';
@@ -19,9 +19,9 @@ import { CredentialsService } from '../credentials/credentials.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 
 @Processor('whatsapp-messages')
-export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
+export class WebhooksProcessor extends WorkerHost {
   private readonly logger = new Logger(WebhooksProcessor.name);
-  private salesAgentService: SalesAgentService | undefined;
+  
 
   constructor(
     private readonly prisma: PrismaService,
@@ -33,16 +33,12 @@ export class WebhooksProcessor extends WorkerHost implements OnModuleInit {
     private readonly auditService: AuditService,
     private readonly credentials: CredentialsService,
     private readonly outboundAttempts: OutboundAttemptService,
-    @Inject('AI_AGENT_PACKAGE') private readonly client: ClientGrpc,
+    private readonly grpcClient: GrpcClientService,
     @InjectQueue('ai-reply') private readonly aiReplyQueue: Queue,
   ) {
     super();
   }
 
-  onModuleInit() {
-    this.salesAgentService =
-      this.client.getService<SalesAgentService>('SalesAgent');
-  }
 
   // Normalized, whole-message commands. Keep this intentionally conservative:
   // ordinary uses of words such as “stop by tomorrow” must not suppress consent.
