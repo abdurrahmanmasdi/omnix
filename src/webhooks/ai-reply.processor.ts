@@ -13,6 +13,12 @@ import { AuditService } from '../audit/audit.service';
 import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 import { AfterSendAction, splitAfterSendActions } from './deferred-actions';
+import {
+  PatientLanguage,
+  actionFallbackText,
+  defaultDisclosure,
+  patientLanguage,
+} from './patient-copy';
 import { Message } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { ToolActionWire } from './interfaces/agent.interface';
@@ -35,14 +41,37 @@ export class AiReplyProcessor extends WorkerHost {
     template: string | null | undefined,
     firstName: string | null | undefined,
     agentName: string | null | undefined,
-    clinicName: string | null | undefined,
+    clinicName: string,
+    language: PatientLanguage,
   ): string {
-    const fallback =
-      "Hi {{firstName}}! 👋 I'm {{agentName}}, the digital assistant for {{clinicName}}. I'm an AI, not a doctor, but I'm here to help you with info about our services, pricing, and booking. If you ever need a human medical coordinator, just say 'human' and I'll connect you right away. How can I help you today?";
-    return (template || fallback)
+    if (!template)
+      return defaultDisclosure(language, {
+        firstName,
+        agentName: agentName || 'Assistant',
+        clinicName,
+      });
+    return template
       .replaceAll('{{firstName}}', firstName || 'there')
       .replaceAll('{{agentName}}', agentName || 'Assistant')
-      .replaceAll('{{clinicName}}', clinicName || 'OmniDesk Clinic');
+      .replaceAll('{{clinicName}}', clinicName);
+  }
+
+  /** Lead preference, then this batch's patient texts (KI-060). */
+  private async batchLanguage(
+    lead:
+      | { preferredLanguage?: string | null; primaryLanguage?: string | null }
+      | null
+      | undefined,
+    messageIds: string[],
+  ): Promise<PatientLanguage> {
+    const texts = await this.prisma.message.findMany({
+      where: { id: { in: messageIds }, type: 'LEAD_TEXT' },
+      select: { content: true },
+    });
+    return patientLanguage(
+      lead ?? null,
+      texts.map((row) => row.content),
+    );
   }
 
   constructor(
@@ -299,13 +328,20 @@ export class AiReplyProcessor extends WorkerHost {
 
             // 1. If we haven't generated anything yet, call the AI and create the bubbles in the database
             if (existingBubbles.length === 0) {
+              const clinicName =
+                organization.aiPersona?.clinicName || organization.name;
+              const language = await this.batchLanguage(
+                conversation.lead,
+                claimedMessageIds,
+              );
               let disclosureText: string | undefined = undefined;
               if (!conversation.aiDisclosureSent && channel?.credentialId) {
                 disclosureText = this.buildDisclosure(
                   organization.aiPersona?.aiDisclosureText,
                   conversation.lead?.firstName,
                   organization.aiPersona?.agentName,
-                  organization.aiPersona?.clinicName,
+                  clinicName,
+                  language,
                 );
               }
 
@@ -342,7 +378,7 @@ export class AiReplyProcessor extends WorkerHost {
                 organizationId: organization.id,
                 conversationId: conversationId,
                 newMessageIds: claimedMessageIds,
-                clinicName: persona?.clinicName || 'OmniDesk Clinic',
+                clinicName,
                 agentTone: persona?.tone || 'Professional and empathetic',
                 businessRulesJson: businessRulesJson,
                 totalMessageCount: totalMessageCount,
@@ -388,8 +424,7 @@ export class AiReplyProcessor extends WorkerHost {
                     `ACTION_FALLBACK_REQUIRED conversationId=${conversationId}`,
                   );
                   handoffAfterSend = true;
-                  replyText =
-                    "I couldn't complete that request right now. A human coordinator can help with the next step.";
+                  replyText = actionFallbackText(language);
                   mediaUrl = undefined;
                 }
               }

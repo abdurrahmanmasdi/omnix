@@ -1,4 +1,6 @@
 import {
+  actionFallbackText,
+  defaultDisclosure,
   detectLanguage,
   mediaConsentRequestText,
   patientLanguage,
@@ -32,5 +34,30 @@ describe('patient copy', () => {
       expect(text).toContain('WITHDRAW CONSENT');
       expect(text).not.toContain('OmniDesk');
     }
+  });
+
+  it('discloses the AI in EN/TR without timing promises (KI-060)', () => {
+    const names = {
+      firstName: 'Ayşe',
+      agentName: 'Asistan',
+      clinicName: 'Synthetic Dental',
+    };
+    const en = defaultDisclosure('en', names);
+    const tr = defaultDisclosure('tr', names);
+    expect(en).toContain("I'm an AI");
+    expect(tr).toContain('yapay zekâ asistanıyım');
+    expect(defaultDisclosure('tr', { ...names, firstName: null })).toMatch(
+      /^Merhaba! /,
+    );
+    for (const text of [
+      en,
+      tr,
+      actionFallbackText('en'),
+      actionFallbackText('tr'),
+    ]) {
+      expect(text).not.toMatch(/right away|right now|shortly|hemen|birazdan/i);
+      expect(text).not.toContain('OmniDesk');
+    }
+    expect(actionFallbackText('tr')).toContain('ekibine');
   });
 });

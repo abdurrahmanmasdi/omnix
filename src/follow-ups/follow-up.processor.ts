@@ -17,6 +17,7 @@ import {
   isCompatibleAgentVersion,
 } from '../webhooks/contracts/agent-contract';
 import { splitAfterSendActions } from '../webhooks/deferred-actions';
+import { actionFallbackText, patientLanguage } from '../webhooks/patient-copy';
 import {
   MEMBERSHIP_GRANTS_INCLUDE,
   membershipHasPermission,
@@ -342,7 +343,7 @@ export class FollowUpProcessor extends WorkerHost {
                 organizationId: organization.id,
                 conversationId: conversation.id,
                 newMessageIds: [],
-                clinicName: persona?.clinicName || 'OmniDesk Clinic',
+                clinicName: persona?.clinicName || organization.name,
                 agentTone: persona?.tone || 'Professional and empathetic',
                 businessRulesJson: businessRulesJson,
                 totalMessageCount,
@@ -376,8 +377,21 @@ export class FollowUpProcessor extends WorkerHost {
                 ) {
                   handoffAfterSend = true;
                   // A rejected model action cannot support the original follow-up claim.
-                  replyText =
-                    "I couldn't complete that request right now. A human coordinator can help with the next step.";
+                  const recent = await this.prisma.message.findMany({
+                    where: {
+                      conversationId: conversation.id,
+                      type: 'LEAD_TEXT',
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 3,
+                    select: { content: true },
+                  });
+                  replyText = actionFallbackText(
+                    patientLanguage(
+                      conversation.lead ?? null,
+                      recent.map((row) => row.content),
+                    ),
+                  );
                   mediaUrl = undefined;
                 }
               }

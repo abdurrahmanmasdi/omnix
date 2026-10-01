@@ -50,3 +50,24 @@ export function mediaConsentRequestText(
     ? `${clinicName}, buradan gönderdiğiniz fotoğrafları ve sesli mesajları ekibinin inceleyebilmesi için saklamak üzere onayınızı istiyor. Onay vermek için I CONSENT yazın. Onayınızı istediğiniz zaman WITHDRAW CONSENT yazarak geri alabilirsiniz.`
     : `${clinicName} needs your consent to store the photos and voice messages you send here so the clinic's team can review them. Reply I CONSENT to allow this. You can withdraw consent at any time by replying WITHDRAW CONSENT.`;
 }
+
+/** Default AI disclosure when the clinic has no custom template (rule 4). */
+export function defaultDisclosure(
+  language: PatientLanguage,
+  names: { firstName?: string | null; agentName: string; clinicName: string },
+): string {
+  const firstName = names.firstName?.trim();
+  return language === 'tr'
+    ? `Merhaba${firstName ? ` ${firstName}` : ''}! Ben ${names.agentName}, ${names.clinicName} kliniğinin yapay zekâ asistanıyım. Doktor ya da gerçek bir kişi değilim. Tedavilerimiz, fiyatlar ve konsültasyon talebi hakkında bilgi verebilirim. Bir kişiyle görüşmek isterseniz yazmanız yeterli; talebinizi kliniğin ekibine iletirim.`
+    : `Hi${firstName ? ` ${firstName}` : ''}! I'm ${names.agentName}, the AI assistant for ${names.clinicName}. I'm an AI, not a doctor or a person. I can help with information about our treatments, prices and how to request a consultation. If you'd like to talk to a person, just say so and I'll pass your request to the clinic's team.`;
+}
+
+/**
+ * Sent when an AI action could not be completed and the conversation is
+ * handed to staff. Same wording as the Python service's technical handoff.
+ */
+export function actionFallbackText(language: PatientLanguage): string {
+  return language === 'tr'
+    ? 'Üzgünüm, mesajınızı işleyemedim. Mesajınızı kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.'
+    : "Sorry, I couldn't process your message. I'm passing it to the clinic's team, and a team member will reply to you here.";
+}
