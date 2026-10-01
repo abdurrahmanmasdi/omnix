@@ -78,7 +78,6 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             return _blocked_reply("incompatible_contract_version")
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
         conv_id = getattr(request, 'conversationId', getattr(request, 'conversation_id', None))
-        latest_msg = getattr(request, 'latestMessage', getattr(request, 'latest_message', None))
         
         clinic_name = getattr(request, 'clinicName', getattr(request, 'clinic_name', 'our clinic'))
         agent_tone = getattr(request, 'agentTone', getattr(request, 'agent_tone', 'Professional and empathetic'))
@@ -100,6 +99,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
 
         # Extract optional audio from gRPC request
         audio_base64 = getattr(request, 'audioBase64', getattr(request, 'audio_base64', None))
+        # Patient voice-note text: untrusted patient input, checked by the same
+        # input policy as typed text and given to the graph (KI-048).
+        voice_note_text = None
         if audio_base64:
             logger.info("Received audio for Conv %s (%d chars)", conv_id, len(audio_base64))
             try:
@@ -115,10 +117,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 
                 transcribed_text = transcription.text
                 logger.info("Audio transcription success for Conv %s", conv_id)
-                latest_msg = f"🎙️ [Voice Note Transcription]: {transcribed_text}"
-            except Exception as e:
+                if transcribed_text and transcribed_text.strip():
+                    voice_note_text = f"[Voice note transcription]: {transcribed_text.strip()}"
+            except Exception:
                 logger.error("AUDIO_TRANSCRIPTION_FAILED conversation_id=%s", conv_id)
-                latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
+                voice_note_text = "[The patient sent a voice note that could not be transcribed.]"
 
         logger.info("GenerateReply called for Conv: %s", conv_id)
         language = "en"
@@ -200,6 +203,10 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                     
                 if content:
                     state_data["messages"].append(HumanMessage(content=content))
+
+            if voice_note_text:
+                combined_new_text += f"{voice_note_text}\n"
+                state_data["messages"].append(HumanMessage(content=[{"type": "text", "text": voice_note_text}]))
 
             # 3.5 Run Deterministic Input Policy Checks BEFORE graph invocation
             language = detect_language(combined_new_text)
