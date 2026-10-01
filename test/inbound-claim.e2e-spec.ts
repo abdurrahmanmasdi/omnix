@@ -28,6 +28,7 @@ import { ActionExecutorService } from '../src/webhooks/action-executor.service';
 import { NotificationRelayProcessor } from '../src/core/outbox/notification-relay.processor';
 import { PermissionService } from '../src/auth/permission.service';
 import { AuditService } from '../src/audit/audit.service';
+import { WhatsappMediaService } from '../src/webhooks/whatsapp-media.service';
 import { ConversationsService } from '../src/conversations/conversations.service';
 
 jest.setTimeout(120_000);
@@ -145,12 +146,13 @@ function webhook(
   followUps: any = {
     cancelPendingFollowUps: jest.fn().mockResolvedValue(undefined),
   },
+  media: any = {},
 ) {
   return new WebhooksProcessor(
     prismaService,
     { send: jest.fn() } as any,
     {} as any,
-    {} as any,
+    media,
     { broadcastNewMessage: jest.fn() } as any,
     followUps,
     { record: jest.fn().mockResolvedValue(undefined) } as any,
@@ -2203,11 +2205,9 @@ function mediaJob(
 
 it('sends one clinic-named media-consent request per 24 h through OutboundAttempt, also on replay (KI-025)', async () => {
   const f = await fixture();
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const outbound = new OutboundAttemptService(
     prisma,
     new DeliveryAuthService(prisma),
@@ -2281,11 +2281,9 @@ it('sends no media-consent request to an opted-out or paused patient, and uses T
       },
     });
   });
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const outbound = new OutboundAttemptService(
     prisma,
     new DeliveryAuthService(prisma),
@@ -2298,4 +2296,40 @@ it('sends no media-consent request to an opted-out or paused patient, and uses T
   await worker.process(mediaJob(turkish));
   expect(sendTextMessage).toHaveBeenCalledTimes(1);
   expect(sendTextMessage.mock.calls[0][3]).toContain('onay');
+});
+
+it('sets a 30-day expiry on downloaded patient media and the cleanup leaves a marker (KI-026)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { mediaConsentGranted: true },
+    }),
+  );
+  const worker = webhook(prisma, undefined, undefined, {
+    downloadMediaAsBase64: jest.fn().mockResolvedValue('c3ludGhldGlj'),
+  });
+  const before = Date.now();
+  await worker.process(mediaJob(f));
+  const saved = await system(() =>
+    prisma.message.findFirstOrThrow({
+      where: { conversationId: f.conv.id, type: 'LEAD_MEDIA' },
+    }),
+  );
+  expect(saved.mediaUrl).toContain('c3ludGhldGlj');
+  const days = (saved.mediaExpiresAt!.getTime() - before) / 86_400_000;
+  expect(days).toBeGreaterThan(29.99);
+  expect(days).toBeLessThan(30.01);
+  await system(() =>
+    prisma.message.update({
+      where: { id: saved.id },
+      data: { mediaExpiresAt: new Date(Date.now() - 1000) },
+    }),
+  );
+  await new WhatsappMediaService(prisma).cleanupExpiredMedia();
+  const cleaned = await system(() =>
+    prisma.message.findUniqueOrThrow({ where: { id: saved.id } }),
+  );
+  expect(cleaned.mediaUrl).toBeNull();
+  expect(cleaned.content).toBe('[Patient Media - Expired and Deleted]');
 });

@@ -4,6 +4,29 @@ import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import axios from 'axios';
 
+const DEFAULT_PATIENT_MEDIA_RETENTION_DAYS = 30;
+
+/**
+ * Retention for downloaded patient media (P2). PATIENT_MEDIA_RETENTION_DAYS,
+ * default 30; an invalid value falls back to the default.
+ */
+export function patientMediaRetentionDays(
+  raw = process.env.PATIENT_MEDIA_RETENTION_DAYS,
+): number {
+  const days = Number(raw);
+  return raw && Number.isInteger(days) && days > 0 && days <= 3650
+    ? days
+    : DEFAULT_PATIENT_MEDIA_RETENTION_DAYS;
+}
+
+export function patientMediaExpiry(now = new Date()): Date {
+  return new Date(
+    now.getTime() + patientMediaRetentionDays() * 24 * 60 * 60 * 1000,
+  );
+}
+
+export const EXPIRED_MEDIA_MARKER = '[Patient Media - Expired and Deleted]';
+
 @Injectable()
 export class WhatsappMediaService implements OnModuleInit {
   async onModuleInit() {
@@ -33,7 +56,7 @@ export class WhatsappMediaService implements OnModuleInit {
             where: { id: message.id },
             data: {
               mediaUrl: null,
-              content: '[Patient Media - Expired and Deleted]',
+              content: EXPIRED_MEDIA_MARKER,
             },
           });
           await this.prisma.auditLog.create({

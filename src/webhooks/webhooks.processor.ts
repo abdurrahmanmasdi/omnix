@@ -10,7 +10,10 @@ import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { Lead, Message, NotificationType, Prisma } from '@prisma/client';
-import { WhatsappMediaService } from './whatsapp-media.service';
+import {
+  WhatsappMediaService,
+  patientMediaExpiry,
+} from './whatsapp-media.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
@@ -550,6 +553,9 @@ export class WebhooksProcessor extends WorkerHost {
                       metaMessageId,
                       content: messageContent,
                       mediaUrl,
+                      // Retention for patient media (KI-026); the daily
+                      // cleanup removes the content and keeps a marker.
+                      mediaExpiresAt: mediaUrl ? patientMediaExpiry() : null,
                       type:
                         message.type === 'text' ? 'LEAD_TEXT' : 'LEAD_MEDIA',
                       handledBy: 'HUMAN',

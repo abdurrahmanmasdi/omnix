@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { WhatsappMediaService } from './whatsapp-media.service';
+import {
+  WhatsappMediaService,
+  patientMediaExpiry,
+  patientMediaRetentionDays,
+} from './whatsapp-media.service';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 
@@ -80,6 +84,22 @@ describe('WhatsappMediaService', () => {
         },
       });
       expect(prisma.auditLog.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('patient media retention', () => {
+    it('defaults to 30 days and accepts a valid override', () => {
+      expect(patientMediaRetentionDays(undefined)).toBe(30);
+      expect(patientMediaRetentionDays('7')).toBe(7);
+      for (const invalid of ['', '0', '-3', '2.5', 'abc', '99999'])
+        expect(patientMediaRetentionDays(invalid)).toBe(30);
+    });
+
+    it('computes the expiry from now', () => {
+      const now = new Date('2026-10-01T00:00:00Z');
+      expect(patientMediaExpiry(now).toISOString()).toBe(
+        '2026-10-31T00:00:00.000Z',
+      );
     });
   });
 });
