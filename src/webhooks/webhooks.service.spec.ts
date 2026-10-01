@@ -54,6 +54,7 @@ describe('WebhooksService', () => {
 
   it('keeps failed inbound jobs (full webhook bodies, PII) only for a bounded time', async () => {
     const queue = (provider as any).messageQueue;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await provider.queueIncomingMessage({
       entry: [
         { changes: [{ value: { messages: [{ id: 'wamid.synthetic' }] } }] },

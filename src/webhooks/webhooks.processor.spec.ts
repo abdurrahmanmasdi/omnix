@@ -543,6 +543,7 @@ describe('WebhooksProcessor', () => {
     });
     (prisma.message.findUnique as jest.Mock).mockResolvedValue(null);
     await processor.process(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       createMockJob({
         entry: [
           {
