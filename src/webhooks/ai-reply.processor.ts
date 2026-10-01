@@ -14,6 +14,14 @@ import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 import { AfterSendAction, splitAfterSendActions } from './deferred-actions';
 import { Message } from '@prisma/client';
+import { createHash } from 'node:crypto';
+import { ToolActionWire } from './interfaces/agent.interface';
+
+/** A stable UUID for an idempotency claim row. */
+function deterministicUuid(value: string): string {
+  const hex = createHash('sha256').update(value).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
 import {
   AGENT_CONTRACT_VERSION,
   isCompatibleAgentVersion,
@@ -119,6 +127,105 @@ export class AiReplyProcessor extends WorkerHost {
     }
   }
 
+  /**
+   * The bubble key prefix for this generation. Unsent bubbles of an older
+   * generation of the same batch are cancelled. Bubbles created before
+   * version-scoped keys (same version, old key) are reused.
+   */
+  private async currentBatchKey(
+    conversationId: string,
+    batchRoot: string,
+    version: number,
+  ): Promise<string> {
+    const batchKey = `${batchRoot}-v${version}`;
+    const legacy = await this.prisma.message.findMany({
+      where: {
+        conversationId,
+        idempotencyKey: { startsWith: `${batchRoot}-bubble-` },
+      },
+      select: { metadata: true },
+    });
+    if (
+      legacy.length > 0 &&
+      legacy.every(
+        (bubble) =>
+          (bubble.metadata as { generationVersion?: number } | null)
+            ?.generationVersion === version,
+      )
+    )
+      return batchRoot;
+    await this.prisma.message.updateMany({
+      where: {
+        conversationId,
+        status: 'PENDING',
+        idempotencyKey: { startsWith: `${batchRoot}-` },
+        NOT: { idempotencyKey: { startsWith: `${batchKey}-` } },
+      },
+      data: { status: 'CANCELLED' },
+    });
+    return batchKey;
+  }
+
+  /**
+   * Executes a generation's actions at most once (B9): a job retry after the
+   * actions ran (e.g. a crash before the bubbles were stored) must not send
+   * a second staff alert or schedule a second follow-up. The claim row also
+   * remembers whether the first run needed the fallback reply.
+   * Returns true when the fallback reply + handoff is required.
+   */
+  private async executeActionsOnce(
+    organizationId: string,
+    conversationId: string,
+    batchKey: string,
+    actions: ToolActionWire[],
+  ): Promise<boolean> {
+    const id = deterministicUuid(`${batchKey}:actions`);
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          id,
+          organizationId,
+          actor: 'ai',
+          action: 'ai.actions_executed',
+          targetId: conversationId,
+          metadata: {
+            batchKey,
+            actionTypes: actions.map((action) => action.type),
+          },
+        },
+      });
+    } catch (error: any) {
+      if (error?.code !== 'P2002') throw error;
+      const claim = await this.prisma.auditLog.findUnique({ where: { id } });
+      this.logger.warn(
+        `AI_ACTIONS_ALREADY_EXECUTED conversationId=${conversationId}`,
+      );
+      return (
+        (claim?.metadata as { fallback?: boolean } | null)?.fallback === true
+      );
+    }
+    const actionResult = await this.actionExecutor.executeActions(
+      organizationId,
+      conversationId,
+      actions,
+    );
+    const fallback =
+      actionResult.outcomes?.some((item) => item.status !== 'EXECUTED') ||
+      actionResult.rejected > 0 ||
+      actionResult.failed > 0;
+    await this.prisma.auditLog.update({
+      where: { id },
+      data: {
+        metadata: {
+          batchKey,
+          actionTypes: actions.map((action) => action.type),
+          fallback,
+        },
+      },
+    });
+    return fallback;
+  }
+
   async process(
     job: Job<{
       organizationId: string;
@@ -145,8 +252,17 @@ export class AiReplyProcessor extends WorkerHost {
           channel,
           messageIds: claimedMessageIds,
         } = claim;
-        const batchKey = `ai-${claimedMessageIds[0]}`;
         const expectedVersion = conversation.stateVersion;
+        // Bubbles are keyed per conversation version. After a crash and a
+        // newer inbound, the claim folds the new message into this batch;
+        // the older generation's unsent bubbles are cancelled and the whole
+        // batch gets a fresh reply instead of none (B9).
+        const batchRoot = `ai-${claimedMessageIds[0]}`;
+        const batchKey = await this.currentBatchKey(
+          conversationId,
+          batchRoot,
+          expectedVersion,
+        );
         let leaseLost = false;
         const heartbeat = setInterval(() => {
           void this.inboundClaims
@@ -262,18 +378,13 @@ export class AiReplyProcessor extends WorkerHost {
               handoffAfterSend = afterSend === 'HANDOFF_TO_HUMAN';
               pauseAfterSend = afterSend === 'PAUSE_CONVERSATION';
               if (immediate.length > 0) {
-                const actionResult = await this.actionExecutor.executeActions(
+                const fallback = await this.executeActionsOnce(
                   organization.id,
                   conversationId,
+                  batchKey,
                   immediate,
                 );
-                if (
-                  actionResult.outcomes?.some(
-                    (item) => item.status !== 'EXECUTED',
-                  ) ||
-                  actionResult.rejected > 0 ||
-                  actionResult.failed > 0
-                ) {
+                if (fallback) {
                   this.logger.warn(
                     `ACTION_FALLBACK_REQUIRED conversationId=${conversationId}`,
                   );

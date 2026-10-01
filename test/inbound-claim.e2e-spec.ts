@@ -1032,8 +1032,14 @@ it('rejects an older generation after a new inbound changes conversation version
   ).toBe(true);
 });
 
-it('cancels stale generated bubbles after a crash and newer inbound', async () => {
+it('cancels stale generated bubbles after a crash and answers the folded batch (B9)', async () => {
   const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
   const inbound = await system(() => f.message());
   const staleBubble = await system(() =>
     prisma.message.create({
@@ -1047,24 +1053,35 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
       },
     }),
   );
+  // A newer patient message arrived while the first generation was stuck.
+  const newer = await system(() => f.message());
   const updated = await system(() =>
     prisma.conversation.update({
       where: { id: f.conv.id },
       data: { stateVersion: { increment: 1 } },
     }),
   );
-  const sendBubble = jest.fn();
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const generateReply = jest
+    .fn()
+    .mockResolvedValue({ replyText: 'Fresh reply' });
   const processor = new AiReplyProcessor(
     prisma,
-    { sendTextMessage: jest.fn() } as any,
+    { sendTypingIndicator: jest.fn() } as any,
     { broadcastNewMessage: jest.fn() } as any,
     { executeActions: jest.fn() } as any,
     { scheduleAutoFollowUps: jest.fn() } as any,
     { record: jest.fn() } as any,
     new DeliveryAuthService(prisma),
     claims,
-    { sendBubble } as any,
-    { generateReply: jest.fn() } as any,
+    new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+      sendTextMessage,
+    } as any),
+    { generateReply } as any,
   );
   await processor.process({
     id: randomUUID(),
@@ -1076,7 +1093,6 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
       stateVersion: updated.stateVersion,
     },
   } as any);
-  expect(sendBubble).not.toHaveBeenCalled();
   expect(
     (
       await system(() =>
@@ -1084,13 +1100,19 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
       )
     ).status,
   ).toBe('CANCELLED');
-  expect(
-    (
-      await system(() =>
-        prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
-      )
-    ).status,
-  ).toBe('PROCESSED');
+  // Both folded messages get one fresh reply; the stale text is never sent.
+  expect(generateReply).toHaveBeenCalledTimes(1);
+  expect(generateReply.mock.calls[0][0].newMessageIds).toEqual([
+    inbound.id,
+    newer.id,
+  ]);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toBe('Fresh reply');
+  for (const id of [inbound.id, newer.id])
+    expect(
+      (await system(() => prisma.message.findUniqueOrThrow({ where: { id } })))
+        .status,
+    ).toBe('PROCESSED');
 });
 
 it.each(['paused', 'opted-out', 'disabled-channel'])(
@@ -2616,11 +2638,9 @@ it('sends and audits a custom disclosure template once (KI-032)', async () => {
       },
     }),
   );
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const outbound = new OutboundAttemptService(
     prisma,
     new DeliveryAuthService(prisma),
@@ -2668,4 +2688,96 @@ it('sends and audits a custom disclosure template once (KI-032)', async () => {
       }),
     ),
   ).toBe(1);
+});
+
+it('does not re-run AI actions when the reply job is retried (B9)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  const inbound = await system(() => f.message());
+  const executeActions = jest.fn().mockResolvedValue({
+    executed: 2,
+    rejected: 0,
+    failed: 0,
+    outcomes: [
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+    ],
+  });
+  let failCreate = true;
+  const database = new Proxy(prisma, {
+    get(target, key) {
+      if (key === 'message')
+        return new Proxy((target as any).message, {
+          get(model, method) {
+            if (method === 'createMany' && failCreate)
+              return () => {
+                failCreate = false;
+                return Promise.reject(
+                  new Error('synthetic crash after actions'),
+                );
+              };
+            return model[method];
+          },
+        });
+      return (target as any)[key];
+    },
+  });
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const ai = new AiReplyProcessor(
+    database,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+      sendTextMessage,
+    } as any),
+    {
+      generateReply: async () => ({
+        replyText: 'Synthetic AI reply',
+        actions: [
+          { type: 'NOTIFY_AGENT', payload: '{}' },
+          {
+            type: 'SCHEDULE_FOLLOW_UP',
+            payload: JSON.stringify({
+              scheduledAt: new Date(Date.now() + 86_400_000).toISOString(),
+            }),
+          },
+        ],
+      }),
+    } as any,
+  );
+  const job = {
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any;
+  await expect(ai.process(job)).rejects.toThrow(
+    'synthetic crash after actions',
+  );
+  await ai.process(job); // BullMQ retry
+  expect(executeActions).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await system(() =>
+        prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
+      )
+    ).status,
+  ).toBe('PROCESSED');
 });
