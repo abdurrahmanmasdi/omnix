@@ -21,6 +21,8 @@ import { LeadsService } from '../src/leads/leads.service';
 import { QueryBuilderService } from '../src/common/query/query-builder.service';
 import { NotificationEmitterService } from '../src/notifications/notification-emitter.service';
 import { WhatsappService } from '../src/webhooks/whatsapp.service';
+import { OutboundAttemptService } from '../src/webhooks/outbound-attempt.service';
+import { DeliveryAuthService } from '../src/webhooks/delivery-auth.service';
 import { EventsGateway } from '../src/events/events/events.gateway';
 import { WebhooksController } from '../src/webhooks/webhooks.controller';
 import { WebhooksService } from '../src/webhooks/webhooks.service';
@@ -149,11 +151,14 @@ beforeAll(async () => {
       WebhooksService,
       JwtAuthGuard,
       PermissionsGuard,
+      OutboundAttemptService,
+      DeliveryAuthService,
       { provide: WhatsappService, useValue: { sendTextMessage: providerSend } },
       {
         provide: EventsGateway,
         useValue: {
           broadcastNewMessage: jest.fn(),
+          broadcastConversationUpdate: jest.fn().mockResolvedValue(undefined),
           broadcastLeadUpdate: jest.fn().mockResolvedValue(undefined),
           broadcastNotification: jest.fn().mockResolvedValue(undefined),
         },
@@ -228,7 +233,19 @@ it('denies cross-tenant HTTP writes and forged signed memberships before provide
     .patch(`/conversations/${second.conversation.id}/toggle-ai`)
     .set('Authorization', `Bearer ${first.token}`)
     .expect(404);
+  for (const route of ['ai-pause', 'ai-resume'])
+    await request(app.getHttpServer())
+      .post(`/conversations/${second.conversation.id}/${route}`)
+      .set('Authorization', `Bearer ${first.token}`)
+      .expect(404);
   expect(providerSend).not.toHaveBeenCalled();
+  const untouched = await system(() =>
+    prisma.conversation.findUniqueOrThrow({
+      where: { id: second.conversation.id },
+    }),
+  );
+  expect(untouched.aiPaused).toBe(second.conversation.aiPaused);
+  expect(untouched.stateVersion).toBe(second.conversation.stateVersion);
   const forged = new JwtService().sign(
     {
       sub: first.user.id,
