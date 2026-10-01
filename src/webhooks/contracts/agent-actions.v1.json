@@ -6,23 +6,49 @@
       "fields": {
         "firstName": { "kind": "string", "max": 500 },
         "lastName": { "kind": "string", "max": 500 },
-        "email": { "kind": "string", "max": 500 },
-        "phoneNumber": { "kind": "string", "max": 500 },
         "country": { "kind": "string", "max": 500 },
         "primaryLanguage": { "kind": "string", "max": 500 },
         "preferredLanguage": { "kind": "string", "max": 500 },
         "timezone": { "kind": "string", "max": 500 },
-        "gender": { "kind": "enum", "values": ["MALE", "FEMALE", "OTHER", "UNKNOWN"] },
+        "gender": {
+          "kind": "enum",
+          "values": ["MALE", "FEMALE", "OTHER", "UNKNOWN"]
+        },
         "currency": { "kind": "enum", "values": ["USD", "TRY", "EUR", "GBP"] },
         "priority": { "kind": "enum", "values": ["HOT", "WARM", "COLD"] },
-        "status": { "kind": "enum", "values": ["NEW", "QUALIFYING", "QUALIFIED", "READY_TO_BOOK", "READY_TO_PAY", "HANDED_OFF", "UNQUALIFIED", "WON", "LOST"] }
+        "status": {
+          "kind": "enum",
+          "values": ["QUALIFYING", "QUALIFIED", "READY_TO_BOOK", "HANDED_OFF"]
+        }
       }
     },
-    "UPDATE_LEAD": { "required": [], "sameFieldsAs": "CREATE_LEAD", "minFields": 1 },
-    "UPDATE_SUMMARY": { "required": ["summary"], "fields": { "summary": { "kind": "string", "max": 5000 } } },
-    "HANDOFF_TO_HUMAN": { "required": [], "fields": { "reason": { "kind": "string", "max": 500 } } },
+    "UPDATE_LEAD": {
+      "required": [],
+      "sameFieldsAs": "CREATE_LEAD",
+      "minFields": 1
+    },
+    "UPDATE_SUMMARY": {
+      "required": ["summary"],
+      "fields": { "summary": { "kind": "string", "max": 5000 } }
+    },
+    "HANDOFF_TO_HUMAN": {
+      "required": [],
+      "fields": { "reason": { "kind": "string", "max": 500 } }
+    },
     "PAUSE_CONVERSATION": { "required": [], "fields": {} },
-    "NOTIFY_AGENT": { "required": [], "fields": { "title": { "kind": "string", "max": 200 }, "body": { "kind": "string", "max": 1000 } } },
-    "SCHEDULE_FOLLOW_UP": { "required": ["scheduledAt"], "fields": { "scheduledAt": { "kind": "date-time" }, "context": { "kind": "string", "max": 500 } } }
+    "NOTIFY_AGENT": {
+      "required": [],
+      "fields": {
+        "title": { "kind": "string", "max": 200 },
+        "body": { "kind": "string", "max": 1000 }
+      }
+    },
+    "SCHEDULE_FOLLOW_UP": {
+      "required": ["scheduledAt"],
+      "fields": {
+        "scheduledAt": { "kind": "date-time" },
+        "context": { "kind": "string", "max": 500 }
+      }
+    }
   }
 }

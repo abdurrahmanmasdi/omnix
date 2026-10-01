@@ -1,10 +1,16 @@
 {
   "valid": [
     {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "QUALIFIED"
+      }
+    },
+    {
       "type": "CREATE_LEAD",
       "payload": {
         "firstName": "A",
-        "status": "NEW"
+        "status": "QUALIFYING"
       }
     },
     {
@@ -45,6 +51,55 @@
     }
   ],
   "invalid": [
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "phoneNumber": "+15550000000"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "email": "synthetic@example.invalid"
+      }
+    },
+    {
+      "type": "CREATE_LEAD",
+      "payload": {
+        "firstName": "A",
+        "phoneNumber": "+15550000000"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "WON"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "LOST"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "READY_TO_PAY"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "UNQUALIFIED"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "NEW"
+      }
+    },
     {
       "type": "UPDATE_LEAD",
       "payload": {

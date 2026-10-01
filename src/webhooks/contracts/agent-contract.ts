@@ -6,8 +6,6 @@ export const AGENT_CONTRACT_VERSION = spec.version;
 export type LeadActionPayload = Partial<{
   firstName: string;
   lastName: string;
-  email: string;
-  phoneNumber: string;
   country: string;
   primaryLanguage: string;
   preferredLanguage: string;
@@ -15,16 +13,8 @@ export type LeadActionPayload = Partial<{
   gender: 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN';
   currency: 'USD' | 'TRY' | 'EUR' | 'GBP';
   priority: 'HOT' | 'WARM' | 'COLD';
-  status:
-    | 'NEW'
-    | 'QUALIFYING'
-    | 'QUALIFIED'
-    | 'READY_TO_BOOK'
-    | 'READY_TO_PAY'
-    | 'HANDED_OFF'
-    | 'UNQUALIFIED'
-    | 'WON'
-    | 'LOST';
+  // AI-settable statuses only (KI-024); outcomes and payment are staff decisions.
+  status: 'QUALIFYING' | 'QUALIFIED' | 'READY_TO_BOOK' | 'HANDED_OFF';
 }>;
 
 export type ParsedAgentAction =
