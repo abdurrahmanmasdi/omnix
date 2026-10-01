@@ -4,6 +4,7 @@ import io
 import logging
 import re
 
+import grpc
 import agent_pb2
 import agent_pb2_grpc
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -149,7 +150,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
             if not res:
                 logger.warning("Conversation %s not found in DB", conv_id)
-                return agent_pb2.AgentReply(contractVersion=CONTRACT_VERSION, replyText="System error: Conversation not found.")
+                # A gRPC error status, never patient-facing text (KI-054): Nest
+                # turns any RPC error into a failed job and sends nothing.
+                await context.abort(grpc.StatusCode.NOT_FOUND, "conversation not found")
 
             # res is a tuple-like object from SQLAlchemy execute
             # (conv_id, lead_id, firstName, lastName, gender, country, status, priority, externalContactId)
@@ -304,6 +307,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 actions=tool_actions
             )
             
+        except grpc.aio.AbortError:
+            raise
         except Exception as e:
             error_type = e.__class__.__name__
             logger.error("AGENT_REPLY_FAILED conversation_id=%s error_type=%s", conv_id, error_type)
