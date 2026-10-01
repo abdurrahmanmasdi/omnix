@@ -69,11 +69,22 @@ describe('WebhooksProcessor', () => {
     expect(prisma.message.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          content: '[Media omitted: Awaiting consent. Consent request sent.]',
+          content: '[Media omitted: Awaiting consent.]',
           mediaUrl: null,
         }),
       }),
     );
+    // The consent request goes through the outbound pipeline (KI-025).
+    expect(outboundAttempts.sendBubble).toHaveBeenCalledWith(
+      'org-1',
+      'conv-1',
+      expect.objectContaining({
+        idempotencyKey: 'consent-request-msg-media-1',
+      }),
+      2,
+      'consent-request',
+    );
+    expect(whatsappSendText).not.toHaveBeenCalled();
   });
 
   it('should update consent status if user sends I CONSENT', async () => {
@@ -204,6 +215,11 @@ describe('WebhooksProcessor', () => {
   let processor: WebhooksProcessor;
   let prisma: jest.Mocked<PrismaService>;
   let aiReplyQueue: any;
+  const whatsappSendText = jest.fn();
+  const outboundAttempts = {
+    reconcileStatus: jest.fn(),
+    sendBubble: jest.fn().mockResolvedValue('ACCEPTED'),
+  };
 
   beforeEach(async () => {
     // 1. Setup Mock Prisma
@@ -219,7 +235,11 @@ describe('WebhooksProcessor', () => {
       message: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
-        create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        create: jest
+          .fn()
+          .mockImplementation(async ({ data }) => ({ id: 'msg-1', ...data })),
         updateMany: jest.fn(),
       },
       conversation: {
@@ -265,7 +285,10 @@ describe('WebhooksProcessor', () => {
           provide: NotificationEmitterService,
           useValue: { emitNotification: jest.fn() },
         },
-        { provide: WhatsappService, useValue: { sendTextMessage: jest.fn() } },
+        {
+          provide: WhatsappService,
+          useValue: { sendTextMessage: whatsappSendText },
+        },
         {
           provide: WhatsappMediaService,
           useValue: { downloadMediaAsBase64: jest.fn() },
@@ -285,7 +308,7 @@ describe('WebhooksProcessor', () => {
         { provide: CredentialsService, useValue: { readActive: jest.fn() } },
         {
           provide: OutboundAttemptService,
-          useValue: { reconcileStatus: jest.fn() },
+          useValue: outboundAttempts,
         },
         { provide: GrpcClientService, useValue: { generateReply: jest.fn() } },
         { provide: getQueueToken('ai-reply'), useValue: mockQueue },

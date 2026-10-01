@@ -12,8 +12,14 @@ export type AttemptResult = 'ACCEPTED' | 'WAITING' | 'FAILED' | 'CANCELLED';
  * reply / follow-up: AI-generated bubbles, blocked by pause, assignment and a
  * newer conversation version. staff: a human reply, which is allowed while the
  * AI is paused but still needs opt-out, clinic, channel and 24 h checks.
+ * consent-request: the system media-consent prompt; blocked by pause and
+ * opt-out, not by a newer inbound or by staff assignment.
  */
-export type OutboundPurpose = 'reply' | 'follow-up' | 'staff';
+export type OutboundPurpose =
+  | 'reply'
+  | 'follow-up'
+  | 'staff'
+  | 'consent-request';
 
 export type DeliveryBlockReason =
   | 'CONVERSATION_NOT_FOUND'
@@ -23,7 +29,13 @@ export type DeliveryBlockReason =
   | 'NO_CONTACT'
   | 'OUTSIDE_24H_WINDOW';
 
-const PURPOSES: OutboundPurpose[] = ['reply', 'follow-up', 'staff'];
+const PURPOSES: OutboundPurpose[] = [
+  'reply',
+  'follow-up',
+  'staff',
+  'consent-request',
+];
+const AI_GENERATED: OutboundPurpose[] = ['reply', 'follow-up'];
 
 @Injectable()
 export class OutboundAttemptService {
@@ -86,7 +98,7 @@ export class OutboundAttemptService {
       !(await this.auth.authorizeDelivery(
         organizationId,
         conversationId,
-        version,
+        AI_GENERATED.includes(purpose) ? version : undefined,
       ))
     )
       return null;
@@ -95,7 +107,10 @@ export class OutboundAttemptService {
       conversationId,
     );
     if (!eligibility.ok) return null;
-    if (purpose !== 'staff' && eligibility.conversation.assignedAgentId)
+    if (
+      AI_GENERATED.includes(purpose) &&
+      eligibility.conversation.assignedAgentId
+    )
       return null;
     return eligibility;
   }

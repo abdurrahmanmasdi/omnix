@@ -9,12 +9,15 @@ import { EventsGateway } from '../events/events/events.gateway';
 import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import parsePhoneNumberFromString from 'libphonenumber-js';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
-import { NotificationType, Prisma } from '@prisma/client';
+import { Lead, Message, NotificationType, Prisma } from '@prisma/client';
 import { WhatsappMediaService } from './whatsapp-media.service';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
+import { mediaConsentRequestText, patientLanguage } from './patient-copy';
+
+const CONSENT_REQUEST_PREFIX = 'consent-request-';
 
 type PatientCommand = 'STOP' | 'START' | 'I_CONSENT' | 'WITHDRAW_CONSENT';
 
@@ -154,6 +157,101 @@ export class WebhooksProcessor extends WorkerHost {
         await audit('consent.media_withdrawn');
         return;
     }
+  }
+
+  private async consentRequestText(
+    clinicName: string,
+    conversationId: string,
+    lead: Pick<Lead, 'preferredLanguage' | 'primaryLanguage'> | null,
+  ) {
+    const recent = await this.prisma.message.findMany({
+      where: { conversationId, type: 'LEAD_TEXT' },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { content: true },
+    });
+    return mediaConsentRequestText(
+      clinicName,
+      patientLanguage(
+        lead,
+        recent.map((row) => row.content),
+      ),
+    );
+  }
+
+  /**
+   * At most one media-consent request per conversation per 24 h (KI-025).
+   * Created with the inbound message, so a duplicate webhook creates none.
+   */
+  private async createConsentRequest(
+    tx: Prisma.TransactionClient,
+    conversationId: string,
+    metaMessageId: string,
+    content: string,
+    version: number,
+  ): Promise<Message | null> {
+    const recent = await tx.message.count({
+      where: {
+        conversationId,
+        idempotencyKey: { startsWith: CONSENT_REQUEST_PREFIX },
+        status: { not: 'CANCELLED' },
+        createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    });
+    if (recent > 0) return null;
+    return tx.message.create({
+      data: {
+        conversationId,
+        content,
+        type: 'AI_TEXT',
+        handledBy: 'AI',
+        status: 'PENDING',
+        idempotencyKey: `${CONSENT_REQUEST_PREFIX}${metaMessageId}`,
+        metadata: { kind: 'MEDIA_CONSENT_REQUEST', generationVersion: version },
+      },
+    });
+  }
+
+  private async sendConsentRequest(
+    organizationId: string,
+    request: Message,
+    version: number,
+  ) {
+    const result = await this.outboundAttempts.sendBubble(
+      organizationId,
+      request.conversationId,
+      request,
+      version,
+      'consent-request',
+    );
+    if (result === 'WAITING') throw new Error('OUTBOUND_UNRESOLVED');
+    if (result === 'ACCEPTED') {
+      const sent = await this.prisma.message.findUnique({
+        where: { id: request.id },
+      });
+      if (sent)
+        void this.eventsGateway.broadcastNewMessage(organizationId, sent);
+    }
+  }
+
+  private async resumeConsentRequest(
+    organizationId: string,
+    conversationId: string,
+    metaMessageId: string,
+  ) {
+    const request = await this.prisma.message.findUnique({
+      where: { idempotencyKey: `${CONSENT_REQUEST_PREFIX}${metaMessageId}` },
+    });
+    if (
+      !request ||
+      request.conversationId !== conversationId ||
+      request.status !== 'PENDING'
+    )
+      return;
+    const version =
+      (request.metadata as { generationVersion?: number } | null)
+        ?.generationVersion ?? 0;
+    await this.sendConsentRequest(organizationId, request, version);
   }
 
   async process(job: Job<WhatsAppWebhookPayload>): Promise<any> {
@@ -358,8 +456,25 @@ export class WebhooksProcessor extends WorkerHost {
                 throw new Error('Conversation could not be created');
               }
 
+              // Duplicate check before any media download or patient-facing
+              // send (R2). A replay only resumes an unsent consent request.
+              const existingMessage = await this.prisma.message.findUnique({
+                where: { metaMessageId: metaMessageId },
+              });
+
+              if (existingMessage) {
+                this.logger.warn(`INBOUND_DUPLICATE jobId=${job.id}`);
+                await this.resumeConsentRequest(
+                  organization.id,
+                  conversation.id,
+                  metaMessageId,
+                );
+                continue; // A batch can contain other, non-duplicate messages.
+              }
+
               let messageContent = '[Non-text message]';
               let mediaUrl: string | null = null;
+              let awaitingConsent = false;
 
               const consentGranted = !!conversation?.lead?.mediaConsentGranted;
 
@@ -375,17 +490,8 @@ export class WebhooksProcessor extends WorkerHost {
                   if (base64) mediaUrl = `data:image/jpeg;base64,${base64}`;
                   messageContent = '[Image message]';
                 } else {
-                  if (channel.credentialId && conversation.lead?.phoneNumber) {
-                    await this.whatsappService.sendTextMessage(
-                      channel.credentialId,
-                      organization.id,
-                      conversation.lead.phoneNumber,
-                      "OmniDesk Clinic needs your consent to process and store your images and audio securely for AI analysis and staff review. Reply 'I CONSENT' to grant permission, or 'WITHDRAW CONSENT' anytime to revoke it. (Purpose: Patient Media Analysis v1.0)",
-                      channel.providerAccountId,
-                    );
-                  }
-                  messageContent =
-                    '[Media omitted: Awaiting consent. Consent request sent.]';
+                  awaitingConsent = true;
+                  messageContent = '[Media omitted: Awaiting consent.]';
                 }
               } else if (
                 (message.type === 'audio' && message.audio?.id) ||
@@ -401,27 +507,9 @@ export class WebhooksProcessor extends WorkerHost {
                   if (base64) mediaUrl = `data:audio/ogg;base64,${base64}`;
                   messageContent = '[Audio message]';
                 } else {
-                  if (channel.credentialId && conversation.lead?.phoneNumber) {
-                    await this.whatsappService.sendTextMessage(
-                      channel.credentialId,
-                      organization.id,
-                      conversation.lead.phoneNumber,
-                      "OmniDesk Clinic needs your consent to process and store your images and audio securely for AI analysis and staff review. Reply 'I CONSENT' to grant permission, or 'WITHDRAW CONSENT' anytime to revoke it. (Purpose: Patient Media Analysis v1.0)",
-                      channel.providerAccountId,
-                    );
-                  }
-                  messageContent =
-                    '[Media omitted: Awaiting consent. Consent request sent.]';
+                  awaitingConsent = true;
+                  messageContent = '[Media omitted: Awaiting consent.]';
                 }
-              }
-
-              const existingMessage = await this.prisma.message.findUnique({
-                where: { metaMessageId: metaMessageId },
-              });
-
-              if (existingMessage) {
-                this.logger.warn(`INBOUND_DUPLICATE jobId=${job.id}`);
-                continue; // A batch can contain other, non-duplicate messages.
               }
 
               // 2. Save the inbound message, its command effects (STOP, START,
@@ -440,6 +528,18 @@ export class WebhooksProcessor extends WorkerHost {
                 !organization.deleted_at &&
                 channel.status === 'ACTIVE';
               const leadId = conversation.leadId;
+              const consentRequestText =
+                awaitingConsent &&
+                !conversation.aiPaused &&
+                !conversation.lead?.optedOutAt
+                  ? await this.consentRequestText(
+                      organization.name,
+                      conversation.id,
+                      conversation.lead,
+                    )
+                  : null;
+              let consentRequest: Message | null = null;
+              let consentVersion = 0;
               try {
                 // metaMessageId is unique in the database. This catch closes the
                 // check/create race between simultaneous BullMQ workers.
@@ -495,6 +595,16 @@ export class WebhooksProcessor extends WorkerHost {
                       metaMessageId,
                     });
                   }
+                  if (consentRequestText) {
+                    consentVersion = currentConversation.stateVersion;
+                    consentRequest = await this.createConsentRequest(
+                      tx,
+                      conversation.id,
+                      metaMessageId,
+                      consentRequestText,
+                      consentVersion,
+                    );
+                  }
                   if (shouldGenerate) {
                     await tx.outboxEvent.create({
                       data: {
@@ -528,6 +638,14 @@ export class WebhooksProcessor extends WorkerHost {
               await this.followUpService.cancelPendingFollowUps(
                 conversation.id,
               );
+
+              if (consentRequest) {
+                await this.sendConsentRequest(
+                  organization.id,
+                  consentRequest,
+                  consentVersion,
+                );
+              }
 
               if (isStop) {
                 this.logger.log(

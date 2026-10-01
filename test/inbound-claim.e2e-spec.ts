@@ -2088,11 +2088,9 @@ it('pauses and resumes the AI idempotently with audit rows, and a pause during g
     }),
   );
   const staffId = randomUUID();
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const { conversations, outbound } = staffService(sendTextMessage);
   const start = await system(() =>
     prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
@@ -2168,4 +2166,136 @@ it('pauses and resumes the AI idempotently with audit rows, and a pause during g
     },
   } as any);
   expect(sendTextMessage).not.toHaveBeenCalled();
+});
+
+function mediaJob(
+  f: {
+    channel: { providerAccountId: string | null };
+    conv: { externalContactId: string | null };
+  },
+  id = randomUUID(),
+) {
+  return {
+    id: randomUUID(),
+    data: {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: f.channel.providerAccountId },
+                messages: [
+                  {
+                    from: f.conv.externalContactId,
+                    id,
+                    type: 'image',
+                    image: { id: `img-${id}` },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  } as any;
+}
+
+it('sends one clinic-named media-consent request per 24 h through OutboundAttempt, also on replay (KI-025)', async () => {
+  const f = await fixture();
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const followUps = {
+    cancelPendingFollowUps: jest
+      .fn()
+      .mockRejectedValueOnce(new Error('synthetic crash after commit'))
+      .mockResolvedValue(undefined),
+  };
+  const worker = webhook(prisma, outbound, followUps);
+  const first = mediaJob(f);
+  // Crash after the inbound commit, before the request is sent; the retry
+  // (a duplicate) resumes the committed request instead of losing it.
+  await expect(worker.process(first)).rejects.toThrow(
+    'synthetic crash after commit',
+  );
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  await worker.process(first);
+  await worker.process(first); // Meta redelivery
+  await worker.process(mediaJob(f)); // second photo within 24 h
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  const [, , to, text] = sendTextMessage.mock.calls[0];
+  expect(to).toBe(f.conv.externalContactId);
+  expect(text).toContain('Synthetic Clinic');
+  expect(text).not.toContain('OmniDesk');
+  const attempts = await system(() =>
+    prisma.outboundAttempt.findMany({
+      where: { conversationId: f.conv.id },
+    }),
+  );
+  expect(attempts).toHaveLength(1);
+  expect(attempts[0]).toMatchObject({
+    purpose: 'consent-request',
+    status: 'ACCEPTED',
+  });
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: {
+          conversationId: f.conv.id,
+          type: 'LEAD_MEDIA',
+          mediaUrl: null,
+        },
+      }),
+    ),
+  ).toBe(2);
+});
+
+it('sends no media-consent request to an opted-out or paused patient, and uses Turkish for a Turkish patient (KI-025)', async () => {
+  const optedOut = await fixture();
+  const paused = await fixture();
+  const turkish = await fixture();
+  await system(async () => {
+    await prisma.lead.update({
+      where: { id: optedOut.lead.id },
+      data: { optedOutAt: new Date() },
+    });
+    await prisma.conversation.update({
+      where: { id: paused.conv.id },
+      data: { aiPaused: true },
+    });
+    await prisma.message.create({
+      data: {
+        conversationId: turkish.conv.id,
+        metaMessageId: randomUUID(),
+        content: 'Merhaba, implant fiyatı nedir?',
+        type: 'LEAD_TEXT',
+        status: 'PROCESSED',
+      },
+    });
+  });
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const worker = webhook(prisma, outbound);
+  await worker.process(mediaJob(optedOut));
+  await worker.process(mediaJob(paused));
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  await worker.process(mediaJob(turkish));
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toContain('onay');
 });
