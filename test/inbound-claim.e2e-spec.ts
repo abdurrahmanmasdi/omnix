@@ -141,6 +141,9 @@ async function fixture() {
 function webhook(
   prismaService: PrismaService,
   outboundAttempts: any = { reconcileStatus: jest.fn() },
+  followUps: any = {
+    cancelPendingFollowUps: jest.fn().mockResolvedValue(undefined),
+  },
 ) {
   return new WebhooksProcessor(
     prismaService,
@@ -148,14 +151,13 @@ function webhook(
     {} as any,
     {} as any,
     { broadcastNewMessage: jest.fn() } as any,
-    { cancelPendingFollowUps: jest.fn().mockResolvedValue(undefined) } as any,
+    followUps,
     { record: jest.fn().mockResolvedValue(undefined) } as any,
     {
       readActive: jest.fn().mockResolvedValue({ accessToken: 'synthetic' }),
     } as any,
     outboundAttempts,
     { getService: jest.fn() } as any,
-    { getJob: jest.fn().mockResolvedValue(null) } as any,
   );
 }
 
@@ -1657,4 +1659,207 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
       )
     ).status,
   ).toBe('SENT');
+});
+
+function inboundJob(
+  f: {
+    channel: { providerAccountId: string | null };
+    conv: { externalContactId: string | null };
+  },
+  body: string,
+  id = randomUUID(),
+) {
+  return {
+    id: randomUUID(),
+    data: {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: f.channel.providerAccountId },
+                messages: [
+                  {
+                    from: f.conv.externalContactId,
+                    id,
+                    type: 'text',
+                    text: { body },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  } as any;
+}
+
+it('applies STOP exactly once when the worker crashes after the inbound commit (KI-022)', async () => {
+  const f = await fixture();
+  const followUps = {
+    cancelPendingFollowUps: jest
+      .fn()
+      .mockRejectedValueOnce(new Error('synthetic crash after commit'))
+      .mockResolvedValue(undefined),
+  };
+  const worker = webhook(prisma, undefined, followUps);
+  const job = inboundJob(f, 'STOP');
+  await expect(worker.process(job)).rejects.toThrow(
+    'synthetic crash after commit',
+  );
+  // BullMQ retry, then a Meta redelivery of the same message.
+  await worker.process(job);
+  await worker.process(job);
+  const lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).not.toBeNull();
+  expect(lead.optOutReason).toBe('PATIENT_STOP_COMMAND');
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  const audits = await system(() =>
+    prisma.auditLog.findMany({
+      where: { organizationId: f.org.id, action: 'consent.opt_out' },
+    }),
+  );
+  expect(audits).toHaveLength(1);
+  expect(JSON.stringify(audits[0].metadata)).not.toContain('STOP');
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+      }),
+    ),
+  ).toBe(1);
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    ),
+  ).toBe(0);
+});
+
+it('rolls back the inbound message when its consent effect fails, then applies withdrawal once on retry (KI-022)', async () => {
+  const f = await fixture();
+  await system(async () => {
+    await prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { mediaConsentGranted: true },
+    });
+    await prisma.message.create({
+      data: {
+        conversationId: f.conv.id,
+        metaMessageId: randomUUID(),
+        content: '[Image message]',
+        mediaUrl: 'data:image/jpeg;base64,c3ludGhldGlj',
+        type: 'LEAD_MEDIA',
+        status: 'PROCESSED',
+      },
+    });
+  });
+  const original = prisma.$transaction.bind(prisma);
+  let failNext = true;
+  const spy = jest.spyOn(prisma, '$transaction').mockImplementation(((
+    arg: any,
+    ...rest: any[]
+  ) => {
+    if (typeof arg !== 'function') return original(arg, ...rest);
+    return original(
+      async (tx: any) => {
+        const wrapped = new Proxy(tx, {
+          get(target, key) {
+            if (key === 'auditLog' && failNext) {
+              failNext = false;
+              return {
+                create: () =>
+                  Promise.reject(new Error('synthetic crash inside tx')),
+              };
+            }
+            return target[key];
+          },
+        });
+        return arg(wrapped);
+      },
+      ...rest,
+    );
+  }) as any);
+  try {
+    const worker = webhook(prisma);
+    const job = inboundJob(f, 'WITHDRAW CONSENT');
+    await expect(worker.process(job)).rejects.toThrow(
+      'synthetic crash inside tx',
+    );
+    expect(
+      await system(() =>
+        prisma.message.count({
+          where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+        }),
+      ),
+    ).toBe(0);
+    await worker.process(job);
+    await worker.process(job);
+  } finally {
+    spy.mockRestore();
+  }
+  const lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.mediaConsentGranted).toBe(false);
+  expect(lead.mediaConsentWithdrawnAt).not.toBeNull();
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, mediaUrl: { not: null } },
+      }),
+    ),
+  ).toBe(0);
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'consent.media_withdrawn' },
+      }),
+    ),
+  ).toBe(1);
+});
+
+it('keeps an opt-out on ordinary messages and clears it only on START / BAŞLA', async () => {
+  const f = await fixture();
+  const worker = webhook(prisma);
+  await worker.process(inboundJob(f, 'STOP'));
+  await worker.process(inboundJob(f, 'Hello again, a question about implants'));
+  let lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).not.toBeNull();
+  // The ordinary message still reaches the inbox, without an AI reply intent.
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+      }),
+    ),
+  ).toBe(2);
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    ),
+  ).toBe(0);
+  await worker.process(inboundJob(f, 'BAŞLA'));
+  lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).toBeNull();
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'consent.opt_in' },
+      }),
+    ),
+  ).toBe(1);
 });
