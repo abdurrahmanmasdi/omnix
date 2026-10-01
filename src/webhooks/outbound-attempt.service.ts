@@ -1,10 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Message } from '@prisma/client';
+import { Message, NotificationType } from '@prisma/client';
+import {
+  MEMBERSHIP_GRANTS_INCLUDE,
+  membershipHasPermission,
+} from '../auth/permission.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { DeliveryAuthService } from './delivery-auth.service';
-import { WhatsappService } from './whatsapp.service';
+import { OutboundNotSentError, WhatsappService } from './whatsapp.service';
 
 export type AttemptResult = 'ACCEPTED' | 'WAITING' | 'FAILED' | 'CANCELLED';
 
@@ -222,6 +226,16 @@ export class OutboundAttemptService {
           );
       providerId = response?.messages?.[0]?.id;
     } catch (error: any) {
+      if (error instanceof OutboundNotSentError) {
+        // Local failure before the POST (e.g. revoked credential): Meta was
+        // never contacted, so this is a definite FAILED, not UNKNOWN.
+        await this.prisma.outboundAttempt.updateMany({
+          where: { id: attempt.id, status: 'SENDING' },
+          data: { status: 'FAILED', lastErrorCode: error.code },
+        });
+        this.logger.warn(`OUTBOUND_NOT_SENT attempt=${attempt.id}`);
+        return 'FAILED';
+      }
       const code = Number(error?.response?.status ?? error?.status);
       // Only an explicit provider rejection is safe to retry. Timeout,
       // connection loss, and 5xx may mean Meta accepted the message.
@@ -238,6 +252,7 @@ export class OutboundAttemptService {
       this.logger.warn(
         `OUTBOUND_PROVIDER_RESULT_${rejected ? 'REJECTED' : 'UNKNOWN'} attempt=${attempt.id}`,
       );
+      if (!rejected) await this.escalateUnknown(attempt.id);
       return code === 429 ? 'WAITING' : rejected ? 'FAILED' : 'WAITING';
     }
     if (!providerId) {
@@ -245,6 +260,7 @@ export class OutboundAttemptService {
         where: { id: attempt.id, status: 'SENDING' },
         data: { status: 'UNKNOWN', lastErrorCode: 'MISSING_PROVIDER_ID' },
       });
+      await this.escalateUnknown(attempt.id);
       return 'WAITING';
     }
     // If this commit fails after Meta accepted, the durable SENDING row will
@@ -386,6 +402,94 @@ export class OutboundAttemptService {
       });
       if (result.count)
         this.logger.warn(`OUTBOUND_INTERRUPTED count=${result.count}`);
+      // Also covers a crash between writing UNKNOWN and routing it.
+      const unrouted = await this.prisma.outboundAttempt.findMany({
+        where: { status: 'UNKNOWN', escalatedAt: null },
+        select: { id: true },
+        take: 100,
+      });
+      for (const { id } of unrouted) {
+        try {
+          await this.escalateUnknown(id);
+        } catch {
+          this.logger.error(`OUTBOUND_UNKNOWN_ESCALATION_FAILED attempt=${id}`);
+        }
+      }
+    });
+  }
+
+  /**
+   * An UNKNOWN send may or may not have reached the patient (R7: never
+   * resend). Route it to people once: pause the AI (new patient messages
+   * then go to staff, not into a stuck AI batch), bump stateVersion, alert
+   * eligible staff to check WhatsApp before replying, and audit (KI-029).
+   */
+  async escalateUnknown(attemptId: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.outboundAttempt.updateMany({
+        where: { id: attemptId, status: 'UNKNOWN', escalatedAt: null },
+        data: { escalatedAt: new Date() },
+      });
+      if (claimed.count !== 1) return;
+      const attempt = await tx.outboundAttempt.findUniqueOrThrow({
+        where: { id: attemptId },
+        include: { conversation: { include: { lead: true } } },
+      });
+      const { conversation, organizationId } = attempt;
+      await tx.conversation.updateMany({
+        where: { id: conversation.id, organizationId, aiPaused: false },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
+      });
+      const memberships = await tx.organizationMembership.findMany({
+        where: {
+          organizationId,
+          status: 'ACTIVE',
+          deletedAt: null,
+          user: { status: 'ACTIVE', deletedAt: null },
+        },
+        include: MEMBERSHIP_GRANTS_INCLUDE,
+      });
+      const recipients = memberships.filter(
+        (membership) =>
+          membershipHasPermission(membership, 'notifications:view') &&
+          (membership.userId === conversation.lead?.assignedAgentId ||
+            membership.userId === conversation.assignedAgentId ||
+            membershipHasPermission(membership, 'leads:read:all')),
+      );
+      for (const membership of recipients) {
+        const notification = await tx.notification.create({
+          data: {
+            organizationId,
+            userId: membership.userId,
+            type: NotificationType.SYSTEM_ALERT,
+            title: 'Delivery uncertain',
+            body: 'A WhatsApp message may or may not have reached the patient. Check WhatsApp before replying. The AI is paused for this conversation.',
+            referenceId: conversation.leadId ?? conversation.id,
+            referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
+          },
+        });
+        await tx.outboxEvent.create({
+          data: {
+            organizationId,
+            topic: 'notification.broadcast',
+            payload: { organizationId, notificationId: notification.id },
+          },
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actor: 'system',
+          action: 'outbound.delivery_unknown',
+          targetId: conversation.id,
+          metadata: {
+            attemptId,
+            purpose: attempt.purpose,
+            lastErrorCode: attempt.lastErrorCode,
+            staffNotified: recipients.length,
+          },
+        },
+      });
     });
   }
 }

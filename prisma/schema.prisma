@@ -424,6 +424,8 @@ model OutboundAttempt {
   attemptCount        Int                   @default(0)
   startedAt           DateTime?
   acceptedAt          DateTime?
+  // Set once when an UNKNOWN attempt is routed to staff (AI paused + alert).
+  escalatedAt         DateTime?
   lastErrorCode       String?
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @default(now()) @updatedAt

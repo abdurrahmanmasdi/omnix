@@ -28,6 +28,7 @@ import { ActionExecutorService } from '../src/webhooks/action-executor.service';
 import { NotificationRelayProcessor } from '../src/core/outbox/notification-relay.processor';
 import { PermissionService } from '../src/auth/permission.service';
 import { AuditService } from '../src/audit/audit.service';
+import { WhatsappService } from '../src/webhooks/whatsapp.service';
 import { WhatsappMediaService } from '../src/webhooks/whatsapp-media.service';
 import { ConversationsService } from '../src/conversations/conversations.service';
 
@@ -2332,4 +2333,187 @@ it('sets a 30-day expiry on downloaded patient media and the cleanup leaves a ma
   );
   expect(cleaned.mediaUrl).toBeNull();
   expect(cleaned.content).toBe('[Patient Media - Expired and Deleted]');
+});
+
+async function staffMember(organizationId: string) {
+  return system(async () => {
+    const grants = await Promise.all(
+      ['notifications:view', 'leads:read:all'].map((action) =>
+        prisma.permission.upsert({
+          where: { action },
+          update: {},
+          create: { action },
+        }),
+      ),
+    );
+    const role = await prisma.role.create({
+      data: { organizationId, name: 'Pilot staff', slug: randomUUID() },
+    });
+    await prisma.rolePermission.createMany({
+      data: grants.map((permission) => ({
+        roleId: role.id,
+        permissionId: permission.id,
+      })),
+    });
+    const user = await prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.organizationMembership.create({
+      data: {
+        organizationId,
+        userId: user.id,
+        roleId: role.id,
+        status: 'ACTIVE',
+      },
+    });
+    return user;
+  });
+}
+
+it('routes an UNKNOWN send to staff once and stops the AI retry loop (KI-029)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  await staffMember(f.org.id);
+  const inbound = await system(() => f.message());
+  const sendTextMessage = jest
+    .fn()
+    .mockRejectedValue(new Error('synthetic timeout after acceptance'));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    { generateReply: async () => ({ replyText: 'Synthetic AI reply' }) } as any,
+  );
+  const job = {
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any;
+  const before = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  await expect(ai.process(job)).rejects.toThrow('OUTBOUND_UNRESOLVED');
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  expect(conversation.stateVersion).toBe(before.stateVersion + 1);
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0]).toMatchObject({
+    type: 'SYSTEM_ALERT',
+    title: 'Delivery uncertain',
+  });
+  // BullMQ retry, inbound recovery and the sweep: no resend, no second alert.
+  await ai.process(job);
+  await claims.recoverInbound();
+  await outbound.markInterruptedSendsUnknown();
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: {
+          organizationId: f.org.id,
+          action: 'outbound.delivery_unknown',
+        },
+      }),
+    ),
+  ).toBe(1);
+  expect(
+    (
+      await system(() =>
+        prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
+      )
+    ).status,
+  ).toBe('PROCESSED');
+  const attempt = await system(() =>
+    prisma.outboundAttempt.findFirstOrThrow({
+      where: { conversationId: f.conv.id },
+    }),
+  );
+  expect(attempt.status).toBe('UNKNOWN');
+  // A new patient message goes to staff, not into an AI batch.
+  await webhook(prisma).process(inboundJob(f, 'Did you get my question?'));
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    ),
+  ).toBe(0);
+});
+
+it('marks a local credential failure before the POST as FAILED, not UNKNOWN (KI-029)', async () => {
+  const f = await fixture();
+  const bubble = await system(() => f.bubble());
+  const post = jest.fn();
+  const whatsapp = new WhatsappService(
+    { post } as any,
+    {} as any,
+    {
+      readActive: jest
+        .fn()
+        .mockRejectedValue(new Error('Active credential not found')),
+    } as any,
+  );
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    whatsapp,
+  );
+  expect(
+    await system(() =>
+      outbound.sendBubble(f.org.id, f.conv.id, bubble, f.conv.stateVersion),
+    ),
+  ).toBe('FAILED');
+  expect(post).not.toHaveBeenCalled();
+  const attempt = await system(() =>
+    prisma.outboundAttempt.findUniqueOrThrow({
+      where: { messageId: bubble.id },
+    }),
+  );
+  expect(attempt).toMatchObject({
+    status: 'FAILED',
+    lastErrorCode: 'LOCAL_CREDENTIAL_UNAVAILABLE',
+    escalatedAt: null,
+  });
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(false);
+  // Not retried by the confirmed-failure retry cron.
+  await outbound.retryConfirmedFailures();
+  expect(post).not.toHaveBeenCalled();
 });

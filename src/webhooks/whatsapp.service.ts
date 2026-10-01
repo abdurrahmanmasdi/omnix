@@ -1,14 +1,18 @@
-import {
-  Injectable,
-  Logger,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, throwError } from 'rxjs';
 import { catchError, retry, timeout } from 'rxjs/operators';
 import { IChannelProvider } from '../core/interfaces/channel-provider.interface';
 import { CredentialsService } from '../credentials/credentials.service';
+
+/** Raised before any provider I/O: the message was definitely not sent. */
+export class OutboundNotSentError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+    this.name = 'OutboundNotSentError';
+  }
+}
 
 export interface MetaMessageResponse {
   messaging_product: string;
@@ -168,15 +172,24 @@ export class WhatsappService implements IChannelProvider {
     payload: any,
     providerAccountIdOverride?: string,
   ): Promise<MetaMessageResponse> {
-    const { accessToken, phoneNumberId } = await this.credentials.readActive(
-      organizationId,
-      credentialId,
-    );
+    // Failures before the POST mean Meta was never contacted: the message
+    // was certainly not sent, so they must not become UNKNOWN (KI-029).
+    let accessToken: string | undefined;
+    let phoneNumberId: string | undefined;
+    try {
+      ({ accessToken, phoneNumberId } = await this.credentials.readActive(
+        organizationId,
+        credentialId,
+      ));
+    } catch {
+      this.logger.error('WHATSAPP_CREDENTIAL_UNAVAILABLE');
+      throw new OutboundNotSentError('LOCAL_CREDENTIAL_UNAVAILABLE');
+    }
 
     const activePhoneNumberId = providerAccountIdOverride || phoneNumberId;
     if (!activePhoneNumberId || !accessToken) {
       this.logger.error('Missing WhatsApp credentials for this organization.');
-      throw new InternalServerErrorException('Missing WhatsApp credentials');
+      throw new OutboundNotSentError('LOCAL_CREDENTIAL_MISSING');
     }
 
     const url = `${this.apiUrl}/${activePhoneNumberId}/messages`;
