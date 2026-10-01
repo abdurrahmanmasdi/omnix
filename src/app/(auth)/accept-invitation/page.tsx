@@ -18,7 +18,7 @@ import { useAuthStore } from "@/store/auth-store";
 
 export default function AcceptInvitationPage() {
   const token = useRef("");
-  const type = useRef("");
+  const [invitationType, setInvitationType] = useState("");
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +29,7 @@ export default function AcceptInvitationPage() {
     const suppliedToken = params.get("token");
     const suppliedType = params.get("type");
     if (suppliedToken) token.current = suppliedToken;
-    if (suppliedType) type.current = suppliedType;
+    if (suppliedType) setInvitationType(suppliedType);
     window.history.replaceState(
       window.history.state,
       "",
@@ -64,7 +64,7 @@ export default function AcceptInvitationPage() {
     setPending(true);
     setError("");
     try {
-      const url = type.current === "clinic"
+      const url = invitationType === "clinic"
         ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/invitations/clinic/accept`
         : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/accept-invitation`;
 
@@ -78,12 +78,12 @@ export default function AcceptInvitationPage() {
         options.headers = { Authorization: `Bearer ${accessToken}` };
       }
 
-      const response = await axios.post(url, payload, options);
+      await axios.post(url, payload, options);
       
       token.current = "";
       setComplete(true);
       
-      if (accessToken && type.current === "clinic") {
+      if (accessToken && invitationType === "clinic") {
         setTimeout(() => {
            window.location.href = "/";
         }, 1500);
@@ -97,7 +97,7 @@ export default function AcceptInvitationPage() {
     }
   }
 
-  const isExistingUserClinicInvite = type.current === "clinic" && user;
+  const isExistingUserClinicInvite = invitationType === "clinic" && user;
 
   return (
     <Card className="w-full shadow-lg">

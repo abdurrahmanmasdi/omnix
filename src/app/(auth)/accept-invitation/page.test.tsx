@@ -6,6 +6,11 @@ import AcceptInvitationPage from "./page";
 import SignupPage from "../signup/page";
 
 vi.mock("axios", () => ({ default: { post: vi.fn() } }));
+const authState = vi.hoisted(() => ({
+  accessToken: null as string | null,
+  user: null as { firstName: string } | null,
+}));
+vi.mock("@/store/auth-store", () => ({ useAuthStore: () => authState }));
 const token = "a".repeat(64);
 let container: HTMLDivElement;
 let root: Root;
@@ -13,6 +18,8 @@ let root: Root;
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   vi.resetAllMocks();
+  authState.accessToken = null;
+  authState.user = null;
   window.history.replaceState(null, "", `/accept-invitation#token=${token}`);
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -40,6 +47,22 @@ async function submit() {
 }
 
 describe("pilot invitation UI", () => {
+  it("renders clinic acceptance for an existing user after reading the fragment", async () => {
+    authState.accessToken = "synthetic-access-token";
+    authState.user = { firstName: "Synthetic" };
+    window.history.replaceState(
+      null,
+      "",
+      `/accept-invitation#token=${token}&type=clinic`,
+    );
+    await act(async () => root.render(<AcceptInvitationPage />));
+    expect(window.location.hash).toBe("");
+    expect(container.textContent).toContain("Accept Clinic Invitation");
+    expect(container.textContent).toContain("You are logged in as Synthetic");
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("button")?.textContent).toBe("Accept invitation");
+  });
+
   it("removes the capability from browser history and activates without session cookies", async () => {
     vi.mocked(axios.post).mockResolvedValue({
       data: { message: "Account activated" },
