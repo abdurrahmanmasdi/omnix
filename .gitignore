@@ -21,3 +21,8 @@ npm-debug.log*
 # OS
 .DS_Store
 *.tsbuildinfo
+
+# Playwright generated artifacts
+/test-results/
+/playwright-report/
+/playwright/.auth/
