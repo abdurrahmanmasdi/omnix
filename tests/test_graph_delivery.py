@@ -9,7 +9,7 @@ import agent_pb2
 
 from app.modules.agent import nodes
 from app.modules.agent.graph_builder import agent_app
-from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE
+from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE, handoff_message
 from app.grpc_services import agent_servicer
 
 
@@ -147,11 +147,11 @@ def test_real_graph_action_reaches_grpc_contract(monkeypatch):
     ]
 
 
-@pytest.mark.parametrize("message", [
-    "Please connect me with a human coordinator.",
-    "Can you diagnose this swelling after my operation?",
+@pytest.mark.parametrize("message,expected", [
+    ("Please connect me with a human coordinator.", handoff_message("human_request", "en")),
+    ("Can you diagnose this swelling after my operation?", SAFE_HANDOFF_MESSAGE),
 ])
-def test_urgent_and_human_requests_handoff_before_graph(monkeypatch, message):
+def test_urgent_and_human_requests_handoff_before_graph(monkeypatch, message, expected):
     graph_call = AsyncMock(side_effect=AssertionError("graph should not run"))
     monkeypatch.setattr(agent_servicer, "agent_app", SimpleNamespace(ainvoke=graph_call))
     monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_lead_info", AsyncMock(
@@ -166,7 +166,7 @@ def test_urgent_and_human_requests_handoff_before_graph(monkeypatch, message):
             organizationId="org-s12", conversationId="conv-s12", newMessageIds=["msg-s12"],
         ), None
     ))
-    assert reply.replyText == SAFE_HANDOFF_MESSAGE
+    assert reply.replyText == expected
     assert [action.type for action in reply.actions] == ["HANDOFF_TO_HUMAN"]
     graph_call.assert_not_awaited()
 

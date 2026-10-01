@@ -9,10 +9,56 @@ import re
 from dataclasses import dataclass
 
 
-SAFE_HANDOFF_MESSAGE = (
-    "I can't safely answer that here. A human medical coordinator can help "
-    "you with accurate information."
+# DRAFT patient copy pending founder/clinic review (F02), especially Turkish.
+# Rules: say why truthfully (a person was asked for vs. the AI can't answer
+# safely vs. a technical problem), never promise when staff will reply.
+HANDOFF_MESSAGES = {
+    "human_request": {
+        "en": "Of course. I'm passing your request to the clinic's team, and a team member will reply to you here.",
+        "tr": "Elbette. Talebinizi kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+    },
+    "cannot_answer": {
+        "en": "I'm the clinic's AI assistant and I can't safely answer that here. I'm passing your question to the clinic's team, and a team member will reply to you here.",
+        "tr": "Ben kliniğin yapay zekâ asistanıyım ve bu soruyu burada güvenli şekilde yanıtlayamam. Sorunuzu kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+    },
+    "technical": {
+        "en": "Sorry, I couldn't process your message. I'm passing it to the clinic's team, and a team member will reply to you here.",
+        "tr": "Üzgünüm, mesajınızı işleyemedim. Mesajınızı kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+    },
+}
+
+# Default (English, can't-answer-safely). Graph nodes emit this as a sentinel;
+# the servicer localizes it before delivery.
+SAFE_HANDOFF_MESSAGE = HANDOFF_MESSAGES["cannot_answer"]["en"]
+
+_TURKISH_CHARS = re.compile(r"[çğıöşüÇĞİÖŞÜ]")
+_TURKISH_WORDS = re.compile(
+    r"\b(?:merhaba|selam|fiyat\w*|istiyorum|lütfen|teşekkür\w*|tesekkur\w*|randevu\w*|"
+    r"nasıl|nedir|kadar|evet|hayır|musunuz|misiniz|mısınız|mi|mı|ne)\b",
+    re.IGNORECASE,
 )
+
+
+def detect_language(text: str | None) -> str:
+    """Pick 'tr' or 'en' for handoff copy from the patient's latest text."""
+    value = str(text or "")
+    if _TURKISH_CHARS.search(value) or len(_TURKISH_WORDS.findall(value)) >= 2:
+        return "tr"
+    return "en"
+
+
+def handoff_message(kind: str, language: str = "en") -> str:
+    messages = HANDOFF_MESSAGES.get(kind, HANDOFF_MESSAGES["cannot_answer"])
+    return messages.get(language, messages["en"])
+
+
+def handoff_kind(reason: str | None) -> str:
+    """Map a policy/servicer block reason to the matching patient message."""
+    if reason == "human_handoff_request":
+        return "human_request"
+    if reason in {"incompatible_contract_version", "system_exception", "tool_failure"}:
+        return "technical"
+    return "cannot_answer"
 
 
 @dataclass(frozen=True)

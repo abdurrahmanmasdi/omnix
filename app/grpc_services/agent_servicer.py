@@ -12,7 +12,9 @@ from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
 from app.modules.agent.actions import parse_virtual_action, CONTRACT_VERSION
-from app.modules.safety.policy import DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE
+from app.modules.safety.policy import (
+    DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +45,11 @@ def _safe_persona(tone: str, rules_json: str) -> tuple[str, str]:
     return safe_tone, json.dumps(safe_rules)
 
 
-def _blocked_reply(reason: str):
+def _blocked_reply(reason: str, language: str = "en"):
     """Return the only safe reply and an explicit NestJS handoff action."""
     return agent_pb2.AgentReply(
         contractVersion=CONTRACT_VERSION,
-        replyText=SAFE_HANDOFF_MESSAGE,
+        replyText=handoff_message(handoff_kind(reason), language),
         actions=[agent_pb2.ToolAction(
             type="HANDOFF_TO_HUMAN",
             payload=json.dumps({"reason": f"Deterministic delivery policy blocked: {reason}"}),
@@ -104,7 +106,8 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 latest_msg = "System Event: The user sent a voice note, but the audio file was corrupted or unreadable."
 
         logger.info("GenerateReply called for Conv: %s", conv_id)
-        
+        language = "en"
+
         try:
             # 1. Fetch Lead Info & Status from the database VIA ASYNC INFRASTRUCTURE
             res = await DatabaseService.get_conversation_lead_info(conv_id, org_id)
@@ -181,15 +184,14 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                     state_data["messages"].append(HumanMessage(content=content))
 
             # 3.5 Run Deterministic Input Policy Checks BEFORE graph invocation
+            language = detect_language(combined_new_text)
             if combined_new_text:
-                from app.modules.safety.policy import DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE
-                import json
                 input_decision = DeliverySafetyPolicy.check_input(combined_new_text)
                 if not input_decision.allowed:
                     logger.warning("INPUT_POLICY_BLOCKED conversation_id=%s", conv_id)
                     return agent_pb2.AgentReply(
                         contractVersion=CONTRACT_VERSION,
-                        replyText=SAFE_HANDOFF_MESSAGE,
+                        replyText=handoff_message(handoff_kind(input_decision.reason), language),
                         actions=[agent_pb2.ToolAction(
                             type="HANDOFF_TO_HUMAN",
                             payload=json.dumps({"reason": input_decision.reason})
@@ -216,7 +218,10 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             output_decision = DeliverySafetyPolicy.check_output(ai_reply_text)
             if not output_decision.allowed:
                 logger.warning("OUTPUT_POLICY_BLOCKED conversation_id=%s", conv_id)
-                return _blocked_reply(output_decision.reason or "unsafe_output")
+                return _blocked_reply(output_decision.reason or "unsafe_output", language)
+            if ai_reply_text == SAFE_HANDOFF_MESSAGE:
+                # Graph nodes emit the English default; deliver it in the patient's language.
+                ai_reply_text = handoff_message("cannot_answer", language)
             
             reply_parts = [p.strip() for p in ai_reply_text.split("|||") if p.strip()]
             
@@ -232,17 +237,17 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 action = parse_virtual_action(action_str)
                 if action is None:
                     logger.warning("ACTION_TYPE_REJECTED conversation_id=%s", conv_id)
-                    return _blocked_reply("invalid_tool_action")
+                    return _blocked_reply("invalid_tool_action", language)
                 tool_actions.append(agent_pb2.ToolAction(
                     type=action[0], payload=json.dumps(action[1])
                 ))
 
             if final_state.get("tool_failure"):
-                return _blocked_reply("tool_failure")
+                return _blocked_reply("tool_failure", language)
 
             if not any(action.type == "HANDOFF_TO_HUMAN" for action in tool_actions):
                 if re.search(r"\b(?:transferr?ing|connecting|alerted|notified)\b.{0,60}\b(?:staff|team|coordinator|human|agent)\b", ai_reply_text, re.IGNORECASE):
-                    return _blocked_reply("handoff_without_action")
+                    return _blocked_reply("handoff_without_action", language)
 
             final_reply_to_send = "\n\n|||\n\n".join(reply_parts)
 
@@ -258,10 +263,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
         except Exception as e:
             error_type = e.__class__.__name__
             logger.error("AGENT_REPLY_FAILED conversation_id=%s error_type=%s", conv_id, error_type)
-            import json
             return agent_pb2.AgentReply(
                 contractVersion=CONTRACT_VERSION,
-                replyText=SAFE_HANDOFF_MESSAGE,
+                replyText=handoff_message("technical", language),
                 actions=[agent_pb2.ToolAction(
                     type="HANDOFF_TO_HUMAN",
                     payload=json.dumps({"reason": "system_exception"})
