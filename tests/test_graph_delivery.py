@@ -200,3 +200,22 @@ def test_persona_injection_cannot_override_output_safety(monkeypatch):
     assert "maxSentences" in prompt
     assert reply.replyText == SAFE_HANDOFF_MESSAGE
     assert [action.type for action in reply.actions] == ["HANDOFF_TO_HUMAN"]
+
+
+def test_writer_prompt_discloses_ai_identity_without_human_persona(monkeypatch):
+    # WP-A A3 (KI-053): the model is told it is the clinic's AI coordinator,
+    # never a human consultant, and is never given a timing-promise example.
+    _, model = run_graph(monkeypatch, "search_clinic_knowledge", "Verified clinic text")
+    system_prompt = str(model.seen[0][0].content)
+    assert "AI patient coordinator for Synthetic Clinic" in system_prompt
+    assert "not a human" in system_prompt
+    for forbidden in ("Senior Medical Sales Consultant", "right now", "shortly", "transferring you"):
+        assert forbidden.lower() not in system_prompt.lower()
+
+
+def test_prompt_sources_have_no_human_persona_or_timing_promise():
+    from pathlib import Path
+    root = Path(nodes.__file__).parent
+    text = (root / "nodes.py").read_text() + (root / "prompts.py").read_text()
+    for forbidden in ("Senior Medical Sales Consultant", "sales consultant", "right now", "shortly"):
+        assert forbidden.lower() not in text.lower()
