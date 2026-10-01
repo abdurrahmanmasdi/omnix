@@ -147,7 +147,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
         sql = text("""
             SELECT "competitorName", "objectionType", "rebuttalText"
             FROM organization_battlecards
-            WHERE "organizationId" = :org_id AND "consentObtained" = true
+            WHERE "organizationId" = :org_id
               AND embedding IS NOT NULL
             ORDER BY embedding <=> :vector
             LIMIT 1
