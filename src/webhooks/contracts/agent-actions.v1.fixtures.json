@@ -39,7 +39,7 @@
     {
       "type": "SCHEDULE_FOLLOW_UP",
       "payload": {
-        "scheduledAt": "2026-10-01T09:00:00Z",
+        "scheduledAt": "2099-10-01T09:00:00Z",
         "context": "Check availability"
       }
     }
@@ -95,6 +95,12 @@
       "type": "SCHEDULE_FOLLOW_UP",
       "payload": {
         "scheduledAt": "2026-02-30T09:00:00Z"
+      }
+    },
+    {
+      "type": "SCHEDULE_FOLLOW_UP",
+      "payload": {
+        "scheduledAt": "2020-01-01T09:00:00Z"
       }
     },
     {
