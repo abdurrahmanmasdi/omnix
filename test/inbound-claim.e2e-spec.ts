@@ -2528,11 +2528,9 @@ it('delivers the AI handoff text once before pausing, with one alert per eligibl
   );
   await staffMember(f.org.id);
   const inbound = await system(() => f.message());
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const outbound = new OutboundAttemptService(
     prisma,
     new DeliveryAuthService(prisma),
@@ -2605,4 +2603,69 @@ it('delivers the AI handoff text once before pausing, with one alert per eligibl
   );
   expect(bubble.status).toBe('SENT');
   expect(bubble.metadata).toMatchObject({ pendingHandoff: false });
+});
+
+it('sends and audits a custom disclosure template once (KI-032)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.aiPersona.update({
+      where: { organizationId: f.org.id },
+      data: {
+        aiDisclosureText:
+          'Merhaba {{firstName}}, ben {{clinicName}} için çalışan bir yapay zekâ asistanıyım.',
+      },
+    }),
+  );
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    new AuditService(prisma),
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    { generateReply: async () => ({ replyText: 'Synthetic AI reply' }) } as any,
+  );
+  for (let turn = 0; turn < 2; turn++) {
+    const inbound = await system(() => f.message());
+    await ai.process({
+      id: randomUUID(),
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        newMessageIds: [inbound.id],
+      },
+    } as any);
+  }
+  const texts = sendTextMessage.mock.calls.map((call) => call[3]);
+  expect(
+    texts.filter((text) => text.includes('yapay zekâ asistanıyım')),
+  ).toHaveLength(1);
+  expect(texts.filter((text) => text === 'Synthetic AI reply')).toHaveLength(2);
+  expect(
+    (
+      await system(() =>
+        prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+      )
+    ).aiDisclosureSent,
+  ).toBe(true);
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'ai.disclosure_sent' },
+      }),
+    ),
+  ).toBe(1);
 });

@@ -327,6 +327,7 @@ export class AiReplyProcessor extends WorkerHost {
               // Disclosure bubble
               if (disclosureText) {
                 bubblesToCreate.push({
+                  role: 'disclosure',
                   conversationId,
                   content: disclosureText,
                   idempotencyKey: `${batchKey}-bubble-${bubbleIndex++}`,
@@ -375,9 +376,12 @@ export class AiReplyProcessor extends WorkerHost {
               // Create bubbles in DB
               if (bubblesToCreate.length > 0) {
                 await this.prisma.message.createMany({
-                  data: bubblesToCreate.map((bubble) => ({
+                  data: bubblesToCreate.map(({ role, ...bubble }) => ({
                     ...bubble,
                     metadata: {
+                      // The disclosure is tracked by role, not by its text,
+                      // so custom/localized templates count too (KI-032).
+                      ...(role ? { role } : {}),
                       generationVersion: expectedVersion,
                       pendingHandoff: handoffAfterSend,
                       pendingPause: pauseAfterSend,
@@ -510,12 +514,10 @@ export class AiReplyProcessor extends WorkerHost {
                 updatedBubble,
               );
 
-              // If this was the disclosure, update the conversation flag
-              // We assume it's disclosure if it matches the buildDisclosure output or just because it's first and flag is false.
               if (
-                i === 0 &&
                 !currentConv?.aiDisclosureSent &&
-                bubble.content.includes('digital assistant for')
+                (bubble.metadata as { role?: string } | null)?.role ===
+                  'disclosure'
               ) {
                 await this.prisma.conversation.update({
                   where: { id: conversationId },
