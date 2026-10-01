@@ -12,6 +12,8 @@ import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
+import { AfterSendAction, splitAfterSendActions } from './deferred-actions';
+import { Message } from '@prisma/client';
 import {
   AGENT_CONTRACT_VERSION,
   isCompatibleAgentVersion,
@@ -86,6 +88,37 @@ export class AiReplyProcessor extends WorkerHost {
     void this.eventsGateway.broadcastNewMessage(organizationId, msg);
   }
 
+  /**
+   * Runs the deferred handoff/pause once the reply bubbles went out, then
+   * clears the pending flag on each bubble (keeping its other metadata).
+   */
+  private async runAfterSendAction(
+    organizationId: string,
+    conversationId: string,
+    type: AfterSendAction,
+    bubbles: Message[],
+  ) {
+    const result = await this.actionExecutor.executeActions(
+      organizationId,
+      conversationId,
+      [{ type, payload: '{}' }],
+    );
+    if (result.executed !== 1 || result.failed || result.rejected)
+      throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
+    for (const bubble of bubbles) {
+      await this.prisma.message.update({
+        where: { id: bubble.id },
+        data: {
+          metadata: {
+            ...((bubble.metadata as Record<string, unknown> | null) ?? {}),
+            pendingHandoff: false,
+            pendingPause: false,
+          },
+        },
+      });
+    }
+  }
+
   async process(
     job: Job<{
       organizationId: string;
@@ -142,6 +175,7 @@ export class AiReplyProcessor extends WorkerHost {
           let failed = false;
           try {
             let handoffAfterSend = false;
+            let pauseAfterSend = false;
             // Check if we already generated bubbles for this job
             let existingBubbles = await this.prisma.message.findMany({
               where: { idempotencyKey: { startsWith: `${batchKey}-` } },
@@ -222,12 +256,16 @@ export class AiReplyProcessor extends WorkerHost {
                 return;
               }
 
-              // Execute Virtual Tool Actions (CRM Updates)
-              if (actions && actions.length > 0) {
+              // Execute Virtual Tool Actions (CRM Updates). Handoff / pause
+              // run after the reply is sent (B7), see splitAfterSendActions.
+              const { immediate, afterSend } = splitAfterSendActions(actions);
+              handoffAfterSend = afterSend === 'HANDOFF_TO_HUMAN';
+              pauseAfterSend = afterSend === 'PAUSE_CONVERSATION';
+              if (immediate.length > 0) {
                 const actionResult = await this.actionExecutor.executeActions(
                   organization.id,
                   conversationId,
-                  actions,
+                  immediate,
                 );
                 if (
                   actionResult.outcomes?.some(
@@ -342,6 +380,7 @@ export class AiReplyProcessor extends WorkerHost {
                     metadata: {
                       generationVersion: expectedVersion,
                       pendingHandoff: handoffAfterSend,
+                      pendingPause: pauseAfterSend,
                     },
                   })),
                 });
@@ -360,6 +399,14 @@ export class AiReplyProcessor extends WorkerHost {
                   (bubble.metadata as { pendingHandoff?: boolean } | null)
                     ?.pendingHandoff === true,
               );
+            pauseAfterSend =
+              !handoffAfterSend &&
+              (pauseAfterSend ||
+                existingBubbles.some(
+                  (bubble) =>
+                    (bubble.metadata as { pendingPause?: boolean } | null)
+                      ?.pendingPause === true,
+                ));
 
             if (
               existingBubbles.some(
@@ -487,25 +534,13 @@ export class AiReplyProcessor extends WorkerHost {
               }
             } // end of transmission loop
 
-            if (handoffAfterSend) {
-              const handoff = await this.actionExecutor.executeActions(
+            if (handoffAfterSend || pauseAfterSend) {
+              await this.runAfterSendAction(
                 organization.id,
                 conversationId,
-                [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
+                handoffAfterSend ? 'HANDOFF_TO_HUMAN' : 'PAUSE_CONVERSATION',
+                existingBubbles,
               );
-              if (handoff.executed !== 1 || handoff.failed || handoff.rejected)
-                throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
-              await this.prisma.message.updateMany({
-                where: {
-                  id: { in: existingBubbles.map((bubble) => bubble.id) },
-                },
-                data: {
-                  metadata: {
-                    generationVersion: expectedVersion,
-                    pendingHandoff: false,
-                  },
-                },
-              });
               return;
             }
 

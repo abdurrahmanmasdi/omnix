@@ -2517,3 +2517,92 @@ it('marks a local credential failure before the POST as FAILED, not UNKNOWN (KI-
   await outbound.retryConfirmedFailures();
   expect(post).not.toHaveBeenCalled();
 });
+
+it('delivers the AI handoff text once before pausing, with one alert per eligible staff member (B7)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  await staffMember(f.org.id);
+  const inbound = await system(() => f.message());
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const executor = new ActionExecutorService(
+    prisma,
+    { send: jest.fn().mockResolvedValue({ id: randomUUID() }) } as any,
+    {
+      broadcastLeadUpdate: jest.fn(),
+      broadcastConversationUpdate: jest.fn(),
+    } as any,
+    {} as any,
+    {} as any,
+    new AuditService(prisma),
+  );
+  const notifyEmitter = jest.spyOn(
+    (executor as any).notificationEmitter,
+    'send',
+  );
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    executor,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    {
+      generateReply: async () => ({
+        replyText:
+          "Of course. I'm passing your request to the clinic's team, and a team member will reply to you here.",
+        actions: [
+          { type: 'NOTIFY_AGENT', payload: '{}' },
+          { type: 'HANDOFF_TO_HUMAN', payload: '{"reason":"human_request"}' },
+        ],
+      }),
+    } as any,
+  );
+  const job = {
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any;
+  await ai.process(job);
+  await ai.process(job); // job retry / duplicate
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toContain(
+    "passing your request to the clinic's team",
+  );
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].type).toBe('LEAD_HANDED_OFF');
+  expect(notifyEmitter).not.toHaveBeenCalled();
+  const bubble = await system(() =>
+    prisma.message.findFirstOrThrow({
+      where: { conversationId: f.conv.id, type: 'AI_TEXT' },
+    }),
+  );
+  expect(bubble.status).toBe('SENT');
+  expect(bubble.metadata).toMatchObject({ pendingHandoff: false });
+});

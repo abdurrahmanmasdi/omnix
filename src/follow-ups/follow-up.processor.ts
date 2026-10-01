@@ -16,6 +16,7 @@ import {
   AGENT_CONTRACT_VERSION,
   isCompatibleAgentVersion,
 } from '../webhooks/contracts/agent-contract';
+import { splitAfterSendActions } from '../webhooks/deferred-actions';
 import {
   MEMBERSHIP_GRANTS_INCLUDE,
   membershipHasPermission,
@@ -316,6 +317,13 @@ export class FollowUpProcessor extends WorkerHost {
                 (bubble.metadata as { pendingHandoff?: boolean } | null)
                   ?.pendingHandoff === true,
             );
+            let pauseAfterSend =
+              !handoffAfterSend &&
+              existingBubbles.some(
+                (bubble) =>
+                  (bubble.metadata as { pendingPause?: boolean } | null)
+                    ?.pendingPause === true,
+              );
 
             if (existingBubbles.length === 0) {
               // Backward compatibility check for old single message row
@@ -349,11 +357,15 @@ export class FollowUpProcessor extends WorkerHost {
               let { replyText, mediaUrl } = aiResponse;
               const { actions } = aiResponse;
 
-              if (actions && actions.length > 0) {
+              // Handoff / pause run after the bubbles are sent (B7).
+              const { immediate, afterSend } = splitAfterSendActions(actions);
+              handoffAfterSend = afterSend === 'HANDOFF_TO_HUMAN';
+              pauseAfterSend = afterSend === 'PAUSE_CONVERSATION';
+              if (immediate.length > 0) {
                 const actionResult = await this.actionExecutor.executeActions(
                   organization.id,
                   conversation.id,
-                  actions,
+                  immediate,
                 );
                 if (
                   actionResult.outcomes?.some(
@@ -448,6 +460,7 @@ export class FollowUpProcessor extends WorkerHost {
                     metadata: {
                       generationVersion: conversation.stateVersion,
                       pendingHandoff: handoffAfterSend,
+                      pendingPause: pauseAfterSend,
                     },
                   })),
                 });
@@ -612,11 +625,18 @@ export class FollowUpProcessor extends WorkerHost {
                 }
               }
 
-              if (handoffAfterSend) {
+              if (handoffAfterSend || pauseAfterSend) {
                 const handoff = await this.actionExecutor.executeActions(
                   organization.id,
                   conversation.id,
-                  [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
+                  [
+                    {
+                      type: handoffAfterSend
+                        ? 'HANDOFF_TO_HUMAN'
+                        : 'PAUSE_CONVERSATION',
+                      payload: '{}',
+                    },
+                  ],
                 );
                 if (
                   handoff.executed !== 1 ||
@@ -624,17 +644,21 @@ export class FollowUpProcessor extends WorkerHost {
                   handoff.rejected
                 )
                   throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
-                await this.prisma.message.updateMany({
-                  where: {
-                    id: { in: existingBubbles.map((bubble) => bubble.id) },
-                  },
-                  data: {
-                    metadata: {
-                      generationVersion: conversation.stateVersion,
-                      pendingHandoff: false,
+                for (const bubble of existingBubbles) {
+                  await this.prisma.message.update({
+                    where: { id: bubble.id },
+                    data: {
+                      metadata: {
+                        ...((bubble.metadata as Record<
+                          string,
+                          unknown
+                        > | null) ?? {}),
+                        pendingHandoff: false,
+                        pendingPause: false,
+                      },
                     },
-                  },
-                });
+                  });
+                }
               }
 
               await this.prisma.conversation.update({
