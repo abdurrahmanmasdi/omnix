@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from app.modules.agent.state import ConversationState
 from app.modules.agent.actions import parse_virtual_action
 from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE
+from app.core.config import settings
 
 async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions) -> bool:
     """Return True when a tool result cannot support a patient-facing answer."""
@@ -95,7 +96,8 @@ async def extract_and_classify(state: ConversationState) -> dict:
     flagship_llm = LLMFactory.get_flagship_llm()
     extractor_llm = LLMFactory.get_extractor_llm()
 
-    if has_image:
+    # Defense in depth for D-014: never call vision unless explicitly enabled.
+    if has_image and settings.PATIENT_IMAGE_ANALYSIS_ENABLED:
         vision_messages = [SystemMessage(content=VISION_PROMPT), messages[-1]]
         vision_response = await flagship_llm.ainvoke(vision_messages)
         vision_text = vision_response.content
@@ -119,7 +121,9 @@ async def extract_and_classify(state: ConversationState) -> dict:
     if response.service_interested and not current_customer.get("service_interested"):
         new_customer_data["service_interested"] = response.service_interested
         customer_updated = True
-    if response.is_medical_image and not current_customer.get("is_medical_evidence_provided"):
+    # Medical evidence only from an actual vision description, never from text
+    # alone or a disabled image path (KI-058).
+    if response.is_medical_image and vision_text and not current_customer.get("is_medical_evidence_provided"):
         new_customer_data["is_medical_evidence_provided"] = True
         customer_updated = True
         

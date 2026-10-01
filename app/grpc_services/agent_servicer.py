@@ -9,6 +9,7 @@ import agent_pb2
 import agent_pb2_grpc
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
+from app.core.config import settings
 from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
@@ -58,6 +59,12 @@ HANDOFF_CLAIM = re.compile(
     r"\b(?:doktor|hekim|danışman|koordinatör|uzman)\w*\s+(?:size\s+)?(?:dönecek|arayacak|yazacak|ulaşacak|iletişime geçecek)|"
     r"\bkıdemli danışman",
     re.IGNORECASE,
+)
+
+
+PATIENT_IMAGE_NOTE = (
+    "[The patient sent an image. Image analysis is disabled: do not describe, interpret "
+    "or assess it. Acknowledge receipt; the clinic team reviews images.]"
 )
 
 
@@ -221,7 +228,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 if msg.content:
                     content.append({"type": "text", "text": msg.content})
                 if getattr(msg, "mediaUrl", None):
-                    content.append({"type": "image_url", "image_url": {"url": msg.mediaUrl}})
+                    if settings.PATIENT_IMAGE_ANALYSIS_ENABLED:
+                        content.append({"type": "image_url", "image_url": {"url": msg.mediaUrl}})
+                    else:
+                        # D-014 / KI-058: the photo never reaches a model; staff review it.
+                        content.append({"type": "text", "text": PATIENT_IMAGE_NOTE})
                     
                 if content:
                     state_data["messages"].append(HumanMessage(content=content))
