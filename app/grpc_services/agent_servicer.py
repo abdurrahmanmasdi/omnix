@@ -249,10 +249,9 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             if state_data["customer"]["name"] != "Guest" and not state_data["lead_id"]:
                 state_data["pending_crm_actions"].append(json.dumps({
                     "action": "CREATE_LEAD",
-                    "payload": {
-                        "firstName": first_name, 
-                        "phoneNumber": getattr(res, 'externalContactId', None)
-                    }
+                    # No phoneNumber: the AI may not set it (KI-024); Nest uses the
+                    # conversation's contact ID when it creates a lead.
+                    "payload": {"firstName": first_name}
                 }))
                 
             # 4. RUN THE LANGGRAPH AGENT
