@@ -1,7 +1,7 @@
 import { Injectable, Inject, OnModuleInit, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
-import { lastValueFrom, timeout, catchError } from 'rxjs';
+import {lastValueFrom, timeout, Observable} from 'rxjs';
 import { AgentRequest, AgentReply } from '../webhooks/interfaces/agent.interface';
 
 // We duplicate the simple RAG interfaces here for type checking
@@ -21,12 +21,12 @@ export interface EmbedExperienceRequest {
 }
 
 interface SalesAgentService {
-  generateReply(data: AgentRequest, metadata?: Metadata): any;
+  generateReply(data: AgentRequest, metadata?: Metadata): Observable<AgentReply>;
 }
 interface DocumentProcessorService {
-  ingestPdf(data: IngestPdfRequest, metadata?: Metadata): any;
-  deleteFile(data: DeleteFileRequest, metadata?: Metadata): any;
-  EmbedExperience(data: EmbedExperienceRequest, metadata?: Metadata): any;
+  ingestPdf(data: IngestPdfRequest, metadata?: Metadata): Observable<{ success: boolean; chunksProcessed: number }>;
+  deleteFile(data: DeleteFileRequest, metadata?: Metadata): Observable<{ success: boolean; chunksDeleted: number }>;
+  EmbedExperience(data: EmbedExperienceRequest, metadata?: Metadata): Observable<{ success: boolean; message: string }>;
 }
 
 @Injectable()
@@ -57,7 +57,7 @@ export class GrpcClientService implements OnModuleInit {
     return meta;
   }
 
-  private async callGrpcMethod<T>(method: any, data: any): Promise<T> {
+  private async callGrpcMethod<T, D>(method: (data: D, metadata: Metadata) => Observable<T>, data: D): Promise<T> {
     try {
       return await lastValueFrom(
         method(data, this.getMetadata()).pipe(timeout(this.TIMEOUT_MS))
@@ -69,18 +69,18 @@ export class GrpcClientService implements OnModuleInit {
   }
 
   generateReply(data: AgentRequest): Promise<AgentReply> {
-    return this.callGrpcMethod<AgentReply>(this.salesAgentService!.generateReply.bind(this.salesAgentService), data);
+    return this.callGrpcMethod(this.salesAgentService!.generateReply.bind(this.salesAgentService), data);
   }
 
   ingestPdf(data: IngestPdfRequest): Promise<{ success: boolean; chunksProcessed: number }> {
-    return this.callGrpcMethod<any>(this.documentProcessorService!.ingestPdf.bind(this.documentProcessorService), data);
+    return this.callGrpcMethod(this.documentProcessorService!.ingestPdf.bind(this.documentProcessorService), data);
   }
 
   deleteFile(data: DeleteFileRequest): Promise<{ success: boolean; chunksDeleted: number }> {
-    return this.callGrpcMethod<any>(this.documentProcessorService!.deleteFile.bind(this.documentProcessorService), data);
+    return this.callGrpcMethod(this.documentProcessorService!.deleteFile.bind(this.documentProcessorService), data);
   }
 
   EmbedExperience(data: EmbedExperienceRequest): Promise<{ success: boolean; message: string }> {
-    return this.callGrpcMethod<any>(this.documentProcessorService!.EmbedExperience.bind(this.documentProcessorService), data);
+    return this.callGrpcMethod(this.documentProcessorService!.EmbedExperience.bind(this.documentProcessorService), data);
   }
 }

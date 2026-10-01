@@ -1,12 +1,11 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger, OnModuleInit } from '@nestjs/common';
+import {Logger} from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import type { WhatsAppWebhookPayload } from './interfaces/whatsapp.interface';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { WhatsappService } from './whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
-import type { ClientGrpc } from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
 import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import parsePhoneNumberFromString from 'libphonenumber-js';

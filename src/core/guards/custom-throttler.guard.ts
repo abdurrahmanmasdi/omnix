@@ -1,10 +1,10 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ThrottlerGuard, ThrottlerException } from '@nestjs/throttler';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class CustomThrottlerGuard extends ThrottlerGuard {
-  protected async getTracker(req: Record<string, any>): Promise<string> {
+  protected async getTracker(req: { ip?: string; connection?: { remoteAddress?: string }; body?: { email?: unknown; token?: unknown } }): Promise<string> {
     // Generate a secure hash of the IP to avoid storing raw IPs in Redis
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
     const hashedIp = crypto.createHash('sha256').update(ip).digest('hex');
@@ -23,8 +23,6 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   }
 
   protected async throwThrottlingException(
-    context: ExecutionContext,
-    throttlerLimitDetail: any,
   ): Promise<void> {
     throw new ThrottlerException('Too many requests. Please try again later.');
   }

@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
@@ -17,7 +16,6 @@ import { OutboundAttemptService } from './outbound-attempt.service';
 import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 import { WhatsappMediaService } from './whatsapp-media.service';
-import { GRPC_CONFIG } from '../config/grpc.constants';
 import { CredentialsModule } from '../credentials/credentials.module';
 import { AuthModule } from '../auth/auth.module';
 

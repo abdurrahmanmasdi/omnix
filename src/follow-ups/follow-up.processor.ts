@@ -1,13 +1,11 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger, OnModuleInit } from '@nestjs/common';
+import {Logger} from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { FollowUpStatus, FollowUpType, NotificationType } from '@prisma/client';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
-import type { ClientGrpc } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
 import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { ActionExecutorService } from '../webhooks/action-executor.service';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';

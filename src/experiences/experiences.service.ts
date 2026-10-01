@@ -1,27 +1,10 @@
-import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-  InternalServerErrorException,
-  Logger,
-  OnModuleInit,
-  Inject,
-} from '@nestjs/common';
+import {Injectable, BadRequestException, NotFoundException, InternalServerErrorException, Logger} from '@nestjs/common';
 import { GrpcClientService } from '../grpc-client/grpc-client.service';
-import { lastValueFrom, Observable } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Prisma, OrganizationExperience } from '@prisma/client';
-
-// Define the gRPC interface
-interface DocumentProcessorService {
-  EmbedExperience(data: {
-    experienceId: string;
-    organizationId: string;
-  }): Observable<{ success: boolean; message: string }>;
-}
 
 @Injectable()
 export class ExperiencesService {

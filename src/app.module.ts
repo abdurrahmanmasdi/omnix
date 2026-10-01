@@ -30,7 +30,6 @@ import { MetricsModule } from './core/metrics/metrics.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { APP_GUARD } from '@nestjs/core';
-import { CustomThrottlerGuard } from './core/guards/custom-throttler.guard';
 import { CsrfGuard } from './core/guards/csrf.guard';
 
 @Module({
@@ -65,7 +64,7 @@ import { CsrfGuard } from './core/guards/csrf.guard';
             limit: 10,
           }
         ],
-        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL')!),
+        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL')),
       }),
     }),
     LoggerModule,

@@ -1,3 +1,5 @@
+import { JwtService } from '@nestjs/jwt';
+import type { Server } from 'node:http';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -101,7 +103,7 @@ describe('Clinic Invitations (e2e)', () => {
       expect(issueResult.token).toBeDefined();
 
       // 3. Accept via HTTP as a new user
-      const acceptRes = await request(app.getHttpServer())
+      const acceptRes = await request(app.getHttpServer() as Server)
         .post('/auth/invitations/clinic/accept')
         .send({
           token: issueResult.token,
@@ -180,7 +182,7 @@ describe('Clinic Invitations (e2e)', () => {
           status: 'ACTIVE',
         },
       });
-      const existingMembership = await prisma.organizationMembership.create({
+      await prisma.organizationMembership.create({
         data: {
           userId: existingUser.id,
           organizationId: org3.id,
@@ -197,14 +199,14 @@ describe('Clinic Invitations (e2e)', () => {
       );
 
       // 4. Generate JWT for existing user
-      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      const jwtService = app.get(JwtService);
       const token = jwtService.sign(
         { sub: existingUser.id, email: existingUserEmail, organizationId: org3.id, roleId: role3.id },
         { secret: process.env.JWT_ACCESS_SECRET }
       );
 
       // 5. Accept via HTTP as an existing logged-in user
-      const acceptRes = await request(app.getHttpServer())
+      const acceptRes = await request(app.getHttpServer() as Server)
         .post('/auth/invitations/clinic/accept')
         .set('Authorization', `Bearer ${token}`)
         .send({

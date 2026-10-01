@@ -1,3 +1,4 @@
+import type { Server } from 'node:http';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -111,7 +112,7 @@ describe('Account Recovery (P1-08)', () => {
     const preUser = await system(() => prisma.user.findUnique({ where: { id: userId } }));
     const preSecurityVersion = preUser?.securityVersion;
 
-    const response = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer() as Server)
       .post('/auth/recovery/consume')
       .send({ token, newPassword: 'new-secure-password' });
 
@@ -132,11 +133,11 @@ describe('Account Recovery (P1-08)', () => {
 
   it('should fail if token is reused', async () => {
     const { token } = await system(() => authService.issueRecovery('recover@example.com', operatorId));
-    await request(app.getHttpServer())
+    await request(app.getHttpServer() as Server)
       .post('/auth/recovery/consume')
       .send({ token, newPassword: 'new-secure-password-2' });
 
-    const response = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer() as Server)
       .post('/auth/recovery/consume')
       .send({ token, newPassword: 'new-secure-password-3' });
 

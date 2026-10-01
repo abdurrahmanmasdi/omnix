@@ -200,7 +200,7 @@ export class InvitationsService {
   }
 
   async issueClinicInvitation(dto: IssueClinicInvitationDto, issuerUserId: string, organizationId: string) {
-    let email = dto.email.trim().toLowerCase();
+    const email = dto.email.trim().toLowerCase();
     return this.prisma.$transaction(async (tx) => {
       // Check that the target organization is active
       const org = await tx.organization.findUnique({ where: { id: organizationId } });

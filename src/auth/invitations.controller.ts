@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, UseGuards, Req } from '@nestjs/common';
+import {Body, Controller, HttpCode, Post, UseGuards} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { InvitationsService } from './invitations.service';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
@@ -10,7 +10,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
 import { RequirePermissions } from './decorators/require-permissions.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthenticatedUser } from './decorators/current-user.decorator';
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import {Throttle} from '@nestjs/throttler';
 import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
 
 @ApiTags('Authentication')

@@ -1,29 +1,13 @@
 import { getRefreshCookieOptions, REFRESH_COOKIE_NAME } from './cookie.helper';
-import {
-  Controller,
-  Post,
-  Body,
-  Res,
-  HttpStatus,
-  HttpCode,
-  Get,
-  UseGuards,
-  Req,
-  UnauthorizedException,
-} from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import {Controller, Post, Body, Res, HttpStatus, HttpCode, Get, UseGuards, Req, UnauthorizedException} from '@nestjs/common';
+import {ApiBearerAuth, ApiOperation, ApiResponse, ApiTags} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import {Throttle} from '@nestjs/throttler';
 import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
 
 @ApiTags('Authentication')

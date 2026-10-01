@@ -257,11 +257,6 @@ describe('WebhooksProcessor', () => {
       getJob: jest.fn().mockResolvedValue(null),
     };
 
-    // 3. Setup Mock gRPC Client
-    const mockClientGrpc = {
-      getService: jest.fn().mockReturnValue({}),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WebhooksProcessor,

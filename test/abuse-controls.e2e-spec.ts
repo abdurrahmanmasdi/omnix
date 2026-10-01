@@ -1,8 +1,8 @@
+import type { Server } from 'node:http';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/prisma/prisma.service';
 import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -12,7 +12,6 @@ jest.setTimeout(120_000);
 let admin: Client;
 let dbName: string;
 let app: INestApplication;
-let prisma: PrismaService;
 
 beforeAll(async () => {
   const url = process.env.UPGRADE_TEST_ADMIN_URL;
@@ -34,7 +33,6 @@ beforeAll(async () => {
   app = moduleFixture.createNestApplication();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.init();
-  prisma = app.get(PrismaService);
 });
 
 afterAll(async () => {
@@ -47,7 +45,7 @@ afterAll(async () => {
 
 describe('Abuse Controls & Browser Protections (P1-09)', () => {
   it('should reject state-changing requests with a forbidden Origin', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer() as Server)
       .post('/auth/login')
       .set('Origin', 'http://malicious.com')
       .send({ email: 'test@example.com', password: 'password' });
@@ -57,7 +55,7 @@ describe('Abuse Controls & Browser Protections (P1-09)', () => {
   });
 
   it('should allow state-changing requests with an allowed Origin', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer() as Server)
       .post('/auth/login')
       .set('Origin', 'http://localhost:3001')
       .send({ email: 'nonexistent@example.com', password: 'password' });
@@ -71,7 +69,7 @@ describe('Abuse Controls & Browser Protections (P1-09)', () => {
     // Let's send 11 requests sequentially to avoid supertest/Express port connection resets.
     let tooManyCount = 0;
     for (let i = 0; i < 11; i++) {
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpServer() as Server)
         .post('/auth/login')
         .send({ email: 'brute@example.com', password: 'pass' });
       if (response.status === 429) {
