@@ -399,6 +399,7 @@ model Message {
   outboundAttempt OutboundAttempt?
 
   @@index([status, processingLeaseUntil])
+  @@index([conversationId, createdAt])
   @@map("messages")
 }
 
