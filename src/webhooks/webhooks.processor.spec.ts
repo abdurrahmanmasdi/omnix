@@ -470,7 +470,6 @@ describe('WebhooksProcessor', () => {
         payload: {
           organizationId: 'org-1',
           conversationId: 'conv-1',
-          customerPhone: '4915112345678',
           messageId: 'db-msg-1',
           stateVersion: 1,
         },
@@ -527,5 +526,49 @@ describe('WebhooksProcessor', () => {
     // Should stop right here
     expect(prisma.message.create).not.toHaveBeenCalled();
     expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps the patient phone number out of the generate-reply outbox payload', async () => {
+    (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+      id: 'channel-1',
+      status: 'ACTIVE',
+      organizationId: 'org-1',
+      organization: { id: 'org-1', isActive: true },
+    });
+    (prisma.conversation.findFirst as jest.Mock).mockResolvedValue({
+      id: 'conv-1',
+      leadId: 'lead-1',
+      channelId: 'channel-1',
+      lead: { id: 'lead-1' },
+    });
+    (prisma.message.findUnique as jest.Mock).mockResolvedValue(null);
+    await processor.process(
+      createMockJob({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { phone_number_id: '123' },
+                  messages: [
+                    {
+                      from: '15550001111',
+                      id: 'msg-text-1',
+                      type: 'text',
+                      text: { body: 'Hello' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(prisma.outboxEvent.create).toHaveBeenCalledTimes(1);
+    const payload = (prisma.outboxEvent.create as jest.Mock).mock.calls[0][0]
+      .data.payload;
+    expect(JSON.stringify(payload)).not.toContain('15550001111');
+    expect(payload).toMatchObject({ conversationId: 'conv-1' });
   });
 });

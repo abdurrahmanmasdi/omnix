@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { WhatsAppWebhookPayload } from './interfaces/whatsapp.interface';
+import { FAILED_JOB_RETENTION } from '../core/queue/job-retention';
 
 @Injectable()
 export class WebhooksService {
@@ -44,7 +45,8 @@ export class WebhooksService {
     await this.messageQueue.add('process-webhook', payload, {
       jobId,
       removeOnComplete: { age: 86400, count: 10000 },
-      removeOnFail: false, // Failed jobs are the operational DLQ and remain inspectable.
+      // Failed jobs are the operational DLQ; bounded because they hold PII.
+      removeOnFail: FAILED_JOB_RETENTION,
       attempts: 5,
       backoff: {
         type: 'exponential',

@@ -619,7 +619,6 @@ export class WebhooksProcessor extends WorkerHost {
                         payload: {
                           organizationId: organization.id,
                           conversationId: conversation.id,
-                          customerPhone,
                           messageId: saved.id,
                           stateVersion: currentConversation.stateVersion,
                         },

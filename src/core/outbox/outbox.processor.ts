@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { tenantStorage } from '../tenant/tenant.context';
+import { FAILED_JOB_RETENTION } from '../queue/job-retention';
 
 type ClaimedOutboxEvent = {
   id: string;
@@ -168,7 +169,7 @@ export class OutboxProcessor {
               attempts: event.topic === 'notification.broadcast' ? 5 : 1,
               backoff: { type: 'exponential', delay: 2000 },
               removeOnComplete: { age: 86400, count: 10000 },
-              removeOnFail: false,
+              removeOnFail: FAILED_JOB_RETENTION,
             });
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
@@ -179,7 +180,10 @@ export class OutboxProcessor {
             await this.prisma.outboxEvent.update({
               where: { id: event.id },
               data: {
-                status: event.topic === 'notification.broadcast' ? 'PENDING' : 'FAILED',
+                status:
+                  event.topic === 'notification.broadcast'
+                    ? 'PENDING'
+                    : 'FAILED',
                 error: 'OUTBOX_RELAY_FAILED',
               },
             });

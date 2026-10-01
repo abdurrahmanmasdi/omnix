@@ -230,7 +230,6 @@ export class AiReplyProcessor extends WorkerHost {
     job: Job<{
       organizationId: string;
       conversationId: string;
-      customerPhone: string;
       newMessageIds: string[];
       stateVersion?: number;
     }>,

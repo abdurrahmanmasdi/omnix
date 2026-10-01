@@ -22,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
 import { AuditModule } from '../audit/audit.module';
+import { FAILED_JOB_RETENTION } from '../core/queue/job-retention';
 
 @Module({
   imports: [
@@ -37,7 +38,7 @@ import { AuditModule } from '../audit/audit.module';
       defaultJobOptions: {
         attempts: 5,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnFail: false,
+        removeOnFail: FAILED_JOB_RETENTION,
       },
     }),
     BullModule.registerQueue({
@@ -45,7 +46,7 @@ import { AuditModule } from '../audit/audit.module';
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnFail: false,
+        removeOnFail: FAILED_JOB_RETENTION,
       },
     }),
     BullModule.registerQueue({
@@ -53,7 +54,7 @@ import { AuditModule } from '../audit/audit.module';
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
-        removeOnFail: false,
+        removeOnFail: FAILED_JOB_RETENTION,
       },
     }),
   ],

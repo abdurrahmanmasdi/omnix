@@ -51,4 +51,19 @@ describe('WebhooksService', () => {
       ),
     ).toBe(false);
   });
+
+  it('keeps failed inbound jobs (full webhook bodies, PII) only for a bounded time', async () => {
+    const queue = (provider as any).messageQueue;
+    await provider.queueIncomingMessage({
+      entry: [
+        { changes: [{ value: { messages: [{ id: 'wamid.synthetic' }] } }] },
+      ],
+    } as any);
+    const options = queue.add.mock.calls[0][2];
+    expect(options.removeOnFail).toEqual({
+      age: 7 * 24 * 60 * 60,
+      count: 1000,
+    });
+    expect(options.removeOnFail).not.toBe(false);
+  });
 });

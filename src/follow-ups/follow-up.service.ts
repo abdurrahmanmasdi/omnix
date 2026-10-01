@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FollowUpType, FollowUpStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import { FAILED_JOB_RETENTION } from '../core/queue/job-retention';
 
 @Injectable()
 export class FollowUpService {
@@ -70,7 +71,7 @@ export class FollowUpService {
               attempts: 3,
               backoff: { type: 'exponential', delay: 5000 },
               removeOnComplete: true,
-              removeOnFail: false,
+              removeOnFail: FAILED_JOB_RETENTION,
             },
           );
         } catch {
