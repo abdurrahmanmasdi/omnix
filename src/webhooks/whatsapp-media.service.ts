@@ -25,6 +25,10 @@ export function patientMediaExpiry(now = new Date()): Date {
   );
 }
 
+// WhatsApp caps media at 16 MB (video) and 5 MB (images); bound the worker.
+const MEDIA_TIMEOUT_MS = 15_000;
+const MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+
 export const EXPIRED_MEDIA_MARKER = '[Patient Media - Expired and Deleted]';
 
 @Injectable()
@@ -97,6 +101,7 @@ export class WhatsappMediaService implements OnModuleInit {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
+          timeout: MEDIA_TIMEOUT_MS,
         },
       );
 
@@ -113,6 +118,8 @@ export class WhatsappMediaService implements OnModuleInit {
           Authorization: `Bearer ${accessToken}`,
         },
         responseType: 'arraybuffer',
+        timeout: MEDIA_TIMEOUT_MS,
+        maxContentLength: MEDIA_MAX_BYTES,
       });
 
       // Step 3: Convert the binary data buffer to a Base64 string

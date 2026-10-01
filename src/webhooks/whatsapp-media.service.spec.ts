@@ -57,6 +57,12 @@ describe('WhatsappMediaService', () => {
       const result = await service.downloadMediaAsBase64('media-id', 'token');
       expect(result).toBe(Buffer.from('test-data').toString('base64'));
       expect(axios.get).toHaveBeenCalledTimes(2);
+      // Bounded download: a stalled or oversized media fetch cannot hang
+      // the inbound worker (KI-026).
+      expect((axios.get as jest.Mock).mock.calls[1][1]).toMatchObject({
+        timeout: 15_000,
+        maxContentLength: 16 * 1024 * 1024,
+      });
     });
 
     it('should return null if url is not found', async () => {
