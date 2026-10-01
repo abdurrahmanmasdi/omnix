@@ -45,6 +45,21 @@ def _safe_persona(tone: str, rules_json: str) -> tuple[str, str]:
     return safe_tone, json.dumps(safe_rules)
 
 
+# A reply may only say it hands the patient to a person when a HANDOFF action
+# goes with it. Includes the wording the old human-persona prompts used (KI-053)
+# and Turkish equivalents.
+_PERSON = r"(?:staff|team|coordinator|human|agent|consultant|doctor|dentist|colleague|specialist)s?"
+HANDOFF_CLAIM = re.compile(
+    r"\b(?:transferr?ing|connecting|alerted|notified|passing|forwarding|handing)\b.{0,60}\b" + _PERSON + r"\b|"
+    r"\bsenior (?:medical )?consultants?\b|\b(?:our|the|a) (?:doctor|dentist|consultant|coordinator)s? will\b|"
+    r"\b" + _PERSON + r"\b.{0,60}\bright now\b|\bright now\b.{0,60}\b" + _PERSON + r"\b|"
+    r"(?:aktarıyorum|aktardım|yönlendiriyorum|yönlendirdim|bağlıyorum|bağladım|iletiyorum|ilettim)|"
+    r"\b(?:doktor|hekim|danışman|koordinatör|uzman)\w*\s+(?:size\s+)?(?:dönecek|arayacak|yazacak|ulaşacak|iletişime geçecek)|"
+    r"\bkıdemli danışman",
+    re.IGNORECASE,
+)
+
+
 def _blocked_reply(reason: str, language: str = "en"):
     """Return the only safe reply and an explicit NestJS handoff action."""
     return agent_pb2.AgentReply(
@@ -246,7 +261,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 return _blocked_reply("tool_failure", language)
 
             if not any(action.type == "HANDOFF_TO_HUMAN" for action in tool_actions):
-                if re.search(r"\b(?:transferr?ing|connecting|alerted|notified)\b.{0,60}\b(?:staff|team|coordinator|human|agent)\b", ai_reply_text, re.IGNORECASE):
+                if HANDOFF_CLAIM.search(ai_reply_text):
                     return _blocked_reply("handoff_without_action", language)
 
             final_reply_to_send = "\n\n|||\n\n".join(reply_parts)

@@ -219,3 +219,43 @@ def test_prompt_sources_have_no_human_persona_or_timing_promise():
     text = (root / "nodes.py").read_text() + (root / "prompts.py").read_text()
     for forbidden in ("Senior Medical Sales Consultant", "sales consultant", "right now", "shortly"):
         assert forbidden.lower() not in text.lower()
+
+
+def _servicer_reply_with_model_text(monkeypatch, final_text, patient_text="Tell me about implants."):
+    model = FakeModel(final_text=final_text)
+    monkeypatch.setattr(nodes.LLMFactory, "get_flagship_llm", lambda: model)
+    monkeypatch.setattr(nodes.LLMFactory, "get_extractor_llm", lambda: FakeStructured())
+    monkeypatch.setattr(nodes.LLMFactory, "get_cheap_llm", lambda: FakeStructured())
+    monkeypatch.setattr(agent_servicer, "agent_app", agent_app)
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_lead_info", AsyncMock(
+        return_value=SimpleNamespace(lead_id="lead-a4", firstName="Synthetic", status="QUALIFIED")
+    ))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_history", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_messages_by_ids", AsyncMock(
+        return_value=[SimpleNamespace(id="msg-a4", content=patient_text, mediaUrl=None)]
+    ))
+    return asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(
+        agent_pb2.AgentRequest(organizationId="org-a4", conversationId="conv-a4", newMessageIds=["msg-a4"]),
+        None,
+    ))
+
+
+@pytest.mark.parametrize("claim,patient_text,language", [
+    ("I'm transferring you to our senior consultant right now.", "Tell me about implants.", "en"),
+    ("I understand completely. One of our senior medical consultants will message you here.", "Tell me about implants.", "en"),
+    ("Our doctor will call you to discuss it.", "Tell me about implants.", "en"),
+    ("Sizi hemen kıdemli danışmanımıza aktarıyorum.", "İmplant fiyatı ne kadar?", "tr"),
+    ("Doktorumuz size dönecek.", "İmplant fiyatı ne kadar?", "tr"),
+])
+def test_handoff_claim_without_action_is_blocked(monkeypatch, claim, patient_text, language):
+    # WP-A A4 (KI-053): a reply that claims a transfer without a HANDOFF action
+    # is replaced by the safe handoff (and the action is added).
+    reply = _servicer_reply_with_model_text(monkeypatch, claim, patient_text)
+    assert reply.replyText == handoff_message("cannot_answer", language)
+    assert [a.type for a in reply.actions] == ["HANDOFF_TO_HUMAN"]
+
+
+def test_ordinary_reply_is_not_mistaken_for_handoff_claim(monkeypatch):
+    reply = _servicer_reply_with_model_text(monkeypatch, "Implant consultations are available. Which day suits you?")
+    assert reply.replyText == "Implant consultations are available. Which day suits you?"
+    assert list(reply.actions) == []
