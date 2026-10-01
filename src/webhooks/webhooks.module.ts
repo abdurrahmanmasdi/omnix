@@ -56,7 +56,6 @@ import { AuditModule } from '../audit/audit.module';
         removeOnFail: false,
       },
     }),
-
   ],
   controllers: [WebhooksController],
   providers: [
@@ -81,6 +80,7 @@ import { AuditModule } from '../audit/audit.module';
     ActionExecutorService,
     DeliveryAuthService,
     FollowUpService,
+    OutboundAttemptService,
   ],
 })
 export class WebhooksModule {}

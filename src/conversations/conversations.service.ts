@@ -1,23 +1,49 @@
 import {
-  BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { WhatsappService } from '../webhooks/whatsapp.service';
+import {
+  AttemptResult,
+  DeliveryBlockReason,
+  OutboundAttemptService,
+} from '../webhooks/outbound-attempt.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { PermissionService } from '../auth/permission.service';
 import { ForbiddenException } from '@nestjs/common';
 import { toConversationResponse } from './conversation-response.mapper';
 import { toPublicMessageDto } from '../events/dto/public-events.dto';
 
+const MANUAL_SEND_BLOCKED: Record<DeliveryBlockReason, string> = {
+  CONVERSATION_NOT_FOUND: 'Conversation not found.',
+  PATIENT_OPTED_OUT:
+    'The patient opted out (STOP). Messages can be sent again only after the patient replies START.',
+  CLINIC_INACTIVE: 'The clinic account is inactive.',
+  CHANNEL_UNAVAILABLE:
+    'The WhatsApp channel or its credential is not active for this conversation.',
+  NO_CONTACT: 'This conversation has no WhatsApp contact.',
+  OUTSIDE_24H_WINDOW:
+    'The last patient message is older than 24 hours. WhatsApp only allows approved templates after that, and none are configured yet.',
+};
+
+/** What staff see after the send: SENT, UNKNOWN (check WhatsApp) or FAILED. */
+const DELIVERY_STATUS: Record<AttemptResult, string> = {
+  ACCEPTED: 'SENT',
+  WAITING: 'UNKNOWN',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+};
+
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
   constructor(
     private readonly prisma: PrismaService,
-    private readonly whatsappService: WhatsappService,
+    private readonly outboundAttempts: OutboundAttemptService,
     private readonly eventsGateway: EventsGateway,
     private readonly permissionService: PermissionService,
   ) {}
@@ -116,16 +142,21 @@ export class ConversationsService {
     };
   }
 
+  /**
+   * Staff reply through the same delivery pipeline as AI bubbles (KI-023):
+   * eligibility first (opt-out, 24 h window, channel), then AI pause +
+   * stateVersion bump + message + audit in one commit, then OutboundAttempt.
+   * The version bump invalidates any AI reply generated before this send.
+   */
   async sendManualMessage(
     organizationId: string,
     userId: string,
     conversationId: string,
     content: string,
   ) {
-    // 1. Find the conversation and verify ownership
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: { organization: true, lead: true },
+      include: { lead: true },
     });
 
     if (!conversation || conversation.organizationId !== organizationId) {
@@ -142,56 +173,75 @@ export class ConversationsService {
       );
     }
 
-    const { lead } = conversation;
-
-    // 🚀 NEW: Get active WhatsApp channel
-    const channel = await this.prisma.channel.findFirst({
-      where: {
-        organizationId: organizationId,
-        provider: 'WHATSAPP_CLOUD_API',
-        status: 'ACTIVE',
-      },
-    });
-
-    if (!channel || !channel.credentialId) {
-      throw new BadRequestException(
-        'Organization WhatsApp credentials missing',
-      );
+    const eligibility = await this.outboundAttempts.checkEligibility(
+      organizationId,
+      conversationId,
+    );
+    if (!eligibility.ok) {
+      throw new UnprocessableEntityException({
+        code: eligibility.reason,
+        message: MANUAL_SEND_BLOCKED[eligibility.reason],
+      });
     }
 
-    // 2. Send the message to Meta
-    const metaResponse = await this.whatsappService.sendTextMessage(
-      channel.credentialId,
+    const messageId = randomUUID();
+    const { message, version } = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.conversation.update({
+        where: { id: conversation.id },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
+        select: { stateVersion: true },
+      });
+      const created = await tx.message.create({
+        data: {
+          id: messageId,
+          conversationId: conversation.id,
+          senderId: userId,
+          content,
+          type: 'USER_TEXT',
+          handledBy: 'HUMAN',
+          status: 'PENDING',
+          idempotencyKey: `staff-${messageId}`,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actor: userId,
+          action: 'conversation.staff_message_sent',
+          targetId: conversation.id,
+          metadata: {
+            messageId,
+            aiPausedBefore: conversation.aiPaused,
+          },
+        },
+      });
+      return { message: created, version: updated.stateVersion };
+    });
+
+    const result = await this.outboundAttempts.sendBubble(
       organizationId,
-      lead?.phoneNumber || '', // Assuming the lead table holds the phone number!
-      content,
-      channel.providerAccountId,
+      conversation.id,
+      message,
+      version,
+      'staff',
     );
-
-    // 3. Save it to our database (Marked as AGENT_TEXT)
-    const newMessage = await this.prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        content: content,
-        metaMessageId: metaResponse?.messages?.[0]?.id || null,
-        type: 'USER_TEXT', // Distinguish human from AI
-        handledBy: 'HUMAN',
-        status: 'SENT',
-      },
+    const saved = await this.prisma.message.findUniqueOrThrow({
+      where: { id: message.id },
     });
-
-    // 4. Update the conversation timestamp to bump it to the top of the inbox, and pause the AI
-    await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date(), aiPaused: true },
-    });
-
-    // 5. Broadcast to the frontend using your exact working format!
     await this.eventsGateway
-      .broadcastNewMessage(organizationId, newMessage)
+      .broadcastNewMessage(organizationId, saved)
       .catch(() => this.logger.warn('MANUAL_MESSAGE_BROADCAST_FAILED'));
-
-    return newMessage;
+    if (result === 'CANCELLED') {
+      // Eligibility changed between the check and the send (e.g. a STOP).
+      throw new ConflictException({
+        code: 'DELIVERY_NOT_AUTHORIZED',
+        message: 'The message was not sent: the conversation changed.',
+      });
+    }
+    return {
+      ...toPublicMessageDto(saved),
+      deliveryStatus: DELIVERY_STATUS[result],
+    };
   }
 
   async toggleAiState(

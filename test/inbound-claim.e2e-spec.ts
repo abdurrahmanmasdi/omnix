@@ -28,6 +28,7 @@ import { ActionExecutorService } from '../src/webhooks/action-executor.service';
 import { NotificationRelayProcessor } from '../src/core/outbox/notification-relay.processor';
 import { PermissionService } from '../src/auth/permission.service';
 import { AuditService } from '../src/audit/audit.service';
+import { ConversationsService } from '../src/conversations/conversations.service';
 
 jest.setTimeout(120_000);
 let admin: Client;
@@ -1862,4 +1863,217 @@ it('keeps an opt-out on ordinary messages and clears it only on START / BAŞLA',
       }),
     ),
   ).toBe(1);
+});
+
+function staffService(sendTextMessage: jest.Mock) {
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const conversations = new ConversationsService(
+    prisma,
+    outbound,
+    { broadcastNewMessage: jest.fn().mockResolvedValue(undefined) } as any,
+    { has: jest.fn().mockResolvedValue(true) } as any,
+  );
+  return { outbound, conversations };
+}
+
+const asTenant = <T>(organizationId: string, fn: () => Promise<T>) =>
+  tenantStorage.run({ organizationId, isSystemBypass: false }, fn);
+
+it('rejects a staff send to an opted-out patient or outside the 24 h window, with a reason (KI-023)', async () => {
+  const f = await fixture();
+  const staffId = randomUUID();
+  const sendTextMessage = jest.fn();
+  const { conversations } = staffService(sendTextMessage);
+  // No patient message yet: outside the window.
+  await expect(
+    asTenant(f.org.id, () =>
+      conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
+    ),
+  ).rejects.toMatchObject({ response: { code: 'OUTSIDE_24H_WINDOW' } });
+  await system(async () => {
+    await prisma.message.create({
+      data: {
+        conversationId: f.conv.id,
+        metaMessageId: randomUUID(),
+        content: 'Old question',
+        type: 'LEAD_TEXT',
+        status: 'PROCESSED',
+        createdAt: new Date(Date.now() - 25 * 3600_000),
+      },
+    });
+  });
+  await expect(
+    asTenant(f.org.id, () =>
+      conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
+    ),
+  ).rejects.toMatchObject({ response: { code: 'OUTSIDE_24H_WINDOW' } });
+  await system(() => f.message());
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { optedOutAt: new Date() },
+    }),
+  );
+  await expect(
+    asTenant(f.org.id, () =>
+      conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
+    ),
+  ).rejects.toMatchObject({ response: { code: 'PATIENT_OPTED_OUT' } });
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'USER_TEXT' },
+      }),
+    ),
+  ).toBe(0);
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(false);
+});
+
+it('sends a staff reply through OutboundAttempt to the conversation contact, pauses AI and audits (KI-023)', async () => {
+  const f = await fixture();
+  const staff = await system(() =>
+    prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
+      },
+    }),
+  );
+  await system(() => f.message());
+  // The lead phone differs from the WhatsApp contact: the contact wins.
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { phoneNumber: '15550000000' },
+    }),
+  );
+  const sendTextMessage = jest
+    .fn()
+    .mockResolvedValue({ messages: [{ id: `wamid.${randomUUID()}` }] });
+  const { conversations } = staffService(sendTextMessage);
+  const before = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  const sent = await asTenant(f.org.id, () =>
+    conversations.sendManualMessage(
+      f.org.id,
+      staff.id,
+      f.conv.id,
+      'Staff reply',
+    ),
+  );
+  expect(sent).toMatchObject({
+    deliveryStatus: 'SENT',
+    status: 'SENT',
+    senderId: staff.id,
+    type: 'USER_TEXT',
+  });
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][2]).toBe(f.conv.externalContactId);
+  expect(sendTextMessage.mock.calls[0][5]).toBe(`staff-${sent.id}`);
+  const attempt = await system(() =>
+    prisma.outboundAttempt.findUniqueOrThrow({ where: { messageId: sent.id } }),
+  );
+  expect(attempt).toMatchObject({
+    status: 'ACCEPTED',
+    purpose: 'staff',
+    dedupeKey: `staff-${sent.id}`,
+  });
+  const after = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(after.aiPaused).toBe(true);
+  expect(after.stateVersion).toBe(before.stateVersion + 1);
+  const audits = await system(() =>
+    prisma.auditLog.findMany({
+      where: {
+        organizationId: f.org.id,
+        action: 'conversation.staff_message_sent',
+      },
+    }),
+  );
+  expect(audits).toHaveLength(1);
+  expect(audits[0].actor).toBe(staff.id);
+  expect(JSON.stringify(audits[0].metadata)).not.toContain('Staff reply');
+});
+
+it('does not deliver an AI reply generated before a staff send (KI-023)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  const staff = await system(() =>
+    prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
+      },
+    }),
+  );
+  const inbound = await system(() => f.message());
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const { conversations, outbound } = staffService(sendTextMessage);
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    {
+      generateReply: async () => {
+        // Staff take over while the AI is generating.
+        await asTenant(f.org.id, () =>
+          conversations.sendManualMessage(
+            f.org.id,
+            staff.id,
+            f.conv.id,
+            'Staff here',
+          ),
+        );
+        return { replyText: 'Stale AI reply' };
+      },
+    } as any,
+  );
+  await ai.process({
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toBe('Staff here');
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'AI_TEXT', status: 'SENT' },
+      }),
+    ),
+  ).toBe(0);
 });
