@@ -39,7 +39,11 @@ describe('Media Consent (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(WhatsappService)
-      .useValue({ sendTextMessage: jest.fn().mockResolvedValue({ messages: [{ id: 'synthetic-consent-prompt' }] }) })
+      .useValue({
+        sendTextMessage: jest.fn().mockResolvedValue({
+          messages: [{ id: 'synthetic-consent-prompt' }],
+        }),
+      })
       .overrideProvider(WhatsappMediaService)
       .useValue({
         downloadMediaAsBase64: jest.fn().mockResolvedValue('mockbase64'),
@@ -77,7 +81,10 @@ describe('Media Consent (e2e)', () => {
           id: '11111111-1111-1111-1111-111111111111',
           organizationId: orgId,
           provider: 'WHATSAPP_CLOUD_API',
-          encryptedPayload: encryptCredential({ metaAccessToken: 'test-token' }, Buffer.from(process.env.INTEGRATION_CREDENTIAL_KEY!, 'base64')),
+          encryptedPayload: encryptCredential(
+            { metaAccessToken: 'test-token' },
+            Buffer.from(process.env.INTEGRATION_CREDENTIAL_KEY!, 'base64'),
+          ),
         },
       });
       await prisma.channel.create({
@@ -97,27 +104,40 @@ describe('Media Consent (e2e)', () => {
     // 1. Send Image Without Consent
     const payload1 = {
       object: 'whatsapp_business_account',
-      entry: [{
-        id: '123456789',
-        changes: [{
-          value: {
-            metadata: { display_phone_number: '123456789', phone_number_id: '123456789' },
-            contacts: [{ profile: { name: 'Test User' }, wa_id: '4915112345678' }],
-            messages: [{
-              from: '4915112345678',
-              id: 'wamid.HBgLNDkxNTEyMzQ1Njc4OQQ',
-              timestamp: '1612345678',
-              type: 'image',
-              image: { id: 'img-1' }
-            }]
-          }
-        }]
-      }]
+      entry: [
+        {
+          id: '123456789',
+          changes: [
+            {
+              value: {
+                metadata: {
+                  display_phone_number: '123456789',
+                  phone_number_id: '123456789',
+                },
+                contacts: [
+                  { profile: { name: 'Test User' }, wa_id: '4915112345678' },
+                ],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'wamid.HBgLNDkxNTEyMzQ1Njc4OQQ',
+                    timestamp: '1612345678',
+                    type: 'image',
+                    image: { id: 'img-1' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     };
     await processor.process({ data: payload1 } as any);
 
     await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const msg = await prisma.message.findFirst({ where: { metaMessageId: 'wamid.HBgLNDkxNTEyMzQ1Njc4OQQ' } });
+      const msg = await prisma.message.findFirst({
+        where: { metaMessageId: 'wamid.HBgLNDkxNTEyMzQ1Njc4OQQ' },
+      });
       expect(msg).toBeDefined();
       expect(msg!.content).toContain('Awaiting consent');
       expect(msg!.mediaUrl).toBeNull();
@@ -126,27 +146,40 @@ describe('Media Consent (e2e)', () => {
     // 2. Affirmative consent
     const payload2 = {
       object: 'whatsapp_business_account',
-      entry: [{
-        id: '123456789',
-        changes: [{
-          value: {
-            metadata: { display_phone_number: '123456789', phone_number_id: '123456789' },
-            contacts: [{ profile: { name: 'Test User' }, wa_id: '4915112345678' }],
-            messages: [{
-              from: '4915112345678',
-              id: 'wamid.consent',
-              timestamp: '1612345679',
-              type: 'text',
-              text: { body: 'I CONSENT' }
-            }]
-          }
-        }]
-      }]
+      entry: [
+        {
+          id: '123456789',
+          changes: [
+            {
+              value: {
+                metadata: {
+                  display_phone_number: '123456789',
+                  phone_number_id: '123456789',
+                },
+                contacts: [
+                  { profile: { name: 'Test User' }, wa_id: '4915112345678' },
+                ],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'wamid.consent',
+                    timestamp: '1612345679',
+                    type: 'text',
+                    text: { body: 'I CONSENT' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     };
     await processor.process({ data: payload2 } as any);
 
     await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const lead = await prisma.lead.findFirst({ where: { phoneNumber: '4915112345678' } });
+      const lead = await prisma.lead.findFirst({
+        where: { phoneNumber: '4915112345678' },
+      });
       expect(lead!.mediaConsentGranted).toBe(true);
       expect(lead!.mediaConsentResponseId).toBe('wamid.consent');
     });
@@ -154,57 +187,85 @@ describe('Media Consent (e2e)', () => {
     // 3. Image with consent
     const payload3 = {
       object: 'whatsapp_business_account',
-      entry: [{
-        id: '123456789',
-        changes: [{
-          value: {
-            metadata: { display_phone_number: '123456789', phone_number_id: '123456789' },
-            contacts: [{ profile: { name: 'Test User' }, wa_id: '4915112345678' }],
-            messages: [{
-              from: '4915112345678',
-              id: 'wamid.img2',
-              timestamp: '1612345680',
-              type: 'image',
-              image: { id: 'img-2' }
-            }]
-          }
-        }]
-      }]
+      entry: [
+        {
+          id: '123456789',
+          changes: [
+            {
+              value: {
+                metadata: {
+                  display_phone_number: '123456789',
+                  phone_number_id: '123456789',
+                },
+                contacts: [
+                  { profile: { name: 'Test User' }, wa_id: '4915112345678' },
+                ],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'wamid.img2',
+                    timestamp: '1612345680',
+                    type: 'image',
+                    image: { id: 'img-2' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     };
     await processor.process({ data: payload3 } as any);
 
     await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const msg = await prisma.message.findFirst({ where: { metaMessageId: 'wamid.img2' } });
+      const msg = await prisma.message.findFirst({
+        where: { metaMessageId: 'wamid.img2' },
+      });
       expect(msg!.mediaUrl).toContain('mockbase64');
     });
 
     // 4. Withdrawal
     const payload4 = {
       object: 'whatsapp_business_account',
-      entry: [{
-        id: '123456789',
-        changes: [{
-          value: {
-            metadata: { display_phone_number: '123456789', phone_number_id: '123456789' },
-            contacts: [{ profile: { name: 'Test User' }, wa_id: '4915112345678' }],
-            messages: [{
-              from: '4915112345678',
-              id: 'wamid.withdraw',
-              timestamp: '1612345681',
-              type: 'text',
-              text: { body: 'WITHDRAW CONSENT' }
-            }]
-          }
-        }]
-      }]
+      entry: [
+        {
+          id: '123456789',
+          changes: [
+            {
+              value: {
+                metadata: {
+                  display_phone_number: '123456789',
+                  phone_number_id: '123456789',
+                },
+                contacts: [
+                  { profile: { name: 'Test User' }, wa_id: '4915112345678' },
+                ],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'wamid.withdraw',
+                    timestamp: '1612345681',
+                    type: 'text',
+                    text: { body: 'WITHDRAW CONSENT' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     };
     await processor.process({ data: payload4 } as any);
 
     await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const lead = await prisma.lead.findFirst({ where: { phoneNumber: '4915112345678' } });
+      const lead = await prisma.lead.findFirst({
+        where: { phoneNumber: '4915112345678' },
+      });
       expect(lead!.mediaConsentGranted).toBe(false);
 
-      const msg = await prisma.message.findFirst({ where: { metaMessageId: 'wamid.img2' } });
+      const msg = await prisma.message.findFirst({
+        where: { metaMessageId: 'wamid.img2' },
+      });
       expect(msg!.mediaUrl).toBeNull();
       expect(msg!.content).toContain('Media removed');
     });
@@ -212,37 +273,64 @@ describe('Media Consent (e2e)', () => {
     // A patient opt-out pauses automation for this clinic's conversation.
     const payloadStop = {
       object: 'whatsapp_business_account',
-      entry: [{
-        id: '123456789',
-        changes: [{
-          value: {
-            metadata: { display_phone_number: '123456789', phone_number_id: '123456789' },
-            contacts: [{ profile: { name: 'Test User' }, wa_id: '4915112345678' }],
-            messages: [{
-              from: '4915112345678', id: 'wamid.stop', timestamp: '1612345682',
-              type: 'text', text: { body: 'STOP' },
-            }],
-          },
-        }],
-      }],
+      entry: [
+        {
+          id: '123456789',
+          changes: [
+            {
+              value: {
+                metadata: {
+                  display_phone_number: '123456789',
+                  phone_number_id: '123456789',
+                },
+                contacts: [
+                  { profile: { name: 'Test User' }, wa_id: '4915112345678' },
+                ],
+                messages: [
+                  {
+                    from: '4915112345678',
+                    id: 'wamid.stop',
+                    timestamp: '1612345682',
+                    type: 'text',
+                    text: { body: 'STOP' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     };
     await processor.process({ data: payloadStop } as any);
     await tenantStorage.run({ isSystemBypass: true }, async () => {
-      const lead = await prisma.lead.findFirstOrThrow({ where: { phoneNumber: '4915112345678' } });
-      const conversation = await prisma.conversation.findFirstOrThrow({ where: { leadId: lead.id } });
+      const lead = await prisma.lead.findFirstOrThrow({
+        where: { phoneNumber: '4915112345678' },
+      });
+      const conversation = await prisma.conversation.findFirstOrThrow({
+        where: { leadId: lead.id },
+      });
       expect(lead.optedOutAt).not.toBeNull();
       expect(conversation.aiPaused).toBe(true);
 
       // Exercise the real expiry cleanup against an isolated synthetic row.
       const expired = await prisma.message.update({
         where: { metaMessageId: 'wamid.img2' },
-        data: { mediaUrl: 'synthetic-expired-media', mediaExpiresAt: new Date(Date.now() - 1000) },
+        data: {
+          mediaUrl: 'synthetic-expired-media',
+          mediaExpiresAt: new Date(Date.now() - 1000),
+        },
       });
       await new WhatsappMediaService(prisma).cleanupExpiredMedia();
-      const cleaned = await prisma.message.findUniqueOrThrow({ where: { id: expired.id } });
+      const cleaned = await prisma.message.findUniqueOrThrow({
+        where: { id: expired.id },
+      });
       expect(cleaned.mediaUrl).toBeNull();
       expect(cleaned.content).toBe('[Patient Media - Expired and Deleted]');
-      expect(await prisma.auditLog.count({ where: { action: 'media.expired_deleted', targetId: expired.id } })).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { action: 'media.expired_deleted', targetId: expired.id },
+        }),
+      ).toBe(1);
     });
   });
 });

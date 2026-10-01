@@ -19,7 +19,13 @@ describe('WhatsappMediaService', () => {
             auditLog: { create: jest.fn() },
             message: {
               updateMany: jest.fn().mockResolvedValue({ count: 5 }),
-              findMany: jest.fn().mockResolvedValue([{ id: 'msg-1', metaMessageId: 'meta-1', conversation: { organizationId: 'org-1' } }]),
+              findMany: jest.fn().mockResolvedValue([
+                {
+                  id: 'msg-1',
+                  metaMessageId: 'meta-1',
+                  conversation: { organizationId: 'org-1' },
+                },
+              ]),
               update: jest.fn().mockResolvedValue({}),
             },
           },

@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import {Logger} from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
@@ -12,12 +12,14 @@ import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
-import { AGENT_CONTRACT_VERSION, isCompatibleAgentVersion } from './contracts/agent-contract';
+import {
+  AGENT_CONTRACT_VERSION,
+  isCompatibleAgentVersion,
+} from './contracts/agent-contract';
 
 @Processor('ai-reply') // 🚀 Listens to the delay queue
 export class AiReplyProcessor extends WorkerHost {
   private readonly logger = new Logger(AiReplyProcessor.name);
-  
 
   private buildDisclosure(
     template: string | null | undefined,
@@ -47,7 +49,6 @@ export class AiReplyProcessor extends WorkerHost {
   ) {
     super();
   }
-
 
   private async recordCancellation(
     conversationId: string,
@@ -176,7 +177,9 @@ export class AiReplyProcessor extends WorkerHost {
                     );
                   }
                 } catch {
-                  this.logger.warn(`TYPING_INDICATOR_FAILED conversationId=${conversationId}`);
+                  this.logger.warn(
+                    `TYPING_INDICATOR_FAILED conversationId=${conversationId}`,
+                  );
                 }
               }
 
@@ -186,18 +189,17 @@ export class AiReplyProcessor extends WorkerHost {
                 : '{}';
 
               // THE MAGIC BRIDGE: Call Python over gRPC!
-              const aiResponse = await 
-                this.grpcClient.generateReply({
-                  organizationId: organization.id,
-                  conversationId: conversationId,
-                  newMessageIds: claimedMessageIds,
-                  clinicName: persona?.clinicName || 'OmniDesk Clinic',
-                  agentTone: persona?.tone || 'Professional and empathetic',
-                  businessRulesJson: businessRulesJson,
-                  totalMessageCount: totalMessageCount,
-                  leadSummary: leadSummary,
-                  contractVersion: AGENT_CONTRACT_VERSION,
-                });
+              const aiResponse = await this.grpcClient.generateReply({
+                organizationId: organization.id,
+                conversationId: conversationId,
+                newMessageIds: claimedMessageIds,
+                clinicName: persona?.clinicName || 'OmniDesk Clinic',
+                agentTone: persona?.tone || 'Professional and empathetic',
+                businessRulesJson: businessRulesJson,
+                totalMessageCount: totalMessageCount,
+                leadSummary: leadSummary,
+                contractVersion: AGENT_CONTRACT_VERSION,
+              });
               if (!isCompatibleAgentVersion(aiResponse.contractVersion))
                 throw new Error('AI_CONTRACT_VERSION_UNSUPPORTED');
 
@@ -227,9 +229,16 @@ export class AiReplyProcessor extends WorkerHost {
                   conversationId,
                   actions,
                 );
-                if (actionResult.outcomes?.some((item) => item.status !== 'EXECUTED') ||
-                    actionResult.rejected > 0 || actionResult.failed > 0) {
-                  this.logger.warn(`ACTION_FALLBACK_REQUIRED conversationId=${conversationId}`);
+                if (
+                  actionResult.outcomes?.some(
+                    (item) => item.status !== 'EXECUTED',
+                  ) ||
+                  actionResult.rejected > 0 ||
+                  actionResult.failed > 0
+                ) {
+                  this.logger.warn(
+                    `ACTION_FALLBACK_REQUIRED conversationId=${conversationId}`,
+                  );
                   handoffAfterSend = true;
                   replyText =
                     "I couldn't complete that request right now. A human coordinator can help with the next step.";
@@ -330,7 +339,10 @@ export class AiReplyProcessor extends WorkerHost {
                 await this.prisma.message.createMany({
                   data: bubblesToCreate.map((bubble) => ({
                     ...bubble,
-                    metadata: { generationVersion: expectedVersion, pendingHandoff: handoffAfterSend },
+                    metadata: {
+                      generationVersion: expectedVersion,
+                      pendingHandoff: handoffAfterSend,
+                    },
                   })),
                 });
               }
@@ -341,9 +353,13 @@ export class AiReplyProcessor extends WorkerHost {
               });
             } // end of if (existingBubbles.length === 0)
 
-            handoffAfterSend = handoffAfterSend || existingBubbles.some(
-              (bubble) => (bubble.metadata as { pendingHandoff?: boolean } | null)?.pendingHandoff === true,
-            );
+            handoffAfterSend =
+              handoffAfterSend ||
+              existingBubbles.some(
+                (bubble) =>
+                  (bubble.metadata as { pendingHandoff?: boolean } | null)
+                    ?.pendingHandoff === true,
+              );
 
             if (
               existingBubbles.some(
@@ -432,7 +448,8 @@ export class AiReplyProcessor extends WorkerHost {
               );
               if (result === 'WAITING') throw new Error('OUTBOUND_UNRESOLVED');
               if (result === 'FAILED' || result === 'CANCELLED') {
-                if (handoffAfterSend) throw new Error('ACTION_FALLBACK_SEND_FAILED');
+                if (handoffAfterSend)
+                  throw new Error('ACTION_FALLBACK_SEND_FAILED');
                 return;
               }
               const updatedBubble = await this.prisma.message.findUniqueOrThrow(
@@ -472,14 +489,22 @@ export class AiReplyProcessor extends WorkerHost {
 
             if (handoffAfterSend) {
               const handoff = await this.actionExecutor.executeActions(
-                organization.id, conversationId,
+                organization.id,
+                conversationId,
                 [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
               );
               if (handoff.executed !== 1 || handoff.failed || handoff.rejected)
                 throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
               await this.prisma.message.updateMany({
-                where: { id: { in: existingBubbles.map((bubble) => bubble.id) } },
-                data: { metadata: { generationVersion: expectedVersion, pendingHandoff: false } },
+                where: {
+                  id: { in: existingBubbles.map((bubble) => bubble.id) },
+                },
+                data: {
+                  metadata: {
+                    generationVersion: expectedVersion,
+                    pendingHandoff: false,
+                  },
+                },
               });
               return;
             }

@@ -29,22 +29,22 @@ export class WhatsappMediaService implements OnModuleInit {
         if (messages.length === 0) return;
 
         for (const message of messages) {
-           await this.prisma.message.update({
-             where: { id: message.id },
-             data: {
-               mediaUrl: null,
-               content: '[Patient Media - Expired and Deleted]',
-             }
-           });
-           await this.prisma.auditLog.create({
-             data: {
-               organizationId: message.conversation.organizationId,
-               actor: 'system',
-               action: 'media.expired_deleted',
-               targetId: message.id,
-               metadata: { deletedMessageId: message.id },
-             }
-           });
+          await this.prisma.message.update({
+            where: { id: message.id },
+            data: {
+              mediaUrl: null,
+              content: '[Patient Media - Expired and Deleted]',
+            },
+          });
+          await this.prisma.auditLog.create({
+            data: {
+              organizationId: message.conversation.organizationId,
+              actor: 'system',
+              action: 'media.expired_deleted',
+              targetId: message.id,
+              metadata: { deletedMessageId: message.id },
+            },
+          });
         }
         this.logger.log(
           `Successfully deleted media for ${messages.length} expired messages.`,

@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import {Logger} from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import type { WhatsAppWebhookPayload } from './interfaces/whatsapp.interface';
@@ -20,7 +20,6 @@ import { OutboundAttemptService } from './outbound-attempt.service';
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost {
   private readonly logger = new Logger(WebhooksProcessor.name);
-  
 
   constructor(
     private readonly prisma: PrismaService,
@@ -37,7 +36,6 @@ export class WebhooksProcessor extends WorkerHost {
   ) {
     super();
   }
-
 
   // Normalized, whole-message commands. Keep this intentionally conservative:
   // ordinary uses of words such as “stop by tomorrow” must not suppress consent.
@@ -83,9 +81,7 @@ export class WebhooksProcessor extends WorkerHost {
             const organization = channel?.organization;
 
             if (!organization) {
-              this.logger.warn(
-                'Webhook organization lookup failed.',
-              );
+              this.logger.warn('Webhook organization lookup failed.');
               continue;
             }
 
@@ -111,7 +107,8 @@ export class WebhooksProcessor extends WorkerHost {
                 organization.id,
                 channel.credentialId,
               );
-              accessTokenForMedia = activeCred.metaAccessToken || activeCred.accessToken;
+              accessTokenForMedia =
+                activeCred.metaAccessToken || activeCred.accessToken;
             }
 
             // Process each incoming message
@@ -277,7 +274,8 @@ export class WebhooksProcessor extends WorkerHost {
                       channel.providerAccountId,
                     );
                   }
-                  messageContent = '[Media omitted: Awaiting consent. Consent request sent.]';
+                  messageContent =
+                    '[Media omitted: Awaiting consent. Consent request sent.]';
                 }
               } else if (
                 (message.type === 'audio' && message.audio?.id) ||
@@ -302,7 +300,8 @@ export class WebhooksProcessor extends WorkerHost {
                       channel.providerAccountId,
                     );
                   }
-                  messageContent = '[Media omitted: Awaiting consent. Consent request sent.]';
+                  messageContent =
+                    '[Media omitted: Awaiting consent. Consent request sent.]';
                 }
               }
 

@@ -226,7 +226,9 @@ export class FollowUpService {
             await job.remove();
           }
         } catch {
-          this.logger.warn(`FOLLOW_UP_QUEUE_REMOVE_FAILED followUp=${record.id}`);
+          this.logger.warn(
+            `FOLLOW_UP_QUEUE_REMOVE_FAILED followUp=${record.id}`,
+          );
         }
       }
     }
