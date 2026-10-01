@@ -259,3 +259,38 @@ def test_ordinary_reply_is_not_mistaken_for_handoff_claim(monkeypatch):
     reply = _servicer_reply_with_model_text(monkeypatch, "Implant consultations are available. Which day suits you?")
     assert reply.replyText == "Implant consultations are available. Which day suits you?"
     assert list(reply.actions) == []
+
+
+class LongSummaryExtractor(FakeStructured):
+    """Extractor fake whose plain (summarizer) call returns an oversized summary."""
+
+    schema = None
+
+    async def ainvoke(self, messages):
+        if self.schema is None:
+            return AIMessage(content="S" * 8000)
+        return await super().ainvoke(messages)
+
+
+def test_long_summary_is_bounded_and_reply_still_delivered(monkeypatch):
+    # WP-A A10 (KI-051): an 8000-char summary used to invalidate the
+    # UPDATE_SUMMARY action and turn the whole reply into a handoff.
+    model = FakeModel(final_text="Happy to help with implants.")
+    monkeypatch.setattr(nodes.LLMFactory, "get_flagship_llm", lambda: model)
+    monkeypatch.setattr(nodes.LLMFactory, "get_extractor_llm", lambda: LongSummaryExtractor())
+    monkeypatch.setattr(nodes.LLMFactory, "get_cheap_llm", lambda: FakeStructured())
+    monkeypatch.setattr(agent_servicer, "agent_app", agent_app)
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_lead_info", AsyncMock(
+        return_value=SimpleNamespace(lead_id="lead-a10", firstName="Synthetic", status="QUALIFIED")
+    ))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_history", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_messages_by_ids", AsyncMock(
+        return_value=[SimpleNamespace(id="msg-a10", content="Tell me about implants.", mediaUrl=None)]
+    ))
+    reply = asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(agent_pb2.AgentRequest(
+        organizationId="org-a10", conversationId="conv-a10", newMessageIds=["msg-a10"], totalMessageCount=10,
+    ), None))
+    assert reply.replyText == "Happy to help with implants."
+    summaries = [json.loads(a.payload)["summary"] for a in reply.actions if a.type == "UPDATE_SUMMARY"]
+    assert len(summaries) == 1
+    assert 0 < len(summaries[0]) <= 5000

@@ -478,13 +478,21 @@ async def general_qa_node(state: ConversationState):
         
     return node_updates
 
+SUMMARY_MAX_CHARS = 4000
+SUMMARY_TRUNCATION_MARK = " [summary truncated]"
+
+
 async def summarizer_node(state: ConversationState):
     prompt = SUMMARIZER_PROMPT
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     extractor_llm = LLMFactory.get_extractor_llm()
     response = await extractor_llm.ainvoke(messages)
     
-    new_summary = response.content
+    new_summary = str(response.content or "")
+    # Stay well below the contract limit (UPDATE_SUMMARY.summary max 5000) so a
+    # long summary can never invalidate the action and block the reply (KI-051).
+    if len(new_summary) > SUMMARY_MAX_CHARS:
+        new_summary = new_summary[:SUMMARY_MAX_CHARS - len(SUMMARY_TRUNCATION_MARK)] + SUMMARY_TRUNCATION_MARK
     
     current_actions = state.get("pending_crm_actions", [])
     new_actions = list(current_actions)
