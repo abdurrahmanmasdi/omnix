@@ -8,6 +8,23 @@ import { WhatsappService } from './whatsapp.service';
 
 export type AttemptResult = 'ACCEPTED' | 'WAITING' | 'FAILED' | 'CANCELLED';
 
+/**
+ * reply / follow-up: AI-generated bubbles, blocked by pause, assignment and a
+ * newer conversation version. staff: a human reply, which is allowed while the
+ * AI is paused but still needs opt-out, clinic, channel and 24 h checks.
+ */
+export type OutboundPurpose = 'reply' | 'follow-up' | 'staff';
+
+export type DeliveryBlockReason =
+  | 'CONVERSATION_NOT_FOUND'
+  | 'PATIENT_OPTED_OUT'
+  | 'CLINIC_INACTIVE'
+  | 'CHANNEL_UNAVAILABLE'
+  | 'NO_CONTACT'
+  | 'OUTSIDE_24H_WINDOW';
+
+const PURPOSES: OutboundPurpose[] = ['reply', 'follow-up', 'staff'];
+
 @Injectable()
 export class OutboundAttemptService {
   private readonly logger = new Logger(OutboundAttemptService.name);
@@ -17,38 +34,34 @@ export class OutboundAttemptService {
     private readonly whatsapp: WhatsappService,
   ) {}
 
-  private async authorized(
-    organizationId: string,
-    conversationId: string,
-    version: number,
-  ) {
-    if (
-      !(await this.auth.authorizeDelivery(
-        organizationId,
-        conversationId,
-        version,
-      ))
-    )
-      return null;
+  /**
+   * Checks shared by every patient-facing send (R8): opt-out, clinic,
+   * channel/credential, recipient, and the WhatsApp 24 h free-form window.
+   */
+  async checkEligibility(organizationId: string, conversationId: string) {
     const conversation = await this.prisma.conversation.findFirst({
       where: { id: conversationId, organizationId, deletedAt: null },
       include: { channel: true, lead: true, organization: true },
     });
-    const channel = conversation?.channel;
+    const block = (reason: DeliveryBlockReason) =>
+      ({ ok: false, reason }) as const;
+    if (!conversation) return block('CONVERSATION_NOT_FOUND');
+    if (conversation.lead?.optedOutAt) return block('PATIENT_OPTED_OUT');
     if (
-      !conversation ||
-      conversation.assignedAgentId ||
-      conversation.lead?.optedOutAt ||
       !conversation.organization.isActive ||
-      conversation.organization.deleted_at ||
+      conversation.organization.deleted_at
+    )
+      return block('CLINIC_INACTIVE');
+    const channel = conversation.channel;
+    if (
       !channel ||
       channel.organizationId !== organizationId ||
       channel.status !== 'ACTIVE' ||
       !channel.credentialId ||
-      !channel.providerAccountId ||
-      !conversation.externalContactId
+      !channel.providerAccountId
     )
-      return null;
+      return block('CHANNEL_UNAVAILABLE');
+    if (!conversation.externalContactId) return block('NO_CONTACT');
     // Meta allows free-form text/media only within 24 hours of the most
     // recent customer message. No approved template is configured here.
     const recentInbound = await this.prisma.message.count({
@@ -58,8 +71,33 @@ export class OutboundAttemptService {
         createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       },
     });
-    if (!recentInbound) return null;
-    return { conversation, channel };
+    if (!recentInbound) return block('OUTSIDE_24H_WINDOW');
+    return { ok: true, conversation, channel } as const;
+  }
+
+  private async authorized(
+    organizationId: string,
+    conversationId: string,
+    version: number,
+    purpose: OutboundPurpose,
+  ) {
+    if (
+      purpose !== 'staff' &&
+      !(await this.auth.authorizeDelivery(
+        organizationId,
+        conversationId,
+        version,
+      ))
+    )
+      return null;
+    const eligibility = await this.checkEligibility(
+      organizationId,
+      conversationId,
+    );
+    if (!eligibility.ok) return null;
+    if (purpose !== 'staff' && eligibility.conversation.assignedAgentId)
+      return null;
+    return eligibility;
   }
 
   async sendBubble(
@@ -67,7 +105,7 @@ export class OutboundAttemptService {
     conversationId: string,
     message: Message,
     version: number,
-    purpose: 'reply' | 'follow-up' = 'reply',
+    purpose: OutboundPurpose = 'reply',
   ): Promise<AttemptResult> {
     if (!message.idempotencyKey || message.conversationId !== conversationId)
       throw new Error('OUTBOUND_INVALID_BUBBLE');
@@ -108,6 +146,7 @@ export class OutboundAttemptService {
       organizationId,
       conversationId,
       version,
+      purpose,
     );
     if (!authorized) {
       await this.prisma.outboundAttempt.updateMany({
@@ -137,6 +176,7 @@ export class OutboundAttemptService {
       organizationId,
       conversationId,
       version,
+      purpose,
     );
     if (!current) {
       await this.prisma.outboundAttempt.updateMany({
@@ -306,7 +346,9 @@ export class OutboundAttemptService {
                 attempt.conversationId,
                 attempt.message,
                 attempt.conversationVersion,
-                attempt.purpose === 'follow-up' ? 'follow-up' : 'reply',
+                PURPOSES.includes(attempt.purpose as OutboundPurpose)
+                  ? (attempt.purpose as OutboundPurpose)
+                  : 'reply',
               );
             } catch {
               this.logger.error(`OUTBOUND_RETRY_FAILED attempt=${attempt.id}`);
