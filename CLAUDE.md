@@ -60,10 +60,10 @@ The AI proposes, this app validates and executes (rule 9). The action contract (
 
 Don't build new features on these paths until they are fixed; if you touch them, fix the listed issue.
 
-- STOP / consent side effects in `webhooks.processor.ts` — KI-022, KI-025, KI-026.
-- Staff manual send and toggle-ai in `conversations.service.ts` — KI-023 (also KI-035 in the UI).
+- Fixed on branch `wp-b/delivery-consent` (2026-10-01, not merged yet): STOP/consent effects (KI-022), staff manual send + explicit AI pause/resume (KI-023), consent request (KI-025), media expiry (KI-026, storage still base64 → IMP-011), UNKNOWN routing (KI-029). Until merged, `ci/p1-04-hosted` still has the old behavior.
+- Follow-up processor runs actions before storing bubbles — KI-061.
 - AI authority over lead status / phone / email in `action-executor.service.ts` — KI-024.
-- UNKNOWN handling, clinic invitations, config validation — KI-029, KI-027, KI-028.
+- Clinic invitations, config validation — KI-027, KI-028.
 - Production gRPC TLS (`grpc-client.module.ts`) — KI-002. DB role passwords in the `20260930000000_least_privilege_roles` migration — KI-013 (applied migrations are forward-only; add a new step, don't edit it).
 
 ## Clutter: ignore, don't import or run
