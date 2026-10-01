@@ -1874,7 +1874,10 @@ function staffService(sendTextMessage: jest.Mock) {
   const conversations = new ConversationsService(
     prisma,
     outbound,
-    { broadcastNewMessage: jest.fn().mockResolvedValue(undefined) } as any,
+    {
+      broadcastNewMessage: jest.fn().mockResolvedValue(undefined),
+      broadcastConversationUpdate: jest.fn().mockResolvedValue(undefined),
+    } as any,
     { has: jest.fn().mockResolvedValue(true) } as any,
   );
   return { outbound, conversations };
@@ -2028,11 +2031,9 @@ it('does not deliver an AI reply generated before a staff send (KI-023)', async 
     }),
   );
   const inbound = await system(() => f.message());
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const { conversations, outbound } = staffService(sendTextMessage);
   const ai = new AiReplyProcessor(
     prisma,
@@ -2076,4 +2077,95 @@ it('does not deliver an AI reply generated before a staff send (KI-023)', async 
       }),
     ),
   ).toBe(0);
+});
+
+it('pauses and resumes the AI idempotently with audit rows, and a pause during generation sends nothing', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  const staffId = randomUUID();
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const { conversations, outbound } = staffService(sendTextMessage);
+  const start = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  // Double click on pause = one state change, one audit row.
+  const [first, second] = [
+    await asTenant(f.org.id, () =>
+      conversations.setAiPaused(f.org.id, staffId, f.conv.id, true),
+    ),
+    await asTenant(f.org.id, () =>
+      conversations.setAiPaused(f.org.id, staffId, f.conv.id, true),
+    ),
+  ];
+  expect(first).toEqual({ id: f.conv.id, aiPaused: true });
+  expect(second).toEqual({ id: f.conv.id, aiPaused: true });
+  let current = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(current.stateVersion).toBe(start.stateVersion + 1);
+  await asTenant(f.org.id, () =>
+    conversations.setAiPaused(f.org.id, staffId, f.conv.id, false),
+  );
+  await asTenant(f.org.id, () =>
+    conversations.setAiPaused(f.org.id, staffId, f.conv.id, false),
+  );
+  current = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(current.aiPaused).toBe(false);
+  expect(current.stateVersion).toBe(start.stateVersion + 2);
+  const audits = await system(() =>
+    prisma.auditLog.findMany({
+      where: {
+        organizationId: f.org.id,
+        targetId: f.conv.id,
+        action: { startsWith: 'conversation.ai_' },
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+  );
+  expect(audits.map((row) => [row.action, row.actor])).toEqual([
+    ['conversation.ai_paused', staffId],
+    ['conversation.ai_resumed', staffId],
+  ]);
+
+  // A pause while the AI is generating: no AI bubble reaches the patient.
+  const inbound = await system(() => f.message());
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    {
+      generateReply: async () => {
+        await asTenant(f.org.id, () =>
+          conversations.setAiPaused(f.org.id, staffId, f.conv.id, true),
+        );
+        return { replyText: 'Stale AI reply' };
+      },
+    } as any,
+  );
+  await ai.process({
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any);
+  expect(sendTextMessage).not.toHaveBeenCalled();
 });

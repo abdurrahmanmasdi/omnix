@@ -244,7 +244,76 @@ export class ConversationsService {
     };
   }
 
+  /**
+   * Explicit, idempotent AI pause/resume (replaces the toggle). A change bumps
+   * stateVersion so in-flight AI work is invalidated, and is audited with the
+   * acting user. Repeating the same request (double click) changes nothing.
+   */
+  async setAiPaused(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+    paused: boolean,
+  ) {
+    const conversation = await this.findAccessibleConversation(
+      organizationId,
+      userId,
+      conversationId,
+    );
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.conversation.updateMany({
+        where: { id: conversation.id, organizationId, aiPaused: !paused },
+        data: { aiPaused: paused, stateVersion: { increment: 1 } },
+      });
+      if (changed.count === 1) {
+        await tx.auditLog.create({
+          data: {
+            organizationId,
+            actor: userId,
+            action: paused
+              ? 'conversation.ai_paused'
+              : 'conversation.ai_resumed',
+            targetId: conversation.id,
+          },
+        });
+      }
+      return tx.conversation.findUniqueOrThrow({
+        where: { id: conversation.id },
+        include: { lead: true },
+      });
+    });
+    try {
+      await this.eventsGateway.broadcastConversationUpdate(
+        organizationId,
+        updated,
+      );
+    } catch {
+      // The state change is committed; live delivery is best effort.
+      this.logger.warn('AI_STATE_BROADCAST_FAILED');
+    }
+    return { id: updated.id, aiPaused: updated.aiPaused };
+  }
+
+  /** @deprecated Use setAiPaused; kept for the old PATCH toggle-ai route. */
   async toggleAiState(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+  ) {
+    const conversation = await this.findAccessibleConversation(
+      organizationId,
+      userId,
+      conversationId,
+    );
+    return this.setAiPaused(
+      organizationId,
+      userId,
+      conversationId,
+      !conversation.aiPaused,
+    );
+  }
+
+  private async findAccessibleConversation(
     organizationId: string,
     userId: string,
     conversationId: string,
@@ -267,12 +336,6 @@ export class ConversationsService {
         'You do not have permission to access this conversation',
       );
     }
-
-    const updatedConversation = await this.prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { aiPaused: !conversation.aiPaused },
-    });
-
-    return updatedConversation;
+    return conversation;
   }
 }
