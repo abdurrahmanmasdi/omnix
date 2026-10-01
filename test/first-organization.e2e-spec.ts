@@ -1,3 +1,4 @@
+import { ThrottlerModule } from '@nestjs/throttler';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -65,6 +66,7 @@ beforeAll(async () => {
   await safeDeploy(root);
   const module = await Test.createTestingModule({
     imports: [
+      ThrottlerModule.forRoot([{ name: 'auth', ttl: 300000, limit: 10 }]),
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
       PrismaModule,
       AuthModule,
@@ -173,9 +175,9 @@ it('uses the operator CLI invitation → acceptance → login → workspace → 
       .post('/auth/login')
       .send({ email, password })
       .expect(401);
-    const stored = await prisma.accountInvitation.findFirstOrThrow({
+    const stored = await system(() => prisma.accountInvitation.findFirstOrThrow({
       where: { userId: user.id },
-    });
+    }));
     expect(stored.tokenHash === token).toBe(false);
     const accepted = await request(app.getHttpServer())
       .post('/auth/accept-invitation')
@@ -247,17 +249,17 @@ it.each(['expired', 'revoked', 'wrong-purpose'] as const)(
   async (kind) => {
     const invite = await invited();
     if (kind === 'expired')
-      await prisma.accountInvitation.update({
+      await system(() => prisma.accountInvitation.update({
         where: { id: invite.invitationId },
         data: { expiresAt: new Date(0) },
-      });
+      }));
     if (kind === 'revoked')
       await invitations.revoke(invite.invitationId, operator);
     if (kind === 'wrong-purpose')
-      await prisma.accountInvitation.update({
+      await system(() => prisma.accountInvitation.update({
         where: { id: invite.invitationId },
         data: { purpose: 'EMAIL_VERIFICATION' },
-      });
+      }));
     await request(app.getHttpServer())
       .post('/auth/accept-invitation')
       .send(body(invite.token))
@@ -315,10 +317,10 @@ it('rate limits operator reissue, revokes old invitations and audits replacement
   await expect(invitations.issue(invite.email, operator)).rejects.toThrow(
     'INVITATION_ISSUE_RATE_LIMIT',
   );
-  await prisma.accountInvitation.update({
+  await system(() => prisma.accountInvitation.update({
     where: { id: invite.invitationId },
     data: { createdAt: new Date(Date.now() - 61_000) },
-  });
+  }));
   const replacement = await invitations.issue(invite.email, operator);
   await request(app.getHttpServer())
     .post('/auth/accept-invitation')

@@ -1,3 +1,4 @@
+import { ThrottlerModule } from '@nestjs/throttler';
 /* eslint-disable @typescript-eslint/no-unsafe-argument -- Fake Nest providers and BullMQ jobs are intentional integration-test seams. */
 import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +12,6 @@ import { OutboundAttemptService } from '../src/webhooks/outbound-attempt.service
 import { FollowUpService } from '../src/follow-ups/follow-up.service';
 import { FollowUpProcessor } from '../src/follow-ups/follow-up.processor';
 import { AiReplyProcessor } from '../src/webhooks/ai-reply.processor';
-import { of } from 'rxjs';
 import { tenantStorage } from '../src/core/tenant/tenant.context';
 import { safeDeploy } from '../src/credentials/deploy-cli';
 import { Test } from '@nestjs/testing';
@@ -178,6 +178,7 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
   const secret = 'synthetic-s11-signing-secret';
   const inboundAdd = jest.fn().mockResolvedValue({ id: 'queued' });
   const module = await Test.createTestingModule({
+    imports: [ThrottlerModule.forRoot([{ name: 'auth', ttl: 300000, limit: 10 }])],
     controllers: [WebhooksController, AuthController],
     providers: [
       WebhooksService,
@@ -246,12 +247,12 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
       new DeliveryAuthService(prisma),
       { sendTextMessage } as any,
     );
-    const generateReply = jest.fn().mockReturnValue(of({
+    const generateReply = jest.fn().mockResolvedValue({
       replyText: patientText,
       safetyFlag: false,
       confidenceScore: 1,
       actions: [],
-    }));
+    });
     const processor = new AiReplyProcessor(
       prisma,
       { sendTypingIndicator: jest.fn() } as any,
@@ -262,7 +263,7 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
       new DeliveryAuthService(prisma),
       claims,
       outbound,
-      { getService: () => ({ generateReply }) } as any,
+      { generateReply } as any,
     );
     await expect(processor.process({ id: randomUUID(), data: aiAdd.mock.calls[0][1] } as any))
       .rejects.toThrow('OUTBOUND_UNRESOLVED');
@@ -440,10 +441,10 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
   const outbound = new OutboundAttemptService(
     prisma, new DeliveryAuthService(prisma), { sendTextMessage } as any,
   );
-  const generateReply = jest.fn().mockReturnValue(of({
+  const generateReply = jest.fn().mockResolvedValue({
     replyText: 'Our staff has been alerted.',
     actions: [{ type: 'UPDATE_LEAD', payload: '{bad' }],
-  }));
+  });
   const ai = new AiReplyProcessor(
     prisma,
     { sendTypingIndicator: jest.fn() } as any,
@@ -454,7 +455,7 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
     new DeliveryAuthService(prisma),
     claims,
     outbound,
-    { getService: () => ({ generateReply }) } as any,
+    { generateReply } as any,
   );
   const aiJob = {
     id: randomUUID(),
@@ -500,7 +501,7 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
     { send: jest.fn() } as any,
     new DeliveryAuthService(prisma),
     outbound,
-    { getService: () => ({ generateReply }) } as any,
+    { generateReply } as any,
   );
   const followUpJob = { data: { followUpId: followUp.id } } as any;
   await expect(followUpWorker.process(followUpJob))
@@ -524,11 +525,11 @@ it('rejects an incompatible AI contract version before actions or patient delive
     { record: jest.fn() } as any,
     new DeliveryAuthService(prisma), claims,
     { sendBubble } as any,
-    { getService: () => ({ generateReply: () => of({
+    { generateReply: async () => ({
       contractVersion: 2,
       replyText: 'We changed your record and alerted staff.',
       actions: [{ type: 'UPDATE_LEAD', payload: '{"status":"QUALIFIED"}' }],
-    }) }) } as any,
+    }) } as any,
   );
   await expect(ai.process({ id: randomUUID(), data: {
     organizationId: f.org.id, conversationId: f.conv.id, newMessageIds: [inbound.id],
@@ -819,7 +820,7 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
     new DeliveryAuthService(prisma),
     claims,
     { sendBubble } as any,
-    { getService: () => ({ generateReply: jest.fn() }) } as any,
+    { generateReply: jest.fn() } as any,
   );
   await processor.process({
     id: randomUUID(),
@@ -1382,7 +1383,7 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
   );
   const generateReply = jest
     .fn()
-    .mockReturnValue(of({ replyText: 'Synthetic follow-up', actions: [] }));
+    .mockResolvedValue({ replyText: 'Synthetic follow-up', actions: [] });
   const processor = new FollowUpProcessor(
     prisma,
     {} as any,
@@ -1391,7 +1392,7 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
     { send: jest.fn() } as any,
     new DeliveryAuthService(prisma),
     outbound,
-    { getService: () => ({ generateReply }) } as any,
+    { generateReply } as any,
   );
   const job = { data: { followUpId: followUp.id } } as any;
   await expect(processor.process(job)).rejects.toThrow('OUTBOUND_UNRESOLVED');

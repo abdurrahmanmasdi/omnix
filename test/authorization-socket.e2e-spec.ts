@@ -1,3 +1,4 @@
+import { ThrottlerModule } from '@nestjs/throttler';
 import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -142,7 +143,7 @@ beforeAll(async () => {
 
   const module = await Test.createTestingModule({
     providers: [NotificationEmitterService],
-    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, EventsModule, NotificationsModule],
+    imports: [ThrottlerModule.forRoot([{ name: 'auth', ttl: 300000, limit: 10 }]), ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, EventsModule, NotificationsModule],
   }).compile();
 
   app = module.createNestApplication({ logger: false });

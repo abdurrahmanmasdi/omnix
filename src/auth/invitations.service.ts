@@ -39,7 +39,7 @@ export class InvitationsService {
     if (!isEmail(email) || !operator.trim() || operator.length > 120) {
       throw new BadRequestException('INVITATION_INPUT_INVALID');
     }
-    return this.prisma.$transaction(async (tx) => {
+    return tenantStorage.run({ isSystemBypass: true }, () => this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findFirst({
         where: { email: { equals: email, mode: 'insensitive' } },
       });
@@ -109,13 +109,13 @@ export class InvitationsService {
         token,
         expiresAt: invitation.expiresAt,
       };
-    });
+    }));
   }
 
   async revoke(invitationId: string, operator: string) {
     if (!operator.trim() || operator.length > 120)
       throw new BadRequestException('INVITATION_INPUT_INVALID');
-    return this.prisma.$transaction(async (tx) => {
+    return tenantStorage.run({ isSystemBypass: true }, () => this.prisma.$transaction(async (tx) => {
       const invitation = await tx.accountInvitation.findUnique({
         where: { id: invitationId },
       });
@@ -134,7 +134,7 @@ export class InvitationsService {
           },
         });
       return { revoked: changed.count === 1 };
-    });
+    }));
   }
 
   async accept(dto: AcceptInvitationDto) {

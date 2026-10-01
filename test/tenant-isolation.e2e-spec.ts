@@ -1,3 +1,4 @@
+import { ThrottlerModule } from '@nestjs/throttler';
 /* eslint-disable @typescript-eslint/no-unsafe-argument -- Synthetic Nest providers. */
 import { Client } from 'pg';
 import { randomUUID, createHmac } from 'node:crypto';
@@ -134,6 +135,7 @@ beforeAll(async () => {
   await safeDeploy(resolve(__dirname, '..'));
   const module = await Test.createTestingModule({
     imports: [
+      ThrottlerModule.forRoot([{ name: 'auth', ttl: 300000, limit: 10 }]),
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
       PrismaModule,
       AuthModule,
