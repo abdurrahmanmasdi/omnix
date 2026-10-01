@@ -86,7 +86,11 @@ export class FollowUpService {
   }
 
   /**
-   * Schedules standard 12h and 24h follow ups after the AI replies.
+   * Schedules the standard follow-ups after the AI replies:
+   * attempt 1 (12 h) sends a follow-up message to the patient (inside the
+   * WhatsApp 24 h window); attempt 2 (24 h) sends nothing to the patient,
+   * it alerts eligible staff that the lead is unresponsive
+   * (FollowUpProcessor, AUTO_NO_REPLY attempt >= 2).
    */
   async scheduleAutoFollowUps(conversationId: string, organizationId: string) {
     // 1. Cancel any existing pending follow-ups
