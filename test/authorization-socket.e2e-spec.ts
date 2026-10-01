@@ -142,7 +142,9 @@ beforeAll(async () => {
 
   const module = await Test.createTestingModule({
     providers: [NotificationEmitterService],
-    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, EventsModule, NotificationsModule],
+    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), PrismaModule, AuthModule, EventsModule, NotificationsModule,
+      require('@nestjs/throttler').ThrottlerModule.forRoot({ throttlers: [{ limit: 10, ttl: 60000 }] })
+    ],
   }).compile();
 
   app = module.createNestApplication({ logger: false });
