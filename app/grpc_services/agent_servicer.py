@@ -280,11 +280,16 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             
             # 6. Send only validated virtual actions to NestJS.
             tool_actions = []
+            seen_actions = set()
             for action_str in final_state.get("pending_crm_actions", []):
                 action = parse_virtual_action(action_str)
                 if action is None:
                     logger.warning("ACTION_TYPE_REJECTED conversation_id=%s", conv_id)
                     return _blocked_reply("invalid_tool_action", language)
+                key = (action[0], json.dumps(action[1], sort_keys=True))
+                if key in seen_actions:
+                    continue  # the same action proposed twice is sent once (KI-052)
+                seen_actions.add(key)
                 tool_actions.append(agent_pb2.ToolAction(
                     type=action[0], payload=json.dumps(action[1])
                 ))

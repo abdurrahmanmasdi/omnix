@@ -294,3 +294,72 @@ def test_long_summary_is_bounded_and_reply_still_delivered(monkeypatch):
     summaries = [json.loads(a.payload)["summary"] for a in reply.actions if a.type == "UPDATE_SUMMARY"]
     assert len(summaries) == 1
     assert 0 < len(summaries[0]) <= 5000
+
+
+class RejectFirstChecker(FakeStructured):
+    """Compliance fake: rejects the first draft, accepts later ones."""
+
+    def __init__(self, counter):
+        self.counter = counter
+
+    async def ainvoke(self, messages):
+        if self.schema.__name__ == "ComplianceOutput":
+            self.counter["checks"] += 1
+            if self.counter["checks"] == 1:
+                return SimpleNamespace(is_compliant=False, feedback="Draft invented a price.")
+        return await super().ainvoke(messages)
+
+
+def test_actions_from_compliance_rejected_draft_are_dropped(monkeypatch):
+    # WP-A A11 (KI-052): draft 1 proposes NOTIFY_AGENT and is rejected; draft 2
+    # proposes nothing and is accepted -> no NOTIFY_AGENT may be returned.
+    notify = json.dumps({"action": "NOTIFY_AGENT", "payload": {"title": "Review", "body": "Draft 1 action"}})
+    counter = {"checks": 0}
+    model = FakeModel(
+        {"name": "search_clinic_knowledge", "args": {"search_query": "q"}, "id": "call_a11"},
+        "Final text.",
+    )
+    monkeypatch.setattr(nodes.LLMFactory, "get_flagship_llm", lambda: model)
+    monkeypatch.setattr(nodes.LLMFactory, "get_extractor_llm", lambda: FakeStructured())
+    monkeypatch.setattr(nodes.LLMFactory, "get_cheap_llm", lambda: RejectFirstChecker(counter))
+    monkeypatch.setattr(nodes, "search_clinic_knowledge", FakeTool(notify))
+    state = {
+        "organization_id": "org-a11", "conversation_id": "conv-a11",
+        "clinic_name": "Synthetic Clinic", "agent_tone": "professional", "business_rules": "{}",
+        "lead_id": "lead-a11", "customer": {"name": "Synthetic", "is_medical_evidence_provided": True},
+        "current_intent": "general", "active_objection": "none", "current_stage": "QUALIFIED",
+        "pending_crm_actions": [], "messages": [HumanMessage(content="Question")],
+        "needs_summarization": False, "is_compliant": True, "generation_attempts": 0,
+    }
+    result = asyncio.run(agent_app.ainvoke(state))
+    assert counter["checks"] == 2
+    assert result["messages"][-1].content == "Final text."
+    actions = [json.loads(a)["action"] for a in result.get("pending_crm_actions", [])]
+    assert "NOTIFY_AGENT" not in actions
+
+
+def test_duplicate_actions_are_returned_once(monkeypatch):
+    handoff = {"action": "HANDOFF_TO_HUMAN", "payload": {"reason": "patient_requested"}}
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_lead_info", AsyncMock(
+        return_value=SimpleNamespace(lead_id="lead-a11", firstName="Synthetic", status="QUALIFIED")
+    ))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_history", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_messages_by_ids", AsyncMock(
+        return_value=[SimpleNamespace(id="m", content="Question", mediaUrl=None)]
+    ))
+
+    async def invoke(state, config):
+        return {**state, "messages": [AIMessage(content="A team member can help with that.")],
+                "pending_crm_actions": [json.dumps(handoff), json.dumps(handoff)]}
+
+    monkeypatch.setattr(agent_servicer, "agent_app", SimpleNamespace(ainvoke=invoke))
+    reply = asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(agent_pb2.AgentRequest(
+        organizationId="org-a11", conversationId="conv-a11", newMessageIds=["m"],
+    ), None))
+    assert [a.type for a in reply.actions] == ["HANDOFF_TO_HUMAN"]
+
+
+def test_past_follow_up_is_invalid():
+    from app.modules.agent.actions import parse_virtual_action
+    assert parse_virtual_action({"action": "SCHEDULE_FOLLOW_UP", "payload": {"scheduledAt": "2020-01-01T09:00:00Z"}}) is None
+    assert parse_virtual_action({"action": "SCHEDULE_FOLLOW_UP", "payload": {"scheduledAt": "2099-01-01T09:00:00Z"}}) is not None

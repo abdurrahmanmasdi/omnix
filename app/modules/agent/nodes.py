@@ -147,7 +147,10 @@ async def extract_and_classify(state: ConversationState) -> dict:
         
         updates["pending_crm_actions"] = new_actions
         updates["current_stage"] = "QUALIFYING"
-        
+
+    # Snapshot before any writer draft, so a compliance-rejected draft's
+    # actions can be discarded (KI-052).
+    updates["actions_before_draft"] = list(updates.get("pending_crm_actions", state.get("pending_crm_actions", [])))
     return updates
 
 def _get_smart_llm():
@@ -523,5 +526,7 @@ async def compliance_checker_node(state: ConversationState):
         return {
             "is_compliant": False, 
             "compliance_feedback": response.feedback, 
-            "generation_attempts": attempts
+            "generation_attempts": attempts,
+            # Drop actions proposed by the rejected draft (KI-052).
+            "pending_crm_actions": list(state.get("actions_before_draft", [])),
         }
