@@ -8,6 +8,7 @@
 
 export * from "./acceptClinicInvitationDto";
 export * from "./acceptInvitationDto";
+export * from "./aiStateResponseDto";
 export * from "./analyticsSummaryDto";
 export * from "./authControllerLogout200";
 export * from "./authControllerRefreshTokens200";
@@ -78,4 +79,3 @@ export * from "./uploadDocumentDto";
 export * from "./upsertAiPersonaDto";
 export * from "./upsertAiPersonaDtoBusinessRules";
 export * from "./webhooksControllerVerifyWebhookParams";
-export * from "./aiStateResponseDto";
