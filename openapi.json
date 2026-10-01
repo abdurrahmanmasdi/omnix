@@ -553,7 +553,13 @@
         },
         "responses": {
           "201": {
-            "description": "Message sent successfully"
+            "description": "Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED"
+          },
+          "409": {
+            "description": "Not sent: the conversation changed during the send (code DELIVERY_NOT_AUTHORIZED)"
+          },
+          "422": {
+            "description": "Not sent. code: PATIENT_OPTED_OUT, OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE"
           }
         },
         "security": [
@@ -565,8 +571,77 @@
         "tags": ["Conversations"]
       }
     },
+    "/conversations/{id}/ai-pause": {
+      "post": {
+        "operationId": "ConversationsController_pauseAi",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pause the AI for a conversation (idempotent)",
+        "tags": ["Conversations"]
+      }
+    },
+    "/conversations/{id}/ai-resume": {
+      "post": {
+        "operationId": "ConversationsController_resumeAi",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resume the AI for a conversation (idempotent)",
+        "tags": ["Conversations"]
+      }
+    },
     "/conversations/{id}/toggle-ai": {
       "patch": {
+        "deprecated": true,
         "operationId": "ConversationsController_toggleAi",
         "parameters": [
           {
@@ -603,7 +678,7 @@
             "bearer": []
           }
         ],
-        "summary": "Toggle the AI auto-reply state for a conversation",
+        "summary": "Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.",
         "tags": ["Conversations"]
       }
     },
@@ -2539,6 +2614,18 @@
           }
         },
         "required": ["content"]
+      },
+      "AiStateResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "aiPaused": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "aiPaused"]
       },
       "UploadDocumentDto": {
         "type": "object",

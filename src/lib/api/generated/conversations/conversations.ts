@@ -22,6 +22,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AiStateResponseDto,
   ConversationsControllerGetConversations200Item,
   ConversationsControllerGetConversationsParams,
   ConversationsControllerGetMessages200Item,
@@ -412,7 +413,7 @@ export const conversationsControllerSendMessage = (
 };
 
 export const getConversationsControllerSendMessageMutationOptions = <
-  TError = unknown,
+  TError = void | void,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -453,13 +454,13 @@ export type ConversationsControllerSendMessageMutationResult = NonNullable<
   Awaited<ReturnType<typeof conversationsControllerSendMessage>>
 >;
 export type ConversationsControllerSendMessageMutationBody = SendMessageDto;
-export type ConversationsControllerSendMessageMutationError = unknown;
+export type ConversationsControllerSendMessageMutationError = void | void;
 
 /**
  * @summary Send a manual message to a conversation
  */
 export const useConversationsControllerSendMessage = <
-  TError = unknown,
+  TError = void | void,
   TContext = unknown,
 >(
   options?: {
@@ -484,7 +485,180 @@ export const useConversationsControllerSendMessage = <
   return useMutation(mutationOptions, queryClient);
 };
 /**
- * @summary Toggle the AI auto-reply state for a conversation
+ * @summary Pause the AI for a conversation (idempotent)
+ */
+export const conversationsControllerPauseAi = (
+  id: string,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<AiStateResponseDto>(
+    { url: `/conversations/${id}/ai-pause`, method: "POST", signal },
+    options,
+  );
+};
+
+export const getConversationsControllerPauseAiMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof conversationsControllerPauseAi>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof conversationsControllerPauseAi>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["conversationsControllerPauseAi"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof conversationsControllerPauseAi>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return conversationsControllerPauseAi(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConversationsControllerPauseAiMutationResult = NonNullable<
+  Awaited<ReturnType<typeof conversationsControllerPauseAi>>
+>;
+
+export type ConversationsControllerPauseAiMutationError = unknown;
+
+/**
+ * @summary Pause the AI for a conversation (idempotent)
+ */
+export const useConversationsControllerPauseAi = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof conversationsControllerPauseAi>>,
+      TError,
+      { id: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof conversationsControllerPauseAi>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationOptions =
+    getConversationsControllerPauseAiMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary Resume the AI for a conversation (idempotent)
+ */
+export const conversationsControllerResumeAi = (
+  id: string,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<AiStateResponseDto>(
+    { url: `/conversations/${id}/ai-resume`, method: "POST", signal },
+    options,
+  );
+};
+
+export const getConversationsControllerResumeAiMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof conversationsControllerResumeAi>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof conversationsControllerResumeAi>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["conversationsControllerResumeAi"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof conversationsControllerResumeAi>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return conversationsControllerResumeAi(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConversationsControllerResumeAiMutationResult = NonNullable<
+  Awaited<ReturnType<typeof conversationsControllerResumeAi>>
+>;
+
+export type ConversationsControllerResumeAiMutationError = unknown;
+
+/**
+ * @summary Resume the AI for a conversation (idempotent)
+ */
+export const useConversationsControllerResumeAi = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof conversationsControllerResumeAi>>,
+      TError,
+      { id: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof conversationsControllerResumeAi>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationOptions =
+    getConversationsControllerResumeAiMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @deprecated
+ * @summary Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.
  */
 export const conversationsControllerToggleAi = (
   id: string,
@@ -541,7 +715,8 @@ export type ConversationsControllerToggleAiMutationResult = NonNullable<
 export type ConversationsControllerToggleAiMutationError = unknown;
 
 /**
- * @summary Toggle the AI auto-reply state for a conversation
+ * @deprecated
+ * @summary Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.
  */
 export const useConversationsControllerToggleAi = <
   TError = unknown,
