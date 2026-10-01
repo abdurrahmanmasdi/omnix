@@ -177,8 +177,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             for msg in history:
                 if str(msg.id) in new_message_ids:
                     continue
-                if msg.type in ['USER_TEXT', 'LEAD_TEXT', 'LEAD_MEDIA']:
+                if msg.type in ['LEAD_TEXT', 'LEAD_MEDIA']:
                     state_data["messages"].append(HumanMessage(content=msg.content))
+                elif msg.type == 'USER_TEXT':
+                    # Staff wrote this, not the patient (KI-049): keep it on the clinic side.
+                    state_data["messages"].append(AIMessage(content=f"[Clinic staff message]: {msg.content}", name="staff"))
                 elif msg.type == 'AI_TEXT':
                     state_data["messages"].append(AIMessage(content=msg.content))
             
