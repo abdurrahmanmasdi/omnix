@@ -1,14 +1,10 @@
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from openai import AsyncOpenAI
 from app.core.config import settings
 
-# ─── CENTRALIZED MODEL CONSTANTS ────────────────────────
-# Change these to swap models across the entire service.
-FLAGSHIP_MODEL = "gpt-5.6-luna"
-EXTRACTOR_MODEL = "gpt-5.6-terra"
-CHEAP_MODEL = "gpt-5.6-luna"
-EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDING_DIMENSIONS = 3072
+# Model names come from Settings (rule 12); these aliases keep existing imports working.
+EMBEDDING_MODEL = settings.EMBEDDING_MODEL
+EMBEDDING_DIMENSIONS = settings.EMBEDDING_DIMENSIONS
 
 
 class LLMFactory:
@@ -18,33 +14,54 @@ class LLMFactory:
     """
     
     @staticmethod
-    def get_cheap_llm(temperature: float = 0.0):
+    def get_cheap_llm(temperature: float | None = None):
         return ChatOpenAI(
-            model=CHEAP_MODEL, 
+            model=settings.CHEAP_MODEL,
             api_key=settings.OPENAI_API_KEY, 
-            temperature=temperature,
-            model_kwargs={"reasoning_effort": "none"}
+            temperature=settings.CHEAP_TEMPERATURE if temperature is None else temperature,
+            model_kwargs={"reasoning_effort": "none"},
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
     
     @staticmethod
-    def get_extractor_llm(temperature: float = 0.1):
+    def get_extractor_llm(temperature: float | None = None):
         return ChatOpenAI(
-            model=EXTRACTOR_MODEL, 
+            model=settings.EXTRACTOR_MODEL,
             api_key=settings.OPENAI_API_KEY, 
-            temperature=temperature,
-            model_kwargs={"reasoning_effort": "none"}
+            temperature=settings.EXTRACTOR_TEMPERATURE if temperature is None else temperature,
+            model_kwargs={"reasoning_effort": "none"},
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     @staticmethod
-    def get_flagship_llm(temperature: float = 0.3):
+    def get_flagship_llm(temperature: float | None = None):
         return ChatOpenAI(
-            model=FLAGSHIP_MODEL, 
+            model=settings.FLAGSHIP_MODEL,
             api_key=settings.OPENAI_API_KEY, 
-            temperature=temperature,
-            model_kwargs={"reasoning_effort": "none"}
+            temperature=settings.FLAGSHIP_TEMPERATURE if temperature is None else temperature,
+            model_kwargs={"reasoning_effort": "none"},
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     @staticmethod
     def get_async_openai_client():
         """Returns the native OpenAI async client (e.g. for Whisper)."""
-        return AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        return AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
+        )
+
+    @staticmethod
+    def get_embeddings():
+        """LangChain embeddings with the configured model, dimensions, timeout and retries."""
+        return OpenAIEmbeddings(
+            model=settings.EMBEDDING_MODEL,
+            dimensions=settings.EMBEDDING_DIMENSIONS,
+            api_key=settings.OPENAI_API_KEY,
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
+        )

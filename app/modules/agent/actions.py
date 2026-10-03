@@ -2,7 +2,7 @@
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -44,9 +44,13 @@ def parse_virtual_action(raw: str | dict) -> tuple[str, dict] | None:
             if not isinstance(field, str) or not DATE_TIME.fullmatch(field):
                 return None
             try:
-                if datetime.fromisoformat(field.replace("Z", "+00:00")).tzinfo is None:
-                    return None
+                moment = datetime.fromisoformat(field.replace("Z", "+00:00"))
             except ValueError:
+                return None
+            if moment.tzinfo is None:
+                return None
+            # A follow-up in the past would fire immediately (KI-052).
+            if action == "SCHEDULE_FOLLOW_UP" and moment <= datetime.now(timezone.utc):
                 return None
     if action == "HANDOFF_TO_HUMAN":
         reason = payload.get("reason", "patient_requested")

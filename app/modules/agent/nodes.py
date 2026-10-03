@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from app.modules.agent.state import ConversationState
 from app.modules.agent.actions import parse_virtual_action
 from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE
+from app.core.config import settings
 
 async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions) -> bool:
     """Return True when a tool result cannot support a patient-facing answer."""
@@ -48,7 +49,7 @@ async def _execute_tool_calls(state: ConversationState, response, messages, new_
     return False
 
 from app.modules.agent.prompts import (
-    EXTRACTOR_SYSTEM_PROMPT, VISION_PROMPT, HANDOFF_PROMPT, 
+    AI_IDENTITY_PROMPT, EXTRACTOR_SYSTEM_PROMPT, VISION_PROMPT, HANDOFF_PROMPT, 
     OUT_OF_DOMAIN_PROMPT, SUMMARIZER_PROMPT, COMPLIANCE_CHECKER_PROMPT
 )
 from app.infrastructure.llm_factory import LLMFactory
@@ -95,7 +96,8 @@ async def extract_and_classify(state: ConversationState) -> dict:
     flagship_llm = LLMFactory.get_flagship_llm()
     extractor_llm = LLMFactory.get_extractor_llm()
 
-    if has_image:
+    # Defense in depth for D-014: never call vision unless explicitly enabled.
+    if has_image and settings.PATIENT_IMAGE_ANALYSIS_ENABLED:
         vision_messages = [SystemMessage(content=VISION_PROMPT), messages[-1]]
         vision_response = await flagship_llm.ainvoke(vision_messages)
         vision_text = vision_response.content
@@ -119,7 +121,9 @@ async def extract_and_classify(state: ConversationState) -> dict:
     if response.service_interested and not current_customer.get("service_interested"):
         new_customer_data["service_interested"] = response.service_interested
         customer_updated = True
-    if response.is_medical_image and not current_customer.get("is_medical_evidence_provided"):
+    # Medical evidence only from an actual vision description, never from text
+    # alone or a disabled image path (KI-058).
+    if response.is_medical_image and vision_text and not current_customer.get("is_medical_evidence_provided"):
         new_customer_data["is_medical_evidence_provided"] = True
         customer_updated = True
         
@@ -147,7 +151,10 @@ async def extract_and_classify(state: ConversationState) -> dict:
         
         updates["pending_crm_actions"] = new_actions
         updates["current_stage"] = "QUALIFYING"
-        
+
+    # Snapshot before any writer draft, so a compliance-rejected draft's
+    # actions can be discarded (KI-052).
+    updates["actions_before_draft"] = list(updates.get("pending_crm_actions", state.get("pending_crm_actions", [])))
     return updates
 
 def _get_smart_llm():
@@ -167,11 +174,11 @@ async def objection_handler_node(state: ConversationState):
         safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
-    prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user has an objection (fear, price, trust, or competitor comparison). 
+    prompt = f"""You are the AI patient coordinator for {clinic_name}. The user has an objection (fear, price, trust, or competitor comparison). 
     If they mention a competitor or object to the price, you MUST use the fetch_battlecard tool defensively to find our approved rebuttal. 
     Otherwise, use the fetch_social_proof tool to find a relevant patient success story. 
     Acknowledge their concern with deep empathy, present the proof/rebuttal, and end with a gentle question to move forward. Max 3-4 sentences."""
-    prompt += "\n" + HANDOFF_PROMPT
+    prompt += "\n" + AI_IDENTITY_PROMPT + "\n" + HANDOFF_PROMPT
     
 
     # T24: Inject Tone and Business Rules
@@ -236,7 +243,7 @@ async def qualification_node(state: ConversationState):
     missing_str = ", ".join(missing_info)
     visual_analysis = state.get("visual_pixel_analysis", "")
     
-    prompt = f"""You are a Senior Medical Sales Consultant representing {clinic_name} on WhatsApp.
+    prompt = f"""You are the AI patient coordinator for {clinic_name} on WhatsApp.
 Your goal is to build rapport, answer the user's questions, and gently guide them toward providing the information we need to quote them.
 
 CRITICAL SALES RULE (Acknowledge -> Answer -> Pivot):
@@ -247,7 +254,7 @@ CRITICAL SALES RULE (Acknowledge -> Answer -> Pivot):
 The patient is currently missing: {missing_str}.
 DO NOT aggressively demand an OPG X-ray in every message. Build trust first. If they are just asking general questions, answer them nicely and casually mention that a photo of their teeth would help give a precise quote."""
 
-    prompt += "\n" + HANDOFF_PROMPT
+    prompt += "\n" + AI_IDENTITY_PROMPT + "\n" + HANDOFF_PROMPT
 
     if visual_analysis:
         prompt += f"""
@@ -310,12 +317,12 @@ async def value_pitch_node(state: ConversationState):
         safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
-    prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is asking for pricing or service details.
+    prompt = f"""You are the AI patient coordinator for {clinic_name}. The user is asking for pricing or service details.
     Use the search_clinic_knowledge tool to find real prices and info. NEVER invent prices. 
     Describe only verified service details and prices from the tool. Never imply pain-free treatment, a warranty, or a guaranteed outcome unless approved evidence explicitly supports it.
     Keep it conversational (WhatsApp style) and end with a Call-To-Action (e.g., free consultation check)."""
     
-    prompt += "\n" + HANDOFF_PROMPT
+    prompt += "\n" + AI_IDENTITY_PROMPT + "\n" + HANDOFF_PROMPT
     
 
     # T24: Inject Tone and Business Rules
@@ -369,12 +376,12 @@ async def closing_node(state: ConversationState):
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
 
     clinic_name = state.get("clinic_name", "our clinic")
-    prompt = f"""Act as an elite Senior Medical Sales Consultant representing {clinic_name}. The user is ready to book or showing high intent. 
+    prompt = f"""You are the AI patient coordinator for {clinic_name}. The user is ready to book or showing high intent. 
     Never invent urgency, availability, a discount, a price, a medical outcome, or a guarantee.
     Ask them explicitly for their preferred day and time for the consultation. 
     Keep it under 3 sentences, conversational (WhatsApp style), and extremely warm."""
     
-    prompt += "\n" + HANDOFF_PROMPT
+    prompt += "\n" + AI_IDENTITY_PROMPT + "\n" + HANDOFF_PROMPT
 
 
     # T24: Inject Tone and Business Rules
@@ -434,11 +441,11 @@ async def general_qa_node(state: ConversationState):
         safe_response = AIMessage(content=SAFE_HANDOFF_MESSAGE)
         return {"messages": [safe_response], "pending_crm_actions": new_actions, "current_stage": "HANDED_OFF", "is_compliant": True, "generation_attempts": 0}
     clinic_name = state.get("clinic_name", "our clinic")
-    prompt = f"""Act as a Senior Medical Sales Consultant representing {clinic_name}. The user is asking general questions about the clinic, doctors, location, or procedures.
+    prompt = f"""You are the AI patient coordinator for {clinic_name}. The user is asking general questions about the clinic, doctors, location, or procedures.
     Use the search_clinic_knowledge tool to find accurate information. NEVER invent details. 
     Keep your response friendly, concise, and conversational (WhatsApp style). End by asking if they have any other questions or if they'd like to book a consultation."""
     
-    prompt += "\n" + HANDOFF_PROMPT
+    prompt += "\n" + AI_IDENTITY_PROMPT + "\n" + HANDOFF_PROMPT
     
 
     # T24: Inject Tone and Business Rules
@@ -478,13 +485,21 @@ async def general_qa_node(state: ConversationState):
         
     return node_updates
 
+SUMMARY_MAX_CHARS = 4000
+SUMMARY_TRUNCATION_MARK = " [summary truncated]"
+
+
 async def summarizer_node(state: ConversationState):
     prompt = SUMMARIZER_PROMPT
     messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
     extractor_llm = LLMFactory.get_extractor_llm()
     response = await extractor_llm.ainvoke(messages)
     
-    new_summary = response.content
+    new_summary = str(response.content or "")
+    # Stay well below the contract limit (UPDATE_SUMMARY.summary max 5000) so a
+    # long summary can never invalidate the action and block the reply (KI-051).
+    if len(new_summary) > SUMMARY_MAX_CHARS:
+        new_summary = new_summary[:SUMMARY_MAX_CHARS - len(SUMMARY_TRUNCATION_MARK)] + SUMMARY_TRUNCATION_MARK
     
     current_actions = state.get("pending_crm_actions", [])
     new_actions = list(current_actions)
@@ -515,5 +530,7 @@ async def compliance_checker_node(state: ConversationState):
         return {
             "is_compliant": False, 
             "compliance_feedback": response.feedback, 
-            "generation_attempts": attempts
+            "generation_attempts": attempts,
+            # Drop actions proposed by the rejected draft (KI-052).
+            "pending_crm_actions": list(state.get("actions_before_draft", [])),
         }

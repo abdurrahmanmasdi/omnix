@@ -1,21 +1,15 @@
 import logging
 
-from langchain_openai import OpenAIEmbeddings
 from sqlalchemy.orm import Session
 from app.core.database import OrganizationExperience, SessionLocal
-from app.core.config import settings
-from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.infrastructure.llm_factory import EMBEDDING_DIMENSIONS, LLMFactory
 
 logger = logging.getLogger(__name__)
 
 
 class ExperienceProcessor:
     def __init__(self):
-        self.embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL, 
-            dimensions=EMBEDDING_DIMENSIONS,
-            api_key=settings.OPENAI_API_KEY
-        )
+        self.embeddings = LLMFactory.get_embeddings()
 
     async def embed_and_save_experience(self, experience_id: str, org_id: str) -> bool:
         db: Session = SessionLocal()
