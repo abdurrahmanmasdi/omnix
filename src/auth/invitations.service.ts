@@ -490,6 +490,8 @@ export class InvitationsService {
               userId: user.id,
               organizationId: invitation.organizationId!,
               roleId: invitation.roleId!,
+              // The issuer's invitation is the approval; login only uses ACTIVE memberships.
+              status: 'ACTIVE',
             },
           });
         }

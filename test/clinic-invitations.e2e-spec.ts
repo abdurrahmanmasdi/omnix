@@ -134,6 +134,15 @@ describe('Clinic Invitations (e2e)', () => {
       });
       expect(membership).toBeDefined();
       expect(membership!.roleId).toEqual(role.id);
+      expect(membership!.status).toEqual('ACTIVE');
+
+      // 5. The new staff member logs straight into the inviting clinic (not onboarding)
+      const loginRes = await request(app.getHttpServer() as Server)
+        .post('/auth/login')
+        .send({ email: newEmail, password: 'securepassword123' })
+        .expect(200);
+      expect(loginRes.body.user.organizationId).toEqual(org.id);
+      expect(loginRes.body.user.hasCompletedOnboarding).toBe(true);
     });
   });
 
