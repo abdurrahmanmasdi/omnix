@@ -30,3 +30,7 @@ prisma/*.db
 playwright/.auth/
 
 .pytest_cache/
+
+# Playwright fixtures (synthetic credentials, per run)
+playwright/.auth/
+*.fixture.json
