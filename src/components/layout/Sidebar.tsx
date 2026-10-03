@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useInboxText } from '@/features/inbox/i18n';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
@@ -41,7 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/dashboard/conversations',
-    label: 'Conversations',
+    label: 'Inbox',
     icon: <MessageSquare className="mr-2.5 h-4 w-4" />,
     matchPath: '/conversations',
   },
@@ -52,11 +53,12 @@ const NAV_ITEMS: NavItem[] = [
   //   matchPath: '/knowledge-base',
   // },
   {
-    href: '/dashboard/settings',
+    href: '/dashboard/settings/ai',
     label: 'Settings',
     icon: <Settings className="mr-2.5 h-4 w-4" />,
     matchPath: '/settings',
     children: [
+      { href: '/dashboard/settings/ai', label: 'AI Settings', icon: <Settings className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/ai' },
       { href: '/dashboard/settings/lead-sources', label: 'Lead Sources', icon: <Target className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/lead-sources' },
       { href: '/dashboard/settings/pipeline-stages', label: 'Pipeline Stages', icon: <Layers className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/pipeline-stages' },
       { href: '/dashboard/settings/experiences', label: 'Experiences', icon: <Briefcase className="mr-2 h-3.5 w-3.5" />, matchPath: '/settings/experiences' },
@@ -75,7 +77,8 @@ const NAV_ITEMS: NavItem[] = [
 
 import { useAuthStore } from '@/store/auth-store';
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
+  const { t } = useInboxText();
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(pathname.includes('/settings'));
   const user = useAuthStore((state) => state.user);
@@ -88,7 +91,8 @@ export function Sidebar() {
   const isExactActive = (item: NavItem) => pathname === item.href;
 
   return (
-    <aside className="w-[260px] border-r border-white/5 bg-brand-navy flex flex-col shrink-0">
+    <aside aria-label={t('menu')} className={`${mobileOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} w-[260px] border-r border-white/5 bg-brand-navy flex-col shrink-0 md:static md:flex`}>
+      <Button className="m-2 md:hidden" variant="outline" aria-label={t('close')} onClick={onClose}>{t('close')}</Button>
       {/* Brand */}
       <div className="flex h-16 items-center px-6 border-b border-white/5">
         <div className="flex items-center gap-3 w-full">
@@ -98,7 +102,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-ice/40 px-3 pt-3 pb-2">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-ice/40 px-3 pt-3 pb-2">
           Main Menu
         </p>
         {NAV_ITEMS.map((item) => {
@@ -116,7 +120,7 @@ export function Sidebar() {
                 >
                   <span className="flex items-center">
                     {item.icon}
-                    {item.label}
+                    {item.matchPath === '/conversations' ? t('inbox') : item.label}
                   </span>
                   <ChevronDown
                     className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${
@@ -132,7 +136,7 @@ export function Sidebar() {
                 >
                   <div className="ml-5 pl-3 border-l-2 border-white/5 space-y-0.5 py-0.5">
                     {item.children.map((child) => (
-                      <Link key={child.href} href={child.href}>
+                      <Link key={child.href} href={child.href} onClick={onClose}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -154,7 +158,7 @@ export function Sidebar() {
           }
 
           return (
-            <Link key={item.href} href={item.href}>
+            <Link key={item.href} href={item.href} onClick={onClose}>
               <Button
                 variant="ghost"
                 className={`w-full justify-start h-10 rounded-xl text-[13px] font-semibold transition-all ${
@@ -164,7 +168,7 @@ export function Sidebar() {
                 }`}
               >
                 {item.icon}
-                {item.label}
+                {item.matchPath === '/conversations' ? t('inbox') : item.label}
               </Button>
             </Link>
           );
@@ -181,7 +185,7 @@ export function Sidebar() {
             <span className="text-sm font-semibold text-brand-ice truncate">
               {user?.firstName} {user?.lastName}
             </span>
-            <p className="text-[11px] font-medium text-brand-ice/40 mt-0.5">OMNIX v2.0</p>
+            <p className="text-xs font-medium text-brand-ice/40 mt-0.5">OMNIX v2.0</p>
           </div>
         </div>
       </div>
