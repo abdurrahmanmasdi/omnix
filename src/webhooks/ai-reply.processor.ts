@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 import { AfterSendAction, splitAfterSendActions } from './deferred-actions';
+import { executeActionsOnce } from './action-claim';
 import {
   PatientLanguage,
   actionFallbackText,
@@ -20,14 +21,7 @@ import {
   patientLanguage,
 } from './patient-copy';
 import { Message } from '@prisma/client';
-import { createHash } from 'node:crypto';
-import { ToolActionWire } from './interfaces/agent.interface';
 
-/** A stable UUID for an idempotency claim row. */
-function deterministicUuid(value: string): string {
-  const hex = createHash('sha256').update(value).digest('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
 import {
   AGENT_CONTRACT_VERSION,
   isCompatibleAgentVersion,
@@ -195,66 +189,6 @@ export class AiReplyProcessor extends WorkerHost {
     return batchKey;
   }
 
-  /**
-   * Executes a generation's actions at most once (B9): a job retry after the
-   * actions ran (e.g. a crash before the bubbles were stored) must not send
-   * a second staff alert or schedule a second follow-up. The claim row also
-   * remembers whether the first run needed the fallback reply.
-   * Returns true when the fallback reply + handoff is required.
-   */
-  private async executeActionsOnce(
-    organizationId: string,
-    conversationId: string,
-    batchKey: string,
-    actions: ToolActionWire[],
-  ): Promise<boolean> {
-    const id = deterministicUuid(`${batchKey}:actions`);
-    try {
-      await this.prisma.auditLog.create({
-        data: {
-          id,
-          organizationId,
-          actor: 'ai',
-          action: 'ai.actions_executed',
-          targetId: conversationId,
-          metadata: {
-            batchKey,
-            actionTypes: actions.map((action) => action.type),
-          },
-        },
-      });
-    } catch (error: any) {
-      if (error?.code !== 'P2002') throw error;
-      const claim = await this.prisma.auditLog.findUnique({ where: { id } });
-      this.logger.warn(
-        `AI_ACTIONS_ALREADY_EXECUTED conversationId=${conversationId}`,
-      );
-      return (
-        (claim?.metadata as { fallback?: boolean } | null)?.fallback === true
-      );
-    }
-    const actionResult = await this.actionExecutor.executeActions(
-      organizationId,
-      conversationId,
-      actions,
-    );
-    const fallback =
-      actionResult.outcomes?.some((item) => item.status !== 'EXECUTED') ||
-      actionResult.rejected > 0 ||
-      actionResult.failed > 0;
-    await this.prisma.auditLog.update({
-      where: { id },
-      data: {
-        metadata: {
-          batchKey,
-          actionTypes: actions.map((action) => action.type),
-          fallback,
-        },
-      },
-    });
-    return fallback;
-  }
-
   async process(
     job: Job<{
       organizationId: string;
@@ -413,11 +347,15 @@ export class AiReplyProcessor extends WorkerHost {
               handoffAfterSend = afterSend === 'HANDOFF_TO_HUMAN';
               pauseAfterSend = afterSend === 'PAUSE_CONVERSATION';
               if (immediate.length > 0) {
-                const fallback = await this.executeActionsOnce(
-                  organization.id,
-                  conversationId,
-                  batchKey,
-                  immediate,
+                const fallback = await executeActionsOnce(
+                  this.prisma,
+                  this.actionExecutor,
+                  {
+                    organizationId: organization.id,
+                    conversationId,
+                    generationKey: batchKey,
+                    actions: immediate,
+                  },
                 );
                 if (fallback) {
                   this.logger.warn(
