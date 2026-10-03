@@ -21,3 +21,7 @@ npm-debug.log*
 # OS
 .DS_Store
 *.tsbuildinfo
+
+# Playwright output (local runs)
+test-results/
+playwright-report/
