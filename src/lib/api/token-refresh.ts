@@ -6,7 +6,8 @@
 // Uses bare axios.post, not axiosInstance, so the response interceptor can
 // never loop on its own refresh call.
 
-import axios from "axios";
+import axios, { CanceledError } from "axios";
+import { getSessionGeneration } from "@/lib/session-scope";
 import { installSession } from "@/lib/session-manager";
 
 export const API_URL =
@@ -21,9 +22,13 @@ let inFlight: Promise<string> | null = null;
  */
 export function refreshAccessToken(): Promise<string> {
   if (!inFlight) {
+    const generation = getSessionGeneration();
     inFlight = axios
       .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
       .then((response) => {
+        if (generation !== getSessionGeneration()) {
+          throw new CanceledError("Stale session refresh");
+        }
         const { access_token, user } = response.data;
         installSession(access_token, user);
         return access_token as string;

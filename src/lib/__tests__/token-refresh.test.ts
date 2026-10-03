@@ -30,6 +30,7 @@ vi.mock("@/store/auth-store", () => ({
   useAuthStore: { getState: () => ({ accessToken: mocks.token }) },
 }));
 
+import { incrementSessionGeneration } from "../session-scope";
 import { refreshAccessToken } from "../api/token-refresh";
 import { axiosInstance } from "../api/axios-client";
 
@@ -71,6 +72,16 @@ describe("single-flight token refresh", () => {
       { withCredentials: true },
     );
     expect(mocks.installSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not restore a session after a remote reset invalidates an in-flight refresh", async () => {
+    const pending = deferred();
+    mocks.post.mockReturnValue(pending.promise);
+    const refresh = refreshAccessToken();
+    incrementSessionGeneration();
+    pending.resolve({ data: { access_token: "stale-token", user } });
+    await expect(refresh).rejects.toThrow("Stale session refresh");
+    expect(mocks.installSession).not.toHaveBeenCalled();
   });
 
   it("starts a new refresh after the previous one settled", async () => {
