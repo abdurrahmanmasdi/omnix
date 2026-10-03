@@ -13,16 +13,33 @@
         "tags": ["App"]
       }
     },
-    "/metrics": {
+    "/health": {
       "get": {
-        "operationId": "PrometheusController_index",
+        "operationId": "HealthController_liveness",
         "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
         },
-        "tags": ["Prometheus"]
+        "summary": "Liveness: the process is up (no dependency checks)",
+        "tags": ["Health"]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "HealthController_readiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All dependencies reachable"
+          },
+          "503": {
+            "description": "At least one dependency unreachable"
+          }
+        },
+        "summary": "Readiness: database, Redis and the AI gRPC service",
+        "tags": ["Health"]
       }
     },
     "/webhooks/whatsapp": {
