@@ -13,6 +13,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { AcceptClinicInvitationDto } from './dto/accept-clinic-invitation.dto';
 import { IssueClinicInvitationDto } from './dto/issue-clinic-invitation.dto';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import { Prisma } from '@prisma/client';
 import {
   MEMBERSHIP_GRANTS_INCLUDE,
   membershipHasPermission,
@@ -20,6 +21,8 @@ import {
 
 const PURPOSE = 'PILOT_ACTIVATION';
 const CLINIC_MEMBERSHIP_PURPOSE = 'CLINIC_MEMBERSHIP';
+// Activation event marking the clinic invitation that created a new identity and may set its password.
+const IDENTITY_CREATED = 'IDENTITY_CREATED';
 
 const digest = (purpose: string, token: string) =>
   createHash('sha256').update(`${purpose}:${token}`).digest('hex');
@@ -276,6 +279,16 @@ export class InvitationsService {
             status: 'PENDING',
           },
         }));
+      // Only an identity this clinic created may be activated (password set) through its invitation.
+      // Any other existing identity, PENDING or ACTIVE, joins only by authenticated acceptance (KI-027).
+      const ownsIdentity =
+        !existing ||
+        (existing.status === 'PENDING' &&
+          (await this.identityCreatedByClinic(
+            tx,
+            existing.id,
+            organizationId,
+          )));
 
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
 
@@ -335,11 +348,23 @@ export class InvitationsService {
           actor: issuerUserId,
         },
       });
+      if (ownsIdentity) {
+        await tx.accountActivationEvent.create({
+          data: {
+            userId: user.id,
+            invitationId: invitation.id,
+            action: IDENTITY_CREATED,
+            actor: issuerUserId,
+          },
+        });
+      }
 
       return {
         invitationId: invitation.id,
         token,
         expiresAt: invitation.expiresAt,
+        // false: the invitee must log in to their own existing account to accept.
+        createsAccount: ownsIdentity,
       };
     });
   }
@@ -400,6 +425,13 @@ export class InvitationsService {
             );
           }
         } else if (user.status === 'PENDING') {
+          if (
+            !(await this.invitationOwnsIdentity(tx, user.id, invitation.id))
+          ) {
+            throw new ForbiddenException(
+              'This account is not activated yet. Activate it with your own invitation, then log in to accept.',
+            );
+          }
           if (!dto.password || !dto.firstName || !dto.lastName) {
             throw new BadRequestException(
               'Password, first name, and last name are required for new accounts.',
@@ -477,5 +509,38 @@ export class InvitationsService {
         };
       });
     });
+  }
+
+  /** True when an invitation of this clinic created the (still PENDING) identity. */
+  private async identityCreatedByClinic(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    organizationId: string,
+  ) {
+    const created = await tx.accountActivationEvent.findMany({
+      where: { userId, action: IDENTITY_CREATED },
+      select: { invitationId: true },
+    });
+    if (!created.length) return false;
+    const owning = await tx.accountInvitation.count({
+      where: {
+        id: { in: created.map((event) => event.invitationId) },
+        organizationId,
+        purpose: CLINIC_MEMBERSHIP_PURPOSE,
+      },
+    });
+    return owning > 0;
+  }
+
+  private async invitationOwnsIdentity(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    invitationId: string,
+  ) {
+    const event = await tx.accountActivationEvent.findFirst({
+      where: { userId, invitationId, action: IDENTITY_CREATED },
+      select: { id: true },
+    });
+    return event !== null;
   }
 }
