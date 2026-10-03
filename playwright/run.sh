@@ -16,9 +16,13 @@ work="$(mktemp -d)"
 chmod 700 "$work"
 backend_pid=""
 frontend_pid=""
+stop() { # pid: stop the server and any children it spawned
+  pkill -TERM -P "$1" 2>/dev/null || true
+  kill "$1" 2>/dev/null || true
+}
 cleanup() {
-  [[ -n "$backend_pid" ]] && kill "$backend_pid" 2>/dev/null || true
-  [[ -n "$frontend_pid" ]] && kill "$frontend_pid" 2>/dev/null || true
+  [[ -n "$backend_pid" ]] && stop "$backend_pid"
+  [[ -n "$frontend_pid" ]] && stop "$frontend_pid"
   docker rm -f "$pg_name" "$redis_name" >/dev/null 2>&1 || true
   rm -rf "$work"
 }
@@ -35,6 +39,14 @@ wait_for() { # description, command...
   echo "$what did not become ready" >&2
   exit 1
 }
+
+# A leftover server would pass the readiness checks below while pointing at a deleted database.
+for port in 3000 3001; do
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port $port is already in use (leftover server from an earlier run?). Stop it and retry." >&2
+    exit 1
+  fi
+done
 
 pg_password="$(node -e 'process.stdout.write(require("crypto").randomBytes(12).toString("hex"))')"
 docker run --rm -d --name "$pg_name" -e POSTGRES_PASSWORD="$pg_password" \
@@ -64,13 +76,13 @@ export PLAYWRIGHT_FIXTURE_FILE="$work/fixture.json"
 (cd "$backend" && node dist/src/credentials/deploy-cli.js)
 (cd "$backend" && npx ts-node scripts/playwright-fixture.ts seed "$PLAYWRIGHT_FIXTURE_FILE")
 
-(cd "$backend" && node dist/src/main.js >"$work/backend.log" 2>&1) &
+(cd "$backend" && exec node dist/src/main.js >"$work/backend.log" 2>&1) &
 backend_pid=$!
 wait_for "Backend" curl -fsS http://127.0.0.1:3000/health
 
 (cd "$frontend" && NEXT_PUBLIC_API_URL=http://localhost:3000 npm run build >"$work/frontend-build.log" 2>&1) \
   || { tail -n 40 "$work/frontend-build.log" >&2; exit 1; }
-(cd "$frontend" && npm run start >"$work/frontend.log" 2>&1) &
+(cd "$frontend" && exec node_modules/.bin/next start -p 3001 >"$work/frontend.log" 2>&1) &
 frontend_pid=$!
 wait_for "Frontend" curl -fsS http://127.0.0.1:3001/login
 
