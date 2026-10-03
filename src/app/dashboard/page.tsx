@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadError } from '@/features/inbox/ReadError';
 import { useAuthStore } from '@/store/auth-store';
 import { useAnalyticsControllerGetSummary } from '@/lib/api/generated/analytics/analytics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +23,7 @@ export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
   
   // Refetch frequently on dashboard
-  const { data, isLoading } = useAnalyticsControllerGetSummary({
+  const { data, isLoading, isError, error, refetch } = useAnalyticsControllerGetSummary({
     query: {
       refetchInterval: 30000,
     }
@@ -37,6 +38,8 @@ export default function DashboardPage() {
   };
 
   const hasNeedsAttention = summary.needsAttention > 0;
+
+  if (isError) return <ReadError error={error} retry={() => { void refetch(); }} />;
 
   if (isLoading) {
     return <DashboardSkeleton />;

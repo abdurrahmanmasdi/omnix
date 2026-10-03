@@ -15,8 +15,8 @@ export function ReadError({
   const { t } = useInboxText();
   const status = isAxiosError(error) ? error.response?.status : undefined;
   const copy =
-    status === 403 && messages
-      ? "noAccess"
+    status === 403
+      ? messages ? "noAccess" : "noPermission"
       : status === 404
         ? "missing"
         : "unavailable";
