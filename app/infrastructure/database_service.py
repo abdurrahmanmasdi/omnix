@@ -10,6 +10,14 @@ class DatabaseService:
     """
 
     @staticmethod
+    async def ping():
+        """Readiness probe: one trivial query, off the event loop."""
+        def _ping():
+            with SessionLocal() as db:
+                db.execute(text("SELECT 1"))
+        await asyncio.to_thread(_ping)
+
+    @staticmethod
     async def get_conversation_lead_info(conv_id: str, org_id: str):
         def _fetch():
             with SessionLocal() as db:
