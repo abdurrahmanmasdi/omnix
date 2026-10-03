@@ -16,7 +16,9 @@ export function ReadError({
   const status = isAxiosError(error) ? error.response?.status : undefined;
   const copy =
     status === 403
-      ? messages ? "noAccess" : "noPermission"
+      ? messages
+        ? "noAccess"
+        : "noPermission"
       : status === 404
         ? "missing"
         : "unavailable";

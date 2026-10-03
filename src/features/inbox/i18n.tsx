@@ -22,7 +22,7 @@ const tr = {
   emptyList: "Bu filtrede görüşme yok.",
   select: "Bir görüşme seçin.",
   noMessages: "Henüz mesaj yok",
-  noPermission: 'Bu verileri görüntüleme izniniz yok.',
+  noPermission: "Bu verileri görüntüleme izniniz yok.",
   noAccess: "Bu görüşmenin mesajlarına erişiminiz yok.",
   unavailable: "Veriler yüklenemedi. Lütfen tekrar deneyin.",
   missing: "Görüşme bulunamadı.",
@@ -43,7 +43,7 @@ const tr = {
   optedOut:
     "Hasta STOP gönderdi — AI duraklatıldı, otomatik mesajlar kapalı. Yine de yanıt verebilirsiniz.",
   optOutWarning:
-    "Hasta STOP gönderdi. Personel mesajı gönderildi; otomatik mesajlar kapalı kalır.",
+    "Hasta STOP gönderdi. Personel yanıtlarına izin verilir; otomatik mesajlar kapalı kalır.",
   window:
     "Son hasta mesajının üzerinden 24 saat geçti. WhatsApp bu süreden sonra onaylı şablon gerektirir; henüz şablon yapılandırılmadı.",
   channel: "WhatsApp kanalı veya kimlik bilgisi etkin değil.",
@@ -118,7 +118,7 @@ const en: Record<keyof typeof tr, string> = {
   emptyList: "No conversations match this filter.",
   select: "Select a conversation.",
   noMessages: "No messages yet.",
-  noPermission: 'You do not have permission to view this data.',
+  noPermission: "You do not have permission to view this data.",
   noAccess: "You don't have access to this conversation's messages",
   unavailable: "Could not load data. Please try again.",
   missing: "Conversation not found.",
@@ -139,7 +139,7 @@ const en: Record<keyof typeof tr, string> = {
   optedOut:
     "Patient sent STOP — AI paused, automated messages are off. You can still reply.",
   optOutWarning:
-    "Patient sent STOP. The staff message was sent; automated messages stay off.",
+    "Patient sent STOP. Staff replies are allowed; automated messages stay off.",
   window:
     "The last patient message is older than 24 hours. WhatsApp requires approved templates after that; none are configured yet.",
   channel: "The WhatsApp channel or its credential is not active.",

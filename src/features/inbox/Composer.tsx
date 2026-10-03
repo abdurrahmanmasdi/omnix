@@ -104,12 +104,24 @@ export function Composer({
               if (isAxiosError<InboxSendErrorDto>(error)) {
                 const body = error.response?.data;
                 const copy = body?.code ? blockedCopy(body.code) : undefined;
-                setErrorText(copy ? t(copy) : body?.message || t("sendFailed"));
-                setBlocked(
-                  error.response?.status === 422 &&
-                    body?.code !== "PATIENT_OPTED_OUT",
+                const ambiguous =
+                  !error.response || error.response.status >= 500;
+                setErrorText(
+                  ambiguous
+                    ? t("unknownTip")
+                    : copy
+                      ? t(copy)
+                      : body?.message || t("sendFailed"),
                 );
-              } else setErrorText(t("sendFailed"));
+                setBlocked(
+                  ambiguous ||
+                    (error.response?.status === 422 &&
+                      body?.code !== "PATIENT_OPTED_OUT"),
+                );
+              } else {
+                setErrorText(t("unknownTip"));
+                setBlocked(true);
+              }
               await refresh();
             },
           },

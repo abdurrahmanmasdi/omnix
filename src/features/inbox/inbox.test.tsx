@@ -186,9 +186,7 @@ describe("Inbox user flows", () => {
     fireEvent.click(screen.getByRole("button", { name: "AI’ı devam ettir" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(calls.some((call) => call.url?.endsWith("/ai-resume"))).toBe(false);
-    fireEvent.click(
-      screen.getByRole("button", { name: /^Devam ettir$/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^Devam ettir$/ }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Devral" })).toBeEnabled(),
     );
@@ -235,7 +233,7 @@ describe("Inbox user flows", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Gönder" }));
     expect(
-      await screen.findByText(/Personel mesajı gönderildi/),
+      await screen.findByText(/Personel yanıtlarına izin verilir/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("textbox")).toBeEnabled());
@@ -257,6 +255,34 @@ describe("Inbox user flows", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(text);
     expect(screen.getByRole("textbox")).toHaveValue("Keep this text");
     await waitFor(() => expect(screen.getByRole("textbox")).toBeDisabled());
+  });
+  it("does not claim a timed-out staff send was rejected or automatically resend it", async () => {
+    current.aiPaused = true;
+    const adapter = axiosInstance.defaults.adapter;
+    axiosInstance.defaults.adapter = async (config) => {
+      if (config.method === "post" && config.url?.endsWith("/messages")) {
+        calls.push(config);
+        throw new AxiosError("timeout", "ECONNABORTED", config);
+      }
+      if (typeof adapter !== "function")
+        throw new Error("Missing synthetic adapter");
+      return adapter(config);
+    };
+    mount(<ConnectedThread />);
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "Possibly accepted text" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Gönder" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Yeniden göndermeden önce WhatsApp’ı kontrol edin",
+    );
+    expect(screen.getByRole("textbox")).toHaveValue("Possibly accepted text");
+    expect(
+      calls.filter(
+        (call) => call.method === "post" && call.url?.endsWith("/messages"),
+      ),
+    ).toHaveLength(1);
   });
   it.each([403, 500, 0])(
     "renders %s history failure as an error rather than empty",
