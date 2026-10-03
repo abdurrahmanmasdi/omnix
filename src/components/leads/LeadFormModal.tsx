@@ -31,6 +31,8 @@ import { FaInstagram, FaFacebookF } from "react-icons/fa";
 
 import { toast } from 'sonner';
 import { CreateLeadDtoPriority } from '@/lib/api/model/createLeadDtoPriority';
+import { isMasked } from '@/features/inbox/model';
+import { dirtyLeadPatch } from './lead-edit-patch';
 import { CreateLeadDtoCurrency } from '@/lib/api/model/createLeadDtoCurrency';
 
 interface LeadFormModalProps {
@@ -80,7 +82,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
@@ -114,7 +116,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
         lastName: data.lastName as string | undefined,
         phoneNumber: data.phoneNumber as string | undefined,
         country: data.country as string | undefined,
-        email: (data.email as string | undefined) || '',
+        email: isMasked(data.email as string | undefined) ? '' : (data.email as string | undefined) || '',
         status: (data.status as string) || 'NEW',
         priority: (data.priority as CreateLeadDtoPriority) || CreateLeadDtoPriority.WARM,
         currency: (data.currency as CreateLeadDtoCurrency) || CreateLeadDtoCurrency.USD,
@@ -155,6 +157,8 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     }
   }, [existingLead, isEdit, reset, isOpen]);
 
+  const originalContacts = existingLead as { phoneNumber?: string; email?: string } | undefined;
+
   const onSubmit = (data: LeadFormData) => {
     const payload = { 
       ...data,
@@ -163,7 +167,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
     
     if (isEdit && leadId) {
       updateMutation.mutate(
-        { id: leadId, data: payload as unknown as Parameters<typeof updateMutation.mutate>[0]['data'] },
+        { id: leadId, data: dirtyLeadPatch(payload as unknown as Parameters<typeof updateMutation.mutate>[0]['data'], dirtyFields, existingLead as Record<string, unknown>) },
         {
           onSuccess: () => {
             toast.success('Lead updated successfully');
@@ -246,7 +250,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                       <Label htmlFor="phoneNumber" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Phone Number</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-ice/60" />
-                        <Input id="phoneNumber" {...register('phoneNumber')} placeholder="+90 555..." className="pl-10 h-11 rounded-lg border-white/10 focus:ring-blue-500/20" />
+                        <Input id="phoneNumber" readOnly={isEdit && isMasked(originalContacts?.phoneNumber)} {...register('phoneNumber')} placeholder="+90 555..." className="pl-10 h-11 rounded-lg border-white/10 focus:ring-blue-500/20" />
                       </div>
                       {errors.phoneNumber && <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.phoneNumber.message}</p>}
                     </div>
@@ -254,8 +258,9 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                       <Label htmlFor="email" className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Email Address</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-ice/60" />
-                        <Input id="email" {...register('email')} placeholder="ahmet@example.com" className="pl-10 h-11 rounded-lg border-white/10 focus:ring-blue-500/20" />
+                        <Input id="email" readOnly={isEdit && isMasked(originalContacts?.email)} {...register('email')} placeholder="ahmet@example.com" className="pl-10 h-11 rounded-lg border-white/10 focus:ring-blue-500/20" />
                       </div>
+                      {isEdit && isMasked(originalContacts?.email) && <p className="text-xs">{originalContacts?.email} · Masked contact details cannot be edited.</p>}
                       {errors.email && <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">{errors.email.message}</p>}
                     </div>
                   </div>
@@ -272,7 +277,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Currency</Label>
-                        <Select value={currencyValue} onValueChange={(val) => setValue('currency', val as CreateLeadDtoCurrency)}>
+                        <Select value={currencyValue} onValueChange={(val) => setValue('currency', val as CreateLeadDtoCurrency, { shouldDirty: true })}>
                           <SelectTrigger className="h-11 rounded-lg border-white/10">
                             <SelectValue />
                           </SelectTrigger>
@@ -294,7 +299,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                 <TabsContent value="attribution" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Marketing Attribution Source</Label>
-                    <Select value={sourceIdValue} onValueChange={(val) => setValue('sourceId', val)}>
+                    <Select value={sourceIdValue} onValueChange={(val) => setValue('sourceId', val, { shouldDirty: true })}>
                       <SelectTrigger className="h-12 rounded-xl border-white/10 bg-transparent">
                         <SelectValue placeholder="Select how the patient found the clinic" />
                       </SelectTrigger>
@@ -311,7 +316,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                   <div className="grid grid-cols-2 gap-6 pt-2">
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Lifecycle Status</Label>
-                      <Select value={statusValue} onValueChange={(val) => setValue('status', val as LeadFormData['status'])}>
+                      <Select value={statusValue} onValueChange={(val) => setValue('status', val as LeadFormData['status'], { shouldDirty: true })}>
                         <SelectTrigger className="h-11 rounded-lg border-white/10">
                           <SelectValue />
                         </SelectTrigger>
@@ -324,7 +329,7 @@ export function LeadFormModal({ leadId, isOpen, onClose, onSuccess }: LeadFormMo
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase tracking-widest text-brand-ice/60">Sales Priority</Label>
-                      <Select value={priorityValue} onValueChange={(val) => setValue('priority', val as CreateLeadDtoPriority)}>
+                      <Select value={priorityValue} onValueChange={(val) => setValue('priority', val as CreateLeadDtoPriority, { shouldDirty: true })}>
                         <SelectTrigger className="h-11 rounded-lg border-white/10">
                           <SelectValue />
                         </SelectTrigger>
