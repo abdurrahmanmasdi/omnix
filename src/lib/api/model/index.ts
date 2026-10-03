@@ -50,6 +50,8 @@ export * from "./leadsControllerFindAllStatus";
 export * from "./leadsPaginatedResponseDto";
 export * from "./leadsPaginatedResponseDtoMeta";
 export * from "./loginDto";
+export * from "./manualMessageResponseDto";
+export * from "./manualMessageResponseDtoDeliveryStatus";
 export * from "./notificationsControllerGetNotifications200Item";
 export * from "./notificationsControllerGetNotificationsParams";
 export * from "./notificationsControllerMarkAllAsRead200";

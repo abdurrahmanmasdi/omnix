@@ -28,6 +28,7 @@ import type {
   ConversationsControllerGetMessages200Item,
   ConversationsControllerGetMessagesParams,
   ConversationsControllerToggleAi200,
+  ManualMessageResponseDto,
   SendMessageDto,
 } from "../../model";
 
@@ -400,7 +401,7 @@ export const conversationsControllerSendMessage = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<ManualMessageResponseDto>(
     {
       url: `/conversations/${id}/messages`,
       method: "POST",

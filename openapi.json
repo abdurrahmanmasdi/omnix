@@ -553,13 +553,20 @@
         },
         "responses": {
           "201": {
-            "description": "Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED"
+            "description": "Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED. warnings lists non-blocking notices (PATIENT_OPTED_OUT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualMessageResponseDto"
+                }
+              }
+            }
           },
           "409": {
             "description": "Not sent: the conversation changed during the send (code DELIVERY_NOT_AUTHORIZED)"
           },
           "422": {
-            "description": "Not sent. code: PATIENT_OPTED_OUT, OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE"
+            "description": "Not sent. code: OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE (an opt-out never blocks a staff send)"
           }
         },
         "security": [
@@ -2614,6 +2621,69 @@
           }
         },
         "required": ["content"]
+      },
+      "ManualMessageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "senderId": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "type": "string"
+          },
+          "mediaUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string"
+          },
+          "handledBy": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "deliveryStatus": {
+            "type": "string",
+            "enum": ["SENT", "UNKNOWN", "FAILED", "CANCELLED"],
+            "description": "SENT, UNKNOWN (check WhatsApp before resending) or FAILED"
+          },
+          "warnings": {
+            "description": "Non-blocking notices for staff, e.g. PATIENT_OPTED_OUT (the patient sent STOP; the message was still sent). Empty otherwise.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "senderId",
+          "content",
+          "mediaUrl",
+          "type",
+          "handledBy",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "deliveryStatus",
+          "warnings"
+        ]
       },
       "AiStateResponseDto": {
         "type": "object",
