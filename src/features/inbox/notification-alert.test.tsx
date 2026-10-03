@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosHeaders } from 'axios';
 import { afterEach, expect, it, vi } from 'vitest';
 import { axiosInstance } from '@/lib/api/axios-client';
+import contractFixtures from '@/lib/contracts/socket-events.v1.fixtures.json';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { InboxLocaleProvider } from './i18n';
 import type { NotificationInvalidationPayload } from '@/lib/contracts/socket-events.generated';
@@ -22,8 +23,9 @@ afterEach(() => { cleanup(); mocks.socket.removeAllListeners(); vi.clearAllMocks
 
 it('generic UPDATE loads the handoff kind over HTTP, updates unread badge and links to its conversation', async () => {
   let unread = 0;
-  const payload: NotificationInvalidationPayload = { id: 'n1', organizationId: 'org', type: 'UPDATE', title: 'New notification', body: 'Open notifications to view details.' };
-  const notification = { id: 'n1', type: 'LEAD_HANDED_OFF', title: 'Synthetic handoff', body: 'Synthetic coordinator review', referenceType: 'CONVERSATION', referenceId: 'conv', isRead: false };
+  const payload: NotificationInvalidationPayload = { ...contractFixtures.notification, type: 'UPDATE', title: 'New notification', body: 'Open notifications to view details.' };
+  expect(payload).toEqual(contractFixtures.notification);
+  const notification = { id: payload.id, type: 'LEAD_HANDED_OFF', title: 'Synthetic handoff', body: 'Synthetic coordinator review', referenceType: 'CONVERSATION', referenceId: 'conv', isRead: false };
   axiosInstance.defaults.adapter = async config => ({ data: config.url?.endsWith('unread-count') ? unread : unread ? [notification] : [], status: 200, statusText: '', headers: new AxiosHeaders(), config });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(<QueryClientProvider client={client}><InboxLocaleProvider><NotificationBell /></InboxLocaleProvider></QueryClientProvider>);
