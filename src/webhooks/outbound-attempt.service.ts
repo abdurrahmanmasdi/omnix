@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Message, NotificationType } from '@prisma/client';
-import {
-  MEMBERSHIP_GRANTS_INCLUDE,
-  membershipHasPermission,
-} from '../auth/permission.service';
+import { Message } from '@prisma/client';
+import { alertConversationStaff } from '../notifications/conversation-staff-alert';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { DeliveryAuthService } from './delivery-auth.service';
@@ -440,42 +437,12 @@ export class OutboundAttemptService {
         where: { id: conversation.id, organizationId, aiPaused: false },
         data: { aiPaused: true, stateVersion: { increment: 1 } },
       });
-      const memberships = await tx.organizationMembership.findMany({
-        where: {
-          organizationId,
-          status: 'ACTIVE',
-          deletedAt: null,
-          user: { status: 'ACTIVE', deletedAt: null },
-        },
-        include: MEMBERSHIP_GRANTS_INCLUDE,
+      const staffNotified = await alertConversationStaff(tx, {
+        organizationId,
+        conversation,
+        title: 'Delivery uncertain',
+        body: 'A WhatsApp message may or may not have reached the patient. Check WhatsApp before replying. The AI is paused for this conversation.',
       });
-      const recipients = memberships.filter(
-        (membership) =>
-          membershipHasPermission(membership, 'notifications:view') &&
-          (membership.userId === conversation.lead?.assignedAgentId ||
-            membership.userId === conversation.assignedAgentId ||
-            membershipHasPermission(membership, 'leads:read:all')),
-      );
-      for (const membership of recipients) {
-        const notification = await tx.notification.create({
-          data: {
-            organizationId,
-            userId: membership.userId,
-            type: NotificationType.SYSTEM_ALERT,
-            title: 'Delivery uncertain',
-            body: 'A WhatsApp message may or may not have reached the patient. Check WhatsApp before replying. The AI is paused for this conversation.',
-            referenceId: conversation.leadId ?? conversation.id,
-            referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
-          },
-        });
-        await tx.outboxEvent.create({
-          data: {
-            organizationId,
-            topic: 'notification.broadcast',
-            payload: { organizationId, notificationId: notification.id },
-          },
-        });
-      }
       await tx.auditLog.create({
         data: {
           organizationId,
@@ -486,7 +453,7 @@ export class OutboundAttemptService {
             attemptId,
             purpose: attempt.purpose,
             lastErrorCode: attempt.lastErrorCode,
-            staffNotified: recipients.length,
+            staffNotified,
           },
         },
       });
