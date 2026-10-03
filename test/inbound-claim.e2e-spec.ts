@@ -2776,11 +2776,9 @@ it('delivers a staff send to an opted-out patient with a warning, keeps AI pause
       data: { optedOutAt: new Date() },
     }),
   );
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const { conversations, outbound } = staffService(sendTextMessage);
   const sent = await asTenant(f.org.id, () =>
     conversations.sendManualMessage(
@@ -2901,6 +2899,60 @@ it('alerts eligible staff once when a STOP newly opts the patient out (D-021)', 
   expect(
     await system(() =>
       prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+});
+
+it.each(['iptal', "stop that, let's negotiate"])(
+  'does not opt out on the ordinary message %p and keeps the AI path (KI-064)',
+  async (body) => {
+    const f = await fixture();
+    await webhook(prisma).process(inboundJob(f, body));
+    const lead = await system(() =>
+      prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+    );
+    expect(lead.optedOutAt).toBeNull();
+    expect(
+      await system(() =>
+        prisma.auditLog.count({
+          where: { organizationId: f.org.id, action: 'consent.opt_out' },
+        }),
+      ),
+    ).toBe(0);
+    expect(
+      (
+        await system(() =>
+          prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+        )
+      ).aiPaused,
+    ).toBe(false);
+    expect(
+      await system(() =>
+        prisma.outboxEvent.count({
+          where: { organizationId: f.org.id, topic: 'generate-reply' },
+        }),
+      ),
+    ).toBe(1);
+  },
+);
+
+it('opts out once on "STOP." with trailing punctuation (KI-064)', async () => {
+  const f = await fixture();
+  const job = inboundJob(f, 'STOP.');
+  await webhook(prisma).process(job);
+  await webhook(prisma).process(job);
+  expect(
+    (
+      await system(() =>
+        prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+      )
+    ).optedOutAt,
+  ).not.toBeNull();
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'consent.opt_out' },
+      }),
     ),
   ).toBe(1);
 });

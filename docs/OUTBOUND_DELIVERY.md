@@ -13,6 +13,12 @@ All sends share one eligibility check (clinic active, channel + credential, reci
 
 A STOP stops automation, never people (D-021): a staff send to an opted-out patient is not rejected for the opt-out; it is delivered (subject to the 24 h window), returns a warning, and its `conversation.staff_message_sent` audit row records `patientOptedOut: true`. When a STOP newly opts a patient out, eligible staff get one "Patient sent STOP" alert (in the inbound transaction, so replays do not repeat it). A staff send that is not eligible for other reasons is rejected with 422 and a reason code (`OUTSIDE_24H_WINDOW`, `CHANNEL_UNAVAILABLE`, `NO_CONTACT`, `CLINIC_INACTIVE`).
 
+Patient commands (`src/webhooks/patient-commands.ts`) count only as the **whole message**, after trimming, Turkish-safe case folding (`İ`/`I`/`ı` → `i`) and dropping trailing `.` / `!`:
+
+- Opt-out (STOP): `stop`, `stopp`, `unsubscribe`, `opt out` / `opt-out` / `optout`, `no messages`, `no more messages`, `nicht mehr`, `abmelden`, `mesaj gönderme` / `mesaj gonderme`, `artık mesaj` / `artik mesaj`, `parar`, `detener`, `durdur`, `abonelikten çık` / `abonelikten cik` (the last two proposed, native review pending — Q13).
+- Opt-in (re-enables automated sends, does not resume the AI): `start`, `başla`, `basla`.
+- Not commands on purpose: `cancel`, `iptal`, `cancelar`, `end`, `quit`, `basta`, bare `dur`, and any sentence (`stop that, let's negotiate`, `please stop messaging me`). There is no sentence-level or model-based opt-out detection; such messages reach the AI/staff as ordinary text.
+
 A failure before the provider POST (credential missing, revoked or unreadable) is `FAILED` with `LOCAL_CREDENTIAL_*`: Meta was never contacted, so it is not `UNKNOWN` and is not retried.
 
 When an attempt becomes `UNKNOWN` it is routed to people once (`escalatedAt`): the AI is paused and the conversation version bumped, eligible staff get a "Delivery uncertain — check WhatsApp before replying" alert through the outbox, and an `outbound.delivery_unknown` audit row is written. A per-minute sweep covers `SENDING`→`UNKNOWN` and crashes before routing. A later provider callback can still mark the attempt `ACCEPTED`; it does not resume the AI.
