@@ -51,7 +51,11 @@ export class OutboundAttemptService {
    * Checks shared by every patient-facing send (R8): opt-out, clinic,
    * channel/credential, recipient, and the WhatsApp 24 h free-form window.
    */
-  async checkEligibility(organizationId: string, conversationId: string) {
+  async checkEligibility(
+    organizationId: string,
+    conversationId: string,
+    purpose: OutboundPurpose,
+  ) {
     const conversation = await this.prisma.conversation.findFirst({
       where: { id: conversationId, organizationId, deletedAt: null },
       include: { channel: true, lead: true, organization: true },
@@ -59,7 +63,11 @@ export class OutboundAttemptService {
     const block = (reason: DeliveryBlockReason) =>
       ({ ok: false, reason }) as const;
     if (!conversation) return block('CONVERSATION_NOT_FOUND');
-    if (conversation.lead?.optedOutAt) return block('PATIENT_OPTED_OUT');
+    // A STOP stops automation, never people (D-021): staff sends to an
+    // opted-out patient go out and carry a warning instead.
+    const patientOptedOut = !!conversation.lead?.optedOutAt;
+    if (patientOptedOut && purpose !== 'staff')
+      return block('PATIENT_OPTED_OUT');
     if (
       !conversation.organization.isActive ||
       conversation.organization.deleted_at
@@ -85,7 +93,7 @@ export class OutboundAttemptService {
       },
     });
     if (!recentInbound) return block('OUTSIDE_24H_WINDOW');
-    return { ok: true, conversation, channel } as const;
+    return { ok: true, conversation, channel, patientOptedOut } as const;
   }
 
   private async authorized(
@@ -106,6 +114,7 @@ export class OutboundAttemptService {
     const eligibility = await this.checkEligibility(
       organizationId,
       conversationId,
+      purpose,
     );
     if (!eligibility.ok) return null;
     if (

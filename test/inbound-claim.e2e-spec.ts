@@ -1061,11 +1061,9 @@ it('cancels stale generated bubbles after a crash and answers the folded batch (
       data: { stateVersion: { increment: 1 } },
     }),
   );
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const generateReply = jest
     .fn()
     .mockResolvedValue({ replyText: 'Fresh reply' });
@@ -1911,7 +1909,7 @@ function staffService(sendTextMessage: jest.Mock) {
 const asTenant = <T>(organizationId: string, fn: () => Promise<T>) =>
   tenantStorage.run({ organizationId, isSystemBypass: false }, fn);
 
-it('rejects a staff send to an opted-out patient or outside the 24 h window, with a reason (KI-023)', async () => {
+it('rejects a staff send outside the 24 h window, with a reason (KI-023)', async () => {
   const f = await fixture();
   const staffId = randomUUID();
   const sendTextMessage = jest.fn();
@@ -1939,18 +1937,6 @@ it('rejects a staff send to an opted-out patient or outside the 24 h window, wit
       conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
     ),
   ).rejects.toMatchObject({ response: { code: 'OUTSIDE_24H_WINDOW' } });
-  await system(() => f.message());
-  await system(() =>
-    prisma.lead.update({
-      where: { id: f.lead.id },
-      data: { optedOutAt: new Date() },
-    }),
-  );
-  await expect(
-    asTenant(f.org.id, () =>
-      conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
-    ),
-  ).rejects.toMatchObject({ response: { code: 'PATIENT_OPTED_OUT' } });
   expect(sendTextMessage).not.toHaveBeenCalled();
   expect(
     await system(() =>
@@ -2727,11 +2713,9 @@ it('does not re-run AI actions when the reply job is retried (B9)', async () => 
       return (target as any)[key];
     },
   });
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const ai = new AiReplyProcessor(
     database,
     { sendTypingIndicator: jest.fn() } as any,
@@ -2780,4 +2764,143 @@ it('does not re-run AI actions when the reply job is retried (B9)', async () => 
       )
     ).status,
   ).toBe('PROCESSED');
+});
+
+it('delivers a staff send to an opted-out patient with a warning, keeps AI paused and audits it (D-021)', async () => {
+  const f = await fixture();
+  const staff = await staffMember(f.org.id);
+  await system(() => f.message());
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { optedOutAt: new Date() },
+    }),
+  );
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const { conversations, outbound } = staffService(sendTextMessage);
+  const sent = await asTenant(f.org.id, () =>
+    conversations.sendManualMessage(
+      f.org.id,
+      staff.id,
+      f.conv.id,
+      'Staff reply after STOP',
+    ),
+  );
+  expect(sent).toMatchObject({
+    deliveryStatus: 'SENT',
+    status: 'SENT',
+    warnings: ['PATIENT_OPTED_OUT'],
+  });
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await system(() =>
+        prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+      )
+    ).aiPaused,
+  ).toBe(true);
+  const audit = await system(() =>
+    prisma.auditLog.findFirstOrThrow({
+      where: {
+        organizationId: f.org.id,
+        action: 'conversation.staff_message_sent',
+      },
+    }),
+  );
+  expect(audit.metadata).toMatchObject({ patientOptedOut: true });
+  expect(JSON.stringify(audit.metadata)).not.toContain(
+    'Staff reply after STOP',
+  );
+  // Automated sends stay blocked for the opted-out patient.
+  const bubble = await system(() =>
+    prisma.message.create({
+      data: {
+        conversationId: f.conv.id,
+        content: 'Synthetic AI reply',
+        type: 'AI_TEXT',
+        status: 'PENDING',
+        idempotencyKey: randomUUID(),
+      },
+    }),
+  );
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiPaused: false },
+    }),
+  );
+  const current = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(
+    await system(() =>
+      outbound.sendBubble(f.org.id, f.conv.id, bubble, current.stateVersion),
+    ),
+  ).toBe('CANCELLED');
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  // A normal (not opted-out) staff send carries no warning.
+  const other = await fixture();
+  await system(() => other.message());
+  const plain = await asTenant(other.org.id, () =>
+    conversations.sendManualMessage(
+      other.org.id,
+      staff.id,
+      other.conv.id,
+      'Hello',
+    ),
+  );
+  expect(plain.warnings).toEqual([]);
+});
+
+it('alerts eligible staff once when a STOP newly opts the patient out (D-021)', async () => {
+  const f = await fixture();
+  await staffMember(f.org.id);
+  const worker = webhook(prisma);
+  const stop = inboundJob(f, 'STOP');
+  await worker.process(stop);
+  await worker.process(stop); // duplicate webhook
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0]).toMatchObject({
+    type: 'SYSTEM_ALERT',
+    title: 'Patient sent STOP',
+  });
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'notification.broadcast' },
+      }),
+    ),
+  ).toBe(1);
+  // A second STOP while already opted out: no new alert.
+  await worker.process(inboundJob(f, 'STOP'));
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+  // START clears the opt-out but does not resume the AI or alert anyone.
+  await worker.process(inboundJob(f, 'START'));
+  const lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).toBeNull();
+  expect(
+    (
+      await system(() =>
+        prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+      )
+    ).aiPaused,
+  ).toBe(true);
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
 });

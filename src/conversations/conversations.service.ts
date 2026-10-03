@@ -18,10 +18,12 @@ import { ForbiddenException } from '@nestjs/common';
 import { toConversationResponse } from './conversation-response.mapper';
 import { toPublicMessageDto } from '../events/dto/public-events.dto';
 
-const MANUAL_SEND_BLOCKED: Record<DeliveryBlockReason, string> = {
+// PATIENT_OPTED_OUT never blocks a staff send (D-021); it is a warning.
+const MANUAL_SEND_BLOCKED: Record<
+  Exclude<DeliveryBlockReason, 'PATIENT_OPTED_OUT'>,
+  string
+> = {
   CONVERSATION_NOT_FOUND: 'Conversation not found.',
-  PATIENT_OPTED_OUT:
-    'The patient opted out (STOP). Messages can be sent again only after the patient replies START.',
   CLINIC_INACTIVE: 'The clinic account is inactive.',
   CHANNEL_UNAVAILABLE:
     'The WhatsApp channel or its credential is not active for this conversation.',
@@ -176,13 +178,16 @@ export class ConversationsService {
     const eligibility = await this.outboundAttempts.checkEligibility(
       organizationId,
       conversationId,
+      'staff',
     );
     if (!eligibility.ok) {
+      const reason = eligibility.reason as keyof typeof MANUAL_SEND_BLOCKED;
       throw new UnprocessableEntityException({
-        code: eligibility.reason,
-        message: MANUAL_SEND_BLOCKED[eligibility.reason],
+        code: reason,
+        message: MANUAL_SEND_BLOCKED[reason],
       });
     }
+    const patientOptedOut = eligibility.patientOptedOut;
 
     const messageId = randomUUID();
     const { message, version } = await this.prisma.$transaction(async (tx) => {
@@ -212,6 +217,7 @@ export class ConversationsService {
           metadata: {
             messageId,
             aiPausedBefore: conversation.aiPaused,
+            ...(patientOptedOut ? { patientOptedOut: true } : {}),
           },
         },
       });
@@ -232,7 +238,8 @@ export class ConversationsService {
       .broadcastNewMessage(organizationId, saved)
       .catch(() => this.logger.warn('MANUAL_MESSAGE_BROADCAST_FAILED'));
     if (result === 'CANCELLED') {
-      // Eligibility changed between the check and the send (e.g. a STOP).
+      // Eligibility changed between the check and the send (channel,
+      // clinic or window; a STOP never cancels a staff send).
       throw new ConflictException({
         code: 'DELIVERY_NOT_AUTHORIZED',
         message: 'The message was not sent: the conversation changed.',
@@ -241,6 +248,7 @@ export class ConversationsService {
     return {
       ...toPublicMessageDto(saved),
       deliveryStatus: DELIVERY_STATUS[result],
+      warnings: patientOptedOut ? ['PATIENT_OPTED_OUT'] : [],
     };
   }
 

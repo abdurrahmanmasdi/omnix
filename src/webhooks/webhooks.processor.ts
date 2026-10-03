@@ -19,6 +19,7 @@ import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 import { mediaConsentRequestText, patientLanguage } from './patient-copy';
+import { alertConversationStaff } from '../notifications/conversation-staff-alert';
 
 const CONSENT_REQUEST_PREFIX = 'consent-request-';
 
@@ -80,6 +81,12 @@ export class WebhooksProcessor extends WorkerHost {
       leadId: string | null;
       customerPhone: string;
       metaMessageId: string;
+      conversation: {
+        id: string;
+        leadId: string | null;
+        assignedAgentId: string | null;
+        lead?: { assignedAgentId: string | null } | null;
+      };
     },
   ) {
     const { organizationId, conversationId, leadId, metaMessageId } = context;
@@ -104,16 +111,27 @@ export class WebhooksProcessor extends WorkerHost {
       ],
     };
     switch (command) {
-      case 'STOP':
-        await tx.lead.updateMany({
-          where: tenantLead,
+      case 'STOP': {
+        // Keep the first opt-out time; a repeated STOP changes nothing.
+        const newlyOptedOut = await tx.lead.updateMany({
+          where: { ...tenantLead, optedOutAt: null },
           data: {
             optedOutAt: new Date(),
             optOutReason: 'PATIENT_STOP_COMMAND',
           },
         });
         await audit('consent.opt_out');
+        // D-021: STOP stops automation, not people. Tell staff once, in this
+        // transaction, so a replayed or duplicate webhook cannot repeat it.
+        if (newlyOptedOut.count > 0)
+          await alertConversationStaff(tx, {
+            organizationId,
+            conversation: context.conversation,
+            title: 'Patient sent STOP',
+            body: 'The patient sent STOP. The AI is paused and automated messages are off. You can still reply manually.',
+          });
         return;
+      }
       case 'START':
         await tx.lead.updateMany({
           where: { ...tenantLead, optedOutAt: { not: null } },
@@ -599,6 +617,7 @@ export class WebhooksProcessor extends WorkerHost {
                       leadId,
                       customerPhone,
                       metaMessageId,
+                      conversation,
                     });
                   }
                   if (consentRequestText) {

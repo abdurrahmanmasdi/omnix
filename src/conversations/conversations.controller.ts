@@ -23,6 +23,7 @@ import type { AuthenticatedUser } from '../auth/decorators/current-user.decorato
 import { ConversationsService } from './conversations.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { AiStateResponseDto } from './dto/ai-state-response.dto';
+import { ManualMessageResponseDto } from './dto/manual-message-response.dto';
 
 import {
   PaginationQueryDto,
@@ -131,12 +132,13 @@ export class ConversationsController {
   @ApiResponse({
     status: 201,
     description:
-      'Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED',
+      'Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED. warnings lists non-blocking notices (PATIENT_OPTED_OUT).',
+    type: ManualMessageResponseDto,
   })
   @ApiResponse({
     status: 422,
     description:
-      'Not sent. code: PATIENT_OPTED_OUT, OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE',
+      'Not sent. code: OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE (an opt-out never blocks a staff send)',
   })
   @ApiResponse({
     status: 409,
