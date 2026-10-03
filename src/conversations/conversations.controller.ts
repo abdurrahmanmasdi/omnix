@@ -67,7 +67,7 @@ export class ConversationsController {
   @ApiOperation({
     summary: 'Get paginated messages for a specific conversation',
   })
-  @ApiResponse({ status: 200, type: InboxMessagesPageDto, InboxSendErrorDto })
+  @ApiResponse({ status: 200, type: InboxMessagesPageDto })
   async getMessages(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
