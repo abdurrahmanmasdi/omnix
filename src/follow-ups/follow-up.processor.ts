@@ -17,6 +17,7 @@ import {
   isCompatibleAgentVersion,
 } from '../webhooks/contracts/agent-contract';
 import { splitAfterSendActions } from '../webhooks/deferred-actions';
+import { executeActionsOnce } from '../webhooks/action-claim';
 import { actionFallbackText, patientLanguage } from '../webhooks/patient-copy';
 import {
   MEMBERSHIP_GRANTS_INCLUDE,
@@ -363,18 +364,20 @@ export class FollowUpProcessor extends WorkerHost {
               handoffAfterSend = afterSend === 'HANDOFF_TO_HUMAN';
               pauseAfterSend = afterSend === 'PAUSE_CONVERSATION';
               if (immediate.length > 0) {
-                const actionResult = await this.actionExecutor.executeActions(
-                  organization.id,
-                  conversation.id,
-                  immediate,
+                // At most once per follow-up generation (KI-061): a retry
+                // after the actions ran must not repeat them. The claim key
+                // is the follow-up's own idempotency base, never an AI-reply key.
+                const fallback = await executeActionsOnce(
+                  this.prisma,
+                  this.actionExecutor,
+                  {
+                    organizationId: organization.id,
+                    conversationId: conversation.id,
+                    generationKey: idempotencyKeyBase,
+                    actions: immediate,
+                  },
                 );
-                if (
-                  actionResult.outcomes?.some(
-                    (item) => item.status !== 'EXECUTED',
-                  ) ||
-                  actionResult.rejected > 0 ||
-                  actionResult.failed > 0
-                ) {
+                if (fallback) {
                   handoffAfterSend = true;
                   // A rejected model action cannot support the original follow-up claim.
                   const recent = await this.prisma.message.findMany({

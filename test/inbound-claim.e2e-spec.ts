@@ -2956,3 +2956,105 @@ it('opts out once on "STOP." with trailing punctuation (KI-064)', async () => {
     ),
   ).toBe(1);
 });
+
+it('does not re-run follow-up AI actions when the follow-up job is retried (KI-061)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  await system(() => f.message());
+  const followUp = await system(() =>
+    prisma.scheduledFollowUp.create({
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        type: 'AI_SCHEDULED',
+        scheduledAt: new Date(Date.now() - 1000),
+      },
+    }),
+  );
+  const executeActions = jest.fn().mockResolvedValue({
+    executed: 2,
+    rejected: 0,
+    failed: 0,
+    outcomes: [
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+    ],
+  });
+  let failCreate = true;
+  const database = new Proxy(prisma, {
+    get(target, key) {
+      if (key === 'message')
+        return new Proxy((target as any).message, {
+          get(model, method) {
+            if (method === 'createMany' && failCreate)
+              return () => {
+                failCreate = false;
+                return Promise.reject(
+                  new Error('synthetic crash after follow-up actions'),
+                );
+              };
+            return model[method];
+          },
+        });
+      return (target as any)[key];
+    },
+  });
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const worker = new FollowUpProcessor(
+    database,
+    {} as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions } as any,
+    { send: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+      sendTextMessage,
+    } as any),
+    {
+      generateReply: async () => ({
+        replyText: 'Synthetic follow-up',
+        actions: [
+          { type: 'NOTIFY_AGENT', payload: '{}' },
+          {
+            type: 'SCHEDULE_FOLLOW_UP',
+            payload: JSON.stringify({
+              scheduledAt: new Date(Date.now() + 86_400_000).toISOString(),
+            }),
+          },
+        ],
+      }),
+    } as any,
+  );
+  const job = { data: { followUpId: followUp.id } } as any;
+  await expect(worker.process(job)).rejects.toThrow(
+    'synthetic crash after follow-up actions',
+  );
+  await worker.process(job); // BullMQ retry
+  expect(executeActions).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await system(() =>
+        prisma.scheduledFollowUp.findUniqueOrThrow({
+          where: { id: followUp.id },
+        }),
+      )
+    ).status,
+  ).toBe('SENT');
+  // The claim row is keyed by the follow-up, never by an AI-reply batch key.
+  const claim = await system(() =>
+    prisma.auditLog.findFirstOrThrow({
+      where: { organizationId: f.org.id, action: 'ai.actions_executed' },
+    }),
+  );
+  expect((claim.metadata as any).batchKey).toBe(`followUp-${followUp.id}`);
+});
