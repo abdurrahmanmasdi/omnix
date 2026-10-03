@@ -132,7 +132,7 @@ describe('Inbox reads', () => {
       stateVersion: 15,
       messages: [],
       lead: {
-        phoneNumber: '********1234',
+        phoneNumber: '+********1234',
         email: null,
         summary: null,
         optedOut: true,
