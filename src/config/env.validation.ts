@@ -159,8 +159,9 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const PYTHON_SERVER_URL = production
     ? required('PYTHON_SERVER_URL')
     : (text('PYTHON_SERVER_URL') ?? DEV_PYTHON_SERVER_URL);
-  if (PYTHON_SERVER_URL && !/^[A-Za-z0-9.-]+:\d{1,5}$/.test(PYTHON_SERVER_URL))
-    problems.push('PYTHON_SERVER_URL must be host:port (no scheme)');
+  // A gRPC target: host:port or a resolver URI such as dns:///host:port.
+  if (PYTHON_SERVER_URL && /\s/.test(PYTHON_SERVER_URL))
+    problems.push('PYTHON_SERVER_URL must be a gRPC target without spaces');
 
   // Same switch as the Python service; required (default) needs a CA (KI-002).
   problems.push(...grpcTransportProblems(text));

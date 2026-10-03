@@ -110,10 +110,16 @@ describe('validateEnv', () => {
       1,
     );
     expect(
-      problemsOf({ ...valid(), PYTHON_SERVER_URL: 'http://ai' }),
+      problemsOf({ ...valid(), PYTHON_SERVER_URL: 'ai internal:50051' }),
     ).toHaveLength(1);
     expect(problemsOf({ ...valid(), PORT: '99999' })).toHaveLength(1);
     expect(problemsOf({ ...valid(), NODE_ENV: 'prod' })).toHaveLength(1);
+  });
+
+  it('accepts gRPC resolver targets for PYTHON_SERVER_URL', () => {
+    expect(
+      problemsOf({ ...valid(), PYTHON_SERVER_URL: 'dns:///ai.internal:50051' }),
+    ).toEqual([]);
   });
 
   it('lets development fall back to local FRONTEND_URL and PYTHON_SERVER_URL', () => {
