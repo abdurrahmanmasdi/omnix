@@ -1,13 +1,13 @@
-import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
-import type { AxiosError } from 'axios';
-import { useAuthStore } from '@/store/auth-store';
-import { getSessionGeneration } from '@/lib/session-scope';
-import { installSession, resetSession } from '@/lib/session-manager';
+import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
+import type { AxiosError } from "axios";
+import { useAuthStore } from "@/store/auth-store";
+import { getSessionGeneration } from "@/lib/session-scope";
+import { installSession, resetSession } from "@/lib/session-manager";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 // Extend Axios config to carry session generation (internal, not sent as a header)
-declare module 'axios' {
+declare module "axios" {
   interface InternalAxiosRequestConfig {
     __sessionGeneration?: number;
     _retry?: boolean;
@@ -42,9 +42,13 @@ axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 axiosInstance.interceptors.response.use(
   (response) => {
     // Reject responses from a prior session generation
-    const requestGeneration = (response.config as InternalAxiosRequestConfig).__sessionGeneration;
-    if (requestGeneration !== undefined && requestGeneration !== getSessionGeneration()) {
-      throw new axios.CanceledError('Stale session response');
+    const requestGeneration = (response.config as InternalAxiosRequestConfig)
+      .__sessionGeneration;
+    if (
+      requestGeneration !== undefined &&
+      requestGeneration !== getSessionGeneration()
+    ) {
+      throw new axios.CanceledError("Stale session response");
     }
     return response;
   },
@@ -56,8 +60,8 @@ axiosInstance.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/login') &&
-      !originalRequest.url?.includes('/auth/refresh')
+      !originalRequest.url?.includes("/auth/login") &&
+      !originalRequest.url?.includes("/auth/refresh")
     ) {
       originalRequest._retry = true; // Prevent infinite loops
 
@@ -84,7 +88,7 @@ axiosInstance.interceptors.response.use(
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         // If the refresh fails (e.g., refresh token expired after 7 days)
-        console.error('Session completely expired. Logging out.');
+        console.error("Session completely expired. Logging out.");
         resetSession();
         return Promise.reject(refreshError);
       }
