@@ -3,7 +3,7 @@ import logging
 import grpc
 import rag_pb2
 import rag_pb2_grpc
-from app.modules.rag.document_processor import DocumentService
+from app.modules.rag.document_processor import DocumentService, validate_pdf_size
 from app.modules.rag.experience_processor import ExperienceProcessor
 from app.core.database import SessionLocal
 
@@ -16,6 +16,13 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         doc_id = getattr(request, 'documentationId', getattr(request, 'documentation_id', None))
         file_name = getattr(request, 'fileName', getattr(request, 'file_name', None))
         file_content = getattr(request, 'fileContent', getattr(request, 'file_content', None))
+
+        try:
+            validate_pdf_size(file_content)
+        except ValueError:
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details("PDF_TOO_LARGE")
+            return rag_pb2.IngestResponse(success=False, chunksProcessed=0)
 
         logger.info("DOCUMENT_INGEST_STARTED document_id=%s", doc_id)
         
