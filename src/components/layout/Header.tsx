@@ -114,6 +114,7 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
+              data-testid="user-menu"
               className="h-10 px-2 rounded-xl hover:bg-transparent/5 transition-colors flex items-center gap-2"
             >
               <Avatar className="h-8 w-8">
@@ -155,6 +156,7 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
             <DropdownMenuSeparator className="my-1 bg-transparent/10" />
             <DropdownMenuItem
               className="rounded-lg font-medium text-red-400 focus:text-red-400 focus:bg-red-950/50 py-2.5 cursor-pointer"
+              data-testid="sign-out"
               onClick={onLogout}
             >
               <LogOut className="mr-3 h-4 w-4" /> Sign out
