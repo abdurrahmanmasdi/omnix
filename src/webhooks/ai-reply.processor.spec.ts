@@ -51,29 +51,31 @@ describe('AiReplyProcessor on AI RPC failure', () => {
           ),
         ),
     };
-    const processor = new AiReplyProcessor(
-      prisma as any,
-      whatsapp as any,
-      { broadcastNewMessage: jest.fn() } as any,
-      actionExecutor as any,
-      { scheduleAutoFollowUps: jest.fn() } as any,
-      { record: jest.fn() } as any,
-      { authorizeDelivery: jest.fn().mockResolvedValue(true) } as any,
-      inboundClaims as any,
-      outboundAttempts as any,
-      grpcClient as any,
-    );
+    // Partial fakes for the constructor dependencies, typed in one place.
+    const deps = [
+      prisma,
+      whatsapp,
+      { broadcastNewMessage: jest.fn() },
+      actionExecutor,
+      { scheduleAutoFollowUps: jest.fn() },
+      { record: jest.fn() },
+      { authorizeDelivery: jest.fn().mockResolvedValue(true) },
+      inboundClaims,
+      outboundAttempts,
+      grpcClient,
+    ] as unknown as ConstructorParameters<typeof AiReplyProcessor>;
+    const processor = new AiReplyProcessor(...deps);
+    const job = {
+      data: {
+        organizationId: 'org-a8',
+        conversationId: 'conv-a8',
+        newMessageIds: ['msg-a8'],
+      },
+    } as unknown as Parameters<AiReplyProcessor['process']>[0];
 
-    await expect(
-      processor.process({
-        data: {
-          organizationId: 'org-a8',
-          conversationId: 'conv-a8',
-          customerPhone: '15550000000',
-          newMessageIds: ['msg-a8'],
-        },
-      } as any),
-    ).rejects.toThrow('Downstream service failed');
+    await expect(processor.process(job)).rejects.toThrow(
+      'Downstream service failed',
+    );
 
     expect(grpcClient.generateReply).toHaveBeenCalledTimes(1);
     expect(prisma.message.createMany).not.toHaveBeenCalled();
