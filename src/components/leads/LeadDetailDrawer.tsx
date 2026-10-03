@@ -229,7 +229,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                           {lead.email}
                         </a>
                       ) : (
-                        <p className="text-sm font-bold text-brand-ice/40 italic">No verified email</p>
+                        <p className="text-sm font-bold text-brand-ice/40 italic">No email provided</p>
                       )}
                     </div>
                   </div>
@@ -247,7 +247,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                     <FileText className="mr-2 h-3.5 w-3.5" /> Audit Notes
                   </TabsTrigger>
                   <TabsTrigger value="attachments" className="flex-1 rounded-lg py-2.5 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-brand-navy data-[state=active]:shadow-none data-[state=active]:text-brand-cyan">
-                    <Paperclip className="mr-2 h-3.5 w-3.5" /> Clinical Files
+                    <Paperclip className="mr-2 h-3.5 w-3.5" /> Attachments unavailable
                   </TabsTrigger>
                 </TabsList>
 
@@ -299,7 +299,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                       <div>
                         <h3 className="text-xs font-black text-brand-ice uppercase tracking-[0.2em] mb-4">Clinic Pipeline</h3>
                         <div className="bg-brand-navy/50 p-8 rounded-3xl border border-white/10 shadow-inner grid grid-cols-2 gap-y-6 gap-x-8">
-                          <DataRow icon={<User size={14} />} label="Assigned Sales Agent" value={lead.assignedAgentId || 'AI DIGITAL ASSISTANT'} />
+                          <DataRow icon={<User size={14} />} label="Assigned Sales Agent" value={lead.assignedAgentId || 'Unassigned'} />
                           <DataRow icon={<TrendingUp size={14} />} label="Last Interaction Audit" value={new Date(lead.updatedAt).toLocaleDateString()} />
                         </div>
                       </div>
@@ -318,6 +318,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                     <div className="space-y-4">
                       <div className="relative group">
                         <Textarea 
+                          disabled
                           placeholder="Log a clinical or sales observation..." 
                           className="min-h-[160px] rounded-3xl border-white/10 focus:ring-blue-500/10 shadow-none resize-none p-6 text-sm font-medium leading-relaxed transition-all group-hover:border-brand-electric/50" 
                         />
@@ -334,7 +335,7 @@ export function LeadDetailDrawer({ leadId, onClose, onUpdate, onEdit }: LeadDeta
                             </Avatar>
                             <div>
                               <p className="text-[10px] font-black text-brand-ice uppercase tracking-widest">Digital Sales Assistant</p>
-                              <p className="text-[10px] font-bold text-brand-ice/60 uppercase">System Log • 12:45 PM</p>
+                              <p className="text-[10px] font-bold text-brand-ice/60 uppercase">Illustrative example — no recorded event</p>
                             </div>
                           </div>
                           <p className="text-sm text-brand-ice/80 leading-relaxed font-medium">
