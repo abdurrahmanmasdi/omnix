@@ -2,9 +2,8 @@ import axios, { AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
 import type { AxiosError } from "axios";
 import { useAuthStore } from "@/store/auth-store";
 import { getSessionGeneration } from "@/lib/session-scope";
-import { installSession, resetSession } from "@/lib/session-manager";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { resetSession } from "@/lib/session-manager";
+import { API_URL, refreshAccessToken } from "@/lib/api/token-refresh";
 
 // Extend Axios config to carry session generation (internal, not sent as a header)
 declare module "axios" {
@@ -66,17 +65,9 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true; // Prevent infinite loops
 
       try {
-        // 1. Call our refresh endpoint using standard axios (not our instance) to avoid loops
-        const refreshResponse = await axios.post(
-          `${API_URL}/auth/refresh`,
-          {},
-          { withCredentials: true }, // Crucial: Sends the hidden refresh_token cookie
-        );
-
-        const { access_token, user } = refreshResponse.data;
-
-        // 2. Route through centralised session manager
-        installSession(access_token, user);
+        // 1+2. One shared refresh for all concurrent 401s (and the socket); it
+        // installs the new session through the session manager.
+        const access_token = await refreshAccessToken();
 
         // 3. Update the failed request with the brand new token and generation
         if (originalRequest.headers) {

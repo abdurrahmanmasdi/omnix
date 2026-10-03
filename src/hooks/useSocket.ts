@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Socket } from "socket.io-client";
-import axios from "axios";
 import { useAuthStore } from "@/store/auth-store";
-import { installSession, resetSession } from "@/lib/session-manager";
+import { resetSession } from "@/lib/session-manager";
+import { refreshAccessToken } from "@/lib/api/token-refresh";
 import {
   getOrCreateSocket,
   addRef,
@@ -13,9 +13,6 @@ import {
   getConnectionSnapshot,
   getServerSnapshot,
 } from "@/lib/socket-runtime";
-
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000";
 
 export type {
   LiveMessagePayload,
@@ -45,13 +42,8 @@ export function useSocket(): { socket: Socket | null; isConnected: boolean } {
       if (err.message.includes("jwt expired")) {
         console.log("[Socket] Attempting token refresh...");
         try {
-          const res = await axios.post(
-            `${SOCKET_URL}/auth/refresh`,
-            {},
-            { withCredentials: true },
-          );
-          // Route through centralised session manager
-          installSession(res.data.access_token, res.data.user);
+          // Shared with Axios (single flight) and sent to the API URL, not the socket URL.
+          await refreshAccessToken();
         } catch {
           console.error("[Socket] Refresh failed — session dead.");
           resetSession();
