@@ -86,7 +86,10 @@ export class EventsGateway
           throw new Error('User account is inactive or deleted');
         }
 
-        if (payload.securityVersion && user.securityVersion !== payload.securityVersion) {
+        if (
+          payload.securityVersion &&
+          user.securityVersion !== payload.securityVersion
+        ) {
           throw new Error('Session revoked due to security changes');
         }
 
@@ -263,9 +266,7 @@ export class EventsGateway
                 'leads:read:messages',
               );
             } catch {
-              this.logger.warn(
-                `SOCKET_ACCESS_REVOKED socketId=${socket.id}`,
-              );
+              this.logger.warn(`SOCKET_ACCESS_REVOKED socketId=${socket.id}`);
               socket.disconnect(true);
             }
           }
@@ -343,7 +344,8 @@ export class EventsGateway
     ]);
 
     const payloadSecVer = Number(socket.data?.securityVersion);
-    const validSecVer = isNaN(payloadSecVer) || (user?.securityVersion === payloadSecVer);
+    const validSecVer =
+      isNaN(payloadSecVer) || user?.securityVersion === payloadSecVer;
 
     if (
       !user ||
@@ -424,7 +426,10 @@ export class EventsGateway
   }
 
   // 🚀 Broadcast methods (Public events)
-  async broadcastNewMessage(organizationId: string, messageData: MessageSource) {
+  async broadcastNewMessage(
+    organizationId: string,
+    messageData: MessageSource,
+  ) {
     const safeDto = toPublicMessageDto(messageData);
     const assignedAgentId = await this.getAssignedAgentForConversation(
       messageData.conversationId,
@@ -454,14 +459,16 @@ export class EventsGateway
   ) {
     const safeDto = toPublicConversationDto(conversationData);
     const lead = conversationData.lead;
-    const leadAgentId = lead && typeof lead === 'object' &&
-      'assignedAgentId' in lead && typeof lead.assignedAgentId === 'string'
-      ? lead.assignedAgentId : null;
+    const leadAgentId =
+      lead &&
+      typeof lead === 'object' &&
+      'assignedAgentId' in lead &&
+      typeof lead.assignedAgentId === 'string'
+        ? lead.assignedAgentId
+        : null;
     const assignedAgentId =
       leadAgentId ||
-      (await this.getAssignedAgentForConversation(
-        conversationData.id,
-      ));
+      (await this.getAssignedAgentForConversation(conversationData.id));
     await this.emitToAuthorized(
       organizationId,
       'onConversationUpdate',
@@ -470,7 +477,15 @@ export class EventsGateway
     );
   }
 
-  async broadcastNotification(userId: string, notificationData: { id?: string; organizationId?: string; title?: string; body?: string }) {
+  async broadcastNotification(
+    userId: string,
+    notificationData: {
+      id?: string;
+      organizationId?: string;
+      title?: string;
+      body?: string;
+    },
+  ) {
     const organizationId = notificationData.organizationId;
     const notificationId = notificationData.id;
     if (!organizationId || !notificationId) return;

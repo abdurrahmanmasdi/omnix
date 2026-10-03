@@ -18,12 +18,10 @@ describe('JwtStrategy', () => {
     const findFirst = jest.fn().mockResolvedValue({ id: 'membership-1' });
     const strategy = new JwtStrategy(config, {
       user: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({
-            status: 'ACTIVE',
-            memberships: [{ id: 'membership-1' }],
-          }),
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'ACTIVE',
+          memberships: [{ id: 'membership-1' }],
+        }),
       },
       organizationMembership: { findFirst },
     } as unknown as PrismaService);

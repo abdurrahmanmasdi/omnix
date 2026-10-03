@@ -57,8 +57,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User account is not active');
     }
 
-    if (payload.securityVersion && user.securityVersion !== payload.securityVersion) {
-      throw new UnauthorizedException('Session revoked due to security changes');
+    if (
+      payload.securityVersion &&
+      user.securityVersion !== payload.securityVersion
+    ) {
+      throw new UnauthorizedException(
+        'Session revoked due to security changes',
+      );
     }
 
     if (user.memberships.length === 0) {

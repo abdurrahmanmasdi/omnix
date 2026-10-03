@@ -39,109 +39,115 @@ export class InvitationsService {
     if (!isEmail(email) || !operator.trim() || operator.length > 120) {
       throw new BadRequestException('INVITATION_INPUT_INVALID');
     }
-    return tenantStorage.run({ isSystemBypass: true }, () => this.prisma.$transaction(async (tx) => {
-      const existing = await tx.user.findFirst({
-        where: { email: { equals: email, mode: 'insensitive' } },
-      });
-      const user =
-        existing ??
-        (await tx.user.create({
+    return tenantStorage.run({ isSystemBypass: true }, () =>
+      this.prisma.$transaction(async (tx) => {
+        const existing = await tx.user.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
+        });
+        const user =
+          existing ??
+          (await tx.user.create({
+            data: {
+              email,
+              password_hash: '!INVITATION_PENDING',
+              firstName: '',
+              lastName: '',
+              status: 'PENDING',
+            },
+          }));
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
+        const current = await tx.user.findUniqueOrThrow({
+          where: { id: user.id },
+        });
+        if (current.status !== 'PENDING' || current.deletedAt)
+          throw new ConflictException('INVITATION_ACCOUNT_NOT_PENDING');
+        const latest = await tx.accountInvitation.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        const now = new Date();
+        if (latest && now.getTime() - latest.createdAt.getTime() < 60_000) {
+          throw new ConflictException('INVITATION_ISSUE_RATE_LIMIT');
+        }
+        const revoked = await tx.accountInvitation.findMany({
+          where: { userId: user.id, consumedAt: null, revokedAt: null },
+        });
+        await tx.accountInvitation.updateMany({
+          where: { userId: user.id, consumedAt: null, revokedAt: null },
+          data: { revokedAt: now },
+        });
+        for (const previous of revoked) {
+          await tx.accountActivationEvent.create({
+            data: {
+              userId: user.id,
+              invitationId: previous.id,
+              action: 'REVOKED',
+              actor: operator,
+            },
+          });
+        }
+        const token = randomBytes(32).toString('hex');
+        const invitation = await tx.accountInvitation.create({
           data: {
-            email,
-            password_hash: '!INVITATION_PENDING',
-            firstName: '',
-            lastName: '',
-            status: 'PENDING',
+            userId: user.id,
+            tokenHash: digest(PURPOSE, token),
+            purpose: PURPOSE,
+            issuedBy: operator,
+            expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
           },
-        }));
-      await tx.$queryRaw`SELECT id FROM users WHERE id = ${user.id}::uuid FOR UPDATE`;
-      const current = await tx.user.findUniqueOrThrow({
-        where: { id: user.id },
-      });
-      if (current.status !== 'PENDING' || current.deletedAt)
-        throw new ConflictException('INVITATION_ACCOUNT_NOT_PENDING');
-      const latest = await tx.accountInvitation.findFirst({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' },
-      });
-      const now = new Date();
-      if (latest && now.getTime() - latest.createdAt.getTime() < 60_000) {
-        throw new ConflictException('INVITATION_ISSUE_RATE_LIMIT');
-      }
-      const revoked = await tx.accountInvitation.findMany({
-        where: { userId: user.id, consumedAt: null, revokedAt: null },
-      });
-      await tx.accountInvitation.updateMany({
-        where: { userId: user.id, consumedAt: null, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      for (const previous of revoked) {
+        });
         await tx.accountActivationEvent.create({
           data: {
             userId: user.id,
-            invitationId: previous.id,
-            action: 'REVOKED',
+            invitationId: invitation.id,
+            action: 'ISSUED',
             actor: operator,
           },
         });
-      }
-      const token = randomBytes(32).toString('hex');
-      const invitation = await tx.accountInvitation.create({
-        data: {
-          userId: user.id,
-          tokenHash: digest(PURPOSE, token),
-          purpose: PURPOSE,
-          issuedBy: operator,
-          expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
-        },
-      });
-      await tx.accountActivationEvent.create({
-        data: {
-          userId: user.id,
+        return {
           invitationId: invitation.id,
-          action: 'ISSUED',
-          actor: operator,
-        },
-      });
-      return {
-        invitationId: invitation.id,
-        userId: user.id,
-        token,
-        expiresAt: invitation.expiresAt,
-      };
-    }));
+          userId: user.id,
+          token,
+          expiresAt: invitation.expiresAt,
+        };
+      }),
+    );
   }
 
   async revoke(invitationId: string, operator: string) {
     if (!operator.trim() || operator.length > 120)
       throw new BadRequestException('INVITATION_INPUT_INVALID');
-    return tenantStorage.run({ isSystemBypass: true }, () => this.prisma.$transaction(async (tx) => {
-      const invitation = await tx.accountInvitation.findUnique({
-        where: { id: invitationId },
-      });
-      if (!invitation) throw new BadRequestException('INVITATION_NOT_FOUND');
-      const changed = await tx.accountInvitation.updateMany({
-        where: { id: invitationId, consumedAt: null, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      if (changed.count)
-        await tx.accountActivationEvent.create({
-          data: {
-            userId: invitation.userId,
-            invitationId,
-            action: 'REVOKED',
-            actor: operator,
-          },
+    return tenantStorage.run({ isSystemBypass: true }, () =>
+      this.prisma.$transaction(async (tx) => {
+        const invitation = await tx.accountInvitation.findUnique({
+          where: { id: invitationId },
         });
-      return { revoked: changed.count === 1 };
-    }));
+        if (!invitation) throw new BadRequestException('INVITATION_NOT_FOUND');
+        const changed = await tx.accountInvitation.updateMany({
+          where: { id: invitationId, consumedAt: null, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        if (changed.count)
+          await tx.accountActivationEvent.create({
+            data: {
+              userId: invitation.userId,
+              invitationId,
+              action: 'REVOKED',
+              actor: operator,
+            },
+          });
+        return { revoked: changed.count === 1 };
+      }),
+    );
   }
 
   async accept(dto: AcceptInvitationDto) {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
       if (!/^[a-f0-9]{64}$/.test(dto.token)) throw invalid();
       if (Buffer.byteLength(dto.password, 'utf8') > 72)
-        throw new BadRequestException('Password must not exceed 72 UTF-8 bytes');
+        throw new BadRequestException(
+          'Password must not exceed 72 UTF-8 bytes',
+        );
       const tokenHash = digest(PURPOSE, dto.token);
       // Check the random capability before expensive password hashing; check again under lock.
       const invitation = await this.prisma.accountInvitation.findUnique({
@@ -161,7 +167,8 @@ export class InvitationsService {
         const user = await tx.user.findUnique({
           where: { id: invitation.userId },
         });
-        if (!user || user.status !== 'PENDING' || user.deletedAt) throw invalid();
+        if (!user || user.status !== 'PENDING' || user.deletedAt)
+          throw invalid();
         const now = new Date();
         const claim = await tx.accountInvitation.updateMany({
           where: {
@@ -199,15 +206,21 @@ export class InvitationsService {
     });
   }
 
-  async issueClinicInvitation(dto: IssueClinicInvitationDto, issuerUserId: string, organizationId: string) {
+  async issueClinicInvitation(
+    dto: IssueClinicInvitationDto,
+    issuerUserId: string,
+    organizationId: string,
+  ) {
     const email = dto.email.trim().toLowerCase();
     return this.prisma.$transaction(async (tx) => {
       // Check that the target organization is active
-      const org = await tx.organization.findUnique({ where: { id: organizationId } });
+      const org = await tx.organization.findUnique({
+        where: { id: organizationId },
+      });
       if (!org || org.deleted_at) {
         throw new BadRequestException('Organization is inactive or not found.');
       }
-      
+
       const role = await tx.role.findFirst({
         where: {
           id: dto.roleId,
@@ -215,7 +228,7 @@ export class InvitationsService {
         },
       });
       if (!role) throw new BadRequestException('ROLE_NOT_FOUND');
-      
+
       // Reject arbitrary role fields (e.g. escalating to Super Admin incorrectly)
       if (role.name === 'Super Admin') {
         throw new BadRequestException('Cannot invite users as Super Admin.');
@@ -223,9 +236,12 @@ export class InvitationsService {
 
       // Check issuer membership
       const issuerMembership = await tx.organizationMembership.findUnique({
-        where: { userId_organizationId: { userId: issuerUserId, organizationId } }
+        where: {
+          userId_organizationId: { userId: issuerUserId, organizationId },
+        },
       });
-      if (!issuerMembership) throw new UnauthorizedException('Issuer is not a member of the clinic');
+      if (!issuerMembership)
+        throw new UnauthorizedException('Issuer is not a member of the clinic');
 
       const existing = await tx.user.findFirst({
         where: { email: { equals: email, mode: 'insensitive' } },
@@ -247,14 +263,25 @@ export class InvitationsService {
       const membership = await tx.organizationMembership.findUnique({
         where: { userId_organizationId: { userId: user.id, organizationId } },
       });
-      if (membership) throw new ConflictException('User is already a member of this clinic.');
+      if (membership)
+        throw new ConflictException('User is already a member of this clinic.');
 
       const now = new Date();
       const revoked = await tx.accountInvitation.findMany({
-        where: { userId: user.id, organizationId, consumedAt: null, revokedAt: null },
+        where: {
+          userId: user.id,
+          organizationId,
+          consumedAt: null,
+          revokedAt: null,
+        },
       });
       await tx.accountInvitation.updateMany({
-        where: { userId: user.id, organizationId, consumedAt: null, revokedAt: null },
+        where: {
+          userId: user.id,
+          organizationId,
+          consumedAt: null,
+          revokedAt: null,
+        },
         data: { revokedAt: now },
       });
       for (const previous of revoked) {
@@ -298,10 +325,13 @@ export class InvitationsService {
     });
   }
 
-  async acceptClinicInvitation(dto: AcceptClinicInvitationDto, authenticatedUserId?: string) {
+  async acceptClinicInvitation(
+    dto: AcceptClinicInvitationDto,
+    authenticatedUserId?: string,
+  ) {
     return tenantStorage.run({ isSystemBypass: true }, async () => {
       if (!/^[a-f0-9]{64}$/.test(dto.token)) throw invalidClinic();
-      
+
       const tokenHash = digest(CLINIC_MEMBERSHIP_PURPOSE, dto.token);
       const invitation = await this.prisma.accountInvitation.findUnique({
         where: { tokenHash },
@@ -324,11 +354,16 @@ export class InvitationsService {
 
       return this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM users WHERE id = ${invitation.userId}::uuid FOR UPDATE`;
-        const user = await tx.user.findUnique({ where: { id: invitation.userId } });
+        const user = await tx.user.findUnique({
+          where: { id: invitation.userId },
+        });
         if (!user || user.deletedAt) throw invalidClinic();
-        
-        const org = await tx.organization.findUnique({ where: { id: invitation.organizationId! } });
-        if (!org || org.deleted_at) throw new UnauthorizedException('Clinic is inactive or deleted.');
+
+        const org = await tx.organization.findUnique({
+          where: { id: invitation.organizationId! },
+        });
+        if (!org || org.deleted_at)
+          throw new UnauthorizedException('Clinic is inactive or deleted.');
 
         let passwordHash = user.password_hash;
         let firstName = user.firstName;
@@ -336,23 +371,31 @@ export class InvitationsService {
 
         if (user.status === 'ACTIVE') {
           if (!authenticatedUserId) {
-            throw new UnauthorizedException('You must log in to accept this invitation.');
+            throw new UnauthorizedException(
+              'You must log in to accept this invitation.',
+            );
           }
           if (authenticatedUserId !== user.id) {
-            throw new UnauthorizedException('You are logged in as a different user than the invited identity.');
+            throw new UnauthorizedException(
+              'You are logged in as a different user than the invited identity.',
+            );
           }
         } else if (user.status === 'PENDING') {
           if (!dto.password || !dto.firstName || !dto.lastName) {
-            throw new BadRequestException('Password, first name, and last name are required for new accounts.');
+            throw new BadRequestException(
+              'Password, first name, and last name are required for new accounts.',
+            );
           }
           if (Buffer.byteLength(dto.password, 'utf8') > 72) {
-            throw new BadRequestException('Password must not exceed 72 UTF-8 bytes');
+            throw new BadRequestException(
+              'Password must not exceed 72 UTF-8 bytes',
+            );
           }
           passwordHash = await bcrypt.hash(dto.password, 12);
           firstName = dto.firstName;
           lastName = dto.lastName;
         } else {
-           throw invalidClinic();
+          throw invalidClinic();
         }
 
         const now = new Date();
@@ -382,7 +425,12 @@ export class InvitationsService {
         }
 
         const existingMembership = await tx.organizationMembership.findUnique({
-          where: { userId_organizationId: { userId: user.id, organizationId: invitation.organizationId! } }
+          where: {
+            userId_organizationId: {
+              userId: user.id,
+              organizationId: invitation.organizationId!,
+            },
+          },
         });
 
         if (!existingMembership) {

@@ -24,17 +24,18 @@ let invitations: InvitationsService;
 
 beforeAll(async () => {
   const url = process.env.UPGRADE_TEST_ADMIN_URL;
-  if (!url || new URL(url).hostname !== '127.0.0.1') throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
+  if (!url || new URL(url).hostname !== '127.0.0.1')
+    throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
   admin = new Client({ connectionString: url });
   await admin.connect();
   dbName = 'omnidesk_s02_' + randomUUID().replace(/-/g, '');
   await admin.query(`CREATE DATABASE "${dbName}"`);
-  
+
   const parsed = new URL(url);
   parsed.pathname = `/${dbName}`;
   const isolatedUrl = parsed.toString();
   process.env.DATABASE_URL = isolatedUrl;
-  
+
   await safeDeploy(resolve(__dirname, '..'));
 
   const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -44,7 +45,7 @@ beforeAll(async () => {
   app = moduleFixture.createNestApplication();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.init();
-  
+
   prisma = app.get(PrismaService);
   invitations = app.get(InvitationsService);
 });
@@ -97,7 +98,7 @@ describe('Clinic Invitations (e2e)', () => {
       const issueResult = await invitations.issueClinicInvitation(
         { email: newEmail, roleId: role.id },
         owner.id,
-        org.id
+        org.id,
       );
 
       expect(issueResult.token).toBeDefined();
@@ -117,13 +118,17 @@ describe('Clinic Invitations (e2e)', () => {
       expect(acceptRes.body.organizationId).toEqual(org.id);
 
       // 4. Verify user was created and joined clinic
-      const staff = await prisma.user.findUnique({ where: { email: newEmail } });
+      const staff = await prisma.user.findUnique({
+        where: { email: newEmail },
+      });
       expect(staff).toBeDefined();
       expect(staff!.status).toEqual('ACTIVE');
       expect(staff!.firstName).toEqual('Staff');
 
       const membership = await prisma.organizationMembership.findUnique({
-        where: { userId_organizationId: { userId: staff!.id, organizationId: org.id } },
+        where: {
+          userId_organizationId: { userId: staff!.id, organizationId: org.id },
+        },
       });
       expect(membership).toBeDefined();
       expect(membership!.roleId).toEqual(role.id);
@@ -187,7 +192,7 @@ describe('Clinic Invitations (e2e)', () => {
           userId: existingUser.id,
           organizationId: org3.id,
           roleId: role3.id,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
         },
       });
 
@@ -195,14 +200,19 @@ describe('Clinic Invitations (e2e)', () => {
       const issueResult = await invitations.issueClinicInvitation(
         { email: existingUserEmail, roleId: role.id },
         owner.id,
-        org.id
+        org.id,
       );
 
       // 4. Generate JWT for existing user
       const jwtService = app.get(JwtService);
       const token = jwtService.sign(
-        { sub: existingUser.id, email: existingUserEmail, organizationId: org3.id, roleId: role3.id },
-        { secret: process.env.JWT_ACCESS_SECRET }
+        {
+          sub: existingUser.id,
+          email: existingUserEmail,
+          organizationId: org3.id,
+          roleId: role3.id,
+        },
+        { secret: process.env.JWT_ACCESS_SECRET },
       );
 
       // 5. Accept via HTTP as an existing logged-in user
@@ -212,7 +222,7 @@ describe('Clinic Invitations (e2e)', () => {
         .send({
           token: issueResult.token,
         });
-      
+
       if (acceptRes.status !== 200) {
         console.error(acceptRes.body);
       }
@@ -221,7 +231,12 @@ describe('Clinic Invitations (e2e)', () => {
 
       // 6. Verify user joined clinic
       const membership = await prisma.organizationMembership.findUnique({
-        where: { userId_organizationId: { userId: existingUser.id, organizationId: org.id } },
+        where: {
+          userId_organizationId: {
+            userId: existingUser.id,
+            organizationId: org.id,
+          },
+        },
       });
       expect(membership).toBeDefined();
       expect(membership!.roleId).toEqual(role.id);
