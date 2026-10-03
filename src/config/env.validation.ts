@@ -1,4 +1,5 @@
 import { credentialKey } from '../credentials/credential-cipher';
+import { grpcTransportProblems } from '../grpc-client/grpc-transport';
 
 /**
  * Startup configuration schema (KI-028). Passed to ConfigModule.forRoot({ validate }),
@@ -23,6 +24,11 @@ export interface AppEnv {
   INTEGRATION_CREDENTIAL_KEY: string;
   FRONTEND_URL: string;
   PYTHON_SERVER_URL: string;
+  INTERNAL_GRPC_TLS: 'required' | 'disabled';
+  INTERNAL_GRPC_PRIVATE_NETWORK: boolean;
+  INTERNAL_GRPC_TLS_CA?: string;
+  INTERNAL_GRPC_TLS_CA_B64?: string;
+  INTERNAL_GRPC_TLS_SERVER_NAME?: string;
   PATIENT_MEDIA_RETENTION_DAYS?: number;
 }
 
@@ -155,6 +161,11 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   if (PYTHON_SERVER_URL && !/^[A-Za-z0-9.-]+:\d{1,5}$/.test(PYTHON_SERVER_URL))
     problems.push('PYTHON_SERVER_URL must be host:port (no scheme)');
 
+  // Same switch as the Python service; required (default) needs a CA (KI-002).
+  problems.push(...grpcTransportProblems(text));
+  const INTERNAL_GRPC_TLS =
+    text('INTERNAL_GRPC_TLS') === 'disabled' ? 'disabled' : 'required';
+
   const retentionRaw = text('PATIENT_MEDIA_RETENTION_DAYS');
   const PATIENT_MEDIA_RETENTION_DAYS =
     retentionRaw === undefined ? undefined : Number(retentionRaw);
@@ -195,6 +206,12 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     INTEGRATION_CREDENTIAL_KEY,
     FRONTEND_URL,
     PYTHON_SERVER_URL,
+    INTERNAL_GRPC_TLS,
+    INTERNAL_GRPC_PRIVATE_NETWORK:
+      text('INTERNAL_GRPC_PRIVATE_NETWORK') === 'true',
+    INTERNAL_GRPC_TLS_CA: text('INTERNAL_GRPC_TLS_CA'),
+    INTERNAL_GRPC_TLS_CA_B64: text('INTERNAL_GRPC_TLS_CA_B64'),
+    INTERNAL_GRPC_TLS_SERVER_NAME: text('INTERNAL_GRPC_TLS_SERVER_NAME'),
     PATIENT_MEDIA_RETENTION_DAYS,
   };
 }

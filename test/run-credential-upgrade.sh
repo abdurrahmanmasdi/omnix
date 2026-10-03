@@ -48,4 +48,7 @@ export META_VERIFY_TOKEN=synthetic-e2e-verify-token
 export INTERNAL_RPC_SECRET=synthetic-e2e-rpc-secret
 export FRONTEND_URL=http://localhost:3001
 export PYTHON_SERVER_URL=localhost:50051
+# Loopback only: plaintext gRPC with the explicit private-network acknowledgement (KI-002).
+export INTERNAL_GRPC_TLS=disabled
+export INTERNAL_GRPC_PRIVATE_NETWORK=true
 npx jest --config test/jest-e2e.json "${1:-credential-upgrade.e2e-spec.ts}" --runInBand --watchman=false

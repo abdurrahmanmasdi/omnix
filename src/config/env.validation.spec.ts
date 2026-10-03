@@ -19,7 +19,9 @@ const valid = () => ({
   FRONTEND_URL: 'https://app.example.test',
   PYTHON_SERVER_URL: 'ai.internal:50051',
   INTERNAL_GRPC_TLS: 'required',
-  INTERNAL_GRPC_TLS_CA: '/run/secrets/grpc-ca.pem',
+  INTERNAL_GRPC_TLS_CA_B64: Buffer.from(
+    '-----BEGIN CERTIFICATE-----\nc3ludGhldGlj\n-----END CERTIFICATE-----\n',
+  ).toString('base64'),
 });
 
 const problemsOf = (env: Record<string, unknown>) => {
@@ -159,5 +161,33 @@ describe('validateEnv', () => {
     } finally {
       process.env = saved;
     }
+  });
+
+  describe('internal gRPC transport (KI-002)', () => {
+    it('requires a CA when TLS is required (the default)', () => {
+      const env: Record<string, unknown> = valid();
+      delete env.INTERNAL_GRPC_TLS;
+      delete env.INTERNAL_GRPC_TLS_CA_B64;
+      expect(problemsOf(env).join('\n')).toContain('INTERNAL_GRPC_TLS_CA');
+    });
+
+    it('allows plaintext only with the private-network acknowledgement, in any NODE_ENV', () => {
+      const disabled = { ...valid(), INTERNAL_GRPC_TLS: 'disabled' };
+      expect(problemsOf(disabled).join('\n')).toContain(
+        'INTERNAL_GRPC_PRIVATE_NETWORK',
+      );
+      expect(problemsOf({ ...disabled, NODE_ENV: 'development' })).toHaveLength(
+        1,
+      );
+      expect(
+        problemsOf({ ...disabled, INTERNAL_GRPC_PRIVATE_NETWORK: 'true' }),
+      ).toEqual([]);
+    });
+
+    it('rejects an unknown mode', () => {
+      expect(
+        problemsOf({ ...valid(), INTERNAL_GRPC_TLS: 'optional' }),
+      ).toHaveLength(1);
+    });
   });
 });

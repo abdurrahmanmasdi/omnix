@@ -39,6 +39,8 @@ if [[ "${SKIP_GENERATED_CHECK:-0}" != "1" ]]; then
     META_APP_SECRET=synthetic-ci-only-meta-secret \
     META_VERIFY_TOKEN=synthetic-ci-only-verify-token \
     INTERNAL_RPC_SECRET=synthetic-ci-only-rpc-secret \
+    INTERNAL_GRPC_TLS=disabled \
+    INTERNAL_GRPC_PRIVATE_NETWORK=true \
     INTEGRATION_CREDENTIAL_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')" \
     REDIS_URL=redis://127.0.0.1:1 \
     npx ts-node scripts/export-openapi.ts "$frontend/openapi.json")
