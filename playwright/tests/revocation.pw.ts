@@ -21,7 +21,9 @@ test.describe("revocation while connected", () => {
 
     backendFixture("downgrade", "coordinatorA"); // removes PII, message and read-all grants
 
-    await page.reload(); // a fresh read with the same live session
+    // A fresh full page load with the same live session. One navigation only:
+    // reload + goto aborted the reload's in-flight refresh after the server had
+    // rotated the cookie, which the backend correctly treats as token reuse (KI-070).
     await openInbox(page);
     const residue = await pageResidue(page);
     expect(residue).not.toContain(a.assignedPatient.text);
