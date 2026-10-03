@@ -187,7 +187,7 @@ describe("Inbox user flows", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(calls.some((call) => call.url?.endsWith("/ai-resume"))).toBe(false);
     fireEvent.click(
-      screen.getByRole("button", { name: "Devam ettir", exact: true }),
+      screen.getByRole("button", { name: /^Devam ettir$/ }),
     );
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Devral" })).toBeEnabled(),
