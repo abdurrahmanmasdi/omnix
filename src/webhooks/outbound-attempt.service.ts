@@ -11,8 +11,9 @@ export type AttemptResult = 'ACCEPTED' | 'WAITING' | 'FAILED' | 'CANCELLED';
 
 /**
  * reply / follow-up: AI-generated bubbles, blocked by pause, assignment and a
- * newer conversation version. staff: a human reply, which is allowed while the
- * AI is paused but still needs opt-out, clinic, channel and 24 h checks.
+ * newer conversation version. staff: a human reply, allowed while the AI is
+ * paused and after a STOP (D-021: warning only); still needs clinic, channel
+ * and 24 h checks.
  * consent-request: the system media-consent prompt; blocked by pause and
  * opt-out, not by a newer inbound or by staff assignment.
  */
@@ -48,8 +49,9 @@ export class OutboundAttemptService {
   ) {}
 
   /**
-   * Checks shared by every patient-facing send (R8): opt-out, clinic,
-   * channel/credential, recipient, and the WhatsApp 24 h free-form window.
+   * Checks shared by every patient-facing send (R8): opt-out (automated
+   * purposes only, D-021), clinic, channel/credential, recipient, and the
+   * WhatsApp 24 h free-form window.
    */
   async checkEligibility(
     organizationId: string,
