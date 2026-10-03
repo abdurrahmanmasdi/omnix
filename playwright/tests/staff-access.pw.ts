@@ -35,6 +35,8 @@ test.describe("staff and restricted access in the Inbox", () => {
     await page.locator("#lastName").fill("Staff");
     await page.locator("#password").fill(password);
     await page.getByRole("button", { name: /activate account/i }).click();
+    // Leaving the page before the accept request finishes would abort it.
+    await expect(page.getByText("Account activated")).toBeVisible();
 
     await page.goto("/login");
     await page.locator("#email").fill(email);
