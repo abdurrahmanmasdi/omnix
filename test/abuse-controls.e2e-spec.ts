@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { safeDeploy } from '../src/credentials/deploy-cli';
 import cookieParser from 'cookie-parser';
+import Redis from 'ioredis';
 
 jest.setTimeout(120_000);
 let admin: Client;
@@ -39,6 +40,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // This suite deliberately exhausts the per-IP login bucket; clear the disposable
+  // throttler store so suites that run after it in the same process can log in.
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl && new URL(redisUrl).hostname === '127.0.0.1') {
+    const redis = new Redis(redisUrl);
+    await redis.flushdb();
+    await redis.quit();
+  }
   if (app) await app.close();
   if (admin) {
     await admin.query(`DROP DATABASE "${dbName}" WITH (FORCE)`);
