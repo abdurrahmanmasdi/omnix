@@ -170,6 +170,29 @@ describe('Account Recovery (P1-08)', () => {
     expect(response.status).toBe(401);
   });
 
+  it('consumes a recovery token exactly once under parallel use', async () => {
+    const { token } = await system(() =>
+      authService.issueRecovery('recover@example.com', operatorId),
+    );
+    const before = await system(() =>
+      prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    );
+
+    const results = await Promise.allSettled(
+      ['parallel-password-1', 'parallel-password-2', 'parallel-password-3'].map(
+        (newPassword) => authService.consumeRecovery({ token, newPassword }),
+      ),
+    );
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const after = await system(() =>
+      prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    );
+    expect(after.securityVersion).toBe(before.securityVersion + 1);
+  });
+
   it('should fail if user is suspended', async () => {
     await system(() =>
       prisma.user.update({

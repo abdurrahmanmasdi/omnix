@@ -119,8 +119,14 @@ export class AuthService {
       .createHash('sha256')
       .update(`PASSWORD_RECOVERY:${dto.token}`)
       .digest('hex');
+    const invalidToken = () =>
+      new UnauthorizedException(
+        'Recovery token is invalid, expired, or already used.',
+      );
 
     await tenantStorage.run({ isSystemBypass: true }, async () => {
+      // Hash before the transaction so the row claim below stays short.
+      const password_hash = await bcrypt.hash(dto.newPassword, 12);
       await this.prisma.$transaction(async (tx) => {
         const invitation = await tx.accountInvitation.findUnique({
           where: { tokenHash },
@@ -133,15 +139,25 @@ export class AuthService {
           invitation.revokedAt ||
           invitation.expiresAt < new Date()
         ) {
-          throw new UnauthorizedException(
-            'Recovery token is invalid, expired, or already used.',
-          );
+          throw invalidToken();
         }
         if (invitation.user.deletedAt || invitation.user.status !== 'ACTIVE') {
           throw new UnauthorizedException('Account is suspended or deleted.');
         }
 
-        const password_hash = await bcrypt.hash(dto.newPassword, 12);
+        // Compare-and-set: of several parallel consumers exactly one claims the token.
+        const now = new Date();
+        const claim = await tx.accountInvitation.updateMany({
+          where: {
+            id: invitation.id,
+            purpose: 'PASSWORD_RECOVERY',
+            consumedAt: null,
+            revokedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { consumedAt: now },
+        });
+        if (claim.count !== 1) throw invalidToken();
 
         await tx.user.update({
           where: { id: invitation.userId },
@@ -158,11 +174,6 @@ export class AuthService {
             revokedAt: new Date(),
             revokedReason: 'Password Reset',
           },
-        });
-
-        await tx.accountInvitation.update({
-          where: { id: invitation.id },
-          data: { consumedAt: new Date() },
         });
 
         const activeMemberships = await tx.organizationMembership.findMany({
