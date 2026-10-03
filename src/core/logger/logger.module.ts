@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
+import { isProduction } from '../../config/runtime';
 
 @Module({
   imports: [
@@ -27,15 +28,14 @@ import { randomUUID } from 'node:crypto';
           ],
           censor: '[REDACTED]',
         },
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? {
-                target: 'pino-pretty',
-                options: {
-                  singleLine: true,
-                },
-              }
-            : undefined,
+        transport: !isProduction()
+          ? {
+              target: 'pino-pretty',
+              options: {
+                singleLine: true,
+              },
+            }
+          : undefined,
       },
     }),
   ],

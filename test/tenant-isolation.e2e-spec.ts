@@ -5,7 +5,7 @@ import { randomUUID, createHmac } from 'node:crypto';
 import { resolve } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { getQueueToken } from '@nestjs/bullmq';
 import request from 'supertest';
@@ -171,7 +171,7 @@ beforeAll(async () => {
     ],
   }).compile();
   app = module.createNestApplication({ logger: false, rawBody: true });
-  const middleware = new TenantMiddleware();
+  const middleware = new TenantMiddleware(module.get(ConfigService));
   app.use(middleware.use.bind(middleware));
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -177,7 +177,7 @@ beforeAll(async () => {
   }).compile();
 
   app = module.createNestApplication({ logger: false });
-  const middleware = new TenantMiddleware();
+  const middleware = new TenantMiddleware(module.get(ConfigService));
   app.use(middleware.use.bind(middleware));
   await app.listen(0);
 

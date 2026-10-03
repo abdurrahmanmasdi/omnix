@@ -1,7 +1,7 @@
 import { ThrottlerModule } from '@nestjs/throttler';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Client } from 'pg';
 import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -85,7 +85,7 @@ beforeAll(async () => {
     logger: false,
   });
   app.use(cookieParser());
-  const middleware = new TenantMiddleware();
+  const middleware = new TenantMiddleware(module.get(ConfigService));
   app.use(middleware.use.bind(middleware));
   app.useGlobalPipes(
     new ValidationPipe({
@@ -175,9 +175,11 @@ it('uses the operator CLI invitation → acceptance → login → workspace → 
       .post('/auth/login')
       .send({ email, password })
       .expect(401);
-    const stored = await system(() => prisma.accountInvitation.findFirstOrThrow({
-      where: { userId: user.id },
-    }));
+    const stored = await system(() =>
+      prisma.accountInvitation.findFirstOrThrow({
+        where: { userId: user.id },
+      }),
+    );
     expect(stored.tokenHash === token).toBe(false);
     const accepted = await request(app.getHttpServer())
       .post('/auth/accept-invitation')
@@ -249,17 +251,21 @@ it.each(['expired', 'revoked', 'wrong-purpose'] as const)(
   async (kind) => {
     const invite = await invited();
     if (kind === 'expired')
-      await system(() => prisma.accountInvitation.update({
-        where: { id: invite.invitationId },
-        data: { expiresAt: new Date(0) },
-      }));
+      await system(() =>
+        prisma.accountInvitation.update({
+          where: { id: invite.invitationId },
+          data: { expiresAt: new Date(0) },
+        }),
+      );
     if (kind === 'revoked')
       await invitations.revoke(invite.invitationId, operator);
     if (kind === 'wrong-purpose')
-      await system(() => prisma.accountInvitation.update({
-        where: { id: invite.invitationId },
-        data: { purpose: 'EMAIL_VERIFICATION' },
-      }));
+      await system(() =>
+        prisma.accountInvitation.update({
+          where: { id: invite.invitationId },
+          data: { purpose: 'EMAIL_VERIFICATION' },
+        }),
+      );
     await request(app.getHttpServer())
       .post('/auth/accept-invitation')
       .send(body(invite.token))
@@ -317,10 +323,12 @@ it('rate limits operator reissue, revokes old invitations and audits replacement
   await expect(invitations.issue(invite.email, operator)).rejects.toThrow(
     'INVITATION_ISSUE_RATE_LIMIT',
   );
-  await system(() => prisma.accountInvitation.update({
-    where: { id: invite.invitationId },
-    data: { createdAt: new Date(Date.now() - 61_000) },
-  }));
+  await system(() =>
+    prisma.accountInvitation.update({
+      where: { id: invite.invitationId },
+      data: { createdAt: new Date(Date.now() - 61_000) },
+    }),
+  );
   const replacement = await invitations.issue(invite.email, operator);
   await request(app.getHttpServer())
     .post('/auth/accept-invitation')

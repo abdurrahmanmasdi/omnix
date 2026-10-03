@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -55,6 +56,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document); // Hosts the docs at http://localhost:3000/api
 
-  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
+  await app.listen(
+    app.get(ConfigService).get<number>('PORT') ?? 3001,
+    '0.0.0.0',
+  );
 }
 void bootstrap();

@@ -25,6 +25,7 @@ import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
+import { isProduction } from '../config/runtime';
 
 // Session upkeep: own generous per-IP bucket instead of the strict auth/default ones.
 const SESSION_ROUTE = { auth: true, default: true, session: false };
@@ -160,7 +161,7 @@ export class AuthController {
     } catch {
       res.clearCookie(REFRESH_COOKIE_NAME, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction(),
         sameSite: 'lax',
       });
       throw new UnauthorizedException('Invalid or expired refresh token');

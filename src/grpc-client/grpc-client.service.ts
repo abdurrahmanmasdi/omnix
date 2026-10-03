@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { Metadata } from '@grpc/grpc-js';
+import { ConfigService } from '@nestjs/config';
 import { lastValueFrom, timeout, Observable } from 'rxjs';
 import {
   AgentRequest,
@@ -61,6 +62,7 @@ export class GrpcClientService implements OnModuleInit {
   constructor(
     @Inject('AI_AGENT_PACKAGE') private readonly agentClient: ClientGrpc,
     @Inject('RAG_PACKAGE') private readonly ragClient: ClientGrpc,
+    private readonly config: ConfigService,
   ) {}
 
   onModuleInit() {
@@ -72,7 +74,7 @@ export class GrpcClientService implements OnModuleInit {
 
   private getMetadata(): Metadata {
     const meta = new Metadata();
-    const secret = process.env.INTERNAL_RPC_SECRET;
+    const secret = this.config.get<string>('INTERNAL_RPC_SECRET');
     if (!secret) {
       this.logger.error('INTERNAL_RPC_SECRET is not configured.');
       throw new HttpException(
