@@ -1,6 +1,27 @@
 # Outbound delivery in the invitation-only pilot
 
-Every AI reply bubble and WhatsApp follow-up bubble has a stable `messages.idempotencyKey` and one `outbound_attempts` row. The attempt is committed before the provider POST. `SENDING` is a claim, not proof of delivery. A successful Meta response and the local message update commit together as `ACCEPTED`/`SENT`. A timeout, missing provider ID, or local commit failure leaves `UNKNOWN` (or a `SENDING` row that becomes `UNKNOWN` after two minutes). The worker never resends an `UNKNOWN` attempt automatically. Signed Meta status webhooks can reconcile by provider ID or `biz_opaque_callback_data`; the latter is correlation data, not provider-side deduplication.
+Every patient-facing WhatsApp send — AI reply bubbles, follow-up bubbles, staff manual replies (`purpose = staff`, key `staff-<messageId>`) and the media-consent request (`purpose = consent-request`) — has a stable `messages.idempotencyKey` and one `outbound_attempts` row. The attempt is committed before the provider POST. `SENDING` is a claim, not proof of delivery. A successful Meta response and the local message update commit together as `ACCEPTED`/`SENT`. A timeout, missing provider ID, or local commit failure leaves `UNKNOWN` (or a `SENDING` row that becomes `UNKNOWN` after two minutes). The worker never resends an `UNKNOWN` attempt automatically. Signed Meta status webhooks can reconcile by provider ID or `biz_opaque_callback_data`; the latter is correlation data, not provider-side deduplication.
+
+All sends share one eligibility check (clinic active, channel + credential, recipient, 24 h window) plus purpose-specific rules:
+
+| Purpose           | Blocked by opt-out (STOP)                                         | Blocked by AI pause                                                      | Blocked by staff assignment / newer version |
+| ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------- |
+| `reply` (AI)      | yes                                                               | yes                                                                      | yes                                         |
+| `follow-up`       | yes                                                               | yes                                                                      | yes                                         |
+| `consent-request` | yes                                                               | yes                                                                      | no                                          |
+| `staff`           | **no** — sent, response carries `warnings: ['PATIENT_OPTED_OUT']` | no (the send pauses the AI and bumps the version itself, before sending) | no                                          |
+
+A STOP stops automation, never people (D-021): a staff send to an opted-out patient is not rejected for the opt-out; it is delivered (subject to the 24 h window), returns a warning, and its `conversation.staff_message_sent` audit row records `patientOptedOut: true`. When a STOP newly opts a patient out, eligible staff get one "Patient sent STOP" alert (in the inbound transaction, so replays do not repeat it). A staff send that is not eligible for other reasons is rejected with 422 and a reason code (`OUTSIDE_24H_WINDOW`, `CHANNEL_UNAVAILABLE`, `NO_CONTACT`, `CLINIC_INACTIVE`).
+
+Patient commands (`src/webhooks/patient-commands.ts`) count only as the **whole message**, after trimming, Turkish-safe case folding (`İ`/`I`/`ı` → `i`) and dropping trailing `.` / `!`:
+
+- Opt-out (STOP): `stop`, `stopp`, `unsubscribe`, `opt out` / `opt-out` / `optout`, `no messages`, `no more messages`, `nicht mehr`, `abmelden`, `mesaj gönderme` / `mesaj gonderme`, `artık mesaj` / `artik mesaj`, `parar`, `detener`, `durdur`, `abonelikten çık` / `abonelikten cik` (the last two proposed, native review pending — Q13).
+- Opt-in (re-enables automated sends, does not resume the AI): `start`, `başla`, `basla`.
+- Not commands on purpose: `cancel`, `iptal`, `cancelar`, `end`, `quit`, `basta`, bare `dur`, and any sentence (`stop that, let's negotiate`, `please stop messaging me`). There is no sentence-level or model-based opt-out detection; such messages reach the AI/staff as ordinary text.
+
+A failure before the provider POST (credential missing, revoked or unreadable) is `FAILED` with `LOCAL_CREDENTIAL_*`: Meta was never contacted, so it is not `UNKNOWN` and is not retried.
+
+When an attempt becomes `UNKNOWN` it is routed to people once (`escalatedAt`): the AI is paused and the conversation version bumped, eligible staff get a "Delivery uncertain — check WhatsApp before replying" alert through the outbox, and an `outbound.delivery_unknown` audit row is written. A per-minute sweep covers `SENDING`→`UNKNOWN` and crashes before routing. A later provider callback can still mark the attempt `ACCEPTED`; it does not resume the AI.
 
 Confirmed HTTP 429 or provider `failed` status is retried at most three attempts, with authorization checked again. Other explicit 4xx rejections remain `FAILED` for operator review. The worker checks conversation version, pause, opt-out, assignment, organization and channel before each send. Pending follow-ups are canceled in the inbound message transaction, and a recovery cron re-enqueues due records when Redis scheduling fails or a worker stops. A leased follow-up processor prevents competing jobs from generating/sending concurrently.
 
@@ -17,6 +38,6 @@ WHERE a.status IN ('UNKNOWN', 'FAILED')
 ORDER BY a."updatedAt" DESC;
 ```
 
-For `UNKNOWN`, inspect signed provider status evidence and the Meta dashboard before any manual intervention. Do not reset the row to `PENDING` or re-enqueue the same content merely because no callback arrived: the customer may already have received it. If provider evidence remains unavailable, route the conversation to a human and record the investigation outside the automated sender. Do not infer delivery from `biz_opaque_callback_data` alone.
+For `UNKNOWN`, inspect signed provider status evidence and the Meta dashboard before any manual intervention. Do not reset the row to `PENDING` or re-enqueue the same content merely because no callback arrived: the customer may already have received it. The conversation has already been paused and staff alerted automatically; if provider evidence remains unavailable, a person decides whether to write to the patient again and records the investigation outside the automated sender. Do not infer delivery from `biz_opaque_callback_data` alone.
 
 The migrations are additive and preserve earlier history. Tests use synthetic accounts and a disposable PostgreSQL database. A provider sandbox fault exercise and production status-webhook verification are still required before real patient traffic (S17).

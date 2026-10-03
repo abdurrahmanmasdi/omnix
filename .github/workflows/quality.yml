@@ -1,4 +1,6 @@
 name: Cross-service quality
+permissions:
+  contents: read
 on:
   push:
   pull_request:
@@ -7,30 +9,45 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: main
+        default: b457f4c31031140ade60ee63948f7551e27c2c7d
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
-        default: main
+        default: 9700405cd3837f70b8e1784f89aa72ee7ca55b79
 jobs:
   quality:
+    # Environment admission alone cannot distinguish same-repo PRs from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    environment: ci-private-peers
     steps:
       - uses: actions/checkout@v4
         with:
           path: backend-v2
+          persist-credentials: false
+      - name: Require peer repository read access
+        env:
+          CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+        run: |
+          if [ -z "$CROSS_REPO_READ_TOKEN" ]; then
+            echo '::error::Configure CROSS_REPO_READ_TOKEN with read access to Omnix_FE and Omnix_py.'
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
-          repository: abdurrahmanmasdi/wp_crm_FE
+          repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          ref: ${{ inputs.frontend_ref || 'main' }}
-          token: ${{ secrets.CROSS_REPO_READ_TOKEN || github.token }}
+          # Pin the coordinated Stage 1 peers before backend -> Python -> frontend merge.
+          ref: ${{ inputs.frontend_ref || 'b457f4c31031140ade60ee63948f7551e27c2c7d' }}
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+          persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          repository: abdurrahmanmasdi/degital_sales_employee_python
+          repository: abdurrahmanmasdi/Omnix_py
           path: python-ai-service-v2
-          ref: ${{ inputs.python_ref || 'main' }}
-          token: ${{ secrets.CROSS_REPO_READ_TOKEN || github.token }}
+          ref: ${{ inputs.python_ref || '9700405cd3837f70b8e1784f89aa72ee7ca55b79' }}
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: backend-v2/.nvmrc
@@ -48,4 +65,5 @@ jobs:
       - name: Run quality gate
         run: bash backend-v2/scripts/quality-gate.sh
       - name: Run database acceptance suite
-        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|inbound-claim|media-consent|auth-refresh-concurrency'
+        # Every disposable-DB suite (KI-016). app.e2e/auth.e2e are legacy scaffolding (KI-066), not run.
+        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|credential-upgrade|runtime-role-passwords|health'

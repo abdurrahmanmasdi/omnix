@@ -21,10 +21,20 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
+import { isProduction } from '../config/runtime';
+
+// Session upkeep: own generous per-IP bucket instead of the strict auth/default ones.
+const SESSION_ROUTE = { auth: true, default: true, session: false };
 
 @ApiTags('Authentication')
 @Controller('auth')
+@UseGuards(CustomThrottlerGuard)
+@Throttle({ auth: { limit: 10, ttl: 60000 } })
+@SkipThrottle({ loginIp: true, session: true })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -41,6 +51,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @SkipThrottle({ loginIp: false })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log in and receive access/refresh tokens' })
   @ApiResponse({
@@ -70,6 +81,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @SkipThrottle(SESSION_ROUTE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log out and clear cookies' })
   @ApiResponse({
@@ -88,6 +100,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @SkipThrottle(SESSION_ROUTE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using HTTP-only cookie' })
   @ApiResponse({
@@ -148,7 +161,7 @@ export class AuthController {
     } catch {
       res.clearCookie(REFRESH_COOKIE_NAME, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction(),
         sameSite: 'lax',
       });
       throw new UnauthorizedException('Invalid or expired refresh token');
@@ -165,6 +178,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @SkipThrottle(SESSION_ROUTE)
   @UseGuards(JwtAuthGuard) // 🛡️ THE BOUNCER IS ACTIVE!
   @ApiBearerAuth() // Tells Swagger this route requires a token
   @ApiOperation({ summary: 'Get the currently logged-in user profile' })
@@ -174,5 +188,16 @@ export class AuthController {
       message: 'You have successfully bypassed the guard!',
       user: req.user,
     };
+  }
+
+  @Post('recovery/consume')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Reset password using a recovery token' })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Password reset successfully',
+  })
+  async consumeRecovery(@Body() dto: ConsumeRecoveryDto): Promise<void> {
+    await this.authService.consumeRecovery(dto);
   }
 }

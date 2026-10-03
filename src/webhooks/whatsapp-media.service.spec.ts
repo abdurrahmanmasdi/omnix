@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { WhatsappMediaService } from './whatsapp-media.service';
+import {
+  WhatsappMediaService,
+  patientMediaExpiry,
+  patientMediaRetentionDays,
+} from './whatsapp-media.service';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 
@@ -19,7 +23,13 @@ describe('WhatsappMediaService', () => {
             auditLog: { create: jest.fn() },
             message: {
               updateMany: jest.fn().mockResolvedValue({ count: 5 }),
-              findMany: jest.fn().mockResolvedValue([{ id: 'msg-1', metaMessageId: 'meta-1', conversation: { organizationId: 'org-1' } }]),
+              findMany: jest.fn().mockResolvedValue([
+                {
+                  id: 'msg-1',
+                  metaMessageId: 'meta-1',
+                  conversation: { organizationId: 'org-1' },
+                },
+              ]),
               update: jest.fn().mockResolvedValue({}),
             },
           },
@@ -47,6 +57,12 @@ describe('WhatsappMediaService', () => {
       const result = await service.downloadMediaAsBase64('media-id', 'token');
       expect(result).toBe(Buffer.from('test-data').toString('base64'));
       expect(axios.get).toHaveBeenCalledTimes(2);
+      // Bounded download: a stalled or oversized media fetch cannot hang
+      // the inbound worker (KI-026).
+      expect((axios.get as jest.Mock).mock.calls[1][1]).toMatchObject({
+        timeout: 15_000,
+        maxContentLength: 16 * 1024 * 1024,
+      });
     });
 
     it('should return null if url is not found', async () => {
@@ -74,6 +90,22 @@ describe('WhatsappMediaService', () => {
         },
       });
       expect(prisma.auditLog.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('patient media retention', () => {
+    it('defaults to 30 days and accepts a valid override', () => {
+      expect(patientMediaRetentionDays(undefined)).toBe(30);
+      expect(patientMediaRetentionDays('7')).toBe(7);
+      for (const invalid of ['', '0', '-3', '2.5', 'abc', '99999'])
+        expect(patientMediaRetentionDays(invalid)).toBe(30);
+    });
+
+    it('computes the expiry from now', () => {
+      const now = new Date('2026-10-01T00:00:00Z');
+      expect(patientMediaExpiry(now).toISOString()).toBe(
+        '2026-10-31T00:00:00.000Z',
+      );
     });
   });
 });

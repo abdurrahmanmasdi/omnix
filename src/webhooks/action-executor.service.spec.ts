@@ -39,7 +39,9 @@ describe('ActionExecutorService', () => {
               create: jest.fn(),
               count: jest.fn().mockResolvedValue(1),
             },
-            outboxEvent: { create: jest.fn().mockResolvedValue({ id: 'outbox-1' }) },
+            outboxEvent: {
+              create: jest.fn().mockResolvedValue({ id: 'outbox-1' }),
+            },
             organizationMembership: {
               findMany: jest.fn().mockResolvedValue([
                 {
@@ -128,7 +130,11 @@ describe('ActionExecutorService', () => {
     });
 
     it('persists the pause, lead state, notification and relay intent together', async () => {
-      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({
+        executed: 1,
+        rejected: 0,
+        failed: 0,
+      });
       expect(prismaService.conversation.update).toHaveBeenCalledWith({
         where: { id: 'trusted-conv', organizationId: 'org-1' },
         data: { aiPaused: true, stateVersion: { increment: 1 } },
@@ -152,7 +158,10 @@ describe('ActionExecutorService', () => {
         data: {
           organizationId: 'org-1',
           topic: 'notification.broadcast',
-          payload: { organizationId: 'org-1', notificationId: 'notification-1' },
+          payload: {
+            organizationId: 'org-1',
+            notificationId: 'notification-1',
+          },
         },
       });
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
@@ -189,7 +198,9 @@ describe('ActionExecutorService', () => {
         include: { lead: true },
       });
       expect(prismaService.lead.update).not.toHaveBeenCalled();
-      expect(prismaService.organizationMembership.findMany).not.toHaveBeenCalled();
+      expect(
+        prismaService.organizationMembership.findMany,
+      ).not.toHaveBeenCalled();
     });
 
     it('does not hand off a conversation outside the worker tenant', async () => {
@@ -197,7 +208,9 @@ describe('ActionExecutorService', () => {
         null,
       );
       expect(await handoff()).toMatchObject({
-        executed: 0, rejected: 0, failed: 1,
+        executed: 0,
+        rejected: 0,
+        failed: 1,
         outcomes: [{ reasonCode: 'CONVERSATION_NOT_FOUND', retryable: false }],
       });
       expect(prismaService.$transaction).not.toHaveBeenCalled();
@@ -208,7 +221,11 @@ describe('ActionExecutorService', () => {
         ...conversation,
         lead: { ...conversation.lead, organizationId: 'org-2' },
       });
-      expect(await handoff()).toMatchObject({ executed: 0, rejected: 0, failed: 1 });
+      expect(await handoff()).toMatchObject({
+        executed: 0,
+        rejected: 0,
+        failed: 1,
+      });
       expect(prismaService.$transaction).not.toHaveBeenCalled();
     });
 
@@ -217,7 +234,9 @@ describe('ActionExecutorService', () => {
         prismaService.organizationMembership.findMany as jest.Mock
       ).mockResolvedValue([]);
       expect(await handoff()).toMatchObject({
-        executed: 0, rejected: 0, failed: 1,
+        executed: 0,
+        rejected: 0,
+        failed: 1,
         outcomes: [{ reasonCode: 'NO_ELIGIBLE_STAFF', retryable: true }],
       });
       expect(prismaService.conversation.update).not.toHaveBeenCalled();
@@ -244,7 +263,11 @@ describe('ActionExecutorService', () => {
           permissionOverrides: [],
         },
       ]);
-      expect(await handoff()).toMatchObject({ executed: 0, rejected: 0, failed: 1 });
+      expect(await handoff()).toMatchObject({
+        executed: 0,
+        rejected: 0,
+        failed: 1,
+      });
       expect(prismaService.notification.create).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
     });
@@ -255,7 +278,11 @@ describe('ActionExecutorService', () => {
         leadId: null,
         lead: null,
       });
-      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({
+        executed: 1,
+        rejected: 0,
+        failed: 0,
+      });
       expect(prismaService.lead.update).not.toHaveBeenCalled();
       expect(prismaService.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -278,7 +305,11 @@ describe('ActionExecutorService', () => {
       (
         eventsGateway.broadcastConversationUpdate as jest.Mock
       ).mockRejectedValue(new Error('Sensitive transport detail'));
-      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({
+        executed: 1,
+        rejected: 0,
+        failed: 0,
+      });
       for (const event of ['lead', 'conversation']) {
         expect(warn).toHaveBeenCalledWith(
           `ACTION_BROADCAST_FAILED event=${event} conversationId=trusted-conv`,
@@ -292,7 +323,11 @@ describe('ActionExecutorService', () => {
       (prismaService.$transaction as jest.Mock).mockRejectedValue(
         new Error('Transaction failed'),
       );
-      expect(await handoff()).toMatchObject({ executed: 0, rejected: 0, failed: 1 });
+      expect(await handoff()).toMatchObject({
+        executed: 0,
+        rejected: 0,
+        failed: 1,
+      });
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastLeadUpdate).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastConversationUpdate).not.toHaveBeenCalled();
@@ -303,7 +338,11 @@ describe('ActionExecutorService', () => {
         ...conversation,
         aiPaused: true,
       });
-      expect(await handoff()).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
+      expect(await handoff()).toMatchObject({
+        executed: 1,
+        rejected: 0,
+        failed: 0,
+      });
       expect(prismaService.$transaction).not.toHaveBeenCalled();
       expect(eventsGateway.broadcastNotification).not.toHaveBeenCalled();
     });
@@ -421,7 +460,8 @@ describe('ActionExecutorService', () => {
       expect(result.executed).toBe(0);
       expect(result.rejected).toBe(1);
       expect(result.outcomes[0]).toMatchObject({
-        reasonCode: 'ACTION_INVALID', retryable: false,
+        reasonCode: 'ACTION_INVALID',
+        retryable: false,
       });
 
       // Verify Prisma was never called for update
@@ -462,16 +502,22 @@ describe('ActionExecutorService', () => {
       });
     });
 
-    
     it('ensures a failed action cannot generate a success promise', async () => {
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
-        id: 'trusted-conv', organizationId: 'org-1', leadId: 'lead-1',
+        id: 'trusted-conv',
+        organizationId: 'org-1',
+        leadId: 'lead-1',
         lead: { status: 'NEW' },
       });
-      (prismaService.lead.update as jest.Mock).mockRejectedValue(new Error('Synthetic DB Error'));
-      
+      (prismaService.lead.update as jest.Mock).mockRejectedValue(
+        new Error('Synthetic DB Error'),
+      );
+
       const result = await service.executeActions('org-1', 'trusted-conv', [
-        { type: 'UPDATE_LEAD', payload: JSON.stringify({ status: 'QUALIFYING' }) },
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({ status: 'QUALIFYING' }),
+        },
       ]);
       expect(result.executed).toBe(0);
       expect(result.failed).toBe(1);
@@ -481,24 +527,33 @@ describe('ActionExecutorService', () => {
 
     it('classifies a rejected database lead update as retryable', async () => {
       (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
-        id: 'trusted-conv', organizationId: 'org-1', leadId: 'lead-1',
+        id: 'trusted-conv',
+        organizationId: 'org-1',
+        leadId: 'lead-1',
         lead: { status: LeadStatus.NEW },
       });
-      (prismaService.lead.update as jest.Mock).mockRejectedValue(new Error('synthetic database outage'));
+      (prismaService.lead.update as jest.Mock).mockRejectedValue(
+        new Error('synthetic database outage'),
+      );
       const result = await service.executeActions('org-1', 'trusted-conv', [
-        { type: 'UPDATE_LEAD', payload: JSON.stringify({ status: LeadStatus.QUALIFYING }) },
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({ status: LeadStatus.QUALIFYING }),
+        },
       ]);
       expect(result).toMatchObject({
-        executed: 0, rejected: 0, failed: 1,
+        executed: 0,
+        rejected: 0,
+        failed: 1,
         outcomes: [{ reasonCode: 'ACTION_WRITE_FAILED', retryable: true }],
       });
     });
 
-    it('Enforces lead status transition matrix (rejects WON -> NEW)', async () => {
+    it('Enforces lead status transition matrix (rejects WON -> QUALIFYING)', async () => {
       const actions = [
         {
           type: 'UPDATE_LEAD',
-          payload: JSON.stringify({ status: LeadStatus.NEW }),
+          payload: JSON.stringify({ status: LeadStatus.QUALIFYING }),
         },
       ];
 
@@ -520,6 +575,51 @@ describe('ActionExecutorService', () => {
       expect(result.failed).toBe(1);
 
       expect(prismaService.lead.update).not.toHaveBeenCalled();
+    });
+
+    // WP-A A12 (KI-024): the AI cannot change phone/email or set staff-only statuses.
+    it.each([
+      [{ phoneNumber: '+15550000000' }],
+      [{ email: 'synthetic@example.invalid' }],
+      [{ status: LeadStatus.WON }],
+      [{ status: LeadStatus.LOST }],
+      [{ status: LeadStatus.READY_TO_PAY }],
+      [{ status: LeadStatus.UNQUALIFIED }],
+      [{ status: LeadStatus.NEW }],
+    ])('rejects AI lead update %j before Prisma is called', async (payload) => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        id: 'trusted-conv',
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        lead: { status: LeadStatus.QUALIFIED },
+      });
+      const result = await service.executeActions('org-1', 'trusted-conv', [
+        { type: 'UPDATE_LEAD', payload: JSON.stringify(payload) },
+      ]);
+      expect(result).toMatchObject({ executed: 0, rejected: 1, failed: 0 });
+      expect(prismaService.lead.update).not.toHaveBeenCalled();
+    });
+
+    it('still lets the AI mark a lead QUALIFIED', async () => {
+      (prismaService.conversation.findFirst as jest.Mock).mockResolvedValue({
+        id: 'trusted-conv',
+        organizationId: 'org-1',
+        leadId: 'lead-1',
+        lead: { status: LeadStatus.QUALIFYING },
+      });
+      (prismaService.lead.update as jest.Mock).mockResolvedValue({
+        id: 'lead-1',
+      });
+      const result = await service.executeActions('org-1', 'trusted-conv', [
+        {
+          type: 'UPDATE_LEAD',
+          payload: JSON.stringify({ status: LeadStatus.QUALIFIED }),
+        },
+      ]);
+      expect(result).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
+      expect(prismaService.lead.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: LeadStatus.QUALIFIED } }),
+      );
     });
   });
 });

@@ -1,10 +1,11 @@
+import { ThrottlerModule } from '@nestjs/throttler';
 /* eslint-disable @typescript-eslint/no-unsafe-argument -- Synthetic Nest providers. */
 import { Client } from 'pg';
 import { randomUUID, createHmac } from 'node:crypto';
 import { resolve } from 'node:path';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { getQueueToken } from '@nestjs/bullmq';
 import request from 'supertest';
@@ -20,6 +21,8 @@ import { LeadsService } from '../src/leads/leads.service';
 import { QueryBuilderService } from '../src/common/query/query-builder.service';
 import { NotificationEmitterService } from '../src/notifications/notification-emitter.service';
 import { WhatsappService } from '../src/webhooks/whatsapp.service';
+import { OutboundAttemptService } from '../src/webhooks/outbound-attempt.service';
+import { DeliveryAuthService } from '../src/webhooks/delivery-auth.service';
 import { EventsGateway } from '../src/events/events/events.gateway';
 import { WebhooksController } from '../src/webhooks/webhooks.controller';
 import { WebhooksService } from '../src/webhooks/webhooks.service';
@@ -105,6 +108,7 @@ async function seedTenant(permissionIds: string[]) {
         email: user.email,
         organizationId: organization.id,
         roleId: role.id,
+        securityVersion: 1,
       },
       { secret: accessSecret, expiresIn: '15m' },
     );
@@ -134,6 +138,7 @@ beforeAll(async () => {
   await safeDeploy(resolve(__dirname, '..'));
   const module = await Test.createTestingModule({
     imports: [
+      ThrottlerModule.forRoot([{ name: 'auth', ttl: 300000, limit: 10 }]),
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
       PrismaModule,
       AuthModule,
@@ -147,11 +152,14 @@ beforeAll(async () => {
       WebhooksService,
       JwtAuthGuard,
       PermissionsGuard,
+      OutboundAttemptService,
+      DeliveryAuthService,
       { provide: WhatsappService, useValue: { sendTextMessage: providerSend } },
       {
         provide: EventsGateway,
         useValue: {
           broadcastNewMessage: jest.fn(),
+          broadcastConversationUpdate: jest.fn().mockResolvedValue(undefined),
           broadcastLeadUpdate: jest.fn().mockResolvedValue(undefined),
           broadcastNotification: jest.fn().mockResolvedValue(undefined),
         },
@@ -163,7 +171,7 @@ beforeAll(async () => {
     ],
   }).compile();
   app = module.createNestApplication({ logger: false, rawBody: true });
-  const middleware = new TenantMiddleware();
+  const middleware = new TenantMiddleware(module.get(ConfigService));
   app.use(middleware.use.bind(middleware));
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
@@ -226,13 +234,26 @@ it('denies cross-tenant HTTP writes and forged signed memberships before provide
     .patch(`/conversations/${second.conversation.id}/toggle-ai`)
     .set('Authorization', `Bearer ${first.token}`)
     .expect(404);
+  for (const route of ['ai-pause', 'ai-resume'])
+    await request(app.getHttpServer())
+      .post(`/conversations/${second.conversation.id}/${route}`)
+      .set('Authorization', `Bearer ${first.token}`)
+      .expect(404);
   expect(providerSend).not.toHaveBeenCalled();
+  const untouched = await system(() =>
+    prisma.conversation.findUniqueOrThrow({
+      where: { id: second.conversation.id },
+    }),
+  );
+  expect(untouched.aiPaused).toBe(second.conversation.aiPaused);
+  expect(untouched.stateVersion).toBe(second.conversation.stateVersion);
   const forged = new JwtService().sign(
     {
       sub: first.user.id,
       email: first.user.email,
       organizationId: second.organization.id,
       roleId: first.role.id,
+      securityVersion: 1,
     },
     { secret: accessSecret, expiresIn: '15m' },
   );

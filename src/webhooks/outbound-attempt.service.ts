@@ -1,12 +1,43 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Message } from '@prisma/client';
+import { alertConversationStaff } from '../notifications/conversation-staff-alert';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { DeliveryAuthService } from './delivery-auth.service';
-import { WhatsappService } from './whatsapp.service';
+import { OutboundNotSentError, WhatsappService } from './whatsapp.service';
 
 export type AttemptResult = 'ACCEPTED' | 'WAITING' | 'FAILED' | 'CANCELLED';
+
+/**
+ * reply / follow-up: AI-generated bubbles, blocked by pause, assignment and a
+ * newer conversation version. staff: a human reply, allowed while the AI is
+ * paused and after a STOP (D-021: warning only); still needs clinic, channel
+ * and 24 h checks.
+ * consent-request: the system media-consent prompt; blocked by pause and
+ * opt-out, not by a newer inbound or by staff assignment.
+ */
+export type OutboundPurpose =
+  | 'reply'
+  | 'follow-up'
+  | 'staff'
+  | 'consent-request';
+
+export type DeliveryBlockReason =
+  | 'CONVERSATION_NOT_FOUND'
+  | 'PATIENT_OPTED_OUT'
+  | 'CLINIC_INACTIVE'
+  | 'CHANNEL_UNAVAILABLE'
+  | 'NO_CONTACT'
+  | 'OUTSIDE_24H_WINDOW';
+
+const PURPOSES: OutboundPurpose[] = [
+  'reply',
+  'follow-up',
+  'staff',
+  'consent-request',
+];
+const AI_GENERATED: OutboundPurpose[] = ['reply', 'follow-up'];
 
 @Injectable()
 export class OutboundAttemptService {
@@ -17,38 +48,43 @@ export class OutboundAttemptService {
     private readonly whatsapp: WhatsappService,
   ) {}
 
-  private async authorized(
+  /**
+   * Checks shared by every patient-facing send (R8): opt-out (automated
+   * purposes only, D-021), clinic, channel/credential, recipient, and the
+   * WhatsApp 24 h free-form window.
+   */
+  async checkEligibility(
     organizationId: string,
     conversationId: string,
-    version: number,
+    purpose: OutboundPurpose,
   ) {
-    if (
-      !(await this.auth.authorizeDelivery(
-        organizationId,
-        conversationId,
-        version,
-      ))
-    )
-      return null;
     const conversation = await this.prisma.conversation.findFirst({
       where: { id: conversationId, organizationId, deletedAt: null },
       include: { channel: true, lead: true, organization: true },
     });
-    const channel = conversation?.channel;
+    const block = (reason: DeliveryBlockReason) =>
+      ({ ok: false, reason }) as const;
+    if (!conversation) return block('CONVERSATION_NOT_FOUND');
+    // A STOP stops automation, never people (D-021): staff sends to an
+    // opted-out patient go out and carry a warning instead.
+    const patientOptedOut = !!conversation.lead?.optedOutAt;
+    if (patientOptedOut && purpose !== 'staff')
+      return block('PATIENT_OPTED_OUT');
     if (
-      !conversation ||
-      conversation.assignedAgentId ||
-      conversation.lead?.optedOutAt ||
       !conversation.organization.isActive ||
-      conversation.organization.deleted_at ||
+      conversation.organization.deleted_at
+    )
+      return block('CLINIC_INACTIVE');
+    const channel = conversation.channel;
+    if (
       !channel ||
       channel.organizationId !== organizationId ||
       channel.status !== 'ACTIVE' ||
       !channel.credentialId ||
-      !channel.providerAccountId ||
-      !conversation.externalContactId
+      !channel.providerAccountId
     )
-      return null;
+      return block('CHANNEL_UNAVAILABLE');
+    if (!conversation.externalContactId) return block('NO_CONTACT');
     // Meta allows free-form text/media only within 24 hours of the most
     // recent customer message. No approved template is configured here.
     const recentInbound = await this.prisma.message.count({
@@ -58,8 +94,37 @@ export class OutboundAttemptService {
         createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       },
     });
-    if (!recentInbound) return null;
-    return { conversation, channel };
+    if (!recentInbound) return block('OUTSIDE_24H_WINDOW');
+    return { ok: true, conversation, channel, patientOptedOut } as const;
+  }
+
+  private async authorized(
+    organizationId: string,
+    conversationId: string,
+    version: number,
+    purpose: OutboundPurpose,
+  ) {
+    if (
+      purpose !== 'staff' &&
+      !(await this.auth.authorizeDelivery(
+        organizationId,
+        conversationId,
+        AI_GENERATED.includes(purpose) ? version : undefined,
+      ))
+    )
+      return null;
+    const eligibility = await this.checkEligibility(
+      organizationId,
+      conversationId,
+      purpose,
+    );
+    if (!eligibility.ok) return null;
+    if (
+      AI_GENERATED.includes(purpose) &&
+      eligibility.conversation.assignedAgentId
+    )
+      return null;
+    return eligibility;
   }
 
   async sendBubble(
@@ -67,7 +132,7 @@ export class OutboundAttemptService {
     conversationId: string,
     message: Message,
     version: number,
-    purpose: 'reply' | 'follow-up' = 'reply',
+    purpose: OutboundPurpose = 'reply',
   ): Promise<AttemptResult> {
     if (!message.idempotencyKey || message.conversationId !== conversationId)
       throw new Error('OUTBOUND_INVALID_BUBBLE');
@@ -108,6 +173,7 @@ export class OutboundAttemptService {
       organizationId,
       conversationId,
       version,
+      purpose,
     );
     if (!authorized) {
       await this.prisma.outboundAttempt.updateMany({
@@ -137,6 +203,7 @@ export class OutboundAttemptService {
       organizationId,
       conversationId,
       version,
+      purpose,
     );
     if (!current) {
       await this.prisma.outboundAttempt.updateMany({
@@ -167,6 +234,16 @@ export class OutboundAttemptService {
           );
       providerId = response?.messages?.[0]?.id;
     } catch (error: any) {
+      if (error instanceof OutboundNotSentError) {
+        // Local failure before the POST (e.g. revoked credential): Meta was
+        // never contacted, so this is a definite FAILED, not UNKNOWN.
+        await this.prisma.outboundAttempt.updateMany({
+          where: { id: attempt.id, status: 'SENDING' },
+          data: { status: 'FAILED', lastErrorCode: error.code },
+        });
+        this.logger.warn(`OUTBOUND_NOT_SENT attempt=${attempt.id}`);
+        return 'FAILED';
+      }
       const code = Number(error?.response?.status ?? error?.status);
       // Only an explicit provider rejection is safe to retry. Timeout,
       // connection loss, and 5xx may mean Meta accepted the message.
@@ -183,6 +260,7 @@ export class OutboundAttemptService {
       this.logger.warn(
         `OUTBOUND_PROVIDER_RESULT_${rejected ? 'REJECTED' : 'UNKNOWN'} attempt=${attempt.id}`,
       );
+      if (!rejected) await this.escalateUnknown(attempt.id);
       return code === 429 ? 'WAITING' : rejected ? 'FAILED' : 'WAITING';
     }
     if (!providerId) {
@@ -190,6 +268,7 @@ export class OutboundAttemptService {
         where: { id: attempt.id, status: 'SENDING' },
         data: { status: 'UNKNOWN', lastErrorCode: 'MISSING_PROVIDER_ID' },
       });
+      await this.escalateUnknown(attempt.id);
       return 'WAITING';
     }
     // If this commit fails after Meta accepted, the durable SENDING row will
@@ -306,7 +385,9 @@ export class OutboundAttemptService {
                 attempt.conversationId,
                 attempt.message,
                 attempt.conversationVersion,
-                attempt.purpose === 'follow-up' ? 'follow-up' : 'reply',
+                PURPOSES.includes(attempt.purpose as OutboundPurpose)
+                  ? (attempt.purpose as OutboundPurpose)
+                  : 'reply',
               );
             } catch {
               this.logger.error(`OUTBOUND_RETRY_FAILED attempt=${attempt.id}`);
@@ -329,6 +410,64 @@ export class OutboundAttemptService {
       });
       if (result.count)
         this.logger.warn(`OUTBOUND_INTERRUPTED count=${result.count}`);
+      // Also covers a crash between writing UNKNOWN and routing it.
+      const unrouted = await this.prisma.outboundAttempt.findMany({
+        where: { status: 'UNKNOWN', escalatedAt: null },
+        select: { id: true },
+        take: 100,
+      });
+      for (const { id } of unrouted) {
+        try {
+          await this.escalateUnknown(id);
+        } catch {
+          this.logger.error(`OUTBOUND_UNKNOWN_ESCALATION_FAILED attempt=${id}`);
+        }
+      }
+    });
+  }
+
+  /**
+   * An UNKNOWN send may or may not have reached the patient (R7: never
+   * resend). Route it to people once: pause the AI (new patient messages
+   * then go to staff, not into a stuck AI batch), bump stateVersion, alert
+   * eligible staff to check WhatsApp before replying, and audit (KI-029).
+   */
+  async escalateUnknown(attemptId: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.outboundAttempt.updateMany({
+        where: { id: attemptId, status: 'UNKNOWN', escalatedAt: null },
+        data: { escalatedAt: new Date() },
+      });
+      if (claimed.count !== 1) return;
+      const attempt = await tx.outboundAttempt.findUniqueOrThrow({
+        where: { id: attemptId },
+        include: { conversation: { include: { lead: true } } },
+      });
+      const { conversation, organizationId } = attempt;
+      await tx.conversation.updateMany({
+        where: { id: conversation.id, organizationId, aiPaused: false },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
+      });
+      const staffNotified = await alertConversationStaff(tx, {
+        organizationId,
+        conversation,
+        title: 'Delivery uncertain',
+        body: 'A WhatsApp message may or may not have reached the patient. Check WhatsApp before replying. The AI is paused for this conversation.',
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actor: 'system',
+          action: 'outbound.delivery_unknown',
+          targetId: conversation.id,
+          metadata: {
+            attemptId,
+            purpose: attempt.purpose,
+            lastErrorCode: attempt.lastErrorCode,
+            staffNotified,
+          },
+        },
+      });
     });
   }
 }

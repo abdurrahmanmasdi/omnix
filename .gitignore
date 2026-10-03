@@ -26,3 +26,7 @@ prisma/*.db
 
 /uploads
 .credential-deploy-*/
+
+playwright/.auth/
+
+.pytest_cache/

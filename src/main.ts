@@ -1,7 +1,10 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { parseFrontendOrigins } from './config/frontend-origins';
+import { isProduction } from './config/runtime';
 import cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -14,6 +17,9 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
+  // Trust proxy so rate limiting IP is correct (e.g. via nginx)
+  app.set('trust proxy', 1);
+
   // Limit JSON and urlencoded payloads to 2MB (prevents DoS on webhook endpoints)
   app.useBodyParser('json', { limit: '2mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '2mb' });
@@ -25,11 +31,7 @@ async function bootstrap() {
   // Enable cookie parser
   app.use(cookieParser());
 
-  const frontendUrls = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((url) =>
-        url.trim().replace(/\/$/, ''),
-      )
-    : ['http://localhost:3001'];
+  const frontendUrls = parseFrontendOrigins();
 
   app.enableCors({
     origin: frontendUrls,
@@ -44,17 +46,22 @@ async function bootstrap() {
     }),
   );
 
-  // --- Swagger Configuration ---
-  const config = new DocumentBuilder()
-    .setTitle('Lean Commerce API')
-    .setDescription('The AI Sales Agent CRM API Documentation')
-    .setVersion('1.0')
-    .addBearerAuth() // This adds a "Authorize" button to the UI later!
-    .build();
+  // --- Swagger Configuration --- (not served in production: KI-033)
+  if (!isProduction()) {
+    const config = new DocumentBuilder()
+      .setTitle('Lean Commerce API')
+      .setDescription('The AI Sales Agent CRM API Documentation')
+      .setVersion('1.0')
+      .addBearerAuth() // This adds a "Authorize" button to the UI later!
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document); // Hosts the docs at http://localhost:3000/api
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document); // Hosts the docs at http://localhost:3000/api
+  }
 
-  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
+  await app.listen(
+    app.get(ConfigService).get<number>('PORT') ?? 3001,
+    '0.0.0.0',
+  );
 }
 void bootstrap();

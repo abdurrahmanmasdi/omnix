@@ -3,7 +3,13 @@ import { Conversation, Lead } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ToolActionWire } from './interfaces/agent.interface';
 import { parseAgentAction } from './contracts/agent-contract';
-import { LeadStatus, Priority, NotificationType, Gender, Currency } from '@prisma/client';
+import {
+  LeadStatus,
+  Priority,
+  NotificationType,
+  Gender,
+  Currency,
+} from '@prisma/client';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { CrmIntegrationService } from '../modules/integration/crm/crm-integration.service';
@@ -34,6 +40,17 @@ export interface ActionExecutionSummary {
   failed: number;
   outcomes: ActionOutcome[];
 }
+
+/**
+ * Statuses an AI action may set (KI-024). WON / LOST / READY_TO_PAY /
+ * UNQUALIFIED / NEW are staff decisions; the contract rejects them too.
+ */
+const AI_SETTABLE_STATUSES: LeadStatus[] = [
+  LeadStatus.QUALIFYING,
+  LeadStatus.QUALIFIED,
+  LeadStatus.READY_TO_BOOK,
+  LeadStatus.HANDED_OFF,
+];
 
 const VALID_STATUS_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   [LeadStatus.NEW]: [
@@ -101,7 +118,12 @@ export class ActionExecutorService {
     conversationId: string,
     actions: ToolActionWire[],
   ): Promise<ActionExecutionSummary> {
-    const result: ActionExecutionSummary = { executed: 0, rejected: 0, failed: 0, outcomes: [] };
+    const result: ActionExecutionSummary = {
+      executed: 0,
+      rejected: 0,
+      failed: 0,
+      outcomes: [],
+    };
     if (!actions || actions.length === 0) return result;
 
     this.logger.log(
@@ -118,13 +140,15 @@ export class ActionExecutorService {
         `executeActions aborted: conversation ${conversationId} not found in org ${organizationId}`,
       );
       result.failed = actions.length;
-      actions.forEach((action, index) => result.outcomes.push({
-        index,
-        type: action.type,
-        status: 'FAILED',
-        reasonCode: 'CONVERSATION_NOT_FOUND',
-        retryable: false,
-      }));
+      actions.forEach((action, index) =>
+        result.outcomes.push({
+          index,
+          type: action.type,
+          status: 'FAILED',
+          reasonCode: 'CONVERSATION_NOT_FOUND',
+          retryable: false,
+        }),
+      );
       return result;
     }
 
@@ -133,21 +157,43 @@ export class ActionExecutorService {
         const outcome = await this.handleAction(conversation, action);
         if (outcome === 'executed') {
           result.executed++;
-          result.outcomes.push({ index, type: action.type, status: 'EXECUTED', reasonCode: 'OK', retryable: false });
+          result.outcomes.push({
+            index,
+            type: action.type,
+            status: 'EXECUTED',
+            reasonCode: 'OK',
+            retryable: false,
+          });
         } else {
           result.rejected++;
-          result.outcomes.push({ index, type: action.type, status: 'REJECTED', reasonCode: 'ACTION_INVALID', retryable: false });
+          result.outcomes.push({
+            index,
+            type: action.type,
+            status: 'REJECTED',
+            reasonCode: 'ACTION_INVALID',
+            retryable: false,
+          });
         }
       } catch (error: any) {
-        this.logger.error(`ACTION_EXECUTION_FAILED conversationId=${conversationId}`);
+        this.logger.error(
+          `ACTION_EXECUTION_FAILED conversationId=${conversationId}`,
+        );
         result.failed++;
         const code = error instanceof Error ? error.message : '';
-        const permanent = /^(HANDOFF_LEAD_TENANT_MISMATCH|INVALID_|Invalid |Cannot |UPDATE_|NO_UPDATEABLE_FIELDS)/.test(code);
+        const permanent =
+          /^(HANDOFF_LEAD_TENANT_MISMATCH|INVALID_|Invalid |Cannot |UPDATE_|NO_UPDATEABLE_FIELDS)/.test(
+            code,
+          );
         result.outcomes.push({
           index,
           type: action.type,
           status: 'FAILED',
-          reasonCode: code === 'NO_ELIGIBLE_STAFF' ? code : permanent ? 'ACTION_VALIDATION_FAILED' : 'ACTION_WRITE_FAILED',
+          reasonCode:
+            code === 'NO_ELIGIBLE_STAFF'
+              ? code
+              : permanent
+                ? 'ACTION_VALIDATION_FAILED'
+                : 'ACTION_WRITE_FAILED',
           retryable: !permanent,
         });
         if (code === 'NO_ELIGIBLE_STAFF') {
@@ -160,7 +206,9 @@ export class ActionExecutorService {
               metadata: { reason: 'NO_ELIGIBLE_STAFF' },
             });
           } catch {
-            this.logger.warn(`HANDOFF_FAILURE_AUDIT_FAILED conversationId=${conversationId}`);
+            this.logger.warn(
+              `HANDOFF_FAILURE_AUDIT_FAILED conversationId=${conversationId}`,
+            );
           }
         }
       }
@@ -174,7 +222,9 @@ export class ActionExecutorService {
   ): Promise<'executed' | 'rejected'> {
     const parsed = parseAgentAction(action);
     if (!parsed) {
-      this.logger.warn(`ACTION_CONTRACT_INVALID conversationId=${conversation.id}`);
+      this.logger.warn(
+        `ACTION_CONTRACT_INVALID conversationId=${conversation.id}`,
+      );
       return 'rejected';
     }
     const payload: Record<string, unknown> = parsed.payload;
@@ -212,9 +262,13 @@ export class ActionExecutorService {
       case 'SCHEDULE_FOLLOW_UP':
         if (
           typeof payload.scheduledAt !== 'string' ||
-          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(payload.scheduledAt) ||
+          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+            payload.scheduledAt,
+          ) ||
           isNaN(new Date(payload.scheduledAt).getTime()) ||
-          (payload.context !== undefined && (typeof payload.context !== 'string' || payload.context.length > 500))
+          (payload.context !== undefined &&
+            (typeof payload.context !== 'string' ||
+              payload.context.length > 500))
         ) {
           throw new Error('INVALID_FOLLOW_UP_ARGUMENTS');
         }
@@ -227,7 +281,9 @@ export class ActionExecutorService {
         break;
 
       default:
-        this.logger.warn(`ACTION_TYPE_INVALID conversationId=${conversation.id}`);
+        this.logger.warn(
+          `ACTION_TYPE_INVALID conversationId=${conversation.id}`,
+        );
         return 'rejected';
     }
     return 'executed';
@@ -345,24 +401,29 @@ export class ActionExecutorService {
       for (const membership of memberships) {
         try {
           const notification = await this.notificationEmitter.send({
-          organizationId: conversation.organizationId,
-          userId: membership.userId,
-          type: NotificationType.LEAD_HANDED_OFF,
-          title:
-            typeof payload.title === 'string' ? payload.title : 'AI Escalation',
-          body:
-            typeof payload.body === 'string'
-              ? payload.body
-              : 'A conversation has been escalated by the AI.',
-          referenceId: conversation.leadId || conversation.id,
-          referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
+            organizationId: conversation.organizationId,
+            userId: membership.userId,
+            type: NotificationType.LEAD_HANDED_OFF,
+            title:
+              typeof payload.title === 'string'
+                ? payload.title
+                : 'AI Escalation',
+            body:
+              typeof payload.body === 'string'
+                ? payload.body
+                : 'A conversation has been escalated by the AI.',
+            referenceId: conversation.leadId || conversation.id,
+            referenceType: conversation.leadId ? 'LEAD' : 'CONVERSATION',
           });
           if (notification) sent++;
         } catch {
           failed = true;
         }
       }
-      if (sent === 0) throw new Error(failed ? 'NOTIFICATION_DELIVERY_FAILED' : 'NO_ELIGIBLE_STAFF');
+      if (sent === 0)
+        throw new Error(
+          failed ? 'NOTIFICATION_DELIVERY_FAILED' : 'NO_ELIGIBLE_STAFF',
+        );
       this.logger.log(`NOTIFICATION_INTENT_COMMITTED count=${sent}`);
     }
   }
@@ -392,10 +453,7 @@ export class ActionExecutorService {
         data: {
           ...updateData,
           organizationId: conversation.organizationId,
-          phoneNumber:
-            typeof payload.phoneNumber === 'string'
-              ? payload.phoneNumber
-              : conversation.externalContactId || 'Unknown',
+          phoneNumber: conversation.externalContactId || 'Unknown',
           firstName:
             typeof payload.firstName === 'string'
               ? payload.firstName
@@ -456,8 +514,8 @@ export class ActionExecutorService {
     const leadId = conversation.leadId;
     const organizationId = conversation.organizationId;
 
-    const { updatedConversation, updatedLead } =
-      await this.prisma.$transaction(async (tx) => {
+    const { updatedConversation, updatedLead } = await this.prisma.$transaction(
+      async (tx) => {
         const memberships = await tx.organizationMembership.findMany({
           where: {
             organizationId,
@@ -467,11 +525,12 @@ export class ActionExecutorService {
           },
           include: MEMBERSHIP_GRANTS_INCLUDE,
         });
-        const eligible = memberships.filter((membership) =>
-          membershipHasPermission(membership, 'notifications:view') &&
-          (membership.userId === conversation.lead?.assignedAgentId ||
-            membership.userId === conversation.assignedAgentId ||
-            membershipHasPermission(membership, 'leads:read:all')),
+        const eligible = memberships.filter(
+          (membership) =>
+            membershipHasPermission(membership, 'notifications:view') &&
+            (membership.userId === conversation.lead?.assignedAgentId ||
+              membership.userId === conversation.assignedAgentId ||
+              membershipHasPermission(membership, 'leads:read:all')),
         );
         if (eligible.length === 0) throw new Error('NO_ELIGIBLE_STAFF');
         const conv = await tx.conversation.update({
@@ -513,7 +572,8 @@ export class ActionExecutorService {
           updatedConversation: conv,
           updatedLead: lead,
         };
-      });
+      },
+    );
 
     // Notification rows and their delivery intents committed atomically.
 
@@ -574,7 +634,7 @@ export class ActionExecutorService {
     const updateData: Record<string, any> = {};
 
     if (payload.status !== undefined) {
-      if (!Object.values(LeadStatus).includes(payload.status as LeadStatus)) {
+      if (!AI_SETTABLE_STATUSES.includes(payload.status as LeadStatus)) {
         throw new Error(`Invalid status: ${payload.status}`);
       }
       if (currentStatus && payload.status !== currentStatus) {
@@ -595,12 +655,11 @@ export class ActionExecutorService {
       updateData.priority = payload.priority as Priority;
     }
 
-    // Only allow specific string fields
+    // Only allow specific string fields. Phone and email are never AI-editable:
+    // phone is the routing/opt-out key and the manual-send target (KI-024).
     const stringFields = [
       'firstName',
       'lastName',
-      'email',
-      'phoneNumber',
       'country',
       'primaryLanguage',
       'preferredLanguage',
@@ -610,12 +669,22 @@ export class ActionExecutorService {
     ];
     for (const field of stringFields) {
       if (payload[field] !== undefined) {
-        if (typeof payload[field] !== 'string' || !payload[field].trim() || payload[field].length > 500) {
+        if (
+          typeof payload[field] !== 'string' ||
+          !payload[field].trim() ||
+          payload[field].length > 500
+        ) {
           throw new Error(`Invalid type for ${field}, expected string`);
         }
-        if (field === 'gender' && !Object.values(Gender).includes(payload[field] as Gender))
+        if (
+          field === 'gender' &&
+          !Object.values(Gender).includes(payload[field] as Gender)
+        )
           throw new Error('INVALID_GENDER');
-        if (field === 'currency' && !Object.values(Currency).includes(payload[field] as Currency))
+        if (
+          field === 'currency' &&
+          !Object.values(Currency).includes(payload[field] as Currency)
+        )
           throw new Error('INVALID_CURRENCY');
         updateData[field] = payload[field];
       }

@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Body,
+  HttpCode,
   Param,
   Query,
   UseGuards,
@@ -21,6 +22,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
 import { SendMessageDto } from './dto/send-message.dto';
+import { AiStateResponseDto } from './dto/ai-state-response.dto';
+import { ManualMessageResponseDto } from './dto/manual-message-response.dto';
 
 import {
   PaginationQueryDto,
@@ -128,8 +131,19 @@ export class ConversationsController {
   @ApiOperation({ summary: 'Send a manual message to a conversation' })
   @ApiResponse({
     status: 201,
-    description: 'Message sent successfully',
-    // You can define a detailed schema here if you want perfect Orval typing!
+    description:
+      'Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED. warnings lists non-blocking notices (PATIENT_OPTED_OUT).',
+    type: ManualMessageResponseDto,
+  })
+  @ApiResponse({
+    status: 422,
+    description:
+      'Not sent. code: OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE (an opt-out never blocks a staff send)',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not sent: the conversation changed during the send (code DELIVERY_NOT_AUTHORIZED)',
   })
   async sendMessage(
     @CurrentUser() user: AuthenticatedUser,
@@ -147,10 +161,56 @@ export class ConversationsController {
     );
   }
 
+  @Post(':id/ai-pause')
+  @HttpCode(200)
+  @RequirePermissions('manage_conversations')
+  @ApiOperation({
+    summary: 'Pause the AI for a conversation (idempotent)',
+  })
+  @ApiResponse({ status: 200, type: AiStateResponseDto })
+  async pauseAi(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ): Promise<AiStateResponseDto> {
+    if (!user.organizationId) {
+      throw new Error('Organization ID not found');
+    }
+    return this.conversationsService.setAiPaused(
+      user.organizationId,
+      user.id,
+      conversationId,
+      true,
+    );
+  }
+
+  @Post(':id/ai-resume')
+  @HttpCode(200)
+  @RequirePermissions('manage_conversations')
+  @ApiOperation({
+    summary: 'Resume the AI for a conversation (idempotent)',
+  })
+  @ApiResponse({ status: 200, type: AiStateResponseDto })
+  async resumeAi(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ): Promise<AiStateResponseDto> {
+    if (!user.organizationId) {
+      throw new Error('Organization ID not found');
+    }
+    return this.conversationsService.setAiPaused(
+      user.organizationId,
+      user.id,
+      conversationId,
+      false,
+    );
+  }
+
   @Patch(':id/toggle-ai')
   @RequirePermissions('manage_conversations')
   @ApiOperation({
-    summary: 'Toggle the AI auto-reply state for a conversation',
+    summary:
+      'Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.',
+    deprecated: true,
   })
   @ApiResponse({
     status: 200,

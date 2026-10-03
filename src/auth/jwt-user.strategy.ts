@@ -3,12 +3,14 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { hasCurrentSecurityVersion } from './security-version';
 
 export interface JwtPayload {
   sub: string;
   email: string;
   organizationId: string | null;
   roleId: string | null;
+  securityVersion?: number;
 }
 
 @Injectable()
@@ -40,6 +42,14 @@ export class UserJwtStrategy extends PassportStrategy(Strategy, 'jwt-user') {
     if (user.status !== 'ACTIVE') {
       throw new UnauthorizedException(
         'User account is not active. Please accept your pilot invitation.',
+      );
+    }
+
+    if (
+      !hasCurrentSecurityVersion(payload.securityVersion, user.securityVersion)
+    ) {
+      throw new UnauthorizedException(
+        'Session revoked due to security changes',
       );
     }
 

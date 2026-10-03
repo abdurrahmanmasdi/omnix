@@ -10,6 +10,7 @@ describe('EventsGateway', () => {
   let mockEmit: jest.Mock;
   let mockTo: jest.Mock;
   let mockMembershipFind: jest.Mock;
+  let mockUserFind: jest.Mock;
   let mockPermissionHas: jest.Mock;
   let mockDisconnect: jest.Mock;
 
@@ -17,6 +18,9 @@ describe('EventsGateway', () => {
     mockEmit = jest.fn();
     mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
     mockMembershipFind = jest.fn().mockResolvedValue({ id: 'test' });
+    mockUserFind = jest
+      .fn()
+      .mockResolvedValue({ id: 'test-user', securityVersion: 1 });
     mockPermissionHas = jest.fn().mockResolvedValue(true);
     mockDisconnect = jest.fn();
 
@@ -33,7 +37,7 @@ describe('EventsGateway', () => {
           provide: PrismaService,
           useValue: {
             user: {
-              findFirst: jest.fn().mockResolvedValue({ id: 'test-user' }),
+              findFirst: mockUserFind,
             },
             organizationMembership: {
               findFirst: mockMembershipFind,
@@ -62,6 +66,7 @@ describe('EventsGateway', () => {
               organizationId: 'org-456',
               roleId: 'role-1',
               tokenExp: Math.floor(Date.now() / 1000) + 3600,
+              securityVersion: 1,
               canReadAll: true,
               canReadPii: true,
               canReadMessages: true,
@@ -86,6 +91,19 @@ describe('EventsGateway', () => {
 
   it('disconnects a revoked membership before emitting a patient event', async () => {
     mockMembershipFind.mockResolvedValue(null);
+    await gateway.broadcastNewMessage('org-456', {
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      content: 'Private patient text',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(mockDisconnect).toHaveBeenCalledWith(true);
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  it('disconnects a socket whose token predates a security-version bump', async () => {
+    mockUserFind.mockResolvedValue({ id: 'test-user', securityVersion: 2 });
     await gateway.broadcastNewMessage('org-456', {
       id: 'msg-1',
       conversationId: 'conv-1',

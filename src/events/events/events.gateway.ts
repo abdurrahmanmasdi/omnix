@@ -12,6 +12,8 @@ import type { JwtPayload } from '../../auth/jwt.strategy';
 import { PermissionService } from '../../auth/permission.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { tenantStorage } from '../../core/tenant/tenant.context';
+import { hasCurrentSecurityVersion } from '../../auth/security-version';
+import { parseFrontendOrigins } from '../../config/frontend-origins';
 import {
   toPublicMessageDto,
   toPublicLeadDto,
@@ -22,9 +24,7 @@ import {
 } from '../dto/public-events.dto';
 import type { NotificationInvalidationPayload } from '../dto/socket-events.generated';
 
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
-  : ['http://localhost:3001'];
+const allowedOrigins = parseFrontendOrigins();
 
 @WebSocketGateway({
   cors: {
@@ -79,11 +79,20 @@ export class EventsGateway
         // Check if user is still active globally (fixes R06)
         const user = await this.prisma.user.findFirst({
           where: { id: userId, status: 'ACTIVE', deletedAt: null },
-          select: { id: true },
+          select: { id: true, securityVersion: true },
         });
 
         if (!user) {
           throw new Error('User account is inactive or deleted');
+        }
+
+        if (
+          !hasCurrentSecurityVersion(
+            payload.securityVersion,
+            user.securityVersion,
+          )
+        ) {
+          throw new Error('Session revoked due to security changes');
         }
 
         // Authorize membership and permissions inside the Tenant Context
@@ -137,6 +146,7 @@ export class EventsGateway
             roleId,
             membershipId: membership.id,
             tokenExp: exp,
+            securityVersion: payload.securityVersion,
             canReadAll,
             canReadPii,
             canReadMessages,
@@ -258,9 +268,7 @@ export class EventsGateway
                 'leads:read:messages',
               );
             } catch {
-              this.logger.warn(
-                `SOCKET_ACCESS_REVOKED socketId=${socket.id}`,
-              );
+              this.logger.warn(`SOCKET_ACCESS_REVOKED socketId=${socket.id}`);
               socket.disconnect(true);
             }
           }
@@ -323,7 +331,7 @@ export class EventsGateway
     const [user, membership] = await Promise.all([
       this.prisma.user.findFirst({
         where: { id: userId, status: 'ACTIVE', deletedAt: null },
-        select: { id: true },
+        select: { id: true, securityVersion: true },
       }),
       this.prisma.organizationMembership.findFirst({
         where: {
@@ -336,8 +344,17 @@ export class EventsGateway
         select: { id: true },
       }),
     ]);
+
+    const validSecVer =
+      !!user &&
+      hasCurrentSecurityVersion(
+        socket.data?.securityVersion,
+        user.securityVersion,
+      );
+
     if (
       !user ||
+      !validSecVer ||
       !membership ||
       !(await this.permissionService.has(
         userId,
@@ -414,7 +431,10 @@ export class EventsGateway
   }
 
   // 🚀 Broadcast methods (Public events)
-  async broadcastNewMessage(organizationId: string, messageData: MessageSource) {
+  async broadcastNewMessage(
+    organizationId: string,
+    messageData: MessageSource,
+  ) {
     const safeDto = toPublicMessageDto(messageData);
     const assignedAgentId = await this.getAssignedAgentForConversation(
       messageData.conversationId,
@@ -444,14 +464,16 @@ export class EventsGateway
   ) {
     const safeDto = toPublicConversationDto(conversationData);
     const lead = conversationData.lead;
-    const leadAgentId = lead && typeof lead === 'object' &&
-      'assignedAgentId' in lead && typeof lead.assignedAgentId === 'string'
-      ? lead.assignedAgentId : null;
+    const leadAgentId =
+      lead &&
+      typeof lead === 'object' &&
+      'assignedAgentId' in lead &&
+      typeof lead.assignedAgentId === 'string'
+        ? lead.assignedAgentId
+        : null;
     const assignedAgentId =
       leadAgentId ||
-      (await this.getAssignedAgentForConversation(
-        conversationData.id,
-      ));
+      (await this.getAssignedAgentForConversation(conversationData.id));
     await this.emitToAuthorized(
       organizationId,
       'onConversationUpdate',
@@ -460,7 +482,15 @@ export class EventsGateway
     );
   }
 
-  async broadcastNotification(userId: string, notificationData: { id?: string; organizationId?: string; title?: string; body?: string }) {
+  async broadcastNotification(
+    userId: string,
+    notificationData: {
+      id?: string;
+      organizationId?: string;
+      title?: string;
+      body?: string;
+    },
+  ) {
     const organizationId = notificationData.organizationId;
     const notificationId = notificationData.id;
     if (!organizationId || !notificationId) return;

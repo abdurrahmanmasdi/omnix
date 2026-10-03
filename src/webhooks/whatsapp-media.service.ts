@@ -4,6 +4,33 @@ import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import axios from 'axios';
 
+const DEFAULT_PATIENT_MEDIA_RETENTION_DAYS = 30;
+
+/**
+ * Retention for downloaded patient media (P2). PATIENT_MEDIA_RETENTION_DAYS,
+ * default 30; an invalid value falls back to the default.
+ */
+export function patientMediaRetentionDays(
+  raw = process.env.PATIENT_MEDIA_RETENTION_DAYS,
+): number {
+  const days = Number(raw);
+  return raw && Number.isInteger(days) && days > 0 && days <= 3650
+    ? days
+    : DEFAULT_PATIENT_MEDIA_RETENTION_DAYS;
+}
+
+export function patientMediaExpiry(now = new Date()): Date {
+  return new Date(
+    now.getTime() + patientMediaRetentionDays() * 24 * 60 * 60 * 1000,
+  );
+}
+
+// WhatsApp caps media at 16 MB (video) and 5 MB (images); bound the worker.
+const MEDIA_TIMEOUT_MS = 15_000;
+const MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+
+export const EXPIRED_MEDIA_MARKER = '[Patient Media - Expired and Deleted]';
+
 @Injectable()
 export class WhatsappMediaService implements OnModuleInit {
   async onModuleInit() {
@@ -29,22 +56,22 @@ export class WhatsappMediaService implements OnModuleInit {
         if (messages.length === 0) return;
 
         for (const message of messages) {
-           await this.prisma.message.update({
-             where: { id: message.id },
-             data: {
-               mediaUrl: null,
-               content: '[Patient Media - Expired and Deleted]',
-             }
-           });
-           await this.prisma.auditLog.create({
-             data: {
-               organizationId: message.conversation.organizationId,
-               actor: 'system',
-               action: 'media.expired_deleted',
-               targetId: message.id,
-               metadata: { deletedMessageId: message.id },
-             }
-           });
+          await this.prisma.message.update({
+            where: { id: message.id },
+            data: {
+              mediaUrl: null,
+              content: EXPIRED_MEDIA_MARKER,
+            },
+          });
+          await this.prisma.auditLog.create({
+            data: {
+              organizationId: message.conversation.organizationId,
+              actor: 'system',
+              action: 'media.expired_deleted',
+              targetId: message.id,
+              metadata: { deletedMessageId: message.id },
+            },
+          });
         }
         this.logger.log(
           `Successfully deleted media for ${messages.length} expired messages.`,
@@ -74,6 +101,7 @@ export class WhatsappMediaService implements OnModuleInit {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
+          timeout: MEDIA_TIMEOUT_MS,
         },
       );
 
@@ -90,6 +118,8 @@ export class WhatsappMediaService implements OnModuleInit {
           Authorization: `Bearer ${accessToken}`,
         },
         responseType: 'arraybuffer',
+        timeout: MEDIA_TIMEOUT_MS,
+        maxContentLength: MEDIA_MAX_BYTES,
       });
 
       // Step 3: Convert the binary data buffer to a Base64 string

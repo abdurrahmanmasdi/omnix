@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConversationsService } from './conversations.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { WhatsappService } from '../webhooks/whatsapp.service';
+import { OutboundAttemptService } from '../webhooks/outbound-attempt.service';
 import { EventsGateway } from '../events/events/events.gateway';
 import { PermissionService } from '../auth/permission.service';
 
@@ -13,7 +13,10 @@ describe('ConversationsService', () => {
       providers: [
         ConversationsService,
         { provide: PrismaService, useValue: { methodName: jest.fn() } },
-        { provide: WhatsappService, useValue: { methodName: jest.fn() } },
+        {
+          provide: OutboundAttemptService,
+          useValue: { methodName: jest.fn() },
+        },
         { provide: EventsGateway, useValue: { methodName: jest.fn() } },
         {
           provide: PermissionService,

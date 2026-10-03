@@ -1,45 +1,18 @@
-import {
-  Injectable,
-  Inject,
-  Logger,
-  OnModuleInit,
-  NotFoundException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import type { ClientGrpc } from '@nestjs/microservices';
-import { lastValueFrom, Observable } from 'rxjs';
+import {Injectable, Logger, NotFoundException, InternalServerErrorException} from '@nestjs/common';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import * as fs from 'fs/promises';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Define the gRPC Interface
-interface DocumentProcessorService {
-  ingestPdf(data: {
-    organizationId: string;
-    documentationId: string;
-    fileName: string;
-    fileContent: Buffer;
-  }): Observable<{ success: boolean; chunksProcessed: number }>;
-  deleteFile(data: {
-    organizationId: string;
-    fileName: string;
-  }): Observable<{ success: boolean; chunksDeleted: number }>;
-}
-
 @Injectable()
-export class DocumentsService implements OnModuleInit {
+export class DocumentsService {
   private readonly logger = new Logger(DocumentsService.name);
-  private ragService: DocumentProcessorService | undefined;
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject('RAG_PACKAGE') private readonly client: ClientGrpc,
+    private readonly grpcClient: GrpcClientService,
   ) {}
 
-  onModuleInit() {
-    this.ragService =
-      this.client.getService<DocumentProcessorService>('DocumentProcessor');
-  }
 
   async getDocuments(organizationId: string) {
     return this.prisma.organizationDocumentation.findMany({
@@ -80,14 +53,13 @@ export class DocumentsService implements OnModuleInit {
 
       const fileBuffer = await fs.readFile(absolutePath);
 
-      const result = await lastValueFrom(
-        this.ragService!.ingestPdf({
+      const result = await 
+        this.grpcClient.ingestPdf({
           organizationId,
           documentationId: doc.id,
           fileName: doc.fileName,
           fileContent: fileBuffer,
-        }),
-      );
+        });
 
       if (!result || !result.success) {
         throw new Error('Python AI engine returned an unsuccessful response.');
@@ -128,12 +100,11 @@ export class DocumentsService implements OnModuleInit {
 
     // 2. Tell Python to delete the vectors (just in case Prisma Cascade fails or isn't used)
     try {
-      await lastValueFrom(
-        this.ragService!.deleteFile({
+      await 
+        this.grpcClient.deleteFile({
           organizationId,
           fileName: doc.fileName,
-        }),
-      );
+        });
     } catch {
       this.logger.warn(
         `Failed to call Python deletion, relying on Prisma Cascade.`,

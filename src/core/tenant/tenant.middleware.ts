@@ -1,13 +1,22 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { tenantStorage } from './tenant.context';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
+  constructor(private readonly config: ConfigService) {}
+
   use(req: Request, res: Response, next: NextFunction) {
     // The webhook controller verifies Meta's signature before it queues work.
-    if (req.path === '/webhooks/whatsapp') {
+    // Auth endpoints that accept invitations discover their own tenant.
+    if (
+      req.path.startsWith('/webhooks/whatsapp') ||
+      req.path.startsWith('/auth/accept-invitation') ||
+      req.path.startsWith('/auth/invitations/clinic/accept') ||
+      req.path.startsWith('/auth/recovery/consume')
+    ) {
       return tenantStorage.run({ isSystemBypass: true }, () => next());
     }
 
@@ -16,7 +25,7 @@ export class TenantMiddleware implements NestMiddleware {
     // A malformed or unsigned header must never set a tenant here.
     let organizationId: string | undefined;
     const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
-    const secret = process.env.JWT_ACCESS_SECRET;
+    const secret = this.config.get<string>('JWT_ACCESS_SECRET');
     if (token && secret) {
       try {
         const payload = new JwtService().verify<{ organizationId?: unknown }>(
