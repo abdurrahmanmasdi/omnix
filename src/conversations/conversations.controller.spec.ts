@@ -57,6 +57,7 @@ describe('ConversationsController', () => {
       1,
       20,
       undefined,
+      undefined,
     );
   });
 });

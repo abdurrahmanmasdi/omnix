@@ -61,6 +61,7 @@ export class ConversationsService {
     page: number = 1,
     limit: number = 20,
     filter?: string,
+    leadId?: string,
   ) {
     const canReadAll = await this.permissionService.has(
       userId,
@@ -92,6 +93,7 @@ export class ConversationsService {
       unassigned: { lead: { assignedAgentId: null } },
     };
     if (filter && filters[filter]) dynamicWhere.AND = [filters[filter]];
+    if (leadId) dynamicWhere.leadId = leadId;
     const skip = (page - 1) * limit;
 
     const conversations = await this.prisma.conversation.findMany({
