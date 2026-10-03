@@ -9,6 +9,10 @@ import type { ConversationsControllerGetConversationsFilter } from "./conversati
 
 export type ConversationsControllerGetConversationsParams = {
   filter?: ConversationsControllerGetConversationsFilter;
+  /**
+   * Resolve an authorized lead handoff into its conversation
+   */
+  leadId?: string;
   page?: number;
   /**
    * @maximum 100

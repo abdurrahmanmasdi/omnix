@@ -408,6 +408,15 @@
             }
           },
           {
+            "name": "leadId",
+            "required": false,
+            "in": "query",
+            "description": "Resolve an authorized lead handoff into its conversation",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
