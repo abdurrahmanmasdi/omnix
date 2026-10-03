@@ -43,6 +43,6 @@ const grpcClient = (name: string, pkg: string, protoPath: string) => ({
     ]),
   ],
   providers: [GrpcClientService],
-  exports: [GrpcClientService],
+  exports: [GrpcClientService, ClientsModule],
 })
 export class GrpcClientModule {}

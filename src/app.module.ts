@@ -27,6 +27,7 @@ import { OutboxModule } from './core/outbox/outbox.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from './core/logger/logger.module';
 import { MetricsModule } from './core/metrics/metrics.module';
+import { HealthModule } from './health/health.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { APP_GUARD } from '@nestjs/core';
@@ -77,6 +78,7 @@ import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
     }),
     LoggerModule,
     MetricsModule,
+    HealthModule,
     WebhooksModule,
     AuthModule,
     PrismaModule,
