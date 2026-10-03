@@ -89,35 +89,16 @@ export class PipelineStagesController {
     status: 200,
     description: 'Pipeline stages retrieved successfully',
     schema: {
-      example: [
-        {
-          id: 'stage-uuid-1',
-          organizationId: 'org-uuid',
-          name: 'Initial Contact',
-          orderIndex: 0,
-          createdAt: '2026-05-09T10:00:00Z',
-          updatedAt: '2026-05-09T10:00:00Z',
-          deletedAt: null,
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'name', 'orderIndex'],
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          orderIndex: { type: 'number' },
         },
-        {
-          id: 'stage-uuid-2',
-          organizationId: 'org-uuid',
-          name: 'Qualifying',
-          orderIndex: 1,
-          createdAt: '2026-05-09T10:00:00Z',
-          updatedAt: '2026-05-09T10:00:00Z',
-          deletedAt: null,
-        },
-        {
-          id: 'stage-uuid-3',
-          organizationId: 'org-uuid',
-          name: 'Negotiation',
-          orderIndex: 2,
-          createdAt: '2026-05-09T10:00:00Z',
-          updatedAt: '2026-05-09T10:00:00Z',
-          deletedAt: null,
-        },
-      ],
+      },
     },
   })
   @ApiResponse({

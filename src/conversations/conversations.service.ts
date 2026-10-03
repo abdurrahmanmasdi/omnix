@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -15,7 +16,11 @@ import {
 import { EventsGateway } from '../events/events/events.gateway';
 import { PermissionService } from '../auth/permission.service';
 import { ForbiddenException } from '@nestjs/common';
-import { toConversationResponse } from './conversation-response.mapper';
+import {
+  INBOX_LEAD_INCLUDE,
+  toInboxMessage,
+  toConversationResponse,
+} from './conversation-response.mapper';
 import { toPublicMessageDto } from '../events/dto/public-events.dto';
 
 // PATIENT_OPTED_OUT never blocks a staff send (D-021); it is a warning.
@@ -55,6 +60,8 @@ export class ConversationsService {
     userId: string,
     page: number = 1,
     limit: number = 20,
+    filter?: string,
+    leadId?: string,
   ) {
     const canReadAll = await this.permissionService.has(
       userId,
@@ -65,23 +72,42 @@ export class ConversationsService {
       this.permissionService.has(userId, organizationId, 'leads:read:pii'),
       this.permissionService.has(userId, organizationId, 'leads:read:messages'),
     ]);
-    const dynamicWhere: any = { organizationId };
+    const dynamicWhere: Prisma.ConversationWhereInput = {
+      organizationId,
+      deletedAt: null,
+    };
     if (!canReadAll) {
       dynamicWhere.lead = { assignedAgentId: userId };
     }
+    const filters: Record<string, Prisma.ConversationWhereInput> = {
+      needs_reply: { aiPaused: true, status: { not: 'CLOSED' } },
+      handed_off: {
+        OR: [{ status: 'ESCALATED' }, { lead: { status: 'HANDED_OFF' } }],
+      },
+      ai_active: {
+        aiPaused: false,
+        status: 'ACTIVE',
+        OR: [{ lead: null }, { lead: { optedOutAt: null } }],
+      },
+      mine: { lead: { assignedAgentId: userId } },
+      unassigned: { lead: { assignedAgentId: null } },
+    };
+    if (filter && filters[filter]) dynamicWhere.AND = [filters[filter]];
+    if (leadId) dynamicWhere.leadId = leadId;
     const skip = (page - 1) * limit;
 
     const conversations = await this.prisma.conversation.findMany({
       where: dynamicWhere,
-      orderBy: { updatedAt: 'desc' }, // Newest active conversations first
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: limit,
       skip,
       include: {
-        lead: true,
+        lead: { include: INBOX_LEAD_INCLUDE },
         // Fetch the single most recent message to show as a preview in the sidebar
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
+          include: { outboundAttempt: { select: { status: true } } },
         },
       },
     });
@@ -89,6 +115,32 @@ export class ConversationsService {
     return conversations.map((conversation) =>
       toConversationResponse(conversation, canReadPii, canReadMessages),
     );
+  }
+
+  async getConversation(organizationId: string, userId: string, id: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id, organizationId, deletedAt: null },
+      include: {
+        lead: { include: INBOX_LEAD_INCLUDE },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: { outboundAttempt: { select: { status: true } } },
+        },
+      },
+    });
+    if (!conversation || conversation.organizationId !== organizationId)
+      throw new NotFoundException('Conversation not found');
+    const [canReadAll, canReadPii, canReadMessages] = await Promise.all([
+      this.permissionService.has(userId, organizationId, 'leads:read:all'),
+      this.permissionService.has(userId, organizationId, 'leads:read:pii'),
+      this.permissionService.has(userId, organizationId, 'leads:read:messages'),
+    ]);
+    if (!canReadAll && conversation.lead?.assignedAgentId !== userId)
+      throw new ForbiddenException(
+        'You do not have permission to access this conversation',
+      );
+    return toConversationResponse(conversation, canReadPii, canReadMessages);
   }
 
   async getMessages(
@@ -131,6 +183,7 @@ export class ConversationsService {
       where: { conversationId },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
+      include: { outboundAttempt: { select: { status: true } } },
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
@@ -138,7 +191,7 @@ export class ConversationsService {
     if (hasMore) messages.pop();
 
     return {
-      data: messages.map(toPublicMessageDto),
+      data: messages.map(toInboxMessage),
       hasMore,
       nextCursor: hasMore ? messages[messages.length - 1].id : null,
     };
