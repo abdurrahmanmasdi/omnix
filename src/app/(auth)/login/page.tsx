@@ -80,7 +80,7 @@ export default function LoginPage() {
     <Card className="w-full shadow-lg">
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          OmniDesk
+          OmniX
         </CardTitle>
         <CardDescription>
           Enter your email and password to log in to your CRM.

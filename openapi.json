@@ -392,6 +392,31 @@
         "operationId": "ConversationsController_getConversations",
         "parameters": [
           {
+            "name": "filter",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "needs_reply",
+                "handed_off",
+                "ai_active",
+                "mine",
+                "unassigned"
+              ]
+            }
+          },
+          {
+            "name": "leadId",
+            "required": false,
+            "in": "query",
+            "description": "Resolve an authorized lead handoff into its conversation",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -415,52 +440,13 @@
         ],
         "responses": {
           "200": {
-            "description": "Returns conversations with their latest message preview",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "updatedAt": {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      "lead": {
-                        "type": "object",
-                        "nullable": true,
-                        "properties": {
-                          "name": {
-                            "type": "string"
-                          },
-                          "phoneNumber": {
-                            "type": "string"
-                          }
-                        }
-                      },
-                      "messages": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "content": {
-                              "type": "string"
-                            },
-                            "createdAt": {
-                              "type": "string",
-                              "format": "date-time"
-                            }
-                          }
-                        }
-                      }
-                    }
+                    "$ref": "#/components/schemas/InboxConversationDto"
                   }
                 }
               }
@@ -510,29 +496,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Returns history of messages",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "content": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "type": "string"
-                      },
-                      "createdAt": {
-                        "type": "string",
-                        "format": "date-time"
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/InboxMessagesPageDto"
                 }
               }
             }
@@ -580,10 +548,24 @@
             }
           },
           "409": {
-            "description": "Not sent: the conversation changed during the send (code DELIVERY_NOT_AUTHORIZED)"
+            "description": "Not sent: the conversation changed during the send (code DELIVERY_NOT_AUTHORIZED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxSendErrorDto"
+                }
+              }
+            }
           },
           "422": {
-            "description": "Not sent. code: OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE (an opt-out never blocks a staff send)"
+            "description": "Not sent. code: OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE (an opt-out never blocks a staff send)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxSendErrorDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -592,6 +574,40 @@
           }
         ],
         "summary": "Send a manual message to a conversation",
+        "tags": ["Conversations"]
+      }
+    },
+    "/conversations/{id}": {
+      "get": {
+        "operationId": "ConversationsController_getConversation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxConversationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current conversation state and redacted patient summary",
         "tags": ["Conversations"]
       }
     },
@@ -2072,35 +2088,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "example": [
-                    {
-                      "id": "stage-uuid-1",
-                      "organizationId": "org-uuid",
-                      "name": "Initial Contact",
-                      "orderIndex": 0,
-                      "createdAt": "2026-05-09T10:00:00Z",
-                      "updatedAt": "2026-05-09T10:00:00Z",
-                      "deletedAt": null
-                    },
-                    {
-                      "id": "stage-uuid-2",
-                      "organizationId": "org-uuid",
-                      "name": "Qualifying",
-                      "orderIndex": 1,
-                      "createdAt": "2026-05-09T10:00:00Z",
-                      "updatedAt": "2026-05-09T10:00:00Z",
-                      "deletedAt": null
-                    },
-                    {
-                      "id": "stage-uuid-3",
-                      "organizationId": "org-uuid",
-                      "name": "Negotiation",
-                      "orderIndex": 2,
-                      "createdAt": "2026-05-09T10:00:00Z",
-                      "updatedAt": "2026-05-09T10:00:00Z",
-                      "deletedAt": null
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "name", "orderIndex"],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "orderIndex": {
+                        "type": "number"
+                      }
                     }
-                  ]
+                  }
                 }
               }
             }
@@ -2629,6 +2632,224 @@
         },
         "required": ["name", "slug"]
       },
+      "InboxPatientDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryLanguage": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "assignedAgentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "assigneeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "pipelineStageId": {
+            "type": "string",
+            "nullable": true
+          },
+          "stageName": {
+            "type": "string",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "optedOut": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "phoneNumber",
+          "email",
+          "primaryLanguage",
+          "country",
+          "timezone",
+          "status",
+          "priority",
+          "assignedAgentId",
+          "assigneeName",
+          "pipelineStageId",
+          "stageName",
+          "summary",
+          "optedOut"
+        ]
+      },
+      "InboxMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "senderId": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "type": "string"
+          },
+          "mediaUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string"
+          },
+          "handledBy": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Delivery/processing state. UNKNOWN is preserved from the outbound attempt."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "senderId",
+          "content",
+          "mediaUrl",
+          "type",
+          "handledBy",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "InboxConversationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "leadId": {
+            "type": "string",
+            "nullable": true
+          },
+          "channelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "aiPaused": {
+            "type": "boolean"
+          },
+          "stateVersion": {
+            "type": "number"
+          },
+          "assignedAgentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalContactId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "lead": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InboxPatientDto"
+              }
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxMessageDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "leadId",
+          "channelId",
+          "status",
+          "aiPaused",
+          "stateVersion",
+          "assignedAgentId",
+          "externalContactId",
+          "createdAt",
+          "updatedAt",
+          "lead",
+          "messages"
+        ]
+      },
+      "InboxMessagesPageDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxMessageDto"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["data", "hasMore", "nextCursor"]
+      },
       "SendMessageDto": {
         "type": "object",
         "properties": {
@@ -2701,6 +2922,18 @@
           "deliveryStatus",
           "warnings"
         ]
+      },
+      "InboxSendErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["code", "message"]
       },
       "AiStateResponseDto": {
         "type": "object",

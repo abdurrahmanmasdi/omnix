@@ -1,15 +1,47 @@
-import type { Metadata } from 'next';
-import localFont from 'next/font/local';
-import './globals.css';
-import QueryProvider from '@/providers/query-provider';
-import { Toaster } from '@/components/ui/sonner';
+import type { Metadata } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { InboxLocaleProvider } from "@/features/inbox/i18n";
+import QueryProvider from "@/providers/query-provider";
+import { Toaster } from "@/components/ui/sonner";
 
-const montserrat = localFont({ src: './fonts/montserrat-latin.woff2', weight: '100 900', variable: '--font-montserrat', display: 'swap' });
-const inter = localFont({ src: './fonts/inter-latin.woff2', weight: '100 900', variable: '--font-inter', display: 'swap' });
+const montserrat = localFont({
+  src: "./fonts/montserrat-latin.woff2",
+  weight: "100 900",
+  variable: "--font-montserrat-latin",
+  adjustFontFallback: false,
+  fallback: [],
+  display: "swap",
+});
+const inter = localFont({
+  src: "./fonts/inter-latin.woff2",
+  weight: "100 900",
+  variable: "--font-inter-latin",
+  adjustFontFallback: false,
+  fallback: [],
+  display: "swap",
+});
+
+const montserratExt = localFont({
+  src: "./fonts/montserrat-latin-ext.woff2",
+  weight: "100 900",
+  variable: "--font-montserrat-ext",
+  display: "swap",
+  adjustFontFallback: false,
+  fallback: [],
+});
+const interExt = localFont({
+  src: "./fonts/inter-latin-ext.woff2",
+  weight: "100 900",
+  variable: "--font-inter-ext",
+  display: "swap",
+  adjustFontFallback: false,
+  fallback: [],
+});
 
 export const metadata: Metadata = {
-  title: 'OMNIX AI | Next-Gen AI Sales Agent',
-  description: 'AI-Powered CRM and RAG Platform',
+  title: "OmniX — AI International Patient Coordinator",
+  description: "Clinic patient enquiries, AI coordination and staff handoff.",
 };
 
 export default function RootLayout({
@@ -18,11 +50,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${montserrat.variable} ${inter.variable}`}>
-      <body className={`${inter.className} bg-background text-foreground antialiased`}>
+    <html
+      lang="tr"
+      className={`${montserrat.variable} ${inter.variable} ${montserratExt.variable} ${interExt.variable}`}
+    >
+      <body className={`font-inter bg-background text-foreground antialiased`}>
         <QueryProvider>
-          {children}
-          <Toaster />
+          <InboxLocaleProvider>
+            {children}
+            <Toaster />
+          </InboxLocaleProvider>
         </QueryProvider>
       </body>
     </html>

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth-store';
+import { useInboxText } from '@/features/inbox/i18n';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   ChevronRight,
+  Menu,
   LogOut,
   User,
   Settings,
@@ -25,6 +27,8 @@ import {
 
 interface HeaderProps {
   onLogout: () => void;
+  onMenu: () => void;
+  menuOpen: boolean;
 }
 
 // ─── Breadcrumb Generator ───────────────────────────────
@@ -57,7 +61,7 @@ function useBreadcrumbs() {
       path += `/${seg}`;
       crumbs.push({
         label: LABEL_MAP[seg] || seg.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        href: path,
+        href: path === '/dashboard/settings' ? '/dashboard/settings/ai' : path,
       });
     }
 
@@ -65,13 +69,15 @@ function useBreadcrumbs() {
   }, [pathname]);
 }
 
-export function Header({ onLogout }: HeaderProps) {
+export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
+  const { t } = useInboxText();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const breadcrumbs = useBreadcrumbs();
 
   return (
-    <header className="h-16 border-b border-white/5 bg-brand-navy/50 backdrop-blur-xl flex items-center justify-between px-8 shrink-0">
+    <header className="h-16 border-b border-white/5 bg-brand-navy/50 backdrop-blur-xl flex items-center justify-between px-3 md:px-8 shrink-0">
+      <Button className="md:hidden" variant="ghost" size="icon" aria-label={t('menu')} aria-expanded={menuOpen} onClick={onMenu}><Menu /></Button>
       {/* Left: Breadcrumbs */}
       <div className="flex items-center space-x-1 min-w-0">
         {breadcrumbs.map((crumb, i) => {
@@ -83,14 +89,14 @@ export function Header({ onLogout }: HeaderProps) {
               )}
               {isLast ? (
                 <span className="text-sm font-bold text-brand-ice truncate">
-                  {crumb.label}
+                  {crumb.label === 'Conversations' ? t('inbox') : crumb.label}
                 </span>
               ) : (
                 <Link
                   href={crumb.href}
                   className="text-sm font-medium text-brand-ice/60 hover:text-brand-ice transition-colors truncate"
                 >
-                  {crumb.label}
+                  {crumb.label === 'Conversations' ? t('inbox') : crumb.label}
                 </Link>
               )}
             </div>

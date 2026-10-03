@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSocket } from "@/hooks/useSocket";
@@ -11,6 +11,7 @@ import {
   useNotificationsControllerMarkAllAsRead,
   getNotificationsControllerGetNotificationsQueryKey,
   getNotificationsControllerGetUnreadCountQueryKey,
+  getNotificationsControllerGetNotificationsQueryOptions,
 } from "@/lib/api/generated/notifications/notifications";
 import type { NotificationsControllerGetNotifications200Item } from "@/lib/api/model";
 import {
@@ -31,6 +32,9 @@ import {
   AlertCircle,
   ExternalLink,
 } from "lucide-react";
+import type { NotificationInvalidationPayload } from '@/lib/contracts/socket-events.generated';
+import { notificationRoute, resolveNotification } from '@/features/inbox/notifications';
+import { useInboxText } from '@/features/inbox/i18n';
 import { toast } from "sonner";
 
 // ─── Helpers ────────────────────────────────────────────
@@ -49,22 +53,6 @@ function getNotificationIcon(type?: string) {
   }
 }
 
-function getNotificationRoute(
-  n: NotificationsControllerGetNotifications200Item,
-): string | null {
-  if (!n.referenceType || !n.referenceId) return null;
-  switch (n.referenceType.toLowerCase()) {
-    case "lead":
-      return `/dashboard/leads?highlight=${n.referenceId}`;
-    case "conversation":
-      return `/dashboard/conversations/${n.referenceId}`;
-    case "pipeline-stage":
-      return `/dashboard/settings/pipeline-stages`;
-    default:
-      return null;
-  }
-}
-
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -79,6 +67,8 @@ function timeAgo(dateStr?: string): string {
 // ─── Component ──────────────────────────────────────────
 export function NotificationBell() {
   const router = useRouter();
+  const { t } = useInboxText();
+  const seenNotifications = useRef(new Set<string>());
   const queryClient = useQueryClient();
   const { socket } = useSocket();
 
@@ -100,41 +90,27 @@ export function NotificationBell() {
   useEffect(() => {
     if (!socket) return;
 
-    const handler = (payload: {
-      title: string;
-      body: string;
-      type?: string;
-    }) => {
-      // Optimistically increment unread count
-      queryClient.setQueryData<number>(
-        getNotificationsControllerGetUnreadCountQueryKey(),
-        (old) => (old ?? 0) + 1,
-      );
-
-      // Invalidate the list to fetch the new item
-      queryClient.invalidateQueries({
-        queryKey: getNotificationsControllerGetNotificationsQueryKey(),
-      });
-
-      if (payload.type === "LEAD_HANDED_OFF") {
-        toast.error(payload.title, {
-          description: payload.body,
-          duration: 10000,
-        });
-        // Attempt audio ping
-        try {
-          const audio = new Audio("/sounds/ping.mp3");
-          audio.volume = 0.5;
-          audio.play().catch(() => {
-            /* silent failure if not interacted */
-          });
-        } catch {}
-      } else {
-        // Fire a system-wide toast
-        toast.info(payload.title, {
-          description: payload.body,
-          duration: 6000,
-        });
+    const seen = seenNotifications.current;
+    const handler = async (payload: NotificationInvalidationPayload) => {
+      if (seen.has(payload.id)) return;
+      seen.add(payload.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getNotificationsControllerGetNotificationsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getNotificationsControllerGetUnreadCountQueryKey() }),
+      ]);
+      try {
+        const rows = await queryClient.fetchQuery(getNotificationsControllerGetNotificationsQueryOptions({ limit: 100 }, { query: { staleTime: 0 } }));
+        const notification = resolveNotification(payload, rows);
+        if (!notification) return;
+        const route = notificationRoute(notification);
+        const options = { description: notification.body, duration: 10000,
+          ...(route ? { action: { label: t('open'), onClick: () => router.push(route) } } : {}),
+        };
+        if (notification.type === 'LEAD_HANDED_OFF') toast.warning(notification.title || t('handed_off'), options);
+        else toast.info(notification.title || t('notifications'), options);
+      } catch {
+        // Failed or forbidden detail reads must never expose socket-supplied patient data.
+        toast.info(t('notifications'));
       }
     };
 
@@ -142,7 +118,7 @@ export function NotificationBell() {
     return () => {
       socket.off("new_notification", handler);
     };
-  }, [socket, queryClient]);
+  }, [socket, queryClient, router, t]);
 
   // ─── Click → Mark Read + Route ────────────────────────
   const handleClickNotification = useCallback(
@@ -162,7 +138,7 @@ export function NotificationBell() {
           },
         );
       }
-      const route = getNotificationRoute(notification);
+      const route = notificationRoute(notification);
       if (route) router.push(route);
     },
     [markOneMutation, router, queryClient],
@@ -191,11 +167,11 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="relative h-10 w-10 rounded-xl hover:bg-[#01081A] transition-colors"
-          aria-label="Notifications"
+          aria-label={t('notifications')}
         >
           <Bell className="h-[18px] w-[18px] text-brand-ice/60" />
           {count > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-lg shadow-red-500/20 animate-in zoom-in duration-200">
+            <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white shadow-lg shadow-red-500/20 animate-in zoom-in duration-200">
               {count > 99 ? "99+" : count}
             </span>
           )}
@@ -205,14 +181,14 @@ export function NotificationBell() {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[400px] p-0 shadow-2xl border-white/10 rounded-2xl overflow-hidden"
+        className="w-[min(400px,calc(100vw-24px))] p-0 shadow-2xl border-white/10 rounded-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-[#051126]/50">
           <div className="flex items-center space-x-2">
             <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
             {count > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/10 text-red-400 px-1.5 text-[10px] font-bold">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/10 text-red-400 px-1.5 text-xs font-bold">
                 {count}
               </span>
             )}
@@ -273,7 +249,7 @@ export function NotificationBell() {
                         {n.body}
                       </p>
                     )}
-                    <p className="text-[10px] font-medium text-slate-400 mt-1.5">
+                    <p className="text-xs font-medium text-slate-400 mt-1.5">
                       {timeAgo(n.createdAt)}
                     </p>
                   </div>
@@ -298,9 +274,9 @@ export function NotificationBell() {
                 variant="ghost"
                 size="sm"
                 className="text-xs font-bold text-brand-ice/60 hover:text-blue-600 h-8"
-                onClick={() => router.push("/dashboard/notifications")}
+                onClick={() => router.push("/dashboard/conversations")}
               >
-                View all notifications
+                Open Inbox
               </Button>
             </div>
           </>

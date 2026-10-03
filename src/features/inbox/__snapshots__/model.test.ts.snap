@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Inbox contract behavior > has translated draft and opt-out notice in en 1`] = `
+{
+  "draft": "AI draft — not sent",
+  "optOut": "Patient sent STOP — AI paused, automated messages are off. You can still reply.",
+}
+`;
+
+exports[`Inbox contract behavior > has translated draft and opt-out notice in tr 1`] = `
+{
+  "draft": "AI taslağı — gönderilmedi",
+  "optOut": "Hasta STOP gönderdi — AI duraklatıldı, otomatik mesajlar kapalı. Yine de yanıt verebilirsiniz.",
+}
+`;

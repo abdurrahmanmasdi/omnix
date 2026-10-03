@@ -1,5 +1,6 @@
 'use client';
 
+import { ReadError } from '@/features/inbox/ReadError';
 import { useAuthStore } from '@/store/auth-store';
 import { useAnalyticsControllerGetSummary } from '@/lib/api/generated/analytics/analytics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +23,7 @@ export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
   
   // Refetch frequently on dashboard
-  const { data, isLoading } = useAnalyticsControllerGetSummary({
+  const { data, isLoading, isError, error, refetch } = useAnalyticsControllerGetSummary({
     query: {
       refetchInterval: 30000,
     }
@@ -38,6 +39,8 @@ export default function DashboardPage() {
 
   const hasNeedsAttention = summary.needsAttention > 0;
 
+  if (isError) return <ReadError error={error} retry={() => { void refetch(); }} />;
+
   if (isLoading) {
     return <DashboardSkeleton />;
   }
@@ -50,7 +53,7 @@ export default function DashboardPage() {
           Welcome back, {user?.firstName}!
         </h1>
         <p className="text-brand-ice/60 font-medium mt-1">
-          Here is how your AI Agent is performing today.
+          Clinic workspace totals and recent activity.
         </p>
       </div>
 
@@ -69,7 +72,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-black text-brand-ice">{summary.totalLeads.toLocaleString()}</div>
-            <p className="text-xs font-medium text-brand-ice/60 mt-1">Lifetime leads acquired</p>
+            <p className="text-xs font-medium text-brand-ice/60 mt-1">Total patient enquiries</p>
           </CardContent>
         </Card>
 

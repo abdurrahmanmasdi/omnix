@@ -217,7 +217,7 @@ export function LeadsDashboardClient() {
   const handleDelete = useCallback(
     (id: string) => {
       if (
-        confirm("Are you sure you want to delete this high-priority record?")
+        confirm("Are you sure you want to delete this patient record?")
       ) {
         deleteMutation.mutate(
           { id },
@@ -228,7 +228,7 @@ export function LeadsDashboardClient() {
             },
             onError: () =>
               toast.error(
-                "Encryption policy prevents deletion or server error.",
+                "Could not delete the patient record. Please try again.",
               ),
           },
         );
@@ -240,7 +240,7 @@ export function LeadsDashboardClient() {
   const handleOpenConversation = useCallback(
     (conversationId?: string) => {
       if (conversationId) {
-        router.push(`/dashboard/conversations/${conversationId}`);
+        router.push(`/dashboard/conversations?conversation=${encodeURIComponent(conversationId)}`);
       } else {
         toast.error("No conversation linked to this patient yet.");
       }

@@ -7,6 +7,7 @@ import { axiosInstance } from '@/lib/api/axios-client';
 import { resetSession } from '@/lib/session-manager';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { useInboxText } from '@/features/inbox/i18n';
 import { Loader2 } from 'lucide-react';
 
 interface DashboardShellProps {
@@ -15,6 +16,8 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const router = useRouter();
+  const { t } = useInboxText();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { accessToken, user } = useAuthStore();
   const [hasHydrated, setHasHydrated] = useState(false);
 
@@ -79,9 +82,10 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-brand-navy text-brand-ice selection:bg-brand-electric/30 font-inter">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onLogout={handleLogout} />
+      {sidebarOpen && <button className="fixed inset-0 z-30 bg-black/50 md:hidden" aria-label={t('close')} onClick={() => setSidebarOpen(false)} />}
+      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
+        <Header onLogout={handleLogout} onMenu={() => setSidebarOpen(old => !old)} menuOpen={sidebarOpen} />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
