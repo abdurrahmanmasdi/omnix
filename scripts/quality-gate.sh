@@ -55,3 +55,12 @@ fi
 (cd "$backend" && npx tsc --noEmit --incremental false && npm run build && npm test -- --runInBand --watchman=false && npm run lint && npm run lint:baseline)
 (cd "$frontend" && npx tsc --noEmit && npm run build && npx vitest run && npm run lint && npm run lint:baseline)
 (cd "$python_service" && OPENAI_API_KEY=synthetic-test-key INTERNAL_RPC_SECRET=synthetic-rpc-secret DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic ./.venv/bin/python -m pytest -q)
+
+# Browser permission suite (P1-10). Needs Docker; present once the frontend carries playwright/.
+if [[ -f "$frontend/playwright/run.sh" ]]; then
+  if [[ "${SKIP_BROWSER:-0}" == "1" ]]; then
+    echo "SKIP_BROWSER=1: browser permission suite NOT run" >&2
+  else
+    PLAYWRIGHT_BACKEND_DIR="$backend" bash "$frontend/playwright/run.sh"
+  fi
+fi
