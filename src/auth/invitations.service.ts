@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,6 +13,10 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { AcceptClinicInvitationDto } from './dto/accept-clinic-invitation.dto';
 import { IssueClinicInvitationDto } from './dto/issue-clinic-invitation.dto';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import {
+  MEMBERSHIP_GRANTS_INCLUDE,
+  membershipHasPermission,
+} from './permission.service';
 
 const PURPOSE = 'PILOT_ACTIVATION';
 const CLINIC_MEMBERSHIP_PURPOSE = 'CLINIC_MEMBERSHIP';
@@ -224,8 +229,10 @@ export class InvitationsService {
       const role = await tx.role.findFirst({
         where: {
           id: dto.roleId,
+          deletedAt: null,
           OR: [{ organizationId }, { organizationId: null }],
         },
+        include: { rolePermissions: { include: { permission: true } } },
       });
       if (!role) throw new BadRequestException('ROLE_NOT_FOUND');
 
@@ -235,13 +242,25 @@ export class InvitationsService {
       }
 
       // Check issuer membership
-      const issuerMembership = await tx.organizationMembership.findUnique({
+      const issuerMembership = await tx.organizationMembership.findFirst({
         where: {
-          userId_organizationId: { userId: issuerUserId, organizationId },
+          userId: issuerUserId,
+          organizationId,
+          status: 'ACTIVE',
+          deletedAt: null,
         },
+        include: MEMBERSHIP_GRANTS_INCLUDE,
       });
       if (!issuerMembership)
         throw new UnauthorizedException('Issuer is not a member of the clinic');
+
+      // The issuer may only grant permissions they hold themselves (overrides included).
+      const exceeds = role.rolePermissions.some(
+        (grant) =>
+          !membershipHasPermission(issuerMembership, grant.permission.action),
+      );
+      if (exceeds)
+        throw new ForbiddenException('INVITATION_ROLE_EXCEEDS_ISSUER');
 
       const existing = await tx.user.findFirst({
         where: { email: { equals: email, mode: 'insensitive' } },

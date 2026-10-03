@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { safeDeploy } from '../src/credentials/deploy-cli';
 import { tenantStorage } from '../src/core/tenant/tenant.context';
+import { provisionOrganizationRolesAndPermissions } from '../src/auth/permission.provisioning';
 
 jest.setTimeout(120_000);
 const system = <T>(fn: () => Promise<T>) =>
@@ -90,6 +91,7 @@ describe('Clinic Invitations (e2e)', () => {
           userId: owner.id,
           organizationId: org.id,
           roleId: role.id,
+          status: 'ACTIVE',
         },
       });
 
@@ -167,6 +169,7 @@ describe('Clinic Invitations (e2e)', () => {
           userId: owner.id,
           organizationId: org.id,
           roleId: role.id,
+          status: 'ACTIVE',
         },
       });
 
@@ -240,6 +243,92 @@ describe('Clinic Invitations (e2e)', () => {
       });
       expect(membership).toBeDefined();
       expect(membership!.roleId).toEqual(role.id);
+    });
+  });
+
+  const clinicWithRoles = async (label: string) => {
+    const org = await prisma.organization.create({
+      data: {
+        name: `Clinic ${label}`,
+        slug: `clinic-${label}-${randomUUID()}`,
+      },
+    });
+    const roles = await prisma.$transaction((tx) =>
+      provisionOrganizationRolesAndPermissions(tx, org.id),
+    );
+    const owner = await prisma.user.create({
+      data: {
+        email: `owner-${label}-${randomUUID()}@test.com`,
+        password_hash: await bcrypt.hash('password123', 10),
+        firstName: 'Owner',
+        lastName: label,
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.organizationMembership.create({
+      data: {
+        userId: owner.id,
+        organizationId: org.id,
+        roleId: roles.get('Super Admin')!.id,
+        status: 'ACTIVE',
+      },
+    });
+    return { org, roles, owner };
+  };
+
+  it('refuses to let an issuer grant a role with permissions they lack', async () => {
+    return system(async () => {
+      const clinic = await clinicWithRoles('role-cap');
+      // A coordinator: Agent role plus an override that lets them invite.
+      const coordinator = await prisma.user.create({
+        data: {
+          email: `coordinator-${randomUUID()}@test.com`,
+          password_hash: await bcrypt.hash('password123', 10),
+          firstName: 'Co',
+          lastName: 'Ordinator',
+          status: 'ACTIVE',
+        },
+      });
+      const membership = await prisma.organizationMembership.create({
+        data: {
+          userId: coordinator.id,
+          organizationId: clinic.org.id,
+          roleId: clinic.roles.get('Agent')!.id,
+          status: 'ACTIVE',
+        },
+      });
+      const manage = await prisma.permission.findUniqueOrThrow({
+        where: { action: 'organization:manage' },
+      });
+      await prisma.membershipPermissionOverride.create({
+        data: {
+          membershipId: membership.id,
+          permissionId: manage.id,
+          is_granted: true,
+        },
+      });
+
+      await expect(
+        invitations.issueClinicInvitation(
+          {
+            email: `escalate-${randomUUID()}@test.com`,
+            roleId: clinic.roles.get('Manager')!.id,
+          },
+          coordinator.id,
+          clinic.org.id,
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      // Same-or-lower role is still allowed.
+      await expect(
+        invitations.issueClinicInvitation(
+          {
+            email: `peer-${randomUUID()}@test.com`,
+            roleId: clinic.roles.get('Agent')!.id,
+          },
+          coordinator.id,
+          clinic.org.id,
+        ),
+      ).resolves.toMatchObject({ token: expect.any(String) });
     });
   });
 });
