@@ -52,3 +52,52 @@ def test_transcription_uses_the_configured_model(monkeypatch):
     ), None))
 
     assert create.await_args.kwargs["model"] == "synthetic-transcribe"
+
+
+# --- startup validation (fail fast) ---------------------------------------
+import pytest
+from pydantic import ValidationError
+
+from app.core.config import Settings
+
+VALID = dict(
+    OPENAI_API_KEY="synthetic-key",
+    DATABASE_URL="postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic",
+    INTERNAL_RPC_SECRET="synthetic-rpc-secret",
+    ENVIRONMENT="development",
+)
+
+
+def _settings(**overrides):
+    return Settings(_env_file=None, **{**VALID, **overrides})
+
+
+def test_valid_settings_load():
+    assert _settings().GRPC_PORT == 50051
+
+
+@pytest.mark.parametrize("name", ["OPENAI_API_KEY", "DATABASE_URL", "INTERNAL_RPC_SECRET"])
+def test_blank_secret_fails_at_startup(name, monkeypatch):
+    monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValidationError, match=name):
+        _settings(**{name: "   "})
+
+
+@pytest.mark.parametrize("overrides", [
+    {"ENVIRONMENT": "prod"},
+    {"DATABASE_URL": "mysql://x"},
+    {"GRPC_PORT": 0},
+    {"FLAGSHIP_TEMPERATURE": 3},
+    {"FLAGSHIP_MODEL": " "},
+    {"EMBEDDING_DIMENSIONS": 0},
+    {"ENVIRONMENT": "production", "INTERNAL_RPC_SECRET": "short-secret"},
+])
+def test_invalid_settings_fail_at_startup(overrides):
+    with pytest.raises(ValidationError):
+        _settings(**overrides)
+
+
+def test_validation_error_does_not_echo_secret_values():
+    with pytest.raises(ValidationError) as error:
+        _settings(ENVIRONMENT="production", INTERNAL_RPC_SECRET="leaky-short")
+    assert "leaky-short" not in str(error.value)
