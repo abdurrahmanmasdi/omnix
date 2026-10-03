@@ -1,8 +1,37 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class PaginationQueryDto {
+  @ApiPropertyOptional({
+    enum: [
+      'all',
+      'needs_reply',
+      'handed_off',
+      'ai_active',
+      'mine',
+      'unassigned',
+    ],
+  })
+  @IsOptional()
+  @IsIn(['all', 'needs_reply', 'handed_off', 'ai_active', 'mine', 'unassigned'])
+  filter?: string;
+
+  @ApiPropertyOptional({
+    description: 'Resolve an authorized lead handoff into its conversation',
+  })
+  @IsOptional()
+  @IsUUID()
+  leadId?: string;
+
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)

@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { MembershipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import { hasCurrentSecurityVersion } from './security-version';
 
 export interface JwtPayload {
   sub: string;
@@ -57,8 +58,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User account is not active');
     }
 
-    if (payload.securityVersion && user.securityVersion !== payload.securityVersion) {
-      throw new UnauthorizedException('Session revoked due to security changes');
+    if (
+      !hasCurrentSecurityVersion(payload.securityVersion, user.securityVersion)
+    ) {
+      throw new UnauthorizedException(
+        'Session revoked due to security changes',
+      );
     }
 
     if (user.memberships.length === 0) {

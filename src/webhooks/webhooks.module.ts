@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
@@ -17,13 +16,13 @@ import { OutboundAttemptService } from './outbound-attempt.service';
 import { ActionExecutorService } from './action-executor.service';
 import { CrmIntegrationModule } from '../modules/integration/crm/crm-integration.module';
 import { WhatsappMediaService } from './whatsapp-media.service';
-import { GRPC_CONFIG } from '../config/grpc.constants';
 import { CredentialsModule } from '../credentials/credentials.module';
 import { AuthModule } from '../auth/auth.module';
 
 import { FollowUpService } from '../follow-ups/follow-up.service';
 import { FollowUpProcessor } from '../follow-ups/follow-up.processor';
 import { AuditModule } from '../audit/audit.module';
+import { FAILED_JOB_RETENTION } from '../core/queue/job-retention';
 
 @Module({
   imports: [
@@ -39,7 +38,7 @@ import { AuditModule } from '../audit/audit.module';
       defaultJobOptions: {
         attempts: 5,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnFail: false,
+        removeOnFail: FAILED_JOB_RETENTION,
       },
     }),
     BullModule.registerQueue({
@@ -47,7 +46,7 @@ import { AuditModule } from '../audit/audit.module';
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnFail: false,
+        removeOnFail: FAILED_JOB_RETENTION,
       },
     }),
     BullModule.registerQueue({
@@ -55,10 +54,9 @@ import { AuditModule } from '../audit/audit.module';
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
-        removeOnFail: false,
+        removeOnFail: FAILED_JOB_RETENTION,
       },
     }),
-
   ],
   controllers: [WebhooksController],
   providers: [
@@ -83,6 +81,7 @@ import { AuditModule } from '../audit/audit.module';
     ActionExecutorService,
     DeliveryAuthService,
     FollowUpService,
+    OutboundAttemptService,
   ],
 })
 export class WebhooksModule {}

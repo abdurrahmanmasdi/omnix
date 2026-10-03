@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FollowUpType, FollowUpStatus } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import { FAILED_JOB_RETENTION } from '../core/queue/job-retention';
 
 @Injectable()
 export class FollowUpService {
@@ -70,7 +71,7 @@ export class FollowUpService {
               attempts: 3,
               backoff: { type: 'exponential', delay: 5000 },
               removeOnComplete: true,
-              removeOnFail: false,
+              removeOnFail: FAILED_JOB_RETENTION,
             },
           );
         } catch {
@@ -85,7 +86,11 @@ export class FollowUpService {
   }
 
   /**
-   * Schedules standard 12h and 24h follow ups after the AI replies.
+   * Schedules the standard follow-ups after the AI replies:
+   * attempt 1 (12 h) sends a follow-up message to the patient (inside the
+   * WhatsApp 24 h window); attempt 2 (24 h) sends nothing to the patient,
+   * it alerts eligible staff that the lead is unresponsive
+   * (FollowUpProcessor, AUTO_NO_REPLY attempt >= 2).
    */
   async scheduleAutoFollowUps(conversationId: string, organizationId: string) {
     // 1. Cancel any existing pending follow-ups
@@ -226,7 +231,9 @@ export class FollowUpService {
             await job.remove();
           }
         } catch {
-          this.logger.warn(`FOLLOW_UP_QUEUE_REMOVE_FAILED followUp=${record.id}`);
+          this.logger.warn(
+            `FOLLOW_UP_QUEUE_REMOVE_FAILED followUp=${record.id}`,
+          );
         }
       }
     }

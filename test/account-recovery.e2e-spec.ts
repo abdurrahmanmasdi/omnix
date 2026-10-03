@@ -1,3 +1,4 @@
+import type { Server } from 'node:http';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -22,12 +23,13 @@ let authService: AuthService;
 
 beforeAll(async () => {
   const url = process.env.UPGRADE_TEST_ADMIN_URL;
-  if (!url || new URL(url).hostname !== '127.0.0.1') throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
+  if (!url || new URL(url).hostname !== '127.0.0.1')
+    throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
   admin = new Client({ connectionString: url });
   await admin.connect();
   dbName = 'omnidesk_recovery_' + randomUUID().replace(/-/g, '');
   await admin.query(`CREATE DATABASE "${dbName}"`);
-  
+
   const testUrl = new URL(url);
   testUrl.pathname = '/' + dbName;
   process.env.DATABASE_URL = testUrl.toString();
@@ -56,15 +58,21 @@ describe('Account Recovery (P1-08)', () => {
   let userId: string;
   let operatorId: string;
   let organizationId: string;
-  
+
   beforeAll(async () => {
     organizationId = randomUUID();
     const hash = await bcrypt.hash('old-password', 10);
     userId = randomUUID();
     operatorId = randomUUID();
-    
+
     await system(async () => {
-      await prisma.organization.create({ data: { id: organizationId, name: 'Recovery Test Org', slug: 'recovery' } });
+      await prisma.organization.create({
+        data: {
+          id: organizationId,
+          name: 'Recovery Test Org',
+          slug: 'recovery',
+        },
+      });
       await prisma.user.create({
         data: {
           id: userId,
@@ -72,8 +80,8 @@ describe('Account Recovery (P1-08)', () => {
           firstName: 'R',
           lastName: 'U',
           password_hash: hash,
-          status: 'ACTIVE'
-        }
+          status: 'ACTIVE',
+        },
       });
       const roleId = randomUUID();
       await prisma.role.create({ data: { id: roleId, name: 'Admin' } });
@@ -82,74 +90,125 @@ describe('Account Recovery (P1-08)', () => {
           userId,
           organizationId,
           roleId,
-          status: 'ACTIVE'
-        }
+          status: 'ACTIVE',
+        },
       });
       await prisma.session.create({
         data: {
           userId,
           tokenHash: 'somehash',
           familyId: 'family',
-          expiresAt: new Date(Date.now() + 86400000)
-        }
+          expiresAt: new Date(Date.now() + 86400000),
+        },
       });
     });
   });
 
   it('should issue a recovery token via AuthService', async () => {
-    const result = await system(() => authService.issueRecovery('recover@example.com', operatorId));
+    const result = await system(() =>
+      authService.issueRecovery('recover@example.com', operatorId),
+    );
     expect(result.token).toBeDefined();
     expect(result.token.length).toBeGreaterThan(16);
   });
 
   it('should successfully consume a recovery token, update password, and revoke sessions', async () => {
-    const { token } = await system(() => authService.issueRecovery('recover@example.com', operatorId));
-    
-    const preSession = await system(() => prisma.session.findFirst({ where: { userId } }));
+    const { token } = await system(() =>
+      authService.issueRecovery('recover@example.com', operatorId),
+    );
+
+    const preSession = await system(() =>
+      prisma.session.findFirst({ where: { userId } }),
+    );
     expect(preSession?.isRevoked).toBe(false);
 
-    const preUser = await system(() => prisma.user.findUnique({ where: { id: userId } }));
+    const preUser = await system(() =>
+      prisma.user.findUnique({ where: { id: userId } }),
+    );
     const preSecurityVersion = preUser?.securityVersion;
 
-    const response = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer() as Server)
       .post('/auth/recovery/consume')
       .send({ token, newPassword: 'new-secure-password' });
 
     expect(response.status).toBe(204);
 
-    const user = await system(() => prisma.user.findUnique({ where: { id: userId } }));
-    const passwordMatch = await bcrypt.compare('new-secure-password', user!.password_hash);
+    const user = await system(() =>
+      prisma.user.findUnique({ where: { id: userId } }),
+    );
+    const passwordMatch = await bcrypt.compare(
+      'new-secure-password',
+      user!.password_hash,
+    );
     expect(passwordMatch).toBe(true);
     expect(user?.securityVersion).toBe(preSecurityVersion! + 1);
 
-    const postSession = await system(() => prisma.session.findFirst({ where: { userId } }));
+    const postSession = await system(() =>
+      prisma.session.findFirst({ where: { userId } }),
+    );
     expect(postSession?.isRevoked).toBe(true);
 
-    const logs = await system(() => prisma.auditLog.findMany({ where: { organizationId } }));
+    const logs = await system(() =>
+      prisma.auditLog.findMany({ where: { organizationId } }),
+    );
     expect(logs.length).toBe(1);
     expect(logs[0].action).toBe('ACCOUNT_RECOVERY');
   });
 
   it('should fail if token is reused', async () => {
-    const { token } = await system(() => authService.issueRecovery('recover@example.com', operatorId));
-    await request(app.getHttpServer())
+    const { token } = await system(() =>
+      authService.issueRecovery('recover@example.com', operatorId),
+    );
+    await request(app.getHttpServer() as Server)
       .post('/auth/recovery/consume')
       .send({ token, newPassword: 'new-secure-password-2' });
 
-    const response = await request(app.getHttpServer())
+    const response = await request(app.getHttpServer() as Server)
       .post('/auth/recovery/consume')
       .send({ token, newPassword: 'new-secure-password-3' });
 
     expect(response.status).toBe(401);
   });
 
+  it('consumes a recovery token exactly once under parallel use', async () => {
+    const { token } = await system(() =>
+      authService.issueRecovery('recover@example.com', operatorId),
+    );
+    const before = await system(() =>
+      prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    );
+
+    const results = await Promise.allSettled(
+      ['parallel-password-1', 'parallel-password-2', 'parallel-password-3'].map(
+        (newPassword) => authService.consumeRecovery({ token, newPassword }),
+      ),
+    );
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    const after = await system(() =>
+      prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    );
+    expect(after.securityVersion).toBe(before.securityVersion + 1);
+  });
+
   it('should fail if user is suspended', async () => {
-    await system(() => prisma.user.update({ where: { id: userId }, data: { status: 'SUSPENDED' } }));
-    
+    await system(() =>
+      prisma.user.update({
+        where: { id: userId },
+        data: { status: 'SUSPENDED' },
+      }),
+    );
+
     await expect(
-      system(() => authService.issueRecovery('recover@example.com', operatorId))
+      system(() =>
+        authService.issueRecovery('recover@example.com', operatorId),
+      ),
     ).rejects.toThrow();
 
-    await system(() => prisma.user.update({ where: { id: userId }, data: { status: 'ACTIVE' } }));
+    await system(() =>
+      prisma.user.update({ where: { id: userId }, data: { status: 'ACTIVE' } }),
+    );
   });
 });

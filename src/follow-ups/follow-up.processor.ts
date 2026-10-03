@@ -1,26 +1,32 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger, OnModuleInit } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { FollowUpStatus, FollowUpType, NotificationType } from '@prisma/client';
 import { WhatsappService } from '../webhooks/whatsapp.service';
 import { EventsGateway } from '../events/events/events.gateway';
-import type { ClientGrpc } from '@nestjs/microservices';
-import { lastValueFrom } from 'rxjs';
 import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { ActionExecutorService } from '../webhooks/action-executor.service';
 import { NotificationEmitterService } from '../notifications/notification-emitter.service';
 import { DeliveryAuthService } from '../webhooks/delivery-auth.service';
 import { OutboundAttemptService } from '../webhooks/outbound-attempt.service';
 import { randomUUID } from 'node:crypto';
-import { AGENT_CONTRACT_VERSION, isCompatibleAgentVersion } from '../webhooks/contracts/agent-contract';
-import { MEMBERSHIP_GRANTS_INCLUDE, membershipHasPermission } from '../auth/permission.service';
+import {
+  AGENT_CONTRACT_VERSION,
+  isCompatibleAgentVersion,
+} from '../webhooks/contracts/agent-contract';
+import { splitAfterSendActions } from '../webhooks/deferred-actions';
+import { executeActionsOnce } from '../webhooks/action-claim';
+import { actionFallbackText, patientLanguage } from '../webhooks/patient-copy';
+import {
+  MEMBERSHIP_GRANTS_INCLUDE,
+  membershipHasPermission,
+} from '../auth/permission.service';
 
 @Processor('follow-up')
 export class FollowUpProcessor extends WorkerHost {
   private readonly logger = new Logger(FollowUpProcessor.name);
-  
 
   constructor(
     private readonly prisma: PrismaService,
@@ -34,7 +40,6 @@ export class FollowUpProcessor extends WorkerHost {
   ) {
     super();
   }
-
 
   private async recordCancellation(
     conversationId: string,
@@ -188,7 +193,11 @@ export class FollowUpProcessor extends WorkerHost {
             if (!lead) throw new Error('FOLLOW_UP_LEAD_MISSING');
             await this.prisma.$transaction(async (tx) => {
               const claimed = await tx.scheduledFollowUp.updateMany({
-                where: { id: followUp.id, status: FollowUpStatus.PENDING, processingOwner: owner },
+                where: {
+                  id: followUp.id,
+                  status: FollowUpStatus.PENDING,
+                  processingOwner: owner,
+                },
                 data: { status: FollowUpStatus.SENT, sentAt: new Date() },
               });
               if (claimed.count !== 1) throw new Error('FOLLOW_UP_LEASE_LOST');
@@ -201,10 +210,11 @@ export class FollowUpProcessor extends WorkerHost {
                 },
                 include: MEMBERSHIP_GRANTS_INCLUDE,
               });
-              const eligible = memberships.filter((membership) =>
-                membershipHasPermission(membership, 'notifications:view') &&
-                (membership.userId === lead.assignedAgentId ||
-                  membershipHasPermission(membership, 'leads:read:all')),
+              const eligible = memberships.filter(
+                (membership) =>
+                  membershipHasPermission(membership, 'notifications:view') &&
+                  (membership.userId === lead.assignedAgentId ||
+                    membershipHasPermission(membership, 'leads:read:all')),
               );
               if (eligible.length === 0) throw new Error('NO_ELIGIBLE_STAFF');
               for (const membership of eligible) {
@@ -225,7 +235,10 @@ export class FollowUpProcessor extends WorkerHost {
                   data: {
                     organizationId: organization.id,
                     topic: 'notification.broadcast',
-                    payload: { organizationId: organization.id, notificationId: notification.id },
+                    payload: {
+                      organizationId: organization.id,
+                      notificationId: notification.id,
+                    },
                   },
                 });
               }
@@ -302,8 +315,17 @@ export class FollowUpProcessor extends WorkerHost {
               orderBy: { createdAt: 'asc' },
             });
             let handoffAfterSend = existingBubbles.some(
-              (bubble) => (bubble.metadata as { pendingHandoff?: boolean } | null)?.pendingHandoff === true,
+              (bubble) =>
+                (bubble.metadata as { pendingHandoff?: boolean } | null)
+                  ?.pendingHandoff === true,
             );
+            let pauseAfterSend =
+              !handoffAfterSend &&
+              existingBubbles.some(
+                (bubble) =>
+                  (bubble.metadata as { pendingPause?: boolean } | null)
+                    ?.pendingPause === true,
+              );
 
             if (existingBubbles.length === 0) {
               // Backward compatibility check for old single message row
@@ -318,37 +340,61 @@ export class FollowUpProcessor extends WorkerHost {
                 return;
               }
 
-              const aiResponse = await 
-                this.grpcClient.generateReply({
-                  organizationId: organization.id,
-                  conversationId: conversation.id,
-                  newMessageIds: [],
-                  clinicName: persona?.clinicName || 'OmniDesk Clinic',
-                  agentTone: persona?.tone || 'Professional and empathetic',
-                  businessRulesJson: businessRulesJson,
-                  totalMessageCount,
-                  leadSummary,
-                  isFollowUp: true,
-                  followUpContext: contextMsg,
-                  contractVersion: AGENT_CONTRACT_VERSION,
-                });
+              const aiResponse = await this.grpcClient.generateReply({
+                organizationId: organization.id,
+                conversationId: conversation.id,
+                newMessageIds: [],
+                clinicName: persona?.clinicName || organization.name,
+                agentTone: persona?.tone || 'Professional and empathetic',
+                businessRulesJson: businessRulesJson,
+                totalMessageCount,
+                leadSummary,
+                isFollowUp: true,
+                followUpContext: contextMsg,
+                contractVersion: AGENT_CONTRACT_VERSION,
+              });
               if (!isCompatibleAgentVersion(aiResponse.contractVersion))
                 throw new Error('AI_CONTRACT_VERSION_UNSUPPORTED');
 
               let { replyText, mediaUrl } = aiResponse;
               const { actions } = aiResponse;
 
-              if (actions && actions.length > 0) {
-                const actionResult = await this.actionExecutor.executeActions(
-                  organization.id,
-                  conversation.id,
-                  actions,
+              // Handoff / pause run after the bubbles are sent (B7).
+              const { immediate, afterSend } = splitAfterSendActions(actions);
+              handoffAfterSend = afterSend === 'HANDOFF_TO_HUMAN';
+              pauseAfterSend = afterSend === 'PAUSE_CONVERSATION';
+              if (immediate.length > 0) {
+                // At most once per follow-up generation (KI-061): a retry
+                // after the actions ran must not repeat them. The claim key
+                // is the follow-up's own idempotency base, never an AI-reply key.
+                const fallback = await executeActionsOnce(
+                  this.prisma,
+                  this.actionExecutor,
+                  {
+                    organizationId: organization.id,
+                    conversationId: conversation.id,
+                    generationKey: idempotencyKeyBase,
+                    actions: immediate,
+                  },
                 );
-                if (actionResult.outcomes?.some((item) => item.status !== 'EXECUTED') ||
-                    actionResult.rejected > 0 || actionResult.failed > 0) {
+                if (fallback) {
                   handoffAfterSend = true;
                   // A rejected model action cannot support the original follow-up claim.
-                  replyText = "I couldn't complete that request right now. A human coordinator can help with the next step.";
+                  const recent = await this.prisma.message.findMany({
+                    where: {
+                      conversationId: conversation.id,
+                      type: 'LEAD_TEXT',
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 3,
+                    select: { content: true },
+                  });
+                  replyText = actionFallbackText(
+                    patientLanguage(
+                      conversation.lead ?? null,
+                      recent.map((row) => row.content),
+                    ),
+                  );
                   mediaUrl = undefined;
                 }
               }
@@ -384,7 +430,9 @@ export class FollowUpProcessor extends WorkerHost {
                     },
                   });
                 if (revoked) {
-                  this.logger.warn(`REVOKED_MEDIA_BLOCKED followUpId=${followUp.id}`);
+                  this.logger.warn(
+                    `REVOKED_MEDIA_BLOCKED followUpId=${followUp.id}`,
+                  );
                   safeMediaUrl = undefined;
                   safeReplyText =
                     '[Media removed due to privacy rules] ' +
@@ -426,7 +474,11 @@ export class FollowUpProcessor extends WorkerHost {
                 await this.prisma.message.createMany({
                   data: bubblesToCreate.map((bubble) => ({
                     ...bubble,
-                    metadata: { generationVersion: conversation.stateVersion, pendingHandoff: handoffAfterSend },
+                    metadata: {
+                      generationVersion: conversation.stateVersion,
+                      pendingHandoff: handoffAfterSend,
+                      pendingPause: pauseAfterSend,
+                    },
                   })),
                 });
               }
@@ -478,14 +530,14 @@ export class FollowUpProcessor extends WorkerHost {
               const lead = (conversation as any).lead;
               if (lead?.assignedAgentId) {
                 await this.notificationEmitter.send({
-                    organizationId: organization.id,
-                    userId: lead.assignedAgentId as string,
-                    title: 'Draft Follow-Up Ready',
-                    body: `AI generated a draft follow-up for ${lead.firstName} ${lead.lastName}.`,
-                    referenceId: conversation.id,
-                    referenceType: 'CONVERSATION',
-                    type: NotificationType.SYSTEM_ALERT,
-                  });
+                  organizationId: organization.id,
+                  userId: lead.assignedAgentId as string,
+                  title: 'Draft Follow-Up Ready',
+                  body: `AI generated a draft follow-up for ${lead.firstName} ${lead.lastName}.`,
+                  referenceId: conversation.id,
+                  referenceType: 'CONVERSATION',
+                  type: NotificationType.SYSTEM_ALERT,
+                });
               }
 
               for (const bubble of existingBubbles) {
@@ -565,7 +617,8 @@ export class FollowUpProcessor extends WorkerHost {
                 if (result === 'WAITING')
                   throw new Error('OUTBOUND_UNRESOLVED');
                 if (result === 'FAILED' || result === 'CANCELLED') {
-                  if (handoffAfterSend) throw new Error('ACTION_FALLBACK_SEND_FAILED');
+                  if (handoffAfterSend)
+                    throw new Error('ACTION_FALLBACK_SEND_FAILED');
                   await this.prisma.scheduledFollowUp.update({
                     where: { id: followUp.id },
                     data: {
@@ -589,17 +642,40 @@ export class FollowUpProcessor extends WorkerHost {
                 }
               }
 
-              if (handoffAfterSend) {
+              if (handoffAfterSend || pauseAfterSend) {
                 const handoff = await this.actionExecutor.executeActions(
-                  organization.id, conversation.id,
-                  [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }],
+                  organization.id,
+                  conversation.id,
+                  [
+                    {
+                      type: handoffAfterSend
+                        ? 'HANDOFF_TO_HUMAN'
+                        : 'PAUSE_CONVERSATION',
+                      payload: '{}',
+                    },
+                  ],
                 );
-                if (handoff.executed !== 1 || handoff.failed || handoff.rejected)
+                if (
+                  handoff.executed !== 1 ||
+                  handoff.failed ||
+                  handoff.rejected
+                )
                   throw new Error('ACTION_FALLBACK_HANDOFF_FAILED');
-                await this.prisma.message.updateMany({
-                  where: { id: { in: existingBubbles.map((bubble) => bubble.id) } },
-                  data: { metadata: { generationVersion: conversation.stateVersion, pendingHandoff: false } },
-                });
+                for (const bubble of existingBubbles) {
+                  await this.prisma.message.update({
+                    where: { id: bubble.id },
+                    data: {
+                      metadata: {
+                        ...((bubble.metadata as Record<
+                          string,
+                          unknown
+                        > | null) ?? {}),
+                        pendingHandoff: false,
+                        pendingPause: false,
+                      },
+                    },
+                  });
+                }
               }
 
               await this.prisma.conversation.update({
@@ -618,7 +694,9 @@ export class FollowUpProcessor extends WorkerHost {
               throw error;
             }
           } catch (error) {
-            this.logger.error(`FOLLOW_UP_PROCESS_FAILED followUp=${followUp.id}`);
+            this.logger.error(
+              `FOLLOW_UP_PROCESS_FAILED followUp=${followUp.id}`,
+            );
             throw error;
           }
         } finally {

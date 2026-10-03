@@ -1,3 +1,5 @@
+import { JwtService } from '@nestjs/jwt';
+import type { Server } from 'node:http';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
@@ -10,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { safeDeploy } from '../src/credentials/deploy-cli';
 import { tenantStorage } from '../src/core/tenant/tenant.context';
+import { provisionOrganizationRolesAndPermissions } from '../src/auth/permission.provisioning';
 
 jest.setTimeout(120_000);
 const system = <T>(fn: () => Promise<T>) =>
@@ -22,17 +25,18 @@ let invitations: InvitationsService;
 
 beforeAll(async () => {
   const url = process.env.UPGRADE_TEST_ADMIN_URL;
-  if (!url || new URL(url).hostname !== '127.0.0.1') throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
+  if (!url || new URL(url).hostname !== '127.0.0.1')
+    throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
   admin = new Client({ connectionString: url });
   await admin.connect();
   dbName = 'omnidesk_s02_' + randomUUID().replace(/-/g, '');
   await admin.query(`CREATE DATABASE "${dbName}"`);
-  
+
   const parsed = new URL(url);
   parsed.pathname = `/${dbName}`;
   const isolatedUrl = parsed.toString();
   process.env.DATABASE_URL = isolatedUrl;
-  
+
   await safeDeploy(resolve(__dirname, '..'));
 
   const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -42,7 +46,7 @@ beforeAll(async () => {
   app = moduleFixture.createNestApplication();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
   await app.init();
-  
+
   prisma = app.get(PrismaService);
   invitations = app.get(InvitationsService);
 });
@@ -87,6 +91,7 @@ describe('Clinic Invitations (e2e)', () => {
           userId: owner.id,
           organizationId: org.id,
           roleId: role.id,
+          status: 'ACTIVE',
         },
       });
 
@@ -95,13 +100,13 @@ describe('Clinic Invitations (e2e)', () => {
       const issueResult = await invitations.issueClinicInvitation(
         { email: newEmail, roleId: role.id },
         owner.id,
-        org.id
+        org.id,
       );
 
       expect(issueResult.token).toBeDefined();
 
       // 3. Accept via HTTP as a new user
-      const acceptRes = await request(app.getHttpServer())
+      const acceptRes = await request(app.getHttpServer() as Server)
         .post('/auth/invitations/clinic/accept')
         .send({
           token: issueResult.token,
@@ -115,13 +120,17 @@ describe('Clinic Invitations (e2e)', () => {
       expect(acceptRes.body.organizationId).toEqual(org.id);
 
       // 4. Verify user was created and joined clinic
-      const staff = await prisma.user.findUnique({ where: { email: newEmail } });
+      const staff = await prisma.user.findUnique({
+        where: { email: newEmail },
+      });
       expect(staff).toBeDefined();
       expect(staff!.status).toEqual('ACTIVE');
       expect(staff!.firstName).toEqual('Staff');
 
       const membership = await prisma.organizationMembership.findUnique({
-        where: { userId_organizationId: { userId: staff!.id, organizationId: org.id } },
+        where: {
+          userId_organizationId: { userId: staff!.id, organizationId: org.id },
+        },
       });
       expect(membership).toBeDefined();
       expect(membership!.roleId).toEqual(role.id);
@@ -160,6 +169,7 @@ describe('Clinic Invitations (e2e)', () => {
           userId: owner.id,
           organizationId: org.id,
           roleId: role.id,
+          status: 'ACTIVE',
         },
       });
 
@@ -180,12 +190,12 @@ describe('Clinic Invitations (e2e)', () => {
           status: 'ACTIVE',
         },
       });
-      const existingMembership = await prisma.organizationMembership.create({
+      await prisma.organizationMembership.create({
         data: {
           userId: existingUser.id,
           organizationId: org3.id,
           roleId: role3.id,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
         },
       });
 
@@ -193,24 +203,30 @@ describe('Clinic Invitations (e2e)', () => {
       const issueResult = await invitations.issueClinicInvitation(
         { email: existingUserEmail, roleId: role.id },
         owner.id,
-        org.id
+        org.id,
       );
 
       // 4. Generate JWT for existing user
-      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      const jwtService = app.get(JwtService);
       const token = jwtService.sign(
-        { sub: existingUser.id, email: existingUserEmail, organizationId: org3.id, roleId: role3.id },
-        { secret: process.env.JWT_ACCESS_SECRET }
+        {
+          sub: existingUser.id,
+          email: existingUserEmail,
+          organizationId: org3.id,
+          roleId: role3.id,
+          securityVersion: 1,
+        },
+        { secret: process.env.JWT_ACCESS_SECRET },
       );
 
       // 5. Accept via HTTP as an existing logged-in user
-      const acceptRes = await request(app.getHttpServer())
+      const acceptRes = await request(app.getHttpServer() as Server)
         .post('/auth/invitations/clinic/accept')
         .set('Authorization', `Bearer ${token}`)
         .send({
           token: issueResult.token,
         });
-      
+
       if (acceptRes.status !== 200) {
         console.error(acceptRes.body);
       }
@@ -219,10 +235,246 @@ describe('Clinic Invitations (e2e)', () => {
 
       // 6. Verify user joined clinic
       const membership = await prisma.organizationMembership.findUnique({
-        where: { userId_organizationId: { userId: existingUser.id, organizationId: org.id } },
+        where: {
+          userId_organizationId: {
+            userId: existingUser.id,
+            organizationId: org.id,
+          },
+        },
       });
       expect(membership).toBeDefined();
       expect(membership!.roleId).toEqual(role.id);
+    });
+  });
+
+  const clinicWithRoles = async (label: string) => {
+    const org = await prisma.organization.create({
+      data: {
+        name: `Clinic ${label}`,
+        slug: `clinic-${label}-${randomUUID()}`,
+      },
+    });
+    const roles = await prisma.$transaction((tx) =>
+      provisionOrganizationRolesAndPermissions(tx, org.id),
+    );
+    const owner = await prisma.user.create({
+      data: {
+        email: `owner-${label}-${randomUUID()}@test.com`,
+        password_hash: await bcrypt.hash('password123', 10),
+        firstName: 'Owner',
+        lastName: label,
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.organizationMembership.create({
+      data: {
+        userId: owner.id,
+        organizationId: org.id,
+        roleId: roles.get('Super Admin')!.id,
+        status: 'ACTIVE',
+      },
+    });
+    return { org, roles, owner };
+  };
+
+  it('never lets an invitation activate an identity that is PENDING elsewhere (KI-027)', async () => {
+    return system(async () => {
+      const clinicA = await clinicWithRoles('pending-a');
+      const clinicB = await clinicWithRoles('pending-b');
+      const email = `pending-${randomUUID()}@test.com`;
+      // Identity created (PENDING) by clinic A's invitation; the invitee hasn't activated yet.
+      await invitations.issueClinicInvitation(
+        { email, roleId: clinicA.roles.get('Agent')!.id },
+        clinicA.owner.id,
+        clinicA.org.id,
+      );
+      const before = await prisma.user.findUniqueOrThrow({ where: { email } });
+
+      // Clinic B invites the same email and tries to set the password itself.
+      const issued = await invitations.issueClinicInvitation(
+        { email, roleId: clinicB.roles.get('Agent')!.id },
+        clinicB.owner.id,
+        clinicB.org.id,
+      );
+      expect(issued.createsAccount).toBe(false);
+      await request(app.getHttpServer() as Server)
+        .post('/auth/invitations/clinic/accept')
+        .send({
+          token: issued.token,
+          firstName: 'Mal',
+          lastName: 'Lory',
+          password: 'attacker-password-1',
+        })
+        .expect(403);
+
+      const after = await prisma.user.findUniqueOrThrow({ where: { email } });
+      expect(after.status).toBe('PENDING');
+      expect(after.password_hash).toBe(before.password_hash);
+      expect(
+        await prisma.organizationMembership.count({
+          where: { userId: after.id, organizationId: clinicB.org.id },
+        }),
+      ).toBe(0);
+    });
+  });
+
+  it('never lets an invitation activate an operator-issued PENDING pilot identity', async () => {
+    return system(async () => {
+      const clinic = await clinicWithRoles('pilot-pending');
+      const email = `pilot-${randomUUID()}@test.com`;
+      await invitations.issue(email, 'operator-test');
+      const issued = await invitations.issueClinicInvitation(
+        { email, roleId: clinic.roles.get('Agent')!.id },
+        clinic.owner.id,
+        clinic.org.id,
+      );
+      expect(issued.createsAccount).toBe(false);
+      await request(app.getHttpServer() as Server)
+        .post('/auth/invitations/clinic/accept')
+        .send({
+          token: issued.token,
+          firstName: 'Mal',
+          lastName: 'Lory',
+          password: 'attacker-password-1',
+        })
+        .expect(403);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      expect(user.status).toBe('PENDING');
+    });
+  });
+
+  it('lets the creating clinic re-issue for its own pending identity', async () => {
+    return system(async () => {
+      const clinic = await clinicWithRoles('reissue');
+      const email = `reissue-${randomUUID()}@test.com`;
+      const first = await invitations.issueClinicInvitation(
+        { email, roleId: clinic.roles.get('Agent')!.id },
+        clinic.owner.id,
+        clinic.org.id,
+      );
+      expect(first.createsAccount).toBe(true);
+      const second = await invitations.issueClinicInvitation(
+        { email, roleId: clinic.roles.get('Agent')!.id },
+        clinic.owner.id,
+        clinic.org.id,
+      );
+      expect(second.createsAccount).toBe(true);
+      await request(app.getHttpServer() as Server)
+        .post('/auth/invitations/clinic/accept')
+        .send({
+          token: first.token,
+          firstName: 'Old',
+          lastName: 'Token',
+          password: 'staff-password-1',
+        })
+        .expect(401);
+      await request(app.getHttpServer() as Server)
+        .post('/auth/invitations/clinic/accept')
+        .send({
+          token: second.token,
+          firstName: 'New',
+          lastName: 'Staff',
+          password: 'staff-password-1',
+        })
+        .expect(200);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      expect(user.status).toBe('ACTIVE');
+    });
+  });
+
+  it('requires the existing ACTIVE invitee to be logged in as themselves', async () => {
+    return system(async () => {
+      const clinic = await clinicWithRoles('active-needs-login');
+      const email = `active-${randomUUID()}@test.com`;
+      const existing = await prisma.user.create({
+        data: {
+          email,
+          password_hash: await bcrypt.hash('original-password', 10),
+          firstName: 'Real',
+          lastName: 'Owner',
+          status: 'ACTIVE',
+        },
+      });
+      const issued = await invitations.issueClinicInvitation(
+        { email, roleId: clinic.roles.get('Agent')!.id },
+        clinic.owner.id,
+        clinic.org.id,
+      );
+      expect(issued.createsAccount).toBe(false);
+      await request(app.getHttpServer() as Server)
+        .post('/auth/invitations/clinic/accept')
+        .send({
+          token: issued.token,
+          firstName: 'Mal',
+          lastName: 'Lory',
+          password: 'attacker-password-1',
+        })
+        .expect(401);
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: existing.id },
+      });
+      expect(after.password_hash).toBe(existing.password_hash);
+      expect(
+        await prisma.organizationMembership.count({
+          where: { userId: existing.id, organizationId: clinic.org.id },
+        }),
+      ).toBe(0);
+    });
+  });
+
+  it('refuses to let an issuer grant a role with permissions they lack', async () => {
+    return system(async () => {
+      const clinic = await clinicWithRoles('role-cap');
+      // A coordinator: Agent role plus an override that lets them invite.
+      const coordinator = await prisma.user.create({
+        data: {
+          email: `coordinator-${randomUUID()}@test.com`,
+          password_hash: await bcrypt.hash('password123', 10),
+          firstName: 'Co',
+          lastName: 'Ordinator',
+          status: 'ACTIVE',
+        },
+      });
+      const membership = await prisma.organizationMembership.create({
+        data: {
+          userId: coordinator.id,
+          organizationId: clinic.org.id,
+          roleId: clinic.roles.get('Agent')!.id,
+          status: 'ACTIVE',
+        },
+      });
+      const manage = await prisma.permission.findUniqueOrThrow({
+        where: { action: 'organization:manage' },
+      });
+      await prisma.membershipPermissionOverride.create({
+        data: {
+          membershipId: membership.id,
+          permissionId: manage.id,
+          is_granted: true,
+        },
+      });
+
+      await expect(
+        invitations.issueClinicInvitation(
+          {
+            email: `escalate-${randomUUID()}@test.com`,
+            roleId: clinic.roles.get('Manager')!.id,
+          },
+          coordinator.id,
+          clinic.org.id,
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      // Same-or-lower role is still allowed.
+      await expect(
+        invitations.issueClinicInvitation(
+          {
+            email: `peer-${randomUUID()}@test.com`,
+            roleId: clinic.roles.get('Agent')!.id,
+          },
+          coordinator.id,
+          clinic.org.id,
+        ),
+      ).resolves.toMatchObject({ createsAccount: true });
     });
   });
 });

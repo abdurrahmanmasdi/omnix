@@ -1,30 +1,8 @@
-import {
-  Injectable,
-  Inject,
-  Logger,
-  OnModuleInit,
-  NotFoundException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import {Injectable, Logger, NotFoundException, InternalServerErrorException} from '@nestjs/common';
 import { GrpcClientService } from '../grpc-client/grpc-client.service';
-import { lastValueFrom, Observable } from 'rxjs';
 import * as fs from 'fs/promises';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
-
-// Define the gRPC Interface
-interface DocumentProcessorService {
-  ingestPdf(data: {
-    organizationId: string;
-    documentationId: string;
-    fileName: string;
-    fileContent: Buffer;
-  }): Observable<{ success: boolean; chunksProcessed: number }>;
-  deleteFile(data: {
-    organizationId: string;
-    fileName: string;
-  }): Observable<{ success: boolean; chunksDeleted: number }>;
-}
 
 @Injectable()
 export class DocumentsService {

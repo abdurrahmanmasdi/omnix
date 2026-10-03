@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Body,
+  HttpCode,
   Param,
   Query,
   UseGuards,
@@ -20,7 +21,14 @@ import { RequirePermissions } from '../auth/decorators/require-permissions.decor
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { ConversationsService } from './conversations.service';
+import {
+  InboxConversationDto,
+  InboxMessagesPageDto,
+  InboxSendErrorDto,
+} from './dto/conversation-response.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { AiStateResponseDto } from './dto/ai-state-response.dto';
+import { ManualMessageResponseDto } from './dto/manual-message-response.dto';
 
 import {
   PaginationQueryDto,
@@ -37,39 +45,7 @@ export class ConversationsController {
   @Get()
   @RequirePermissions('view_conversations')
   @ApiOperation({ summary: 'Get a list of conversations for the organization' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns conversations with their latest message preview',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          updatedAt: { type: 'string', format: 'date-time' },
-          lead: {
-            type: 'object',
-            nullable: true,
-            properties: {
-              name: { type: 'string' },
-              phoneNumber: { type: 'string' },
-            },
-          },
-          messages: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                content: { type: 'string' },
-                createdAt: { type: 'string', format: 'date-time' },
-              },
-            },
-          },
-        },
-      },
-    },
-  })
+  @ApiResponse({ status: 200, type: [InboxConversationDto] })
   async getConversations(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: PaginationQueryDto,
@@ -82,6 +58,8 @@ export class ConversationsController {
       user.id,
       query.page || 1,
       query.limit || 20,
+      query.filter,
+      query.leadId,
     );
   }
 
@@ -90,22 +68,7 @@ export class ConversationsController {
   @ApiOperation({
     summary: 'Get paginated messages for a specific conversation',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns history of messages',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          content: { type: 'string' },
-          type: { type: 'string' },
-          createdAt: { type: 'string', format: 'date-time' },
-        },
-      },
-    },
-  })
+  @ApiResponse({ status: 200, type: InboxMessagesPageDto })
   async getMessages(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') conversationId: string,
@@ -123,13 +86,44 @@ export class ConversationsController {
     );
   }
 
+  @Get(':id')
+  @RequirePermissions('view_conversations')
+  @ApiOperation({
+    summary: 'Get current conversation state and redacted patient summary',
+  })
+  @ApiResponse({ status: 200, type: InboxConversationDto })
+  async getConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    if (!user.organizationId) throw new Error('Organization ID not found');
+    return this.conversationsService.getConversation(
+      user.organizationId,
+      user.id,
+      id,
+    );
+  }
+
   @Post(':id/messages')
   @RequirePermissions('reply_conversations')
   @ApiOperation({ summary: 'Send a manual message to a conversation' })
   @ApiResponse({
     status: 201,
-    description: 'Message sent successfully',
-    // You can define a detailed schema here if you want perfect Orval typing!
+    description:
+      'Message created and handed to WhatsApp; deliveryStatus is SENT, UNKNOWN (check WhatsApp before resending) or FAILED. warnings lists non-blocking notices (PATIENT_OPTED_OUT).',
+    type: ManualMessageResponseDto,
+  })
+  @ApiResponse({
+    status: 422,
+    type: InboxSendErrorDto,
+    description:
+      'Not sent. code: OUTSIDE_24H_WINDOW, CHANNEL_UNAVAILABLE, NO_CONTACT, CLINIC_INACTIVE (an opt-out never blocks a staff send)',
+  })
+  @ApiResponse({
+    status: 409,
+    type: InboxSendErrorDto,
+    description:
+      'Not sent: the conversation changed during the send (code DELIVERY_NOT_AUTHORIZED)',
   })
   async sendMessage(
     @CurrentUser() user: AuthenticatedUser,
@@ -147,10 +141,56 @@ export class ConversationsController {
     );
   }
 
+  @Post(':id/ai-pause')
+  @HttpCode(200)
+  @RequirePermissions('manage_conversations')
+  @ApiOperation({
+    summary: 'Pause the AI for a conversation (idempotent)',
+  })
+  @ApiResponse({ status: 200, type: AiStateResponseDto })
+  async pauseAi(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ): Promise<AiStateResponseDto> {
+    if (!user.organizationId) {
+      throw new Error('Organization ID not found');
+    }
+    return this.conversationsService.setAiPaused(
+      user.organizationId,
+      user.id,
+      conversationId,
+      true,
+    );
+  }
+
+  @Post(':id/ai-resume')
+  @HttpCode(200)
+  @RequirePermissions('manage_conversations')
+  @ApiOperation({
+    summary: 'Resume the AI for a conversation (idempotent)',
+  })
+  @ApiResponse({ status: 200, type: AiStateResponseDto })
+  async resumeAi(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') conversationId: string,
+  ): Promise<AiStateResponseDto> {
+    if (!user.organizationId) {
+      throw new Error('Organization ID not found');
+    }
+    return this.conversationsService.setAiPaused(
+      user.organizationId,
+      user.id,
+      conversationId,
+      false,
+    );
+  }
+
   @Patch(':id/toggle-ai')
   @RequirePermissions('manage_conversations')
   @ApiOperation({
-    summary: 'Toggle the AI auto-reply state for a conversation',
+    summary:
+      'Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.',
+    deprecated: true,
   })
   @ApiResponse({
     status: 200,

@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { Client } from 'pg';
 import { credentialKey } from './credential-cipher';
 import { hasColumn, repairCredentials } from './credential-upgrade';
+import { applyRuntimeRolePasswords } from './runtime-role-passwords';
 
 const STAGED_THROUGH = '20260920140000_secure_credentials';
 
@@ -92,6 +93,13 @@ export async function safeDeploy(
     const repaired = await repairCredentials(db, key);
     deployMigrations(root);
     await repairCredentials(db, key);
+    // KI-013: runtime role passwords from secrets, replacing the migration's literals.
+    const roles = await applyRuntimeRolePasswords(db);
+    for (const name of roles.missing) {
+      console.warn(
+        `RUNTIME_ROLE_PASSWORD_NOT_SET ${name}: role keeps its previous password`,
+      );
+    }
     return repaired;
   } finally {
     await db.end(); // Releases the session deployment lock on success and failure.
@@ -118,6 +126,9 @@ if (require.main === module) {
         'CREDENTIAL_CHANNEL_CONFLICT_REQUIRES_OPERATOR',
         'CREDENTIAL_CHANNEL_VERIFY_FAILED',
         'PRE_MVP_WHATSAPP_MIGRATION_REQUIRES_OPERATOR',
+        'RUNTIME_ROLE_PASSWORD_REQUIRED',
+        'RUNTIME_ROLE_PASSWORD_INVALID',
+        'RUNTIME_ROLE_MISSING',
       ]);
       const code =
         safeCodes.has(message) ||

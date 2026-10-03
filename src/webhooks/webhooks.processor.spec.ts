@@ -69,11 +69,22 @@ describe('WebhooksProcessor', () => {
     expect(prisma.message.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          content: '[Media omitted: Awaiting consent. Consent request sent.]',
+          content: '[Media omitted: Awaiting consent.]',
           mediaUrl: null,
         }),
       }),
     );
+    // The consent request goes through the outbound pipeline (KI-025).
+    expect(outboundAttempts.sendBubble).toHaveBeenCalledWith(
+      'org-1',
+      'conv-1',
+      expect.objectContaining({
+        idempotencyKey: 'consent-request-msg-media-1',
+      }),
+      2,
+      'consent-request',
+    );
+    expect(whatsappSendText).not.toHaveBeenCalled();
   });
 
   it('should update consent status if user sends I CONSENT', async () => {
@@ -204,6 +215,11 @@ describe('WebhooksProcessor', () => {
   let processor: WebhooksProcessor;
   let prisma: jest.Mocked<PrismaService>;
   let aiReplyQueue: any;
+  const whatsappSendText = jest.fn();
+  const outboundAttempts = {
+    reconcileStatus: jest.fn(),
+    sendBubble: jest.fn().mockResolvedValue('ACCEPTED'),
+  };
 
   beforeEach(async () => {
     // 1. Setup Mock Prisma
@@ -219,7 +235,11 @@ describe('WebhooksProcessor', () => {
       message: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
-        create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        create: jest
+          .fn()
+          .mockImplementation(async ({ data }) => ({ id: 'msg-1', ...data })),
         updateMany: jest.fn(),
       },
       conversation: {
@@ -257,11 +277,6 @@ describe('WebhooksProcessor', () => {
       getJob: jest.fn().mockResolvedValue(null),
     };
 
-    // 3. Setup Mock gRPC Client
-    const mockClientGrpc = {
-      getService: jest.fn().mockReturnValue({}),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WebhooksProcessor,
@@ -270,7 +285,10 @@ describe('WebhooksProcessor', () => {
           provide: NotificationEmitterService,
           useValue: { emitNotification: jest.fn() },
         },
-        { provide: WhatsappService, useValue: { sendTextMessage: jest.fn() } },
+        {
+          provide: WhatsappService,
+          useValue: { sendTextMessage: whatsappSendText },
+        },
         {
           provide: WhatsappMediaService,
           useValue: { downloadMediaAsBase64: jest.fn() },
@@ -290,7 +308,7 @@ describe('WebhooksProcessor', () => {
         { provide: CredentialsService, useValue: { readActive: jest.fn() } },
         {
           provide: OutboundAttemptService,
-          useValue: { reconcileStatus: jest.fn() },
+          useValue: outboundAttempts,
         },
         { provide: GrpcClientService, useValue: { generateReply: jest.fn() } },
         { provide: getQueueToken('ai-reply'), useValue: mockQueue },
@@ -452,7 +470,6 @@ describe('WebhooksProcessor', () => {
         payload: {
           organizationId: 'org-1',
           conversationId: 'conv-1',
-          customerPhone: '4915112345678',
           messageId: 'db-msg-1',
           stateVersion: 1,
         },
@@ -509,5 +526,50 @@ describe('WebhooksProcessor', () => {
     // Should stop right here
     expect(prisma.message.create).not.toHaveBeenCalled();
     expect(prisma.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps the patient phone number out of the generate-reply outbox payload', async () => {
+    (prisma.channel.findFirst as jest.Mock).mockResolvedValue({
+      id: 'channel-1',
+      status: 'ACTIVE',
+      organizationId: 'org-1',
+      organization: { id: 'org-1', isActive: true },
+    });
+    (prisma.conversation.findFirst as jest.Mock).mockResolvedValue({
+      id: 'conv-1',
+      leadId: 'lead-1',
+      channelId: 'channel-1',
+      lead: { id: 'lead-1' },
+    });
+    (prisma.message.findUnique as jest.Mock).mockResolvedValue(null);
+    await processor.process(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      createMockJob({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { phone_number_id: '123' },
+                  messages: [
+                    {
+                      from: '15550001111',
+                      id: 'msg-text-1',
+                      type: 'text',
+                      text: { body: 'Hello' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(prisma.outboxEvent.create).toHaveBeenCalledTimes(1);
+    const payload = (prisma.outboxEvent.create as jest.Mock).mock.calls[0][0]
+      .data.payload;
+    expect(JSON.stringify(payload)).not.toContain('15550001111');
+    expect(payload).toMatchObject({ conversationId: 'conv-1' });
   });
 });

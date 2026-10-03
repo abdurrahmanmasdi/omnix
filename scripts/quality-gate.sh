@@ -16,6 +16,7 @@ if ! "$python_bin" -c 'import sys; assert sys.version_info[:2] >= (3, 13)' 2>/de
   exit 1
 fi
 python3 "$backend/scripts/check-cross-repo-contracts.py"
+bash "$backend/scripts/check-migration-passwords.sh"
 
 if [[ "${SKIP_INSTALL:-0}" != "1" ]]; then
   (cd "$backend" && npm ci)
@@ -30,8 +31,18 @@ fi
 
 if [[ "${SKIP_GENERATED_CHECK:-0}" != "1" ]]; then
   (cd "$backend" && \
+    NODE_ENV=test \
     DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic \
     JWT_ACCESS_SECRET=synthetic-ci-only-jwt-secret \
+    JWT_REFRESH_SECRET=synthetic-ci-only-refresh-secret \
+    JWT_ACCESS_EXPIRATION=15m \
+    JWT_REFRESH_EXPIRATION=7d \
+    META_APP_SECRET=synthetic-ci-only-meta-secret \
+    META_VERIFY_TOKEN=synthetic-ci-only-verify-token \
+    INTERNAL_RPC_SECRET=synthetic-ci-only-rpc-secret \
+    INTERNAL_GRPC_TLS=disabled \
+    INTERNAL_GRPC_PRIVATE_NETWORK=true \
+    INTEGRATION_CREDENTIAL_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')" \
     REDIS_URL=redis://127.0.0.1:1 \
     npx ts-node scripts/export-openapi.ts "$frontend/openapi.json")
   (cd "$frontend" && ./node_modules/.bin/prettier --write openapi.json && npm run generate:api)
@@ -44,3 +55,12 @@ fi
 (cd "$backend" && npx tsc --noEmit --incremental false && npm run build && npm test -- --runInBand --watchman=false && npm run lint && npm run lint:baseline)
 (cd "$frontend" && npx tsc --noEmit && npm run build && npx vitest run && npm run lint && npm run lint:baseline)
 (cd "$python_service" && OPENAI_API_KEY=synthetic-test-key INTERNAL_RPC_SECRET=synthetic-rpc-secret DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic ./.venv/bin/python -m pytest -q)
+
+# Browser permission suite (P1-10). Needs Docker; present once the frontend carries playwright/.
+if [[ -f "$frontend/playwright/run.sh" ]]; then
+  if [[ "${SKIP_BROWSER:-0}" == "1" ]]; then
+    echo "SKIP_BROWSER=1: browser permission suite NOT run" >&2
+  else
+    PLAYWRIGHT_BACKEND_DIR="$backend" bash "$frontend/playwright/run.sh"
+  fi
+fi

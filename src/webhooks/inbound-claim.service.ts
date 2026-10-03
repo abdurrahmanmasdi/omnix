@@ -254,7 +254,6 @@ export class InboundClaimService {
           conversation: {
             select: {
               organizationId: true,
-              externalContactId: true,
               stateVersion: true,
             },
           },
@@ -283,7 +282,6 @@ export class InboundClaimService {
               payload: {
                 organizationId: message.conversation.organizationId,
                 conversationId: message.conversationId,
-                customerPhone: message.conversation.externalContactId ?? '',
                 messageId: message.id,
                 stateVersion: message.conversation.stateVersion,
               },

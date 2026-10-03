@@ -12,18 +12,18 @@ describe('JwtStrategy', () => {
     email: 'user@example.test',
     organizationId: 'org-1',
     roleId: 'role-1',
+    securityVersion: 1,
   };
 
   it('accepts an active membership and returns the verified tenant identity', async () => {
     const findFirst = jest.fn().mockResolvedValue({ id: 'membership-1' });
     const strategy = new JwtStrategy(config, {
       user: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({
-            status: 'ACTIVE',
-            memberships: [{ id: 'membership-1' }],
-          }),
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'ACTIVE',
+          securityVersion: 1,
+          memberships: [{ id: 'membership-1' }],
+        }),
       },
       organizationMembership: { findFirst },
     } as unknown as PrismaService);
@@ -50,4 +50,26 @@ describe('JwtStrategy', () => {
       UnauthorizedException,
     );
   });
+
+  it.each([
+    ['older', { securityVersion: 1 }],
+    ['missing', { securityVersion: undefined }],
+  ])(
+    'rejects a token with an %s security version',
+    async (_label, override) => {
+      const strategy = new JwtStrategy(config, {
+        user: {
+          findUnique: jest.fn().mockResolvedValue({
+            status: 'ACTIVE',
+            securityVersion: 2,
+            memberships: [{ id: 'membership-1' }],
+          }),
+        },
+      } as unknown as PrismaService);
+
+      await expect(
+        strategy.validate({ ...payload, ...override }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    },
+  );
 });

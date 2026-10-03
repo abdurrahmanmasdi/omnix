@@ -1,10 +1,16 @@
 {
   "valid": [
     {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "QUALIFIED"
+      }
+    },
+    {
       "type": "CREATE_LEAD",
       "payload": {
         "firstName": "A",
-        "status": "NEW"
+        "status": "QUALIFYING"
       }
     },
     {
@@ -39,12 +45,61 @@
     {
       "type": "SCHEDULE_FOLLOW_UP",
       "payload": {
-        "scheduledAt": "2026-10-01T09:00:00Z",
+        "scheduledAt": "2099-10-01T09:00:00Z",
         "context": "Check availability"
       }
     }
   ],
   "invalid": [
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "phoneNumber": "+15550000000"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "email": "synthetic@example.invalid"
+      }
+    },
+    {
+      "type": "CREATE_LEAD",
+      "payload": {
+        "firstName": "A",
+        "phoneNumber": "+15550000000"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "WON"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "LOST"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "READY_TO_PAY"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "UNQUALIFIED"
+      }
+    },
+    {
+      "type": "UPDATE_LEAD",
+      "payload": {
+        "status": "NEW"
+      }
+    },
     {
       "type": "UPDATE_LEAD",
       "payload": {
@@ -95,6 +150,12 @@
       "type": "SCHEDULE_FOLLOW_UP",
       "payload": {
         "scheduledAt": "2026-02-30T09:00:00Z"
+      }
+    },
+    {
+      "type": "SCHEDULE_FOLLOW_UP",
+      "payload": {
+        "scheduledAt": "2020-01-01T09:00:00Z"
       }
     },
     {

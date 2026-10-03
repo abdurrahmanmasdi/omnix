@@ -1,3 +1,4 @@
+import { ThrottlerModule } from '@nestjs/throttler';
 /* eslint-disable @typescript-eslint/no-unsafe-argument -- Fake Nest providers and BullMQ jobs are intentional integration-test seams. */
 import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +12,6 @@ import { OutboundAttemptService } from '../src/webhooks/outbound-attempt.service
 import { FollowUpService } from '../src/follow-ups/follow-up.service';
 import { FollowUpProcessor } from '../src/follow-ups/follow-up.processor';
 import { AiReplyProcessor } from '../src/webhooks/ai-reply.processor';
-import { of } from 'rxjs';
 import { tenantStorage } from '../src/core/tenant/tenant.context';
 import { safeDeploy } from '../src/credentials/deploy-cli';
 import { Test } from '@nestjs/testing';
@@ -28,6 +28,9 @@ import { ActionExecutorService } from '../src/webhooks/action-executor.service';
 import { NotificationRelayProcessor } from '../src/core/outbox/notification-relay.processor';
 import { PermissionService } from '../src/auth/permission.service';
 import { AuditService } from '../src/audit/audit.service';
+import { WhatsappService } from '../src/webhooks/whatsapp.service';
+import { WhatsappMediaService } from '../src/webhooks/whatsapp-media.service';
+import { ConversationsService } from '../src/conversations/conversations.service';
 
 jest.setTimeout(120_000);
 let admin: Client;
@@ -141,21 +144,24 @@ async function fixture() {
 function webhook(
   prismaService: PrismaService,
   outboundAttempts: any = { reconcileStatus: jest.fn() },
+  followUps: any = {
+    cancelPendingFollowUps: jest.fn().mockResolvedValue(undefined),
+  },
+  media: any = {},
 ) {
   return new WebhooksProcessor(
     prismaService,
     { send: jest.fn() } as any,
     {} as any,
-    {} as any,
+    media,
     { broadcastNewMessage: jest.fn() } as any,
-    { cancelPendingFollowUps: jest.fn().mockResolvedValue(undefined) } as any,
+    followUps,
     { record: jest.fn().mockResolvedValue(undefined) } as any,
     {
       readActive: jest.fn().mockResolvedValue({ accessToken: 'synthetic' }),
     } as any,
     outboundAttempts,
     { getService: jest.fn() } as any,
-    { getJob: jest.fn().mockResolvedValue(null) } as any,
   );
 }
 
@@ -178,14 +184,27 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
   const secret = 'synthetic-s11-signing-secret';
   const inboundAdd = jest.fn().mockResolvedValue({ id: 'queued' });
   const module = await Test.createTestingModule({
+    imports: [
+      ThrottlerModule.forRoot([{ name: 'auth', ttl: 300000, limit: 10 }]),
+    ],
     controllers: [WebhooksController, AuthController],
     providers: [
       WebhooksService,
-      { provide: getQueueToken('whatsapp-messages'), useValue: { add: inboundAdd } },
+      {
+        provide: getQueueToken('whatsapp-messages'),
+        useValue: { add: inboundAdd },
+      },
       { provide: ConfigService, useValue: { get: () => secret } },
-      { provide: AuthService, useValue: {
-        login: jest.fn().mockRejectedValue(new UnauthorizedException('Invalid credentials')),
-      } },
+      {
+        provide: AuthService,
+        useValue: {
+          login: jest
+            .fn()
+            .mockRejectedValue(
+              new UnauthorizedException('Invalid credentials'),
+            ),
+        },
+      },
     ],
   }).compile();
   const app = module.createNestApplication({ rawBody: true });
@@ -199,19 +218,27 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
   try {
     const payload = {
       object: 'whatsapp_business_account',
-      entry: [{
-        id: randomUUID(),
-        changes: [{ value: {
-          metadata: { phone_number_id: f.channel.providerAccountId },
-          messages: [{
-            from: f.conv.externalContactId,
-            id: randomUUID(),
-            timestamp: String(Math.floor(Date.now() / 1000)),
-            type: 'text',
-            text: { body: patientText },
-          }],
-        } }],
-      }],
+      entry: [
+        {
+          id: randomUUID(),
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: f.channel.providerAccountId },
+                messages: [
+                  {
+                    from: f.conv.externalContactId,
+                    id: randomUUID(),
+                    timestamp: String(Math.floor(Date.now() / 1000)),
+                    type: 'text',
+                    text: { body: patientText },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     };
     const raw = JSON.stringify(payload);
     const signature = createHmac('sha256', secret).update(raw).digest('hex');
@@ -223,12 +250,18 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
       .expect(200);
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email: `synthetic-${privateValues[3]}@example.invalid`, password: privateValues[2] })
+      .send({
+        email: `synthetic-${privateValues[3]}@example.invalid`,
+        password: privateValues[2],
+      })
       .expect(401);
     expect(inboundAdd).toHaveBeenCalledTimes(1);
     const inboundJob = inboundAdd.mock.calls[0];
     expect(inboundJob[2].jobId).toMatch(/^inbound-[a-f0-9]{64}$/);
-    await webhook(prisma).process({ id: inboundJob[2].jobId, data: inboundJob[1] } as any);
+    await webhook(prisma).process({
+      id: inboundJob[2].jobId,
+      data: inboundJob[1],
+    } as any);
 
     const aiAdd = jest.fn().mockResolvedValue({ id: 'reply' });
     await new OutboxProcessor(
@@ -246,12 +279,12 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
       new DeliveryAuthService(prisma),
       { sendTextMessage } as any,
     );
-    const generateReply = jest.fn().mockReturnValue(of({
+    const generateReply = jest.fn().mockResolvedValue({
       replyText: patientText,
       safetyFlag: false,
       confidenceScore: 1,
       actions: [],
-    }));
+    });
     const processor = new AiReplyProcessor(
       prisma,
       { sendTypingIndicator: jest.fn() } as any,
@@ -262,10 +295,14 @@ it('keeps private values out of signed ingress, worker, AI, and provider-error l
       new DeliveryAuthService(prisma),
       claims,
       outbound,
-      { getService: () => ({ generateReply }) } as any,
+      { generateReply } as any,
     );
-    await expect(processor.process({ id: randomUUID(), data: aiAdd.mock.calls[0][1] } as any))
-      .rejects.toThrow('OUTBOUND_UNRESOLVED');
+    await expect(
+      processor.process({
+        id: randomUUID(),
+        data: aiAdd.mock.calls[0][1],
+      } as any),
+    ).rejects.toThrow('OUTBOUND_UNRESOLVED');
     expect(generateReply).toHaveBeenCalledTimes(1);
     expect(sendTextMessage).toHaveBeenCalledTimes(1);
     const output = captured.join('\n');
@@ -283,30 +320,50 @@ it('commits one handoff alert and retries its live relay after transport failure
   const user = await system(async () => {
     const grants = await Promise.all(
       ['notifications:view', 'leads:read:all'].map((action) =>
-        prisma.permission.upsert({ where: { action }, update: {}, create: { action } }),
+        prisma.permission.upsert({
+          where: { action },
+          update: {},
+          create: { action },
+        }),
       ),
     );
     const role = await prisma.role.create({
-      data: { organizationId: f.org.id, name: 'Pilot staff', slug: randomUUID() },
+      data: {
+        organizationId: f.org.id,
+        name: 'Pilot staff',
+        slug: randomUUID(),
+      },
     });
     await prisma.rolePermission.createMany({
-      data: grants.map((permission) => ({ roleId: role.id, permissionId: permission.id })),
+      data: grants.map((permission) => ({
+        roleId: role.id,
+        permissionId: permission.id,
+      })),
     });
     const member = await prisma.user.create({
       data: {
-        email: `${randomUUID()}@example.invalid`, password_hash: 'synthetic',
-        firstName: 'Synthetic', lastName: 'Staff', status: 'ACTIVE',
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
       },
     });
     await prisma.organizationMembership.create({
-      data: { organizationId: f.org.id, userId: member.id, roleId: role.id, status: 'ACTIVE' },
+      data: {
+        organizationId: f.org.id,
+        userId: member.id,
+        roleId: role.id,
+        status: 'ACTIVE',
+      },
     });
     return member;
   });
   const gateway = {
     broadcastLeadUpdate: jest.fn(),
     broadcastConversationUpdate: jest.fn(),
-    broadcastNotification: jest.fn()
+    broadcastNotification: jest
+      .fn()
       .mockRejectedValueOnce(new Error('synthetic transport outage'))
       .mockResolvedValue(undefined),
   };
@@ -319,131 +376,281 @@ it('commits one handoff alert and retries its live relay after transport failure
     new AuditService(prisma),
   );
   const action = [{ type: 'HANDOFF_TO_HUMAN', payload: '{}' }];
-  const first = await system(() => executor.executeActions(f.org.id, f.conv.id, action));
+  const first = await system(() =>
+    executor.executeActions(f.org.id, f.conv.id, action),
+  );
   expect(first).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
-  const duplicate = await system(() => executor.executeActions(f.org.id, f.conv.id, action));
+  const duplicate = await system(() =>
+    executor.executeActions(f.org.id, f.conv.id, action),
+  );
   expect(duplicate).toMatchObject({ executed: 1, rejected: 0, failed: 0 });
-  const notifications = await system(() => prisma.notification.findMany({
-    where: { organizationId: f.org.id, type: 'LEAD_HANDED_OFF' },
-  }));
+  const notifications = await system(() =>
+    prisma.notification.findMany({
+      where: { organizationId: f.org.id, type: 'LEAD_HANDED_OFF' },
+    }),
+  );
   expect(notifications).toHaveLength(1);
-  const outbox = await system(() => prisma.outboxEvent.findMany({
-    where: { organizationId: f.org.id, topic: 'notification.broadcast' },
-  }));
+  const outbox = await system(() =>
+    prisma.outboxEvent.findMany({
+      where: { organizationId: f.org.id, topic: 'notification.broadcast' },
+    }),
+  );
   expect(outbox).toHaveLength(1);
   expect(outbox[0].status).toBe('PENDING');
   expect(gateway.broadcastNotification).not.toHaveBeenCalled();
 
-  const relayAdd = jest.fn()
+  const relayAdd = jest
+    .fn()
     .mockRejectedValueOnce(new Error('synthetic Redis outage'))
     .mockResolvedValue({ id: 'queued' });
   const outboxProcessor = new OutboxProcessor(
-    prisma, { add: relayAdd } as any, { add: jest.fn() } as any,
+    prisma,
+    { add: relayAdd } as any,
+    { add: jest.fn() } as any,
   );
   await outboxProcessor.processPendingEvents();
-  expect((await system(() => prisma.outboxEvent.findUniqueOrThrow({ where: { id: outbox[0].id } }))).status).toBe('PENDING');
+  expect(
+    (
+      await system(() =>
+        prisma.outboxEvent.findUniqueOrThrow({ where: { id: outbox[0].id } }),
+      )
+    ).status,
+  ).toBe('PENDING');
   await outboxProcessor.processPendingEvents();
   expect(relayAdd).toHaveBeenCalledTimes(2);
   expect(relayAdd.mock.calls[1][2].jobId).toBe(`outbox-${outbox[0].id}`);
 
   const relay = new NotificationRelayProcessor(
-    prisma, new PermissionService(prisma), gateway as any,
+    prisma,
+    new PermissionService(prisma),
+    gateway as any,
   );
-  const job = { name: 'notification.broadcast', data: relayAdd.mock.calls[1][1] } as any;
+  const job = {
+    name: 'notification.broadcast',
+    data: relayAdd.mock.calls[1][1],
+  } as any;
   await expect(relay.process(job)).rejects.toThrow('NOTIFICATION_RELAY_RETRY');
   await relay.process(job);
   expect(gateway.broadcastNotification).toHaveBeenCalledTimes(2);
 
-  await system(() => prisma.user.update({ where: { id: user.id }, data: { status: 'SUSPENDED' } }));
+  await system(() =>
+    prisma.user.update({
+      where: { id: user.id },
+      data: { status: 'SUSPENDED' },
+    }),
+  );
   await relay.process(job);
   expect(gateway.broadcastNotification).toHaveBeenCalledTimes(2);
-  expect(await system(() => prisma.notification.count({ where: { organizationId: f.org.id } }))).toBe(1);
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
 });
 
 it('does not commit a handoff when no staff member is eligible', async () => {
   const f = await fixture();
   const executor = new ActionExecutorService(
-    prisma, {} as any,
-    { broadcastLeadUpdate: jest.fn(), broadcastConversationUpdate: jest.fn() } as any,
-    {} as any, {} as any, new AuditService(prisma),
+    prisma,
+    {} as any,
+    {
+      broadcastLeadUpdate: jest.fn(),
+      broadcastConversationUpdate: jest.fn(),
+    } as any,
+    {} as any,
+    {} as any,
+    new AuditService(prisma),
   );
-  const result = await system(() => executor.executeActions(f.org.id, f.conv.id, [
-    { type: 'HANDOFF_TO_HUMAN', payload: '{}' },
-  ]));
+  const result = await system(() =>
+    executor.executeActions(f.org.id, f.conv.id, [
+      { type: 'HANDOFF_TO_HUMAN', payload: '{}' },
+    ]),
+  );
   expect(result).toMatchObject({
-    executed: 0, rejected: 0, failed: 1,
+    executed: 0,
+    rejected: 0,
+    failed: 1,
     outcomes: [{ reasonCode: 'NO_ELIGIBLE_STAFF', retryable: true }],
   });
-  const conversation = await system(() => prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }));
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
   expect(conversation.aiPaused).toBe(false);
-  expect(await system(() => prisma.notification.count({ where: { organizationId: f.org.id } }))).toBe(0);
-  expect(await system(() => prisma.outboxEvent.count({ where: { organizationId: f.org.id, topic: 'notification.broadcast' } }))).toBe(0);
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(0);
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'notification.broadcast' },
+      }),
+    ),
+  ).toBe(0);
 });
 
 it('keeps an unresponsive-lead staff alert pending until an eligible recipient exists', async () => {
   const f = await fixture();
-  const followUp = await system(() => prisma.scheduledFollowUp.create({
-    data: {
-      organizationId: f.org.id, conversationId: f.conv.id,
-      type: 'AUTO_NO_REPLY', attempt: 2, scheduledAt: new Date(Date.now() - 1000),
-    },
-  }));
+  const followUp = await system(() =>
+    prisma.scheduledFollowUp.create({
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        type: 'AUTO_NO_REPLY',
+        attempt: 2,
+        scheduledAt: new Date(Date.now() - 1000),
+      },
+    }),
+  );
   const worker = new FollowUpProcessor(
-    prisma, {} as any, {} as any, {} as any, {} as any,
-    new DeliveryAuthService(prisma), {} as any, {} as any,
+    prisma,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    new DeliveryAuthService(prisma),
+    {} as any,
+    {} as any,
   );
   const job = { data: { followUpId: followUp.id } } as any;
   await expect(worker.process(job)).rejects.toThrow('NO_ELIGIBLE_STAFF');
-  expect((await system(() => prisma.scheduledFollowUp.findUniqueOrThrow({ where: { id: followUp.id } }))).status).toBe('PENDING');
-  expect(await system(() => prisma.notification.count({ where: { organizationId: f.org.id } }))).toBe(0);
+  expect(
+    (
+      await system(() =>
+        prisma.scheduledFollowUp.findUniqueOrThrow({
+          where: { id: followUp.id },
+        }),
+      )
+    ).status,
+  ).toBe('PENDING');
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(0);
 
   await system(async () => {
-    const grants = await Promise.all(['notifications:view', 'leads:read:all'].map((action) =>
-      prisma.permission.upsert({ where: { action }, update: {}, create: { action } }),
-    ));
-    const role = await prisma.role.create({ data: { organizationId: f.org.id, name: 'Pilot staff', slug: randomUUID() } });
-    await prisma.rolePermission.createMany({ data: grants.map((permission) => ({ roleId: role.id, permissionId: permission.id })) });
-    const user = await prisma.user.create({ data: {
-      email: `${randomUUID()}@example.invalid`, password_hash: 'synthetic',
-      firstName: 'Staff', lastName: 'Member', status: 'ACTIVE',
-    } });
+    const grants = await Promise.all(
+      ['notifications:view', 'leads:read:all'].map((action) =>
+        prisma.permission.upsert({
+          where: { action },
+          update: {},
+          create: { action },
+        }),
+      ),
+    );
+    const role = await prisma.role.create({
+      data: {
+        organizationId: f.org.id,
+        name: 'Pilot staff',
+        slug: randomUUID(),
+      },
+    });
+    await prisma.rolePermission.createMany({
+      data: grants.map((permission) => ({
+        roleId: role.id,
+        permissionId: permission.id,
+      })),
+    });
+    const user = await prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Staff',
+        lastName: 'Member',
+        status: 'ACTIVE',
+      },
+    });
     await prisma.organizationMembership.create({
-      data: { organizationId: f.org.id, userId: user.id, roleId: role.id, status: 'ACTIVE' },
+      data: {
+        organizationId: f.org.id,
+        userId: user.id,
+        roleId: role.id,
+        status: 'ACTIVE',
+      },
     });
   });
   await worker.process(job);
   await worker.process(job);
-  expect((await system(() => prisma.scheduledFollowUp.findUniqueOrThrow({ where: { id: followUp.id } }))).status).toBe('SENT');
-  expect(await system(() => prisma.notification.count({ where: { organizationId: f.org.id } }))).toBe(1);
-  expect(await system(() => prisma.outboxEvent.count({ where: { organizationId: f.org.id, topic: 'notification.broadcast' } }))).toBe(1);
+  expect(
+    (
+      await system(() =>
+        prisma.scheduledFollowUp.findUniqueOrThrow({
+          where: { id: followUp.id },
+        }),
+      )
+    ).status,
+  ).toBe('SENT');
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'notification.broadcast' },
+      }),
+    ),
+  ).toBe(1);
 });
 
 it('sends only a neutral bubble and retries failed AI and follow-up handoffs without resending', async () => {
   const f = await fixture();
-  await system(() => prisma.conversation.update({
-    where: { id: f.conv.id }, data: { aiDisclosureSent: true },
-  }));
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
   const inbound = await system(() => f.message());
   const actionExecutor = {
-    executeActions: jest.fn()
-      .mockResolvedValueOnce({ executed: 0, rejected: 1, failed: 0, outcomes: [
-        { status: 'REJECTED', retryable: false, reasonCode: 'ACTION_INVALID' },
-      ] })
-      .mockResolvedValueOnce({ executed: 0, rejected: 0, failed: 1, outcomes: [
-        { status: 'FAILED', retryable: true, reasonCode: 'NO_ELIGIBLE_STAFF' },
-      ] })
-      .mockResolvedValueOnce({ executed: 1, rejected: 0, failed: 0, outcomes: [
-        { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
-      ] }),
+    executeActions: jest
+      .fn()
+      .mockResolvedValueOnce({
+        executed: 0,
+        rejected: 1,
+        failed: 0,
+        outcomes: [
+          {
+            status: 'REJECTED',
+            retryable: false,
+            reasonCode: 'ACTION_INVALID',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        executed: 0,
+        rejected: 0,
+        failed: 1,
+        outcomes: [
+          {
+            status: 'FAILED',
+            retryable: true,
+            reasonCode: 'NO_ELIGIBLE_STAFF',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        executed: 1,
+        rejected: 0,
+        failed: 0,
+        outcomes: [{ status: 'EXECUTED', retryable: false, reasonCode: 'OK' }],
+      }),
   };
-  const sendTextMessage = jest.fn().mockImplementation(async () => ({ messages: [{ id: randomUUID() }] }));
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({ messages: [{ id: randomUUID() }] }));
   const outbound = new OutboundAttemptService(
-    prisma, new DeliveryAuthService(prisma), { sendTextMessage } as any,
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
   );
-  const generateReply = jest.fn().mockReturnValue(of({
+  const generateReply = jest.fn().mockResolvedValue({
     replyText: 'Our staff has been alerted.',
     actions: [{ type: 'UPDATE_LEAD', payload: '{bad' }],
-  }));
+  });
   const ai = new AiReplyProcessor(
     prisma,
     { sendTypingIndicator: jest.fn() } as any,
@@ -454,7 +661,7 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
     new DeliveryAuthService(prisma),
     claims,
     outbound,
-    { getService: () => ({ generateReply }) } as any,
+    { generateReply } as any,
   );
   const aiJob = {
     id: randomUUID(),
@@ -464,34 +671,53 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
       newMessageIds: [inbound.id],
     },
   } as any;
-  await expect(ai.process(aiJob)).rejects.toThrow('ACTION_FALLBACK_HANDOFF_FAILED');
+  await expect(ai.process(aiJob)).rejects.toThrow(
+    'ACTION_FALLBACK_HANDOFF_FAILED',
+  );
   expect(sendTextMessage).toHaveBeenCalledTimes(1);
-  const neutralAi = await system(() => prisma.message.findMany({
-    where: { conversationId: f.conv.id, type: 'AI_TEXT' },
-  }));
+  const neutralAi = await system(() =>
+    prisma.message.findMany({
+      where: { conversationId: f.conv.id, type: 'AI_TEXT' },
+    }),
+  );
   expect(neutralAi).toHaveLength(1);
   expect(neutralAi[0].content).not.toContain('alerted');
   await ai.process(aiJob);
   expect(sendTextMessage).toHaveBeenCalledTimes(1);
 
-  const followUp = await system(() => prisma.scheduledFollowUp.create({
-    data: {
-      organizationId: f.org.id,
-      conversationId: f.conv.id,
-      type: 'AI_SCHEDULED',
-      scheduledAt: new Date(Date.now() - 1000),
-    },
-  }));
+  const followUp = await system(() =>
+    prisma.scheduledFollowUp.create({
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        type: 'AI_SCHEDULED',
+        scheduledAt: new Date(Date.now() - 1000),
+      },
+    }),
+  );
   actionExecutor.executeActions
-    .mockResolvedValueOnce({ executed: 0, rejected: 1, failed: 0, outcomes: [
-      { status: 'REJECTED', retryable: false, reasonCode: 'ACTION_INVALID' },
-    ] })
-    .mockResolvedValueOnce({ executed: 0, rejected: 0, failed: 1, outcomes: [
-      { status: 'FAILED', retryable: true, reasonCode: 'NO_ELIGIBLE_STAFF' },
-    ] })
-    .mockResolvedValueOnce({ executed: 1, rejected: 0, failed: 0, outcomes: [
-      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
-    ] });
+    .mockResolvedValueOnce({
+      executed: 0,
+      rejected: 1,
+      failed: 0,
+      outcomes: [
+        { status: 'REJECTED', retryable: false, reasonCode: 'ACTION_INVALID' },
+      ],
+    })
+    .mockResolvedValueOnce({
+      executed: 0,
+      rejected: 0,
+      failed: 1,
+      outcomes: [
+        { status: 'FAILED', retryable: true, reasonCode: 'NO_ELIGIBLE_STAFF' },
+      ],
+    })
+    .mockResolvedValueOnce({
+      executed: 1,
+      rejected: 0,
+      failed: 0,
+      outcomes: [{ status: 'EXECUTED', retryable: false, reasonCode: 'OK' }],
+    });
   const followUpWorker = new FollowUpProcessor(
     prisma,
     {} as any,
@@ -500,11 +726,12 @@ it('sends only a neutral bubble and retries failed AI and follow-up handoffs wit
     { send: jest.fn() } as any,
     new DeliveryAuthService(prisma),
     outbound,
-    { getService: () => ({ generateReply }) } as any,
+    { generateReply } as any,
   );
   const followUpJob = { data: { followUpId: followUp.id } } as any;
-  await expect(followUpWorker.process(followUpJob))
-    .rejects.toThrow('ACTION_FALLBACK_HANDOFF_FAILED');
+  await expect(followUpWorker.process(followUpJob)).rejects.toThrow(
+    'ACTION_FALLBACK_HANDOFF_FAILED',
+  );
   expect(sendTextMessage).toHaveBeenCalledTimes(2);
   await followUpWorker.process(followUpJob);
   expect(sendTextMessage).toHaveBeenCalledTimes(2);
@@ -522,20 +749,36 @@ it('rejects an incompatible AI contract version before actions or patient delive
     { executeActions } as any,
     { scheduleAutoFollowUps: jest.fn() } as any,
     { record: jest.fn() } as any,
-    new DeliveryAuthService(prisma), claims,
+    new DeliveryAuthService(prisma),
+    claims,
     { sendBubble } as any,
-    { getService: () => ({ generateReply: () => of({
-      contractVersion: 2,
-      replyText: 'We changed your record and alerted staff.',
-      actions: [{ type: 'UPDATE_LEAD', payload: '{"status":"QUALIFIED"}' }],
-    }) }) } as any,
+    {
+      generateReply: async () => ({
+        contractVersion: 2,
+        replyText: 'We changed your record and alerted staff.',
+        actions: [{ type: 'UPDATE_LEAD', payload: '{"status":"QUALIFIED"}' }],
+      }),
+    } as any,
   );
-  await expect(ai.process({ id: randomUUID(), data: {
-    organizationId: f.org.id, conversationId: f.conv.id, newMessageIds: [inbound.id],
-  } } as any)).rejects.toThrow('AI_CONTRACT_VERSION_UNSUPPORTED');
+  await expect(
+    ai.process({
+      id: randomUUID(),
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        newMessageIds: [inbound.id],
+      },
+    } as any),
+  ).rejects.toThrow('AI_CONTRACT_VERSION_UNSUPPORTED');
   expect(executeActions).not.toHaveBeenCalled();
   expect(sendBubble).not.toHaveBeenCalled();
-  expect(await system(() => prisma.message.count({ where: { conversationId: f.conv.id, type: 'AI_TEXT' } }))).toBe(0);
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'AI_TEXT' },
+      }),
+    ),
+  ).toBe(0);
 });
 
 it('persists one message and outbox event per unique webhook, including rapid arrivals', async () => {
@@ -758,7 +1001,9 @@ it('folds two pending messages into one claim even when only one outbox ID dispa
     claims.claim(f.org.id, f.conv.id, [second.id]),
   );
   expect(claim?.messageIds).toHaveLength(2);
-  expect(claim?.messageIds).toEqual(expect.arrayContaining([first.id, second.id]));
+  expect(claim?.messageIds).toEqual(
+    expect.arrayContaining([first.id, second.id]),
+  );
   await system(() =>
     claims.finish(f.conv.id, claim!.owner, claim!.messageIds, 'PROCESSED'),
   );
@@ -787,8 +1032,14 @@ it('rejects an older generation after a new inbound changes conversation version
   ).toBe(true);
 });
 
-it('cancels stale generated bubbles after a crash and newer inbound', async () => {
+it('cancels stale generated bubbles after a crash and answers the folded batch (B9)', async () => {
   const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
   const inbound = await system(() => f.message());
   const staleBubble = await system(() =>
     prisma.message.create({
@@ -802,24 +1053,33 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
       },
     }),
   );
+  // A newer patient message arrived while the first generation was stuck.
+  const newer = await system(() => f.message());
   const updated = await system(() =>
     prisma.conversation.update({
       where: { id: f.conv.id },
       data: { stateVersion: { increment: 1 } },
     }),
   );
-  const sendBubble = jest.fn();
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const generateReply = jest
+    .fn()
+    .mockResolvedValue({ replyText: 'Fresh reply' });
   const processor = new AiReplyProcessor(
     prisma,
-    { sendTextMessage: jest.fn() } as any,
+    { sendTypingIndicator: jest.fn() } as any,
     { broadcastNewMessage: jest.fn() } as any,
     { executeActions: jest.fn() } as any,
     { scheduleAutoFollowUps: jest.fn() } as any,
     { record: jest.fn() } as any,
     new DeliveryAuthService(prisma),
     claims,
-    { sendBubble } as any,
-    { getService: () => ({ generateReply: jest.fn() }) } as any,
+    new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+      sendTextMessage,
+    } as any),
+    { generateReply } as any,
   );
   await processor.process({
     id: randomUUID(),
@@ -831,7 +1091,6 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
       stateVersion: updated.stateVersion,
     },
   } as any);
-  expect(sendBubble).not.toHaveBeenCalled();
   expect(
     (
       await system(() =>
@@ -839,13 +1098,19 @@ it('cancels stale generated bubbles after a crash and newer inbound', async () =
       )
     ).status,
   ).toBe('CANCELLED');
-  expect(
-    (
-      await system(() =>
-        prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
-      )
-    ).status,
-  ).toBe('PROCESSED');
+  // Both folded messages get one fresh reply; the stale text is never sent.
+  expect(generateReply).toHaveBeenCalledTimes(1);
+  expect(generateReply.mock.calls[0][0].newMessageIds).toEqual([
+    inbound.id,
+    newer.id,
+  ]);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toBe('Fresh reply');
+  for (const id of [inbound.id, newer.id])
+    expect(
+      (await system(() => prisma.message.findUniqueOrThrow({ where: { id } })))
+        .status,
+    ).toBe('PROCESSED');
 });
 
 it.each(['paused', 'opted-out', 'disabled-channel'])(
@@ -1320,7 +1585,9 @@ it('enforces the WhatsApp follow-up window and recovers a lost scheduled job', a
   // There is no approved template sender in the pilot. The safe path is a
   // persisted cancellation with an explicit template requirement.
   const outsideWindow = await system(() =>
-    prisma.outboundAttempt.findUniqueOrThrow({ where: { messageId: bubble.id } }),
+    prisma.outboundAttempt.findUniqueOrThrow({
+      where: { messageId: bubble.id },
+    }),
   );
   expect(outsideWindow.status).toBe('CANCELLED');
   const due = await system(() =>
@@ -1382,7 +1649,7 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
   );
   const generateReply = jest
     .fn()
-    .mockReturnValue(of({ replyText: 'Synthetic follow-up', actions: [] }));
+    .mockResolvedValue({ replyText: 'Synthetic follow-up', actions: [] });
   const processor = new FollowUpProcessor(
     prisma,
     {} as any,
@@ -1391,7 +1658,7 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
     { send: jest.fn() } as any,
     new DeliveryAuthService(prisma),
     outbound,
-    { getService: () => ({ generateReply }) } as any,
+    { generateReply } as any,
   );
   const job = { data: { followUpId: followUp.id } } as any;
   await expect(processor.process(job)).rejects.toThrow('OUTBOUND_UNRESOLVED');
@@ -1416,4 +1683,1378 @@ it('retries a confirmed follow-up rejection without repeating an accepted bubble
       )
     ).status,
   ).toBe('SENT');
+});
+
+function inboundJob(
+  f: {
+    channel: { providerAccountId: string | null };
+    conv: { externalContactId: string | null };
+  },
+  body: string,
+  id = randomUUID(),
+) {
+  return {
+    id: randomUUID(),
+    data: {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: f.channel.providerAccountId },
+                messages: [
+                  {
+                    from: f.conv.externalContactId,
+                    id,
+                    type: 'text',
+                    text: { body },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  } as any;
+}
+
+it('applies STOP exactly once when the worker crashes after the inbound commit (KI-022)', async () => {
+  const f = await fixture();
+  const followUps = {
+    cancelPendingFollowUps: jest
+      .fn()
+      .mockRejectedValueOnce(new Error('synthetic crash after commit'))
+      .mockResolvedValue(undefined),
+  };
+  const worker = webhook(prisma, undefined, followUps);
+  const job = inboundJob(f, 'STOP');
+  await expect(worker.process(job)).rejects.toThrow(
+    'synthetic crash after commit',
+  );
+  // BullMQ retry, then a Meta redelivery of the same message.
+  await worker.process(job);
+  await worker.process(job);
+  const lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).not.toBeNull();
+  expect(lead.optOutReason).toBe('PATIENT_STOP_COMMAND');
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  const audits = await system(() =>
+    prisma.auditLog.findMany({
+      where: { organizationId: f.org.id, action: 'consent.opt_out' },
+    }),
+  );
+  expect(audits).toHaveLength(1);
+  expect(JSON.stringify(audits[0].metadata)).not.toContain('STOP');
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+      }),
+    ),
+  ).toBe(1);
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    ),
+  ).toBe(0);
+});
+
+it('rolls back the inbound message when its consent effect fails, then applies withdrawal once on retry (KI-022)', async () => {
+  const f = await fixture();
+  await system(async () => {
+    await prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { mediaConsentGranted: true },
+    });
+    await prisma.message.create({
+      data: {
+        conversationId: f.conv.id,
+        metaMessageId: randomUUID(),
+        content: '[Image message]',
+        mediaUrl: 'data:image/jpeg;base64,c3ludGhldGlj',
+        type: 'LEAD_MEDIA',
+        status: 'PROCESSED',
+      },
+    });
+  });
+  const original = prisma.$transaction.bind(prisma);
+  let failNext = true;
+  const spy = jest.spyOn(prisma, '$transaction').mockImplementation(((
+    arg: any,
+    ...rest: any[]
+  ) => {
+    if (typeof arg !== 'function') return original(arg, ...rest);
+    return original(
+      async (tx: any) => {
+        const wrapped = new Proxy(tx, {
+          get(target, key) {
+            if (key === 'auditLog' && failNext) {
+              failNext = false;
+              return {
+                create: () =>
+                  Promise.reject(new Error('synthetic crash inside tx')),
+              };
+            }
+            return target[key];
+          },
+        });
+        return arg(wrapped);
+      },
+      ...rest,
+    );
+  }) as any);
+  try {
+    const worker = webhook(prisma);
+    const job = inboundJob(f, 'WITHDRAW CONSENT');
+    await expect(worker.process(job)).rejects.toThrow(
+      'synthetic crash inside tx',
+    );
+    expect(
+      await system(() =>
+        prisma.message.count({
+          where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+        }),
+      ),
+    ).toBe(0);
+    await worker.process(job);
+    await worker.process(job);
+  } finally {
+    spy.mockRestore();
+  }
+  const lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.mediaConsentGranted).toBe(false);
+  expect(lead.mediaConsentWithdrawnAt).not.toBeNull();
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, mediaUrl: { not: null } },
+      }),
+    ),
+  ).toBe(0);
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'consent.media_withdrawn' },
+      }),
+    ),
+  ).toBe(1);
+});
+
+it('keeps an opt-out on ordinary messages and clears it only on START / BAŞLA', async () => {
+  const f = await fixture();
+  const worker = webhook(prisma);
+  await worker.process(inboundJob(f, 'STOP'));
+  await worker.process(inboundJob(f, 'Hello again, a question about implants'));
+  let lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).not.toBeNull();
+  // The ordinary message still reaches the inbox, without an AI reply intent.
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+      }),
+    ),
+  ).toBe(2);
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    ),
+  ).toBe(0);
+  await worker.process(inboundJob(f, 'BAŞLA'));
+  lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).toBeNull();
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'consent.opt_in' },
+      }),
+    ),
+  ).toBe(1);
+});
+
+function staffService(sendTextMessage: jest.Mock) {
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const conversations = new ConversationsService(
+    prisma,
+    outbound,
+    {
+      broadcastNewMessage: jest.fn().mockResolvedValue(undefined),
+      broadcastConversationUpdate: jest.fn().mockResolvedValue(undefined),
+    } as any,
+    { has: jest.fn().mockResolvedValue(true) } as any,
+  );
+  return { outbound, conversations };
+}
+
+const asTenant = <T>(organizationId: string, fn: () => Promise<T>) =>
+  tenantStorage.run({ organizationId, isSystemBypass: false }, fn);
+
+it('rejects a staff send outside the 24 h window, with a reason (KI-023)', async () => {
+  const f = await fixture();
+  const staffId = randomUUID();
+  const sendTextMessage = jest.fn();
+  const { conversations } = staffService(sendTextMessage);
+  // No patient message yet: outside the window.
+  await expect(
+    asTenant(f.org.id, () =>
+      conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
+    ),
+  ).rejects.toMatchObject({ response: { code: 'OUTSIDE_24H_WINDOW' } });
+  await system(async () => {
+    await prisma.message.create({
+      data: {
+        conversationId: f.conv.id,
+        metaMessageId: randomUUID(),
+        content: 'Old question',
+        type: 'LEAD_TEXT',
+        status: 'PROCESSED',
+        createdAt: new Date(Date.now() - 25 * 3600_000),
+      },
+    });
+  });
+  await expect(
+    asTenant(f.org.id, () =>
+      conversations.sendManualMessage(f.org.id, staffId, f.conv.id, 'Hello'),
+    ),
+  ).rejects.toMatchObject({ response: { code: 'OUTSIDE_24H_WINDOW' } });
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'USER_TEXT' },
+      }),
+    ),
+  ).toBe(0);
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(false);
+});
+
+it('sends a staff reply through OutboundAttempt to the conversation contact, pauses AI and audits (KI-023)', async () => {
+  const f = await fixture();
+  const staff = await system(() =>
+    prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
+      },
+    }),
+  );
+  await system(() => f.message());
+  // The lead phone differs from the WhatsApp contact: the contact wins.
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { phoneNumber: '15550000000' },
+    }),
+  );
+  const sendTextMessage = jest
+    .fn()
+    .mockResolvedValue({ messages: [{ id: `wamid.${randomUUID()}` }] });
+  const { conversations } = staffService(sendTextMessage);
+  const before = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  const sent = await asTenant(f.org.id, () =>
+    conversations.sendManualMessage(
+      f.org.id,
+      staff.id,
+      f.conv.id,
+      'Staff reply',
+    ),
+  );
+  expect(sent).toMatchObject({
+    deliveryStatus: 'SENT',
+    status: 'SENT',
+    senderId: staff.id,
+    type: 'USER_TEXT',
+  });
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][2]).toBe(f.conv.externalContactId);
+  expect(sendTextMessage.mock.calls[0][5]).toBe(`staff-${sent.id}`);
+  const attempt = await system(() =>
+    prisma.outboundAttempt.findUniqueOrThrow({ where: { messageId: sent.id } }),
+  );
+  expect(attempt).toMatchObject({
+    status: 'ACCEPTED',
+    purpose: 'staff',
+    dedupeKey: `staff-${sent.id}`,
+  });
+  const after = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(after.aiPaused).toBe(true);
+  expect(after.stateVersion).toBe(before.stateVersion + 1);
+  const audits = await system(() =>
+    prisma.auditLog.findMany({
+      where: {
+        organizationId: f.org.id,
+        action: 'conversation.staff_message_sent',
+      },
+    }),
+  );
+  expect(audits).toHaveLength(1);
+  expect(audits[0].actor).toBe(staff.id);
+  expect(JSON.stringify(audits[0].metadata)).not.toContain('Staff reply');
+});
+
+it('does not deliver an AI reply generated before a staff send (KI-023)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  const staff = await system(() =>
+    prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
+      },
+    }),
+  );
+  const inbound = await system(() => f.message());
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const { conversations, outbound } = staffService(sendTextMessage);
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    {
+      generateReply: async () => {
+        // Staff take over while the AI is generating.
+        await asTenant(f.org.id, () =>
+          conversations.sendManualMessage(
+            f.org.id,
+            staff.id,
+            f.conv.id,
+            'Staff here',
+          ),
+        );
+        return { replyText: 'Stale AI reply' };
+      },
+    } as any,
+  );
+  await ai.process({
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toBe('Staff here');
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: { conversationId: f.conv.id, type: 'AI_TEXT', status: 'SENT' },
+      }),
+    ),
+  ).toBe(0);
+});
+
+it('pauses and resumes the AI idempotently with audit rows, and a pause during generation sends nothing', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  const staffId = randomUUID();
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const { conversations, outbound } = staffService(sendTextMessage);
+  const start = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  // Double click on pause = one state change, one audit row.
+  const [first, second] = [
+    await asTenant(f.org.id, () =>
+      conversations.setAiPaused(f.org.id, staffId, f.conv.id, true),
+    ),
+    await asTenant(f.org.id, () =>
+      conversations.setAiPaused(f.org.id, staffId, f.conv.id, true),
+    ),
+  ];
+  expect(first).toEqual({ id: f.conv.id, aiPaused: true });
+  expect(second).toEqual({ id: f.conv.id, aiPaused: true });
+  let current = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(current.stateVersion).toBe(start.stateVersion + 1);
+  await asTenant(f.org.id, () =>
+    conversations.setAiPaused(f.org.id, staffId, f.conv.id, false),
+  );
+  await asTenant(f.org.id, () =>
+    conversations.setAiPaused(f.org.id, staffId, f.conv.id, false),
+  );
+  current = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(current.aiPaused).toBe(false);
+  expect(current.stateVersion).toBe(start.stateVersion + 2);
+  const audits = await system(() =>
+    prisma.auditLog.findMany({
+      where: {
+        organizationId: f.org.id,
+        targetId: f.conv.id,
+        action: { startsWith: 'conversation.ai_' },
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+  );
+  expect(audits.map((row) => [row.action, row.actor])).toEqual([
+    ['conversation.ai_paused', staffId],
+    ['conversation.ai_resumed', staffId],
+  ]);
+
+  // A pause while the AI is generating: no AI bubble reaches the patient.
+  const inbound = await system(() => f.message());
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    {
+      generateReply: async () => {
+        await asTenant(f.org.id, () =>
+          conversations.setAiPaused(f.org.id, staffId, f.conv.id, true),
+        );
+        return { replyText: 'Stale AI reply' };
+      },
+    } as any,
+  );
+  await ai.process({
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any);
+  expect(sendTextMessage).not.toHaveBeenCalled();
+});
+
+function mediaJob(
+  f: {
+    channel: { providerAccountId: string | null };
+    conv: { externalContactId: string | null };
+  },
+  id = randomUUID(),
+) {
+  return {
+    id: randomUUID(),
+    data: {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: f.channel.providerAccountId },
+                messages: [
+                  {
+                    from: f.conv.externalContactId,
+                    id,
+                    type: 'image',
+                    image: { id: `img-${id}` },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  } as any;
+}
+
+it('sends one clinic-named media-consent request per 24 h through OutboundAttempt, also on replay (KI-025)', async () => {
+  const f = await fixture();
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const followUps = {
+    cancelPendingFollowUps: jest
+      .fn()
+      .mockRejectedValueOnce(new Error('synthetic crash after commit'))
+      .mockResolvedValue(undefined),
+  };
+  const worker = webhook(prisma, outbound, followUps);
+  const first = mediaJob(f);
+  // Crash after the inbound commit, before the request is sent; the retry
+  // (a duplicate) resumes the committed request instead of losing it.
+  await expect(worker.process(first)).rejects.toThrow(
+    'synthetic crash after commit',
+  );
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  await worker.process(first);
+  await worker.process(first); // Meta redelivery
+  await worker.process(mediaJob(f)); // second photo within 24 h
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  const [, , to, text] = sendTextMessage.mock.calls[0];
+  expect(to).toBe(f.conv.externalContactId);
+  expect(text).toContain('Synthetic Clinic');
+  expect(text).not.toContain('OmniDesk');
+  const attempts = await system(() =>
+    prisma.outboundAttempt.findMany({
+      where: { conversationId: f.conv.id },
+    }),
+  );
+  expect(attempts).toHaveLength(1);
+  expect(attempts[0]).toMatchObject({
+    purpose: 'consent-request',
+    status: 'ACCEPTED',
+  });
+  expect(
+    await system(() =>
+      prisma.message.count({
+        where: {
+          conversationId: f.conv.id,
+          type: 'LEAD_MEDIA',
+          mediaUrl: null,
+        },
+      }),
+    ),
+  ).toBe(2);
+});
+
+it('sends no media-consent request to an opted-out or paused patient, and uses Turkish for a Turkish patient (KI-025)', async () => {
+  const optedOut = await fixture();
+  const paused = await fixture();
+  const turkish = await fixture();
+  await system(async () => {
+    await prisma.lead.update({
+      where: { id: optedOut.lead.id },
+      data: { optedOutAt: new Date() },
+    });
+    await prisma.conversation.update({
+      where: { id: paused.conv.id },
+      data: { aiPaused: true },
+    });
+    await prisma.message.create({
+      data: {
+        conversationId: turkish.conv.id,
+        metaMessageId: randomUUID(),
+        content: 'Merhaba, implant fiyatı nedir?',
+        type: 'LEAD_TEXT',
+        status: 'PROCESSED',
+      },
+    });
+  });
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const worker = webhook(prisma, outbound);
+  await worker.process(mediaJob(optedOut));
+  await worker.process(mediaJob(paused));
+  expect(sendTextMessage).not.toHaveBeenCalled();
+  await worker.process(mediaJob(turkish));
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toContain('onay');
+});
+
+it('sets a 30-day expiry on downloaded patient media and the cleanup leaves a marker (KI-026)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { mediaConsentGranted: true },
+    }),
+  );
+  const worker = webhook(prisma, undefined, undefined, {
+    downloadMediaAsBase64: jest.fn().mockResolvedValue('c3ludGhldGlj'),
+  });
+  const before = Date.now();
+  await worker.process(mediaJob(f));
+  const saved = await system(() =>
+    prisma.message.findFirstOrThrow({
+      where: { conversationId: f.conv.id, type: 'LEAD_MEDIA' },
+    }),
+  );
+  expect(saved.mediaUrl).toContain('c3ludGhldGlj');
+  const days = (saved.mediaExpiresAt!.getTime() - before) / 86_400_000;
+  expect(days).toBeGreaterThan(29.99);
+  expect(days).toBeLessThan(30.01);
+  await system(() =>
+    prisma.message.update({
+      where: { id: saved.id },
+      data: { mediaExpiresAt: new Date(Date.now() - 1000) },
+    }),
+  );
+  await new WhatsappMediaService(prisma).cleanupExpiredMedia();
+  const cleaned = await system(() =>
+    prisma.message.findUniqueOrThrow({ where: { id: saved.id } }),
+  );
+  expect(cleaned.mediaUrl).toBeNull();
+  expect(cleaned.content).toBe('[Patient Media - Expired and Deleted]');
+});
+
+async function staffMember(organizationId: string) {
+  return system(async () => {
+    const grants = await Promise.all(
+      ['notifications:view', 'leads:read:all'].map((action) =>
+        prisma.permission.upsert({
+          where: { action },
+          update: {},
+          create: { action },
+        }),
+      ),
+    );
+    const role = await prisma.role.create({
+      data: { organizationId, name: 'Pilot staff', slug: randomUUID() },
+    });
+    await prisma.rolePermission.createMany({
+      data: grants.map((permission) => ({
+        roleId: role.id,
+        permissionId: permission.id,
+      })),
+    });
+    const user = await prisma.user.create({
+      data: {
+        email: `${randomUUID()}@example.invalid`,
+        password_hash: 'synthetic',
+        firstName: 'Synthetic',
+        lastName: 'Staff',
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.organizationMembership.create({
+      data: {
+        organizationId,
+        userId: user.id,
+        roleId: role.id,
+        status: 'ACTIVE',
+      },
+    });
+    return user;
+  });
+}
+
+it('routes an UNKNOWN send to staff once and stops the AI retry loop (KI-029)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  await staffMember(f.org.id);
+  const inbound = await system(() => f.message());
+  const sendTextMessage = jest
+    .fn()
+    .mockRejectedValue(new Error('synthetic timeout after acceptance'));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    { generateReply: async () => ({ replyText: 'Synthetic AI reply' }) } as any,
+  );
+  const job = {
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any;
+  const before = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  await expect(ai.process(job)).rejects.toThrow('OUTBOUND_UNRESOLVED');
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  expect(conversation.stateVersion).toBe(before.stateVersion + 1);
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0]).toMatchObject({
+    type: 'SYSTEM_ALERT',
+    title: 'Delivery uncertain',
+  });
+  // BullMQ retry, inbound recovery and the sweep: no resend, no second alert.
+  await ai.process(job);
+  await claims.recoverInbound();
+  await outbound.markInterruptedSendsUnknown();
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: {
+          organizationId: f.org.id,
+          action: 'outbound.delivery_unknown',
+        },
+      }),
+    ),
+  ).toBe(1);
+  expect(
+    (
+      await system(() =>
+        prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
+      )
+    ).status,
+  ).toBe('PROCESSED');
+  const attempt = await system(() =>
+    prisma.outboundAttempt.findFirstOrThrow({
+      where: { conversationId: f.conv.id },
+    }),
+  );
+  expect(attempt.status).toBe('UNKNOWN');
+  // A new patient message goes to staff, not into an AI batch.
+  await webhook(prisma).process(inboundJob(f, 'Did you get my question?'));
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    ),
+  ).toBe(0);
+});
+
+it('marks a local credential failure before the POST as FAILED, not UNKNOWN (KI-029)', async () => {
+  const f = await fixture();
+  const bubble = await system(() => f.bubble());
+  const post = jest.fn();
+  const whatsapp = new WhatsappService(
+    { post } as any,
+    {} as any,
+    {
+      readActive: jest
+        .fn()
+        .mockRejectedValue(new Error('Active credential not found')),
+    } as any,
+  );
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    whatsapp,
+  );
+  expect(
+    await system(() =>
+      outbound.sendBubble(f.org.id, f.conv.id, bubble, f.conv.stateVersion),
+    ),
+  ).toBe('FAILED');
+  expect(post).not.toHaveBeenCalled();
+  const attempt = await system(() =>
+    prisma.outboundAttempt.findUniqueOrThrow({
+      where: { messageId: bubble.id },
+    }),
+  );
+  expect(attempt).toMatchObject({
+    status: 'FAILED',
+    lastErrorCode: 'LOCAL_CREDENTIAL_UNAVAILABLE',
+    escalatedAt: null,
+  });
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(false);
+  // Not retried by the confirmed-failure retry cron.
+  await outbound.retryConfirmedFailures();
+  expect(post).not.toHaveBeenCalled();
+});
+
+it('delivers the AI handoff text once before pausing, with one alert per eligible staff member (B7)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  await staffMember(f.org.id);
+  const inbound = await system(() => f.message());
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const executor = new ActionExecutorService(
+    prisma,
+    { send: jest.fn().mockResolvedValue({ id: randomUUID() }) } as any,
+    {
+      broadcastLeadUpdate: jest.fn(),
+      broadcastConversationUpdate: jest.fn(),
+    } as any,
+    {} as any,
+    {} as any,
+    new AuditService(prisma),
+  );
+  const notifyEmitter = jest.spyOn(
+    (executor as any).notificationEmitter,
+    'send',
+  );
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    executor,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    {
+      generateReply: async () => ({
+        replyText:
+          "Of course. I'm passing your request to the clinic's team, and a team member will reply to you here.",
+        actions: [
+          { type: 'NOTIFY_AGENT', payload: '{}' },
+          { type: 'HANDOFF_TO_HUMAN', payload: '{"reason":"human_request"}' },
+        ],
+      }),
+    } as any,
+  );
+  const job = {
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any;
+  await ai.process(job);
+  await ai.process(job); // job retry / duplicate
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage.mock.calls[0][3]).toContain(
+    "passing your request to the clinic's team",
+  );
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0].type).toBe('LEAD_HANDED_OFF');
+  expect(notifyEmitter).not.toHaveBeenCalled();
+  const bubble = await system(() =>
+    prisma.message.findFirstOrThrow({
+      where: { conversationId: f.conv.id, type: 'AI_TEXT' },
+    }),
+  );
+  expect(bubble.status).toBe('SENT');
+  expect(bubble.metadata).toMatchObject({ pendingHandoff: false });
+});
+
+it('sends and audits a custom disclosure template once (KI-032)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.aiPersona.update({
+      where: { organizationId: f.org.id },
+      data: {
+        aiDisclosureText:
+          'Merhaba {{firstName}}, ben {{clinicName}} için çalışan bir yapay zekâ asistanıyım.',
+      },
+    }),
+  );
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const outbound = new OutboundAttemptService(
+    prisma,
+    new DeliveryAuthService(prisma),
+    { sendTextMessage } as any,
+  );
+  const ai = new AiReplyProcessor(
+    prisma,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions: jest.fn() } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    new AuditService(prisma),
+    new DeliveryAuthService(prisma),
+    claims,
+    outbound,
+    { generateReply: async () => ({ replyText: 'Synthetic AI reply' }) } as any,
+  );
+  for (let turn = 0; turn < 2; turn++) {
+    const inbound = await system(() => f.message());
+    await ai.process({
+      id: randomUUID(),
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        newMessageIds: [inbound.id],
+      },
+    } as any);
+  }
+  const texts = sendTextMessage.mock.calls.map((call) => call[3]);
+  expect(
+    texts.filter((text) => text.includes('yapay zekâ asistanıyım')),
+  ).toHaveLength(1);
+  expect(texts.filter((text) => text === 'Synthetic AI reply')).toHaveLength(2);
+  expect(
+    (
+      await system(() =>
+        prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+      )
+    ).aiDisclosureSent,
+  ).toBe(true);
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'ai.disclosure_sent' },
+      }),
+    ),
+  ).toBe(1);
+});
+
+it('does not re-run AI actions when the reply job is retried (B9)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  const inbound = await system(() => f.message());
+  const executeActions = jest.fn().mockResolvedValue({
+    executed: 2,
+    rejected: 0,
+    failed: 0,
+    outcomes: [
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+    ],
+  });
+  let failCreate = true;
+  const database = new Proxy(prisma, {
+    get(target, key) {
+      if (key === 'message')
+        return new Proxy((target as any).message, {
+          get(model, method) {
+            if (method === 'createMany' && failCreate)
+              return () => {
+                failCreate = false;
+                return Promise.reject(
+                  new Error('synthetic crash after actions'),
+                );
+              };
+            return model[method];
+          },
+        });
+      return (target as any)[key];
+    },
+  });
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const ai = new AiReplyProcessor(
+    database,
+    { sendTypingIndicator: jest.fn() } as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions } as any,
+    { scheduleAutoFollowUps: jest.fn() } as any,
+    { record: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    claims,
+    new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+      sendTextMessage,
+    } as any),
+    {
+      generateReply: async () => ({
+        replyText: 'Synthetic AI reply',
+        actions: [
+          { type: 'NOTIFY_AGENT', payload: '{}' },
+          {
+            type: 'SCHEDULE_FOLLOW_UP',
+            payload: JSON.stringify({
+              scheduledAt: new Date(Date.now() + 86_400_000).toISOString(),
+            }),
+          },
+        ],
+      }),
+    } as any,
+  );
+  const job = {
+    id: randomUUID(),
+    data: {
+      organizationId: f.org.id,
+      conversationId: f.conv.id,
+      newMessageIds: [inbound.id],
+    },
+  } as any;
+  await expect(ai.process(job)).rejects.toThrow(
+    'synthetic crash after actions',
+  );
+  await ai.process(job); // BullMQ retry
+  expect(executeActions).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await system(() =>
+        prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
+      )
+    ).status,
+  ).toBe('PROCESSED');
+});
+
+it('delivers a staff send to an opted-out patient with a warning, keeps AI paused and audits it (D-021)', async () => {
+  const f = await fixture();
+  const staff = await staffMember(f.org.id);
+  await system(() => f.message());
+  await system(() =>
+    prisma.lead.update({
+      where: { id: f.lead.id },
+      data: { optedOutAt: new Date() },
+    }),
+  );
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
+  const { conversations, outbound } = staffService(sendTextMessage);
+  const sent = await asTenant(f.org.id, () =>
+    conversations.sendManualMessage(
+      f.org.id,
+      staff.id,
+      f.conv.id,
+      'Staff reply after STOP',
+    ),
+  );
+  expect(sent).toMatchObject({
+    deliveryStatus: 'SENT',
+    status: 'SENT',
+    warnings: ['PATIENT_OPTED_OUT'],
+  });
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await system(() =>
+        prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+      )
+    ).aiPaused,
+  ).toBe(true);
+  const audit = await system(() =>
+    prisma.auditLog.findFirstOrThrow({
+      where: {
+        organizationId: f.org.id,
+        action: 'conversation.staff_message_sent',
+      },
+    }),
+  );
+  expect(audit.metadata).toMatchObject({ patientOptedOut: true });
+  expect(JSON.stringify(audit.metadata)).not.toContain(
+    'Staff reply after STOP',
+  );
+  // Automated sends stay blocked for the opted-out patient.
+  const bubble = await system(() =>
+    prisma.message.create({
+      data: {
+        conversationId: f.conv.id,
+        content: 'Synthetic AI reply',
+        type: 'AI_TEXT',
+        status: 'PENDING',
+        idempotencyKey: randomUUID(),
+      },
+    }),
+  );
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiPaused: false },
+    }),
+  );
+  const current = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(
+    await system(() =>
+      outbound.sendBubble(f.org.id, f.conv.id, bubble, current.stateVersion),
+    ),
+  ).toBe('CANCELLED');
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  // A normal (not opted-out) staff send carries no warning.
+  const other = await fixture();
+  await system(() => other.message());
+  const plain = await asTenant(other.org.id, () =>
+    conversations.sendManualMessage(
+      other.org.id,
+      staff.id,
+      other.conv.id,
+      'Hello',
+    ),
+  );
+  expect(plain.warnings).toEqual([]);
+});
+
+it('alerts eligible staff once when a STOP newly opts the patient out (D-021)', async () => {
+  const f = await fixture();
+  await staffMember(f.org.id);
+  const worker = webhook(prisma);
+  const stop = inboundJob(f, 'STOP');
+  await worker.process(stop);
+  await worker.process(stop); // duplicate webhook
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0]).toMatchObject({
+    type: 'SYSTEM_ALERT',
+    title: 'Patient sent STOP',
+  });
+  expect(
+    await system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'notification.broadcast' },
+      }),
+    ),
+  ).toBe(1);
+  // A second STOP while already opted out: no new alert.
+  await worker.process(inboundJob(f, 'STOP'));
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+  // START clears the opt-out but does not resume the AI or alert anyone.
+  await worker.process(inboundJob(f, 'START'));
+  const lead = await system(() =>
+    prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+  );
+  expect(lead.optedOutAt).toBeNull();
+  expect(
+    (
+      await system(() =>
+        prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+      )
+    ).aiPaused,
+  ).toBe(true);
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
+});
+
+it.each(['iptal', "stop that, let's negotiate"])(
+  'does not opt out on the ordinary message %p and keeps the AI path (KI-064)',
+  async (body) => {
+    const f = await fixture();
+    await webhook(prisma).process(inboundJob(f, body));
+    const lead = await system(() =>
+      prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+    );
+    expect(lead.optedOutAt).toBeNull();
+    expect(
+      await system(() =>
+        prisma.auditLog.count({
+          where: { organizationId: f.org.id, action: 'consent.opt_out' },
+        }),
+      ),
+    ).toBe(0);
+    expect(
+      (
+        await system(() =>
+          prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+        )
+      ).aiPaused,
+    ).toBe(false);
+    expect(
+      await system(() =>
+        prisma.outboxEvent.count({
+          where: { organizationId: f.org.id, topic: 'generate-reply' },
+        }),
+      ),
+    ).toBe(1);
+  },
+);
+
+it('opts out once on "STOP." with trailing punctuation (KI-064)', async () => {
+  const f = await fixture();
+  const job = inboundJob(f, 'STOP.');
+  await webhook(prisma).process(job);
+  await webhook(prisma).process(job);
+  expect(
+    (
+      await system(() =>
+        prisma.lead.findUniqueOrThrow({ where: { id: f.lead.id } }),
+      )
+    ).optedOutAt,
+  ).not.toBeNull();
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: { organizationId: f.org.id, action: 'consent.opt_out' },
+      }),
+    ),
+  ).toBe(1);
+});
+
+it('does not re-run follow-up AI actions when the follow-up job is retried (KI-061)', async () => {
+  const f = await fixture();
+  await system(() =>
+    prisma.conversation.update({
+      where: { id: f.conv.id },
+      data: { aiDisclosureSent: true },
+    }),
+  );
+  await system(() => f.message());
+  const followUp = await system(() =>
+    prisma.scheduledFollowUp.create({
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        type: 'AI_SCHEDULED',
+        scheduledAt: new Date(Date.now() - 1000),
+      },
+    }),
+  );
+  const executeActions = jest.fn().mockResolvedValue({
+    executed: 2,
+    rejected: 0,
+    failed: 0,
+    outcomes: [
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+      { status: 'EXECUTED', retryable: false, reasonCode: 'OK' },
+    ],
+  });
+  let failCreate = true;
+  const database = new Proxy(prisma, {
+    get(target, key) {
+      if (key === 'message')
+        return new Proxy((target as any).message, {
+          get(model, method) {
+            if (method === 'createMany' && failCreate)
+              return () => {
+                failCreate = false;
+                return Promise.reject(
+                  new Error('synthetic crash after follow-up actions'),
+                );
+              };
+            return model[method];
+          },
+        });
+      return (target as any)[key];
+    },
+  });
+  const sendTextMessage = jest
+    .fn()
+    .mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const worker = new FollowUpProcessor(
+    database,
+    {} as any,
+    { broadcastNewMessage: jest.fn() } as any,
+    { executeActions } as any,
+    { send: jest.fn() } as any,
+    new DeliveryAuthService(prisma),
+    new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+      sendTextMessage,
+    } as any),
+    {
+      generateReply: async () => ({
+        replyText: 'Synthetic follow-up',
+        actions: [
+          { type: 'NOTIFY_AGENT', payload: '{}' },
+          {
+            type: 'SCHEDULE_FOLLOW_UP',
+            payload: JSON.stringify({
+              scheduledAt: new Date(Date.now() + 86_400_000).toISOString(),
+            }),
+          },
+        ],
+      }),
+    } as any,
+  );
+  const job = { data: { followUpId: followUp.id } } as any;
+  await expect(worker.process(job)).rejects.toThrow(
+    'synthetic crash after follow-up actions',
+  );
+  await worker.process(job); // BullMQ retry
+  expect(executeActions).toHaveBeenCalledTimes(1);
+  expect(sendTextMessage).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await system(() =>
+        prisma.scheduledFollowUp.findUniqueOrThrow({
+          where: { id: followUp.id },
+        }),
+      )
+    ).status,
+  ).toBe('SENT');
+  // The claim row is keyed by the follow-up, never by an AI-reply batch key.
+  const claim = await system(() =>
+    prisma.auditLog.findFirstOrThrow({
+      where: { organizationId: f.org.id, action: 'ai.actions_executed' },
+    }),
+  );
+  expect((claim.metadata as any).batchKey).toBe(`followUp-${followUp.id}`);
 });

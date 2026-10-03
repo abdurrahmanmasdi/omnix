@@ -40,4 +40,15 @@ export JWT_REFRESH_EXPIRATION=7d
 mapped_port="$(docker port "$container_name" 5432/tcp)"
 export UPGRADE_TEST_ADMIN_URL="postgresql://postgres:synthetic-test-only@127.0.0.1:${mapped_port##*:}/postgres"
 export INTEGRATION_CREDENTIAL_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')"
+# Synthetic values for every variable the startup schema requires (src/config/env.validation.ts).
+# Suites point DATABASE_URL at their own disposable database before connecting.
+export DATABASE_URL="$UPGRADE_TEST_ADMIN_URL"
+export META_APP_SECRET=synthetic-e2e-meta-app-secret
+export META_VERIFY_TOKEN=synthetic-e2e-verify-token
+export INTERNAL_RPC_SECRET=synthetic-e2e-rpc-secret
+export FRONTEND_URL=http://localhost:3001
+export PYTHON_SERVER_URL=localhost:50051
+# Loopback only: plaintext gRPC with the explicit private-network acknowledgement (KI-002).
+export INTERNAL_GRPC_TLS=disabled
+export INTERNAL_GRPC_PRIVATE_NETWORK=true
 npx jest --config test/jest-e2e.json "${1:-credential-upgrade.e2e-spec.ts}" --runInBand --watchman=false

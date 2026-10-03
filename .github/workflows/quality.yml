@@ -9,13 +9,15 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: main
+        default: 14ff355f3c6df1b159f7f137514259f43bf5a162
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
-        default: main
+        default: 9700405cd3837f70b8e1784f89aa72ee7ca55b79
 jobs:
   quality:
+    # Environment admission alone cannot distinguish same-repo PRs from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: ci-private-peers
     steps:
@@ -35,14 +37,15 @@ jobs:
         with:
           repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          ref: ${{ inputs.frontend_ref || 'main' }}
+          # Pin the reviewed WP-D frontend; Python retains the compatible Stage 1 contract.
+          ref: ${{ inputs.frontend_ref || '14ff355f3c6df1b159f7f137514259f43bf5a162' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: abdurrahmanmasdi/Omnix_py
           path: python-ai-service-v2
-          ref: ${{ inputs.python_ref || 'main' }}
+          ref: ${{ inputs.python_ref || '9700405cd3837f70b8e1784f89aa72ee7ca55b79' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -62,4 +65,5 @@ jobs:
       - name: Run quality gate
         run: bash backend-v2/scripts/quality-gate.sh
       - name: Run database acceptance suite
-        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|inbound-claim|media-consent|auth-refresh-concurrency'
+        # Every disposable-DB suite (KI-016). app.e2e/auth.e2e are legacy scaffolding (KI-066), not run.
+        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|permission-matrix|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|credential-upgrade|runtime-role-passwords|health'

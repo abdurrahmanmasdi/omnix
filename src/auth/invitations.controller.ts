@@ -1,5 +1,10 @@
-import { Body, Controller, HttpCode, Post, UseGuards, Req } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { InvitationsService } from './invitations.service';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { IssueClinicInvitationDto } from './dto/issue-clinic-invitation.dto';
@@ -10,13 +15,14 @@ import { PermissionsGuard } from './guards/permissions.guard';
 import { RequirePermissions } from './decorators/require-permissions.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthenticatedUser } from './decorators/current-user.decorator';
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
 @UseGuards(CustomThrottlerGuard)
 @Throttle({ auth: { limit: 10, ttl: 60000 } })
+@SkipThrottle({ loginIp: true, session: true })
 export class InvitationsController {
   constructor(private readonly invitations: InvitationsService) {}
 
@@ -52,7 +58,11 @@ export class InvitationsController {
     if (!user.organizationId) {
       throw new Error('User does not belong to an organization');
     }
-    return this.invitations.issueClinicInvitation(dto, user.id, user.organizationId);
+    return this.invitations.issueClinicInvitation(
+      dto,
+      user.id,
+      user.organizationId,
+    );
   }
 
   @Post('invitations/clinic/accept')
