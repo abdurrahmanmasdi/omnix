@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   OnModuleInit,
   Injectable,
   InternalServerErrorException,
@@ -17,6 +18,11 @@ import {
 } from './credential-cipher';
 
 import { AuditService } from '../audit/audit.service';
+
+const VERIFIABLE_STATUSES: CredentialStatus[] = [
+  CredentialStatus.ACTIVE,
+  CredentialStatus.ERROR,
+];
 
 @Injectable()
 export class CredentialsService implements OnModuleInit {
@@ -136,8 +142,9 @@ export class CredentialsService implements OnModuleInit {
     valid: boolean,
     error?: string,
   ) {
+    // Verification only moves ACTIVE ⇄ ERROR; ROTATED and REVOKED are final.
     await this.prisma.credential.updateMany({
-      where: { id, organizationId },
+      where: { id, organizationId, status: { in: VERIFIABLE_STATUSES } },
       data: valid
         ? {
             status: CredentialStatus.ACTIVE,
@@ -164,8 +171,13 @@ export class CredentialsService implements OnModuleInit {
     if (!credential) throw new NotFoundException('Credential not found');
 
     if (action === 'CLEAR_ERROR') {
-      await this.prisma.credential.update({
-        where: { id },
+      if (credential.status !== CredentialStatus.ERROR) {
+        throw new ConflictException(
+          'Only a credential in ERROR can be cleared',
+        );
+      }
+      await this.prisma.credential.updateMany({
+        where: { id, organizationId, status: CredentialStatus.ERROR },
         data: { status: CredentialStatus.ACTIVE, lastError: null },
       });
       await this.audit.record({
