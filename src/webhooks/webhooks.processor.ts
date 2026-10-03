@@ -19,11 +19,10 @@ import { AuditService } from '../audit/audit.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 import { mediaConsentRequestText, patientLanguage } from './patient-copy';
+import { PatientCommand, patientCommand } from './patient-commands';
 import { alertConversationStaff } from '../notifications/conversation-staff-alert';
 
 const CONSENT_REQUEST_PREFIX = 'consent-request-';
-
-type PatientCommand = 'STOP' | 'START' | 'I_CONSENT' | 'WITHDRAW_CONSENT';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost {
@@ -42,29 +41,6 @@ export class WebhooksProcessor extends WorkerHost {
     private readonly grpcClient: GrpcClientService,
   ) {
     super();
-  }
-
-  // Normalized, whole-message commands. Keep this intentionally conservative:
-  // ordinary uses of words such as “stop by tomorrow” must not suppress consent.
-  private isOptOut(text: string): boolean {
-    const normalized = text.trim().toLocaleLowerCase();
-    return /^(stop|unsubscribe|cancel|end|quit|opt[ -]?out|no messages|no more messages|nicht mehr|abmelden|stopp|iptal|mesaj gönderme|mesaj gonderme|artık mesaj|artik mesaj|parar|basta|detener|cancelar)$/iu.test(
-      normalized,
-    );
-  }
-
-  // Only an explicit re-opt-in clears a STOP; an ordinary new message does not.
-  private isOptIn(text: string): boolean {
-    return /^(start|başla|basla)$/u.test(text.trim().toLowerCase());
-  }
-
-  private patientCommand(text: string): PatientCommand | null {
-    if (this.isOptOut(text)) return 'STOP';
-    if (this.isOptIn(text)) return 'START';
-    const upper = text.trim().toUpperCase();
-    if (upper === 'I CONSENT') return 'I_CONSENT';
-    if (upper === 'WITHDRAW CONSENT') return 'WITHDRAW_CONSENT';
-    return null;
   }
 
   /**
@@ -539,7 +515,7 @@ export class WebhooksProcessor extends WorkerHost {
               // skipped as a duplicate, so effects committed separately could
               // be lost for good (KI-022).
               let wpMessage;
-              const command = this.patientCommand(messageContent);
+              const command = patientCommand(messageContent);
               const isStop = command === 'STOP';
               const shouldGenerate =
                 !isStop &&
