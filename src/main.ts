@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { parseFrontendOrigins } from './config/frontend-origins';
+import { isProduction } from './config/runtime';
 import cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -45,16 +46,18 @@ async function bootstrap() {
     }),
   );
 
-  // --- Swagger Configuration ---
-  const config = new DocumentBuilder()
-    .setTitle('Lean Commerce API')
-    .setDescription('The AI Sales Agent CRM API Documentation')
-    .setVersion('1.0')
-    .addBearerAuth() // This adds a "Authorize" button to the UI later!
-    .build();
+  // --- Swagger Configuration --- (not served in production: KI-033)
+  if (!isProduction()) {
+    const config = new DocumentBuilder()
+      .setTitle('Lean Commerce API')
+      .setDescription('The AI Sales Agent CRM API Documentation')
+      .setVersion('1.0')
+      .addBearerAuth() // This adds a "Authorize" button to the UI later!
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document); // Hosts the docs at http://localhost:3000/api
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document); // Hosts the docs at http://localhost:3000/api
+  }
 
   await app.listen(
     app.get(ConfigService).get<number>('PORT') ?? 3001,

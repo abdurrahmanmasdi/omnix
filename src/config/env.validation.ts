@@ -30,6 +30,7 @@ export interface AppEnv {
   INTERNAL_GRPC_TLS_CA_B64?: string;
   INTERNAL_GRPC_TLS_SERVER_NAME?: string;
   PATIENT_MEDIA_RETENTION_DAYS?: number;
+  METRICS_TOKEN?: string;
 }
 
 const NODE_ENVS: NodeEnv[] = ['development', 'test', 'production'];
@@ -166,6 +167,11 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
   const INTERNAL_GRPC_TLS =
     text('INTERNAL_GRPC_TLS') === 'disabled' ? 'disabled' : 'required';
 
+  // Optional: without it /metrics is disabled in production (KI-033).
+  const METRICS_TOKEN = text('METRICS_TOKEN');
+  if (METRICS_TOKEN && METRICS_TOKEN.length < 32)
+    problems.push('METRICS_TOKEN must be at least 32 characters');
+
   const retentionRaw = text('PATIENT_MEDIA_RETENTION_DAYS');
   const PATIENT_MEDIA_RETENTION_DAYS =
     retentionRaw === undefined ? undefined : Number(retentionRaw);
@@ -213,5 +219,6 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     INTERNAL_GRPC_TLS_CA_B64: text('INTERNAL_GRPC_TLS_CA_B64'),
     INTERNAL_GRPC_TLS_SERVER_NAME: text('INTERNAL_GRPC_TLS_SERVER_NAME'),
     PATIENT_MEDIA_RETENTION_DAYS,
+    METRICS_TOKEN,
   };
 }
