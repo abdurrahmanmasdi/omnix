@@ -23,13 +23,17 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
+
+// Session upkeep: own generous per-IP bucket instead of the strict auth/default ones.
+const SESSION_ROUTE = { auth: true, default: true, session: false };
 
 @ApiTags('Authentication')
 @Controller('auth')
 @UseGuards(CustomThrottlerGuard)
 @Throttle({ auth: { limit: 10, ttl: 60000 } })
+@SkipThrottle({ loginIp: true, session: true })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -46,6 +50,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @SkipThrottle({ loginIp: false })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log in and receive access/refresh tokens' })
   @ApiResponse({
@@ -75,6 +80,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @SkipThrottle(SESSION_ROUTE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log out and clear cookies' })
   @ApiResponse({
@@ -93,6 +99,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @SkipThrottle(SESSION_ROUTE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using HTTP-only cookie' })
   @ApiResponse({
@@ -170,6 +177,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @SkipThrottle(SESSION_ROUTE)
   @UseGuards(JwtAuthGuard) // 🛡️ THE BOUNCER IS ACTIVE!
   @ApiBearerAuth() // Tells Swagger this route requires a token
   @ApiOperation({ summary: 'Get the currently logged-in user profile' })

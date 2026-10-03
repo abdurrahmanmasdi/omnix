@@ -31,6 +31,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './core/guards/csrf.guard';
+import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
 
 @Module({
   imports: [
@@ -58,11 +59,13 @@ import { CsrfGuard } from './core/guards/csrf.guard';
             ttl: 60000,
             limit: 100,
           },
+          { name: 'auth', ...THROTTLERS.auth },
           {
-            name: 'auth',
-            ttl: 300000,
-            limit: 10,
+            name: 'loginIp',
+            ...THROTTLERS.loginIp,
+            getTracker: (req: Record<string, unknown>) => hashedIp(req),
           },
+          { name: 'session', ...THROTTLERS.session },
         ],
         storage: new ThrottlerStorageRedisService(
           config.get<string>('REDIS_URL'),

@@ -7,6 +7,7 @@ import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { safeDeploy } from '../src/credentials/deploy-cli';
+import cookieParser from 'cookie-parser';
 
 jest.setTimeout(120_000);
 let admin: Client;
@@ -15,12 +16,13 @@ let app: INestApplication;
 
 beforeAll(async () => {
   const url = process.env.UPGRADE_TEST_ADMIN_URL;
-  if (!url || new URL(url).hostname !== '127.0.0.1') throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
+  if (!url || new URL(url).hostname !== '127.0.0.1')
+    throw new Error('ISOLATED_TEST_DATABASE_REQUIRED');
   admin = new Client({ connectionString: url });
   await admin.connect();
   dbName = 'omnidesk_abuse_' + randomUUID().replace(/-/g, '');
   await admin.query(`CREATE DATABASE "${dbName}"`);
-  
+
   const testUrl = new URL(url);
   testUrl.pathname = '/' + dbName;
   process.env.DATABASE_URL = testUrl.toString();
@@ -31,6 +33,7 @@ beforeAll(async () => {
   }).compile();
 
   app = moduleFixture.createNestApplication();
+  app.use(cookieParser()); // as in main.ts
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.init();
 });
@@ -78,5 +81,34 @@ describe('Abuse Controls & Browser Protections (P1-09)', () => {
     }
 
     expect(tooManyCount).toBeGreaterThanOrEqual(1); // At least the 11th request should be 429
+  });
+
+  it('gives refresh and me their own generous per-IP bucket (clinic NAT)', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 15; i++) {
+      statuses.push(
+        (
+          await request(app.getHttpServer() as Server)
+            .post('/auth/refresh')
+            .send({})
+        ).status,
+      );
+      statuses.push(
+        (await request(app.getHttpServer() as Server).get('/auth/me')).status,
+      );
+    }
+    expect(statuses).not.toContain(429);
+    expect(new Set(statuses)).toEqual(new Set([401]));
+  });
+
+  it('caps logins per IP across different emails', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) {
+      const response = await request(app.getHttpServer() as Server)
+        .post('/auth/login')
+        .send({ email: `spray-${i}@example.com`, password: 'password-spray' });
+      statuses.push(response.status);
+    }
+    expect(statuses).toContain(429);
   });
 });
