@@ -62,9 +62,11 @@ import { CsrfGuard } from './core/guards/csrf.guard';
             name: 'auth',
             ttl: 300000,
             limit: 10,
-          }
+          },
         ],
-        storage: new ThrottlerStorageRedisService(config.get<string>('REDIS_URL')),
+        storage: new ThrottlerStorageRedisService(
+          config.get<string>('REDIS_URL'),
+        ),
       }),
     }),
     LoggerModule,

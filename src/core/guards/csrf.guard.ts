@@ -1,18 +1,23 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Request } from 'express';
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    
+
     // We only care about state-changing methods
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
       return true;
     }
 
     const origin = request.headers.origin;
-    
+
     // If no origin is provided and the client is a browser, they are doing a simple form post.
     // In our modern SPA, all requests should be XHR/fetch and have an Origin header.
     // If Origin is missing, we could reject it, but let's just allow if there's no Origin?
@@ -21,7 +26,9 @@ export class CsrfGuard implements CanActivate {
     // So we just need to ensure the Origin (if present) is allowed.
 
     const allowedOrigins = process.env.FRONTEND_URL
-      ? process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
+      ? process.env.FRONTEND_URL.split(',').map((url) =>
+          url.trim().replace(/\/$/, ''),
+        )
       : ['http://localhost:3001'];
 
     if (origin && !allowedOrigins.includes(origin)) {

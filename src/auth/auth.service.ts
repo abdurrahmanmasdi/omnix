@@ -56,12 +56,13 @@ export class AuthService {
     if (!isPasswordValid)
       throw new UnauthorizedException('Invalid credentials');
 
-
     let organizationId: string | null = null;
     let roleId: string | null = null;
 
     if (loginDto.organizationId) {
-      const requestedMembership = user.memberships.find(m => m.organizationId === loginDto.organizationId);
+      const requestedMembership = user.memberships.find(
+        (m) => m.organizationId === loginDto.organizationId,
+      );
       if (!requestedMembership) {
         throw new UnauthorizedException('Membership not found or inactive');
       }
@@ -71,7 +72,6 @@ export class AuthService {
       organizationId = user.memberships[0].organizationId;
       roleId = user.memberships[0].roleId;
     }
-
 
     return this.generateTokens(
       user.id,
@@ -85,17 +85,23 @@ export class AuthService {
     );
   }
 
-
   async issueRecovery(email: string, operator: string) {
-    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
     if (!user || user.deletedAt || user.status !== 'ACTIVE') {
-      throw new Error('Account is not active or suspended. Cannot issue recovery token.');
+      throw new Error(
+        'Account is not active or suspended. Cannot issue recovery token.',
+      );
     }
     const tokenBytes = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(`PASSWORD_RECOVERY:${tokenBytes}`).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(`PASSWORD_RECOVERY:${tokenBytes}`)
+      .digest('hex');
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
-    
+
     await this.prisma.accountInvitation.create({
       data: {
         userId: user.id,
@@ -103,76 +109,100 @@ export class AuthService {
         purpose: 'PASSWORD_RECOVERY',
         issuedBy: operator,
         expiresAt,
-      }
+      },
     });
     return { token: tokenBytes };
   }
 
-
   async consumeRecovery(dto: ConsumeRecoveryDto) {
-    const tokenHash = crypto.createHash('sha256').update(`PASSWORD_RECOVERY:${dto.token}`).digest('hex');
-    
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(`PASSWORD_RECOVERY:${dto.token}`)
+      .digest('hex');
+
     await tenantStorage.run({ isSystemBypass: true }, async () => {
       await this.prisma.$transaction(async (tx) => {
         const invitation = await tx.accountInvitation.findUnique({
           where: { tokenHash },
-          include: { user: true }
+          include: { user: true },
         });
-        if (!invitation || invitation.purpose !== 'PASSWORD_RECOVERY' || invitation.consumedAt || invitation.revokedAt || invitation.expiresAt < new Date()) {
-          throw new UnauthorizedException('Recovery token is invalid, expired, or already used.');
+        if (
+          !invitation ||
+          invitation.purpose !== 'PASSWORD_RECOVERY' ||
+          invitation.consumedAt ||
+          invitation.revokedAt ||
+          invitation.expiresAt < new Date()
+        ) {
+          throw new UnauthorizedException(
+            'Recovery token is invalid, expired, or already used.',
+          );
         }
         if (invitation.user.deletedAt || invitation.user.status !== 'ACTIVE') {
           throw new UnauthorizedException('Account is suspended or deleted.');
         }
-        
+
         const password_hash = await bcrypt.hash(dto.newPassword, 12);
-        
+
         await tx.user.update({
           where: { id: invitation.userId },
           data: {
             password_hash,
-            securityVersion: { increment: 1 }
-          }
+            securityVersion: { increment: 1 },
+          },
         });
-        
+
         await tx.session.updateMany({
           where: { userId: invitation.userId, isRevoked: false },
-          data: { isRevoked: true, revokedAt: new Date(), revokedReason: 'Password Reset' }
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            revokedReason: 'Password Reset',
+          },
         });
-        
+
         await tx.accountInvitation.update({
           where: { id: invitation.id },
-          data: { consumedAt: new Date() }
+          data: { consumedAt: new Date() },
         });
-        
+
         const activeMemberships = await tx.organizationMembership.findMany({
-          where: { userId: invitation.userId, status: 'ACTIVE', deletedAt: null }
+          where: {
+            userId: invitation.userId,
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
         });
-        
+
         if (activeMemberships.length > 0) {
           await tx.auditLog.createMany({
-            data: activeMemberships.map(m => ({
+            data: activeMemberships.map((m) => ({
               organizationId: m.organizationId,
               action: 'ACCOUNT_RECOVERY',
               actor: invitation.userId,
-              metadata: { issuedBy: invitation.issuedBy }
-            }))
+              metadata: { issuedBy: invitation.issuedBy },
+            })),
           });
         }
       });
     });
   }
 
-  async refreshTokens(refreshToken: string, userAgent?: string, ip?: string, requestedOrganizationId?: string) {
+  async refreshTokens(
+    refreshToken: string,
+    userAgent?: string,
+    ip?: string,
+    requestedOrganizationId?: string,
+  ) {
     let payload: { familyId?: string; nonce?: string; org?: string | null };
     try {
       // 1. Verify the token signature mathematically
-      payload = this.jwtService.verify<{ familyId?: string; nonce?: string; org?: string | null }>(
-        refreshToken,
-        {
-          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        },
-      );
+      payload = this.jwtService.verify<{
+        familyId?: string;
+        nonce?: string;
+        org?: string | null;
+      }>(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -243,10 +273,13 @@ export class AuthService {
       let organizationId: string | null = null;
       let roleId: string | null = null;
 
-      const targetOrgId = requestedOrganizationId !== undefined ? requestedOrganizationId : org;
+      const targetOrgId =
+        requestedOrganizationId !== undefined ? requestedOrganizationId : org;
 
       if (targetOrgId) {
-        const mem = user.memberships.find(m => m.organizationId === targetOrgId);
+        const mem = user.memberships.find(
+          (m) => m.organizationId === targetOrgId,
+        );
         if (mem) {
           organizationId = mem.organizationId;
           roleId = mem.roleId;
@@ -254,7 +287,10 @@ export class AuthService {
           return { error: 'Requested organization not found or inactive' };
         }
         // If they didn't request a new one and the old one is inactive, we fall back to null
-      } else if (user.memberships.length === 1 && requestedOrganizationId === undefined) {
+      } else if (
+        user.memberships.length === 1 &&
+        requestedOrganizationId === undefined
+      ) {
         organizationId = user.memberships[0].organizationId;
         roleId = user.memberships[0].roleId;
       }
@@ -351,8 +387,11 @@ export class AuthService {
     txClient?: any,
   ) {
     const tx = txClient || this.prisma;
-    const userRow = await tx.user.findUnique({ where: { id: userId }, select: { securityVersion: true } });
-    
+    const userRow = await tx.user.findUnique({
+      where: { id: userId },
+      select: { securityVersion: true },
+    });
+
     const payload = {
       sub: userId,
       email,
