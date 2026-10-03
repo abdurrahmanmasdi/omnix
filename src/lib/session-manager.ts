@@ -53,6 +53,10 @@ export function installSession(accessToken: string, user: SessionUser): void {
     disconnectSocket();
   }
 
+  if (identityChanged) {
+    publishSessionEvent({ type: 'identity', id: user.id, organizationId: user.organizationId });
+  }
+
   // Store new credentials
   useAuthStore.getState().setAuth(accessToken, user);
 }
@@ -65,7 +69,7 @@ export function installSession(accessToken: string, user: SessionUser): void {
  * Uses location.replace() so the protected page is not in the
  * browser's back-navigation stack.
  */
-export async function resetSession(): Promise<void> {
+export async function resetSession(broadcast = true): Promise<void> {
   if (resetInProgress) return resetInProgress;
 
   resetInProgress = (async () => {
@@ -73,9 +77,11 @@ export async function resetSession(): Promise<void> {
       // 1. Poison all in-flight requests immediately
       incrementSessionGeneration();
 
-      // 2. Cancel running queries
+      if (broadcast) publishSessionEvent({ type: 'logout' });
+
+      // Clear visible state synchronously, even if cancellation is slow.
       const qc = getQueryClient();
-      await qc.cancelQueries();
+      const cancellation = qc.cancelQueries();
 
       // 3. Clear query and mutation caches
       qc.getQueryCache().clear();
@@ -86,6 +92,8 @@ export async function resetSession(): Promise<void> {
 
       // 5. Clear Zustand auth + localStorage
       useAuthStore.getState().logout();
+
+      await cancellation;
 
       // 6. Hard navigate — replace() prevents back-button to protected page
       if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
@@ -98,3 +106,60 @@ export async function resetSession(): Promise<void> {
 
   return resetInProgress;
 }
+
+
+// Only invalidations and identity IDs cross tabs. Tokens stay in memory.
+type SessionEvent = { type: 'logout' } | {
+  type: 'identity'; id: string; organizationId: string | null;
+};
+const SESSION_EVENT_KEY = 'omnix-session-event';
+let publishSessionEvent: (event: SessionEvent) => void = () => {};
+let stopSessionSync: (() => void) | null = null;
+
+export function startSessionSync(): () => void {
+  if (stopSessionSync) return stopSessionSync;
+  if (typeof window === 'undefined') return () => {};
+
+  const receive = (data: unknown) => {
+    if (!data || typeof data !== 'object') return;
+    const event = data as Partial<SessionEvent>;
+    if (event.type === 'identity') {
+      if (typeof event.id !== 'string' ||
+          (event.organizationId !== null && typeof event.organizationId !== 'string')) return;
+      const current = useAuthStore.getState().user;
+      // A cold tab hydrating the shared cookie must not log out the same identity.
+      if (current?.id === event.id && current.organizationId === event.organizationId) return;
+    } else if (event.type !== 'logout') return;
+    void resetSession(false);
+  };
+
+  let channel: BroadcastChannel | null = null;
+  try {
+    if (typeof BroadcastChannel !== 'undefined') channel = new BroadcastChannel('omnix-session');
+  } catch { /* Storage events work when the channel is unavailable. */ }
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== SESSION_EVENT_KEY || !event.newValue) return;
+    try { receive(JSON.parse(event.newValue)); } catch { /* Ignore malformed data. */ }
+  };
+  if (channel) channel.onmessage = (event) => receive(event.data);
+  else window.addEventListener('storage', onStorage);
+
+  publishSessionEvent = (event) => {
+    if (channel) channel.postMessage(event);
+    else {
+      try {
+        window.localStorage.setItem(SESSION_EVENT_KEY, JSON.stringify({ ...event, nonce: crypto.randomUUID() }));
+        window.localStorage.removeItem(SESSION_EVENT_KEY);
+      } catch { /* Storage can be disabled by the browser. */ }
+    }
+  };
+  stopSessionSync = () => {
+    if (channel) { channel.onmessage = null; channel.close(); }
+    window.removeEventListener('storage', onStorage);
+    publishSessionEvent = () => {};
+    stopSessionSync = null;
+  };
+  return stopSessionSync;
+}
+
+startSessionSync();
