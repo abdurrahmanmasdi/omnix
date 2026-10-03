@@ -25,3 +25,7 @@ npm-debug.log*
 # Playwright output (local runs)
 test-results/
 playwright-report/
+
+playwright/.auth/
+
+.pytest_cache/
