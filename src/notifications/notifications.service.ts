@@ -21,6 +21,9 @@ interface NotificationDelegate {
   }): Promise<Prisma.BatchPayload>;
 }
 
+export const GENERIC_NOTIFICATION_TITLE = 'New notification';
+export const GENERIC_NOTIFICATION_BODY = 'Open the inbox to view details.';
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -33,6 +36,45 @@ export class NotificationsService {
     organizationId: string,
     userId: string,
     limit = 20,
+  ): Promise<Notification[]> {
+    const rows = await this.findVisibleNotifications(
+      organizationId,
+      userId,
+      limit,
+    );
+    return this.generalizeForCurrentGrants(organizationId, userId, rows);
+  }
+
+  /**
+   * Stored title/body were generalized at write time against the grants the
+   * recipient held then. Grants can be revoked afterwards, so the text is
+   * generalized again at read time against the grants held now (KI-011).
+   */
+  private async generalizeForCurrentGrants(
+    organizationId: string,
+    userId: string,
+    rows: Notification[],
+  ): Promise<Notification[]> {
+    if (rows.length === 0) return rows;
+    const [mayReadPii, mayReadMessages] = await Promise.all([
+      this.permissionService.has(userId, organizationId, 'leads:read:pii'),
+      this.permissionService.has(userId, organizationId, 'leads:read:messages'),
+    ]);
+    return rows.map((row) => {
+      const hideBody =
+        !mayReadPii || (row.type === 'NEW_MESSAGE' && !mayReadMessages);
+      return {
+        ...row,
+        title: mayReadPii ? row.title : GENERIC_NOTIFICATION_TITLE,
+        body: hideBody ? GENERIC_NOTIFICATION_BODY : row.body,
+      };
+    });
+  }
+
+  private async findVisibleNotifications(
+    organizationId: string,
+    userId: string,
+    limit: number,
   ): Promise<Notification[]> {
     const canReadAll = await this.permissionService.has(
       userId,
@@ -51,8 +93,10 @@ export class NotificationsService {
       });
     }
 
-    return await tenantStorage.run({ isSystemBypass: true, organizationId }, async () => {
-      return await this.prisma.$queryRaw<Notification[]>`
+    return await tenantStorage.run(
+      { isSystemBypass: true, organizationId },
+      async () => {
+        return await this.prisma.$queryRaw<Notification[]>`
         SELECT n.*
         FROM notifications n
         WHERE n."organizationId" = ${organizationId}::uuid
@@ -85,7 +129,8 @@ export class NotificationsService {
         ORDER BY n."createdAt" DESC
         LIMIT ${limit}
       `;
-    });
+      },
+    );
   }
 
   // Used by the Frontend to get the red bubble count
@@ -108,8 +153,10 @@ export class NotificationsService {
       });
     }
 
-    return await tenantStorage.run({ isSystemBypass: true, organizationId }, async () => {
-      const result = await this.prisma.$queryRaw<{ count: bigint }[]>`
+    return await tenantStorage.run(
+      { isSystemBypass: true, organizationId },
+      async () => {
+        const result = await this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT COUNT(*) as count
         FROM notifications n
         WHERE n."organizationId" = ${organizationId}::uuid
@@ -141,8 +188,9 @@ export class NotificationsService {
             )
           )
       `;
-      return Number(result[0].count);
-    });
+        return Number(result[0].count);
+      },
+    );
   }
 
   // When the user clicks the bell icon or a specific notification

@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationType } from '@prisma/client';
 import { PermissionService } from '../auth/permission.service';
+import {
+  GENERIC_NOTIFICATION_BODY,
+  GENERIC_NOTIFICATION_TITLE,
+} from './notifications.service';
 
 export interface SendNotificationDto {
   organizationId: string;
@@ -98,11 +102,11 @@ export class NotificationEmitterService {
       data.organizationId,
       'leads:read:messages',
     );
-    const title = mayReadPii ? data.title : 'New notification';
+    const title = mayReadPii ? data.title : GENERIC_NOTIFICATION_TITLE;
     const body =
       mayReadPii && (data.type !== 'NEW_MESSAGE' || mayReadMessages)
         ? data.body
-        : 'Open the inbox to view details.';
+        : GENERIC_NOTIFICATION_BODY;
     // 1. Save to Database (Persistence)
     return this.prisma.$transaction(async (tx) => {
       const notification = await tx.notification.create({
@@ -120,7 +124,10 @@ export class NotificationEmitterService {
         data: {
           organizationId: data.organizationId,
           topic: 'notification.broadcast',
-          payload: { organizationId: data.organizationId, notificationId: notification.id },
+          payload: {
+            organizationId: data.organizationId,
+            notificationId: notification.id,
+          },
         },
       });
       return notification;
