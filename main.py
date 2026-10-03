@@ -36,11 +36,11 @@ async def lifespan(app: FastAPI):
         # Note: server certificates should be loaded appropriately in production
         # This is a placeholder for the explicit production transport
         server_credentials = grpc.ssl_server_credentials([])
-        _grpc_server.add_secure_port('[::]:50051', server_credentials)
+        _grpc_server.add_secure_port(f'[::]:{settings.GRPC_PORT}', server_credentials)
     else:
-        _grpc_server.add_insecure_port('[::]:50051')
+        _grpc_server.add_insecure_port(f'[::]:{settings.GRPC_PORT}')
     await _grpc_server.start()
-    logger.info("gRPC Server running on port 50051")
+    logger.info("gRPC Server running on port %d", settings.GRPC_PORT)
     
     yield
     

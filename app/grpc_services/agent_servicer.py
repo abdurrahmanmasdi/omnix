@@ -136,7 +136,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 
                 openai_client = LLMFactory.get_async_openai_client()
                 transcription = await openai_client.audio.transcriptions.create(
-                    model="gpt-4o-mini-transcribe", 
+                    model=settings.TRANSCRIPTION_MODEL,
                     file=audio_file
                 )
                 
