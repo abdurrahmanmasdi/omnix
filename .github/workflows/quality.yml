@@ -66,4 +66,4 @@ jobs:
         run: bash backend-v2/scripts/quality-gate.sh
       - name: Run database acceptance suite
         # Every disposable-DB suite (KI-016). app.e2e/auth.e2e are legacy scaffolding (KI-066), not run.
-        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|credential-upgrade|runtime-role-passwords|health'
+        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|permission-matrix|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|credential-upgrade|runtime-role-passwords|health'

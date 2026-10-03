@@ -1,16 +1,42 @@
 # Pilot authorization matrix
 
-| Data or event                           | Required access                                                                                               | Current response                                                            |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Lead list/detail                        | `leads:view` and either `leads:read:all` or current assignment                                                | Explicit public lead fields only                                            |
-| Phone, email, native name, social links | Visible lead plus `leads:read:pii`                                                                            | Phone/email masked and other fields null without grant                      |
-| Email filter                            | `leads:read:pii`                                                                                              | 400 when absent; disallowed filter fields fail closed                       |
-| Conversation list                       | `view_conversations` and all-leads grant or current lead assignment                                           | Explicit conversation/lead fields; no external contact ID without PII grant |
-| Message history                         | Visible conversation plus `leads:read:messages`                                                               | 403 without grant; preview omitted without grant                            |
-| Live lead/conversation/message event    | Active user, active membership, `view_conversations`, current visibility                                      | Grants rechecked at emission; PII and content redacted before emit          |
-| Persisted notification                  | Active recipient membership, `notifications:view`, current record visibility for lead/conversation references | Title/body generalized when PII or message grant is missing                 |
-| Live notification                       | Active recipient membership and `notifications:view`                                                          | Generic invalidation only; details fetched through HTTP                     |
+Personas used by the tests, each in two synthetic clinics (A and B):
 
-There is no lead export endpoint in the current backend. The `LeadsService` filter allowlist excludes phone and allows email only with the PII grant. `ActionExecutorService` now creates handoff notifications only for the assigned agent or staff with `leads:read:all` and notification access, honoring role overrides.
+- **Owner** — every read grant plus `leads:manage` and `notifications:manage`.
+- **Coordinator** — `leads:view`, `leads:read:all`, `leads:read:pii`, `leads:read:messages`, `view_conversations`, `notifications:view`.
+- **Restricted staff** — `leads:view`, `view_conversations`, `notifications:view` only: assigned records only, no PII, no message history.
+- **Revoked user** — a token that was valid when issued, whose membership was removed, whose account is suspended, or whose security version was bumped.
 
-This matrix records the implemented checks, not a completed S07 acceptance gate. Current tests cover two organizations, list/detail/history permissions, recipient denial and redaction, plus mocked mid-session socket revocation. Still needed: two-staff connected-socket database acceptance, current-visibility filtering when reading older persisted notifications after reassignment, and a review of every notification producer and frontend rendering path. The periodic socket sweep remains a fallback; event emission rechecks access immediately.
+## Rules
+
+| Data or event | Required access | Response without access |
+| --- | --- | --- |
+| Lead list/detail | `leads:view` and either `leads:read:all` or current assignment | List omits other leads; detail 403 (other clinic: 404) |
+| Unassigned records | `leads:read:all` (nobody is "assigned" to them) | Omitted from lists, refused on detail |
+| Phone, email, native name, social links | Visible lead plus `leads:read:pii` | Phone/email masked, other fields null |
+| Email filter | `leads:read:pii` | 400; disallowed filter fields fail closed |
+| Lead change / assignment | `leads:manage` (assignment is the `assignedAgentId` field of the lead update; there is no separate assign permission) | 403 |
+| Lead export | **Not implemented.** No export endpoint exists. `leads:export` is a catalog entry only and gates nothing. | n/a |
+| Conversation list/detail | `view_conversations` and all-leads grant or current lead assignment | Other conversations omitted; no external contact ID without PII grant |
+| Message history and message previews | Visible conversation plus `leads:read:messages` | History 403; preview/summary omitted |
+| Media content | Not a separate rule: media is a message type and follows the message-history rule above; media consent is covered by `media-consent.e2e-spec.ts` | Same as message history |
+| Live lead/conversation/message event (Socket.IO) | Active user, active membership, `view_conversations`, current visibility | Grants rechecked at emission; PII and content redacted; revoked sockets disconnected |
+| Persisted notification | Active recipient membership, `notifications:view`, current visibility of the referenced lead/conversation | Hidden if the record is no longer visible |
+| Persisted notification text | Generalized **at write and again at read** against the grants held now: no `leads:read:pii` → generic title and body; `NEW_MESSAGE` without `leads:read:messages` → generic body (KI-011) | "New notification" / "Open the inbox to view details." |
+| Live notification | Active recipient membership and `notifications:view` | Generic invalidation only; details come over HTTP |
+| Revoked session | Membership active, user ACTIVE, `securityVersion` current (HTTP strategies and socket handshake) | 401 / socket disconnected |
+
+## Where each rule is tested
+
+| Surface | Tests |
+| --- | --- |
+| HTTP, persona matrix over two clinics | `test/permission-matrix.e2e-spec.ts` (added in P1-10, **not yet run**: needs the isolated Postgres) |
+| HTTP, PII/message grants and tenant isolation | `test/tenant-isolation.e2e-spec.ts`, `src/conversations/inbox.spec.ts` |
+| Socket, mid-session revocation and reassignment | `test/authorization-socket.e2e-spec.ts` (database), `src/events/events/events.gateway.spec.ts` (mocked) |
+| Notification read-time generalization | `src/notifications/notifications.service.spec.ts` (unit), persona matrix (database) |
+| Session revocation | `src/auth/jwt.strategy.spec.ts`, `src/auth/jwt-user.strategy.spec.ts`, `test/account-recovery.e2e-spec.ts` |
+| Browser (A→B in one tab, tabs, downgrade, recovery, joining staff, Inbox "no access") | `playwright/` in the frontend repo (see its README; **not yet run**) |
+
+## Still open
+
+Every notification producer has not been reviewed; the periodic socket sweep remains a fallback behind emission-time rechecks. Hosted CI for these suites is unverified (see KI-016).
