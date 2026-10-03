@@ -32,3 +32,27 @@ def test_turn_deadline_must_stay_under_nest_timeout():
         Settings(_env_file=None, TURN_DEADLINE_SECONDS=30, **base)
     assert Settings(_env_file=None, **base).TURN_DEADLINE_SECONDS < 30
 
+
+def test_a_turn_past_the_deadline_hands_off_instead_of_running_on(monkeypatch):
+    monkeypatch.setattr(settings, "TURN_DEADLINE_SECONDS", 0.05)
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_lead_info", AsyncMock(
+        return_value=SimpleNamespace(lead_id="lead-c2", firstName="Synthetic", status="QUALIFYING"),
+    ))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_history", AsyncMock(return_value=[]))
+    monkeypatch.setattr(agent_servicer.DatabaseService, "get_messages_by_ids", AsyncMock(return_value=[
+        SimpleNamespace(id="m1", content="How much are veneers?", type="LEAD_TEXT", mediaUrl=None),
+    ]))
+
+    async def slow_graph(state, config):
+        await asyncio.sleep(5)
+        raise AssertionError("the graph should have been cancelled")
+
+    monkeypatch.setattr(agent_servicer, "agent_app", SimpleNamespace(ainvoke=slow_graph))
+    started = time.monotonic()
+    reply = asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(agent_pb2.AgentRequest(
+        organizationId="org-c2", conversationId="conv-c2", newMessageIds=["m1"],
+    ), None))
+
+    assert time.monotonic() - started < 2
+    assert reply.replyText == handoff_message("technical", "en")
+    assert [action.type for action in reply.actions] == ["HANDOFF_TO_HUMAN"]

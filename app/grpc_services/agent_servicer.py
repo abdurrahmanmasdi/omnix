@@ -1,3 +1,4 @@
+import asyncio
 import json
 import base64
 import io
@@ -99,6 +100,21 @@ def _blocked_reply(reason: str, language: str = "en"):
 
 class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
     async def GenerateReply(self, request, context):
+        # The whole turn (transcription, DB, graph, model calls) must finish before
+        # Nest's 30 s gRPC timeout; past the deadline the patient gets the fixed
+        # handoff instead of an abandoned call that keeps spending (KI-055).
+        turn = {"language": "en"}
+        try:
+            return await asyncio.wait_for(
+                self._generate_reply(request, context, turn),
+                timeout=settings.TURN_DEADLINE_SECONDS,
+            )
+        except TimeoutError:
+            conv_id = getattr(request, "conversationId", None)
+            logger.error("AGENT_TURN_DEADLINE_EXCEEDED conversation_id=%s", conv_id)
+            return _blocked_reply("turn_deadline_exceeded", turn["language"])
+
+    async def _generate_reply(self, request, context, turn):
         if getattr(request, "contractVersion", 0) not in (0, CONTRACT_VERSION):
             return _blocked_reply("incompatible_contract_version")
         org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
@@ -243,6 +259,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
 
             # 3.5 Run Deterministic Input Policy Checks BEFORE graph invocation
             language = detect_language(combined_new_text)
+            turn["language"] = language
             if combined_new_text:
                 input_decision = DeliverySafetyPolicy.check_input(combined_new_text)
                 if not input_decision.allowed:

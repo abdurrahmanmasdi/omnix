@@ -56,7 +56,7 @@ def handoff_kind(reason: str | None) -> str:
     """Map a policy/servicer block reason to the matching patient message."""
     if reason == "human_handoff_request":
         return "human_request"
-    if reason in {"incompatible_contract_version", "system_exception", "tool_failure"}:
+    if reason in {"incompatible_contract_version", "system_exception", "tool_failure", "turn_deadline_exceeded"}:
         return "technical"
     return "cannot_answer"
 
