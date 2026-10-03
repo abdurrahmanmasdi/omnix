@@ -21,6 +21,7 @@ from app.grpc_services.document_servicer import DocumentProcessorServicer
 
 from app.grpc_services.auth_interceptor import AuthInterceptor
 from app.core.config import settings
+from app.core.grpc_transport import server_credentials
 
 _grpc_server = grpc.aio.server(interceptors=[AuthInterceptor(settings.INTERNAL_RPC_SECRET)])
 
@@ -32,13 +33,12 @@ async def lifespan(app: FastAPI):
     # Register the Document Processor
     rag_pb2_grpc.add_DocumentProcessorServicer_to_server(DocumentProcessorServicer(), _grpc_server)
     
-    if settings.ENVIRONMENT == "production":
-        # Note: server certificates should be loaded appropriately in production
-        # This is a placeholder for the explicit production transport
-        server_credentials = grpc.ssl_server_credentials([])
-        _grpc_server.add_secure_port(f'[::]:{settings.GRPC_PORT}', server_credentials)
-    else:
+    # INTERNAL_GRPC_TLS decides (not ENVIRONMENT); misconfiguration stops startup.
+    credentials = server_credentials(settings)
+    if credentials is None:
         _grpc_server.add_insecure_port(f'[::]:{settings.GRPC_PORT}')
+    else:
+        _grpc_server.add_secure_port(f'[::]:{settings.GRPC_PORT}', credentials)
     await _grpc_server.start()
     logger.info("gRPC Server running on port %d", settings.GRPC_PORT)
     

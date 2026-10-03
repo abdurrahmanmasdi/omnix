@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     CHEAP_TEMPERATURE: float = Field(0.0, ge=0.0, le=2.0)
 
     GRPC_PORT: int = Field(50051, ge=1, le=65535)
+    # Internal gRPC transport (KI-002), same switch name as the Nest backend; see
+    # app/core/grpc_transport.py. Material is checked when the server starts.
+    INTERNAL_GRPC_TLS: Literal["required", "disabled"] = "required"
+    INTERNAL_GRPC_PRIVATE_NETWORK: bool = False
+    INTERNAL_GRPC_TLS_CERT: str | None = None
+    INTERNAL_GRPC_TLS_KEY: str | None = None
+    INTERNAL_GRPC_TLS_CERT_B64: str | None = None
+    INTERNAL_GRPC_TLS_KEY_B64: str | None = None
 
     # Every model/embedding/transcription call gets a timeout and bounded retries (KI-055).
     LLM_TIMEOUT_SECONDS: float = Field(20.0, gt=0, le=120)
