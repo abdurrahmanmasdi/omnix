@@ -118,12 +118,7 @@ export class ConversationsService {
   }
 
   async getConversation(organizationId: string, userId: string, id: string) {
-    await this.findAccessibleConversation(organizationId, userId, id);
-    const [canReadPii, canReadMessages] = await Promise.all([
-      this.permissionService.has(userId, organizationId, 'leads:read:pii'),
-      this.permissionService.has(userId, organizationId, 'leads:read:messages'),
-    ]);
-    const conversation = await this.prisma.conversation.findUniqueOrThrow({
+    const conversation = await this.prisma.conversation.findUnique({
       where: { id, organizationId, deletedAt: null },
       include: {
         lead: { include: INBOX_LEAD_INCLUDE },
@@ -134,6 +129,17 @@ export class ConversationsService {
         },
       },
     });
+    if (!conversation || conversation.organizationId !== organizationId)
+      throw new NotFoundException('Conversation not found');
+    const [canReadAll, canReadPii, canReadMessages] = await Promise.all([
+      this.permissionService.has(userId, organizationId, 'leads:read:all'),
+      this.permissionService.has(userId, organizationId, 'leads:read:pii'),
+      this.permissionService.has(userId, organizationId, 'leads:read:messages'),
+    ]);
+    if (!canReadAll && conversation.lead?.assignedAgentId !== userId)
+      throw new ForbiddenException(
+        'You do not have permission to access this conversation',
+      );
     return toConversationResponse(conversation, canReadPii, canReadMessages);
   }
 

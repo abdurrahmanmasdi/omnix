@@ -100,4 +100,60 @@ describe('Inbox reads', () => {
       expect.objectContaining({ cursor: { id: 'cursor' }, skip: 1 }),
     );
   });
+  it('reads current detail independently of the first list page and redacts preview/summary', async () => {
+    const now = new Date('2026-10-03T10:00:00Z');
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: 'beyond-100',
+      organizationId: 'org',
+      aiPaused: true,
+      stateVersion: 15,
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+      lead: {
+        id: 'patient',
+        firstName: 'Synthetic',
+        lastName: 'Patient',
+        phoneNumber: '+905550001234',
+        email: 'synthetic@example.invalid',
+        summary: 'Synthetic private summary',
+        assignedAgentId: 'staff',
+        optedOutAt: now,
+      },
+    });
+    permission.has.mockImplementation(
+      (_user: string, _org: string, key: string) =>
+        Promise.resolve(key === 'leads:read:all'),
+    );
+    const result = await service.getConversation('org', 'staff', 'beyond-100');
+    expect(result).toMatchObject({
+      id: 'beyond-100',
+      aiPaused: true,
+      stateVersion: 15,
+      messages: [],
+      lead: {
+        phoneNumber: '********1234',
+        email: null,
+        summary: null,
+        optedOut: true,
+      },
+    });
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+  });
+  it('rejects detail outside the tenant or assigned-only access', async () => {
+    prisma.conversation.findUnique.mockResolvedValue({
+      organizationId: 'other-org',
+    });
+    await expect(
+      service.getConversation('org', 'staff', 'conv'),
+    ).rejects.toMatchObject({ status: 404 });
+    prisma.conversation.findUnique.mockResolvedValue({
+      organizationId: 'org',
+      lead: { assignedAgentId: 'other-staff' },
+    });
+    permission.has.mockResolvedValue(false);
+    await expect(
+      service.getConversation('org', 'staff', 'conv'),
+    ).rejects.toMatchObject({ status: 403 });
+  });
 });
