@@ -16,6 +16,7 @@ if ! "$python_bin" -c 'import sys; assert sys.version_info[:2] >= (3, 13)' 2>/de
   exit 1
 fi
 python3 "$backend/scripts/check-cross-repo-contracts.py"
+bash "$backend/scripts/check-migration-passwords.sh"
 
 if [[ "${SKIP_INSTALL:-0}" != "1" ]]; then
   (cd "$backend" && npm ci)
