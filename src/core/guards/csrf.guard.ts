@@ -34,8 +34,13 @@ export class CsrfGuard implements CanActivate {
 
     // For extra safety on older browsers, check Referer if Origin is missing
     if (!origin && request.headers.referer) {
-      const referer = new URL(request.headers.referer).origin;
-      if (!allowedOrigins.includes(referer)) {
+      let referer: string | null = null;
+      try {
+        referer = new URL(request.headers.referer).origin;
+      } catch {
+        // A malformed Referer is treated like a foreign one (403), never a 500.
+      }
+      if (!referer || !allowedOrigins.includes(referer)) {
         throw new ForbiddenException('CSRF/Referer check failed');
       }
     }
