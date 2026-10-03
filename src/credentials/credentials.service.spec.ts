@@ -10,6 +10,7 @@ type Where = {
   organizationId: string;
   status?: CredentialStatus | { in: CredentialStatus[] };
 };
+type UpdateArgs = { where: Where; data: { status?: CredentialStatus } };
 
 /** Minimal in-memory credential table honouring the `status` filter of updateMany/update. */
 const fakePrisma = (rows: Row[]) => {
@@ -28,11 +29,13 @@ const fakePrisma = (rows: Row[]) => {
   };
   return {
     credential: {
-      updateMany: jest.fn(({ where, data }) =>
+      updateMany: jest.fn(({ where, data }: UpdateArgs) =>
         Promise.resolve(apply(where, data)),
       ),
-      update: jest.fn(({ where, data }) => Promise.resolve(apply(where, data))),
-      findFirst: jest.fn(({ where }) =>
+      update: jest.fn(({ where, data }: UpdateArgs) =>
+        Promise.resolve(apply(where, data)),
+      ),
+      findFirst: jest.fn(({ where }: { where: Where }) =>
         Promise.resolve(rows.find((row) => matches(row, where)) ?? null),
       ),
     },
