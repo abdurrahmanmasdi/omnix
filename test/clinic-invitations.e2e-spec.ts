@@ -214,6 +214,7 @@ describe('Clinic Invitations (e2e)', () => {
           email: existingUserEmail,
           organizationId: org3.id,
           roleId: role3.id,
+          securityVersion: 1,
         },
         { secret: process.env.JWT_ACCESS_SECRET },
       );

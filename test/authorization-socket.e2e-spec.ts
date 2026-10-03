@@ -117,6 +117,7 @@ async function seedTenant(permissionIds: string[]) {
         email: user1.email,
         organizationId: organization.id,
         roleId: role.id,
+        securityVersion: 1,
       },
       { secret: accessSecret, expiresIn: '15m' },
     );
@@ -126,6 +127,7 @@ async function seedTenant(permissionIds: string[]) {
         email: user2.email,
         organizationId: organization.id,
         roleId: role.id,
+        securityVersion: 1,
       },
       { secret: accessSecret, expiresIn: '15m' },
     );

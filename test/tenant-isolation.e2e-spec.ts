@@ -108,6 +108,7 @@ async function seedTenant(permissionIds: string[]) {
         email: user.email,
         organizationId: organization.id,
         roleId: role.id,
+        securityVersion: 1,
       },
       { secret: accessSecret, expiresIn: '15m' },
     );
@@ -252,6 +253,7 @@ it('denies cross-tenant HTTP writes and forged signed memberships before provide
       email: first.user.email,
       organizationId: second.organization.id,
       roleId: first.role.id,
+      securityVersion: 1,
     },
     { secret: accessSecret, expiresIn: '15m' },
   );

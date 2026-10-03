@@ -12,6 +12,7 @@ import type { JwtPayload } from '../../auth/jwt.strategy';
 import { PermissionService } from '../../auth/permission.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { tenantStorage } from '../../core/tenant/tenant.context';
+import { hasCurrentSecurityVersion } from '../../auth/security-version';
 import {
   toPublicMessageDto,
   toPublicLeadDto,
@@ -87,8 +88,10 @@ export class EventsGateway
         }
 
         if (
-          payload.securityVersion &&
-          user.securityVersion !== payload.securityVersion
+          !hasCurrentSecurityVersion(
+            payload.securityVersion,
+            user.securityVersion,
+          )
         ) {
           throw new Error('Session revoked due to security changes');
         }
@@ -144,7 +147,7 @@ export class EventsGateway
             roleId,
             membershipId: membership.id,
             tokenExp: exp,
-            securityVersion: payload.securityVersion || user.securityVersion,
+            securityVersion: payload.securityVersion,
             canReadAll,
             canReadPii,
             canReadMessages,
@@ -343,9 +346,12 @@ export class EventsGateway
       }),
     ]);
 
-    const payloadSecVer = Number(socket.data?.securityVersion);
     const validSecVer =
-      isNaN(payloadSecVer) || user?.securityVersion === payloadSecVer;
+      !!user &&
+      hasCurrentSecurityVersion(
+        socket.data?.securityVersion,
+        user.securityVersion,
+      );
 
     if (
       !user ||
