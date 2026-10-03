@@ -9,7 +9,7 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: b457f4c31031140ade60ee63948f7551e27c2c7d
+        default: 14ff355f3c6df1b159f7f137514259f43bf5a162
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
@@ -37,8 +37,8 @@ jobs:
         with:
           repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          # Pin the coordinated Stage 1 peers before backend -> Python -> frontend merge.
-          ref: ${{ inputs.frontend_ref || 'b457f4c31031140ade60ee63948f7551e27c2c7d' }}
+          # Pin the reviewed WP-D frontend; Python retains the compatible Stage 1 contract.
+          ref: ${{ inputs.frontend_ref || '14ff355f3c6df1b159f7f137514259f43bf5a162' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/checkout@v4
