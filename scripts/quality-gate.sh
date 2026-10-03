@@ -30,8 +30,16 @@ fi
 
 if [[ "${SKIP_GENERATED_CHECK:-0}" != "1" ]]; then
   (cd "$backend" && \
+    NODE_ENV=test \
     DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic \
     JWT_ACCESS_SECRET=synthetic-ci-only-jwt-secret \
+    JWT_REFRESH_SECRET=synthetic-ci-only-refresh-secret \
+    JWT_ACCESS_EXPIRATION=15m \
+    JWT_REFRESH_EXPIRATION=7d \
+    META_APP_SECRET=synthetic-ci-only-meta-secret \
+    META_VERIFY_TOKEN=synthetic-ci-only-verify-token \
+    INTERNAL_RPC_SECRET=synthetic-ci-only-rpc-secret \
+    INTEGRATION_CREDENTIAL_KEY="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')" \
     REDIS_URL=redis://127.0.0.1:1 \
     npx ts-node scripts/export-openapi.ts "$frontend/openapi.json")
   (cd "$frontend" && ./node_modules/.bin/prettier --write openapi.json && npm run generate:api)
