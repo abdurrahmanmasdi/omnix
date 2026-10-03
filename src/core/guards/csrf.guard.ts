@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { parseFrontendOrigins } from '../../config/frontend-origins';
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
@@ -25,11 +26,7 @@ export class CsrfGuard implements CanActivate {
     // If they spoof it outside a browser, they don't have our cookies anyway, so CSRF isn't an issue.
     // So we just need to ensure the Origin (if present) is allowed.
 
-    const allowedOrigins = process.env.FRONTEND_URL
-      ? process.env.FRONTEND_URL.split(',').map((url) =>
-          url.trim().replace(/\/$/, ''),
-        )
-      : ['http://localhost:3001'];
+    const allowedOrigins = parseFrontendOrigins();
 
     if (origin && !allowedOrigins.includes(origin)) {
       throw new ForbiddenException('CSRF/Origin check failed');

@@ -13,6 +13,7 @@ import { PermissionService } from '../../auth/permission.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { tenantStorage } from '../../core/tenant/tenant.context';
 import { hasCurrentSecurityVersion } from '../../auth/security-version';
+import { parseFrontendOrigins } from '../../config/frontend-origins';
 import {
   toPublicMessageDto,
   toPublicLeadDto,
@@ -23,9 +24,7 @@ import {
 } from '../dto/public-events.dto';
 import type { NotificationInvalidationPayload } from '../dto/socket-events.generated';
 
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
-  : ['http://localhost:3001'];
+const allowedOrigins = parseFrontendOrigins();
 
 @WebSocketGateway({
   cors: {

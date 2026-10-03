@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { parseFrontendOrigins } from './config/frontend-origins';
 import cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -28,11 +29,7 @@ async function bootstrap() {
   // Enable cookie parser
   app.use(cookieParser());
 
-  const frontendUrls = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',').map((url) =>
-        url.trim().replace(/\/$/, ''),
-      )
-    : ['http://localhost:3001'];
+  const frontendUrls = parseFrontendOrigins();
 
   app.enableCors({
     origin: frontendUrls,
