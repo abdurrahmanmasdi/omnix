@@ -24,6 +24,7 @@ import type {
 import type {
   BulkReorderStagesDto,
   CreatePipelineStageDto,
+  PipelineStagesControllerFindAll200Item,
   UpdatePipelineStageDto,
 } from "../../model";
 
@@ -131,7 +132,7 @@ export const pipelineStagesControllerFindAll = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<unknown>(
+  return customFetch<PipelineStagesControllerFindAll200Item[]>(
     { url: `/pipeline-stages`, method: "GET", signal },
     options,
   );

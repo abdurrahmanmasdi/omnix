@@ -23,11 +23,12 @@ import type {
 
 import type {
   AiStateResponseDto,
-  ConversationsControllerGetConversations200Item,
   ConversationsControllerGetConversationsParams,
-  ConversationsControllerGetMessages200Item,
   ConversationsControllerGetMessagesParams,
   ConversationsControllerToggleAi200,
+  InboxConversationDto,
+  InboxMessagesPageDto,
+  InboxSendErrorDto,
   ManualMessageResponseDto,
   SendMessageDto,
 } from "../../model";
@@ -44,7 +45,7 @@ export const conversationsControllerGetConversations = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<ConversationsControllerGetConversations200Item[]>(
+  return customFetch<InboxConversationDto[]>(
     { url: `/conversations`, method: "GET", params, signal },
     options,
   );
@@ -215,7 +216,7 @@ export const conversationsControllerGetMessages = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<ConversationsControllerGetMessages200Item[]>(
+  return customFetch<InboxMessagesPageDto>(
     { url: `/conversations/${id}/messages`, method: "GET", params, signal },
     options,
   );
@@ -414,7 +415,7 @@ export const conversationsControllerSendMessage = (
 };
 
 export const getConversationsControllerSendMessageMutationOptions = <
-  TError = void | void,
+  TError = InboxSendErrorDto | InboxSendErrorDto,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -455,13 +456,15 @@ export type ConversationsControllerSendMessageMutationResult = NonNullable<
   Awaited<ReturnType<typeof conversationsControllerSendMessage>>
 >;
 export type ConversationsControllerSendMessageMutationBody = SendMessageDto;
-export type ConversationsControllerSendMessageMutationError = void | void;
+export type ConversationsControllerSendMessageMutationError =
+  | InboxSendErrorDto
+  | InboxSendErrorDto;
 
 /**
  * @summary Send a manual message to a conversation
  */
 export const useConversationsControllerSendMessage = <
-  TError = void | void,
+  TError = InboxSendErrorDto | InboxSendErrorDto,
   TContext = unknown,
 >(
   options?: {
@@ -485,6 +488,181 @@ export const useConversationsControllerSendMessage = <
 
   return useMutation(mutationOptions, queryClient);
 };
+/**
+ * @summary Get current conversation state and redacted patient summary
+ */
+export const conversationsControllerGetConversation = (
+  id: string,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<InboxConversationDto>(
+    { url: `/conversations/${id}`, method: "GET", signal },
+    options,
+  );
+};
+
+export const getConversationsControllerGetConversationQueryKey = (
+  id?: string,
+) => {
+  return [`/conversations/${id}`] as const;
+};
+
+export const getConversationsControllerGetConversationQueryOptions = <
+  TData = Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+  TError = unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getConversationsControllerGetConversationQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof conversationsControllerGetConversation>>
+  > = ({ signal }) =>
+    conversationsControllerGetConversation(id, requestOptions, signal);
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ConversationsControllerGetConversationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof conversationsControllerGetConversation>>
+>;
+export type ConversationsControllerGetConversationQueryError = unknown;
+
+export function useConversationsControllerGetConversation<
+  TData = Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+  TError = unknown,
+>(
+  id: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+          TError,
+          Awaited<ReturnType<typeof conversationsControllerGetConversation>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useConversationsControllerGetConversation<
+  TData = Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+  TError = unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+          TError,
+          Awaited<ReturnType<typeof conversationsControllerGetConversation>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useConversationsControllerGetConversation<
+  TData = Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+  TError = unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Get current conversation state and redacted patient summary
+ */
+
+export function useConversationsControllerGetConversation<
+  TData = Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+  TError = unknown,
+>(
+  id: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof conversationsControllerGetConversation>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getConversationsControllerGetConversationQueryOptions(
+    id,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
 /**
  * @summary Pause the AI for a conversation (idempotent)
  */

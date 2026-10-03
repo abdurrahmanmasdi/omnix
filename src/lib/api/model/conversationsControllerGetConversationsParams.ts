@@ -5,8 +5,10 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
+import type { ConversationsControllerGetConversationsFilter } from "./conversationsControllerGetConversationsFilter";
 
 export type ConversationsControllerGetConversationsParams = {
+  filter?: ConversationsControllerGetConversationsFilter;
   page?: number;
   /**
    * @maximum 100
