@@ -31,6 +31,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './core/guards/csrf.guard';
+import { validateEnv } from './config/env.validation';
 import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
 
 @Module({
@@ -38,6 +39,8 @@ import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
     GrpcClientModule,
     ConfigModule.forRoot({
       isGlobal: true,
+      // Fail fast on missing/invalid configuration (KI-028).
+      validate: validateEnv,
     }),
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
