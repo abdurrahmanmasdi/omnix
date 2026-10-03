@@ -6,7 +6,6 @@ import rag_pb2_grpc
 from app.modules.rag.document_processor import DocumentService
 from app.modules.rag.experience_processor import ExperienceProcessor
 from app.core.database import SessionLocal
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         
         db = SessionLocal()
         try:
-            doc_service = DocumentService(db_session=db, api_key=settings.OPENAI_API_KEY)
+            doc_service = DocumentService(db_session=db)
             
             chunks = await doc_service.process_and_save_pdf(
                 org_id=org_id,
@@ -63,7 +62,7 @@ class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
         
         db = SessionLocal()
         try:
-            doc_service = DocumentService(db_session=db, api_key=settings.OPENAI_API_KEY)
+            doc_service = DocumentService(db_session=db)
             deleted_count = await doc_service.delete_file_knowledge(
                 org_id=request.organizationId,
                 file_name=request.fileName

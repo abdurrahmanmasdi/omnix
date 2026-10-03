@@ -27,7 +27,7 @@ def test_empty_or_failed_retrieval_makes_no_outcome_claim(monkeypatch, tool_name
             pass
 
     monkeypatch.setattr(tools, "SessionLocal", FakeDb)
-    monkeypatch.setattr(tools, "OpenAIEmbeddings", FakeEmbeddings)
+    monkeypatch.setattr(tools.LLMFactory, "get_embeddings", lambda: FakeEmbeddings())
     selected = getattr(tools, tool_name)
     result = asyncio.run(selected.coroutine(
         "question", config={"configurable": {"organization_id": "org-s12"}}
@@ -70,7 +70,7 @@ def test_battlecard_sql_uses_only_existing_columns(monkeypatch):
             pass
 
     monkeypatch.setattr(tools, "SessionLocal", FakeDb)
-    monkeypatch.setattr(tools, "OpenAIEmbeddings", FakeEmbeddings)
+    monkeypatch.setattr(tools.LLMFactory, "get_embeddings", lambda: FakeEmbeddings())
     result = asyncio.run(tools.fetch_battlecard.coroutine(
         "Clinic X is cheaper", config={"configurable": {"organization_id": "org-a9"}}
     ))

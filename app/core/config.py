@@ -36,6 +36,13 @@ class Settings(BaseSettings):
 
     GRPC_PORT: int = Field(50051, ge=1, le=65535)
 
+    # Every model/embedding/transcription call gets a timeout and bounded retries (KI-055).
+    LLM_TIMEOUT_SECONDS: float = Field(20.0, gt=0, le=120)
+    LLM_MAX_RETRIES: int = Field(1, ge=0, le=5)
+    # Whole GenerateReply turn; must stay under Nest's 30 s gRPC timeout so Nest gets
+    # a deliberate handoff instead of an abandoned call.
+    TURN_DEADLINE_SECONDS: float = Field(25.0, gt=0, lt=30)
+
     # This tells Pydantic to read from your .env file
     model_config = SettingsConfigDict(
         env_file=".env",

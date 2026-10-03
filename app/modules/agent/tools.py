@@ -3,13 +3,12 @@ import logging
 
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import OpenAIEmbeddings
+
 from sqlalchemy import text
 
 from app.core.database import SessionLocal
 from app.modules.rag.retriever import RAGRetriever
-from app.core.config import settings
-from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.infrastructure.llm_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ async def search_clinic_knowledge(search_query: str, config: RunnableConfig) -> 
     logger.info("[TOOL] Searching Knowledge Base (Org: %s)", org_id)
     db = SessionLocal()
     try:
-        retriever = RAGRetriever(db_session=db, api_key=settings.OPENAI_API_KEY)
+        retriever = RAGRetriever(db_session=db)
         context = await retriever.get_relevant_context(org_id, search_query)
         return context if context.startswith("UNVERIFIED:") else QUOTED_DATA_HEADER + context
     except Exception:
@@ -84,11 +83,7 @@ async def fetch_social_proof(user_objection: str, config: RunnableConfig) -> str
     logger.info("[TOOL] Searching Social Proof (Org: %s) [Query redacted]", org_id)
     db = SessionLocal()
     try:
-        embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL, 
-            dimensions=EMBEDDING_DIMENSIONS,
-            api_key=settings.OPENAI_API_KEY
-        )
+        embeddings = LLMFactory.get_embeddings()
         query_vector = await embeddings.aembed_query(user_objection)
 
         sql = text("""
@@ -137,11 +132,7 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
     logger.info("[TOOL] Searching Battlecards (Org: %s)", org_id)
     db = SessionLocal()
     try:
-        embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL, 
-            dimensions=EMBEDDING_DIMENSIONS,
-            api_key=settings.OPENAI_API_KEY
-        )
+        embeddings = LLMFactory.get_embeddings()
         query_vector = await embeddings.aembed_query(user_objection)
 
         sql = text("""

@@ -1,20 +1,18 @@
 import asyncio
 import logging
 
-from openai import AsyncOpenAI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import OrganizationKnowledge
-from app.core.config import settings
-from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, LLMFactory
 
 logger = logging.getLogger(__name__)
 
 
 class RAGRetriever:
-    def __init__(self, db_session: Session, api_key: str):
+    def __init__(self, db_session: Session):
         self.db = db_session
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = LLMFactory.get_async_openai_client()
 
     async def get_relevant_context(self, org_id: str, query: str) -> str:
         # 1. Turn the user's WhatsApp message into a vector

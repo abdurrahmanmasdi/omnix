@@ -2,20 +2,19 @@ import logging
 import uuid
 
 import fitz  # PyMuPDF
-from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 from sqlalchemy import delete
 from app.core.database import OrganizationKnowledge
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.infrastructure.llm_factory import EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, LLMFactory
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    def __init__(self, db_session: Session, api_key: str):
+    def __init__(self, db_session: Session):
         self.db = db_session
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = LLMFactory.get_async_openai_client()
 
     async def process_and_save_pdf(self, org_id: str, documentation_id: str, file_name: str, file_content: bytes) -> int:
         logger.info("DOCUMENT_PROCESS_STARTED documentation_id=%s", documentation_id)

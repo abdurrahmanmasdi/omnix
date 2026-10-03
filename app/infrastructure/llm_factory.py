@@ -1,4 +1,4 @@
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from openai import AsyncOpenAI
 from app.core.config import settings
 
@@ -19,7 +19,9 @@ class LLMFactory:
             model=settings.CHEAP_MODEL,
             api_key=settings.OPENAI_API_KEY, 
             temperature=settings.CHEAP_TEMPERATURE if temperature is None else temperature,
-            model_kwargs={"reasoning_effort": "none"}
+            model_kwargs={"reasoning_effort": "none"},
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
     
     @staticmethod
@@ -28,7 +30,9 @@ class LLMFactory:
             model=settings.EXTRACTOR_MODEL,
             api_key=settings.OPENAI_API_KEY, 
             temperature=settings.EXTRACTOR_TEMPERATURE if temperature is None else temperature,
-            model_kwargs={"reasoning_effort": "none"}
+            model_kwargs={"reasoning_effort": "none"},
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     @staticmethod
@@ -37,10 +41,27 @@ class LLMFactory:
             model=settings.FLAGSHIP_MODEL,
             api_key=settings.OPENAI_API_KEY, 
             temperature=settings.FLAGSHIP_TEMPERATURE if temperature is None else temperature,
-            model_kwargs={"reasoning_effort": "none"}
+            model_kwargs={"reasoning_effort": "none"},
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
         )
 
     @staticmethod
     def get_async_openai_client():
         """Returns the native OpenAI async client (e.g. for Whisper)."""
-        return AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        return AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
+        )
+
+    @staticmethod
+    def get_embeddings():
+        """LangChain embeddings with the configured model, dimensions, timeout and retries."""
+        return OpenAIEmbeddings(
+            model=settings.EMBEDDING_MODEL,
+            dimensions=settings.EMBEDDING_DIMENSIONS,
+            api_key=settings.OPENAI_API_KEY,
+            timeout=settings.LLM_TIMEOUT_SECONDS,
+            max_retries=settings.LLM_MAX_RETRIES,
+        )
