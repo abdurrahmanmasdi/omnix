@@ -50,7 +50,7 @@ Preserve every invariant in `../../context/invariants.md`. These look odd but ar
 - **Prisma proxy:** raw SQL throws outside system scope; `Message` is scoped via its conversation; `upsert` on `Message` is deliberately refused. `tenantStorage.enterWith` inside `JwtStrategy.validate` installs the tenant only after the DB membership check.
 - **Opt-out is stored on the tenant's lead,** not globally by phone.
 - **Signup returns 403, verify-email 410** (invitation-only pilot). Free-form sends are cancelled outside the 24 h window (no templates configured yet).
-- **Refresh reuse (or concurrent rotation) revokes the whole family.**
+- **Refresh reuse (or concurrent rotation) revokes the whole family** — except a token rotated ≤10 s ago in a still-live family (parallel tabs, KI-070), which gets a sibling session.
 - **Live notifications carry only a generic invalidation;** details go via HTTP.
 - **Use `npm run db:deploy`,** not `prisma migrate deploy` (credential preflight).
 
