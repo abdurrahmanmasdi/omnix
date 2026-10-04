@@ -11,6 +11,5 @@
   "src/webhooks/webhooks.controller.spec.ts|@typescript-eslint/no-unsafe-argument": 3,
   "src/webhooks/whatsapp-media.service.ts|@typescript-eslint/no-unsafe-argument": 1,
   "test/auth-refresh-concurrency.e2e-spec.ts|@typescript-eslint/no-unsafe-argument": 9,
-  "test/auth.e2e-spec.ts|@typescript-eslint/no-unsafe-argument": 5,
   "test/authorization-socket.e2e-spec.ts|@typescript-eslint/no-unsafe-argument": 1
 }
