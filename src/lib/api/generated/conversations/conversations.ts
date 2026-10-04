@@ -25,7 +25,6 @@ import type {
   AiStateResponseDto,
   ConversationsControllerGetConversationsParams,
   ConversationsControllerGetMessagesParams,
-  ConversationsControllerToggleAi200,
   InboxConversationDto,
   InboxMessagesPageDto,
   InboxSendErrorDto,
@@ -832,93 +831,6 @@ export const useConversationsControllerResumeAi = <
 > => {
   const mutationOptions =
     getConversationsControllerResumeAiMutationOptions(options);
-
-  return useMutation(mutationOptions, queryClient);
-};
-/**
- * @deprecated
- * @summary Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.
- */
-export const conversationsControllerToggleAi = (
-  id: string,
-  options?: SecondParameter<typeof customFetch>,
-) => {
-  return customFetch<ConversationsControllerToggleAi200>(
-    { url: `/conversations/${id}/toggle-ai`, method: "PATCH" },
-    options,
-  );
-};
-
-export const getConversationsControllerToggleAiMutationOptions = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof conversationsControllerToggleAi>>,
-    TError,
-    { id: string },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof conversationsControllerToggleAi>>,
-  TError,
-  { id: string },
-  TContext
-> => {
-  const mutationKey = ["conversationsControllerToggleAi"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof conversationsControllerToggleAi>>,
-    { id: string }
-  > = (props) => {
-    const { id } = props ?? {};
-
-    return conversationsControllerToggleAi(id, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type ConversationsControllerToggleAiMutationResult = NonNullable<
-  Awaited<ReturnType<typeof conversationsControllerToggleAi>>
->;
-
-export type ConversationsControllerToggleAiMutationError = unknown;
-
-/**
- * @deprecated
- * @summary Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.
- */
-export const useConversationsControllerToggleAi = <
-  TError = unknown,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof conversationsControllerToggleAi>>,
-      TError,
-      { id: string },
-      TContext
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof conversationsControllerToggleAi>>,
-  TError,
-  { id: string },
-  TContext
-> => {
-  const mutationOptions =
-    getConversationsControllerToggleAiMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

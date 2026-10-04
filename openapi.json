@@ -679,49 +679,6 @@
         "tags": ["Conversations"]
       }
     },
-    "/conversations/{id}/toggle-ai": {
-      "patch": {
-        "deprecated": true,
-        "operationId": "ConversationsController_toggleAi",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "AI state toggled successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "aiPaused": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.",
-        "tags": ["Conversations"]
-      }
-    },
     "/documents": {
       "get": {
         "operationId": "DocumentsController_getDocuments",
