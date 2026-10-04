@@ -54,3 +54,17 @@ async def test_grpc_auth_valid_token(grpc_server):
             # It will probably fail with UNIMPLEMENTED or something else if not mocked, but NOT UNAUTHENTICATED
         except grpc.RpcError as exc:
             assert exc.code() != grpc.StatusCode.UNAUTHENTICATED
+
+@pytest.mark.anyio
+async def test_ping_requires_the_rpc_secret(grpc_server):
+    # Backend readiness uses Ping to prove the secret works (KI-083).
+    async with grpc.aio.insecure_channel(grpc_server) as channel:
+        stub = agent_pb2_grpc.SalesAgentStub(channel)
+        reply = await stub.Ping(
+            agent_pb2.PingRequest(),
+            metadata=(('authorization', f'Bearer {settings.INTERNAL_RPC_SECRET}'),),
+        )
+        assert isinstance(reply, agent_pb2.PingReply)
+        with pytest.raises(grpc.RpcError) as exc:
+            await stub.Ping(agent_pb2.PingRequest(), metadata=(('authorization', 'Bearer wrong'),))
+        assert exc.value.code() == grpc.StatusCode.UNAUTHENTICATED
