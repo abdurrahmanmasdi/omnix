@@ -7,3 +7,8 @@ __pycache__/
 playwright/.auth/
 
 .pytest_cache/
+
+# Local environments and test output (CLN-1)
+venv/
+test-results/
+.credential-deploy-*/
