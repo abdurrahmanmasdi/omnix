@@ -18,7 +18,6 @@ describe('ConversationsController', () => {
             getConversations: jest.fn(),
             getMessages: jest.fn(),
             sendManualMessage: jest.fn(),
-            toggleAiState: jest.fn(),
           },
         },
         { provide: PermissionService, useValue: { has: jest.fn() } },

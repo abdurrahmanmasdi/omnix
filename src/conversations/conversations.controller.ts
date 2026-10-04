@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Patch,
   Body,
   HttpCode,
   Param,
@@ -182,38 +181,6 @@ export class ConversationsController {
       user.id,
       conversationId,
       false,
-    );
-  }
-
-  @Patch(':id/toggle-ai')
-  @RequirePermissions('manage_conversations')
-  @ApiOperation({
-    summary:
-      'Deprecated: toggle the AI state. Use POST ai-pause / ai-resume instead.',
-    deprecated: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'AI state toggled successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        aiPaused: { type: 'boolean' },
-      },
-    },
-  })
-  async toggleAi(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id') conversationId: string,
-  ) {
-    if (!user.organizationId) {
-      throw new Error('Organization ID not found');
-    }
-    return this.conversationsService.toggleAiState(
-      user.organizationId,
-      user.id,
-      conversationId,
     );
   }
 }

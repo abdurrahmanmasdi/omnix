@@ -12,6 +12,7 @@ import { FollowUpService } from '../follow-ups/follow-up.service';
 import { AuditService } from '../audit/audit.service';
 import { InboundClaimService } from './inbound-claim.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
+import { inBubbleOrder } from './bubble-order';
 import { AfterSendAction, splitAfterSendActions } from './deferred-actions';
 import { executeActionsOnce } from './action-claim';
 import {
@@ -255,10 +256,11 @@ export class AiReplyProcessor extends WorkerHost {
             let handoffAfterSend = false;
             let pauseAfterSend = false;
             // Check if we already generated bubbles for this job
-            let existingBubbles = await this.prisma.message.findMany({
-              where: { idempotencyKey: { startsWith: `${batchKey}-` } },
-              orderBy: { createdAt: 'asc' },
-            });
+            let existingBubbles = inBubbleOrder(
+              await this.prisma.message.findMany({
+                where: { idempotencyKey: { startsWith: `${batchKey}-` } },
+              }),
+            );
 
             // 1. If we haven't generated anything yet, call the AI and create the bubbles in the database
             if (existingBubbles.length === 0) {
@@ -473,10 +475,11 @@ export class AiReplyProcessor extends WorkerHost {
                 });
               }
 
-              existingBubbles = await this.prisma.message.findMany({
-                where: { idempotencyKey: { startsWith: `${batchKey}-` } },
-                orderBy: { createdAt: 'asc' },
-              });
+              existingBubbles = inBubbleOrder(
+                await this.prisma.message.findMany({
+                  where: { idempotencyKey: { startsWith: `${batchKey}-` } },
+                }),
+              );
             } // end of if (existingBubbles.length === 0)
 
             handoffAfterSend =

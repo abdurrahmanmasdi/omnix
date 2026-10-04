@@ -50,7 +50,7 @@ Preserve every invariant in `../../context/invariants.md`. These look odd but ar
 - **Prisma proxy:** raw SQL throws outside system scope; `Message` is scoped via its conversation; `upsert` on `Message` is deliberately refused. `tenantStorage.enterWith` inside `JwtStrategy.validate` installs the tenant only after the DB membership check.
 - **Opt-out is stored on the tenant's lead,** not globally by phone.
 - **Signup returns 403, verify-email 410** (invitation-only pilot). Free-form sends are cancelled outside the 24 h window (no templates configured yet).
-- **Refresh reuse (or concurrent rotation) revokes the whole family.**
+- **Refresh reuse (or concurrent rotation) revokes the whole family** — except a token rotated ≤10 s ago in a still-live family (parallel tabs, KI-070), which gets a sibling session.
 - **Live notifications carry only a generic invalidation;** details go via HTTP.
 - **Use `npm run db:deploy`,** not `prisma migrate deploy` (credential preflight).
 
@@ -68,4 +68,4 @@ Don't build new features on these paths until they are fixed; if you touch them,
 
 ## Clutter: ignore, don't import or run
 
-`patch_*.py` in the repo root, `scratch/`, `cleanup_duplicates.ts`, `generate_migration.sh`, `new_migration.sql`, `*.orig` / `*.patch` in `src/`, the root `product_vision.md` / `serivces.md` / `ARCHITECTURE_NESTJS.md`, and the ignored `.credential-deploy-*` temp dir. None are referenced by `package.json`, CI or scripts. Some contain secret-looking literals: do not open them to copy values. Deletion plan: `../../memory/cleanup-manifest.md` (one `chore:` commit; prove unused first). `src/credentials/seed-playwright.ts` is untracked P1-10 WIP: it belongs outside `src/`.
+Removed in CLN-1 (2026-10-04, branch `cln-1/cleanup`): root `patch_*.py`, `scratch/`, `*.orig`/`*.patch` in `src/`, root `product_vision.md`/`serivces.md`/`ARCHITECTURE_NESTJS.md` (archived in the workspace `docs/archive/2026-08-original/`), stale `test/app.e2e-spec.ts`/`auth.e2e-spec.ts` (KI-066). Still ignore the `.credential-deploy-*` temp dir and never open `.env*`. `ERD.svg` is stale (predates 22 schema commits, e.g. no OutboundAttempt) — don't trust it.

@@ -355,25 +355,6 @@ export class ConversationsService {
     return { id: updated.id, aiPaused: updated.aiPaused };
   }
 
-  /** @deprecated Use setAiPaused; kept for the old PATCH toggle-ai route. */
-  async toggleAiState(
-    organizationId: string,
-    userId: string,
-    conversationId: string,
-  ) {
-    const conversation = await this.findAccessibleConversation(
-      organizationId,
-      userId,
-      conversationId,
-    );
-    return this.setAiPaused(
-      organizationId,
-      userId,
-      conversationId,
-      !conversation.aiPaused,
-    );
-  }
-
   private async findAccessibleConversation(
     organizationId: string,
     userId: string,

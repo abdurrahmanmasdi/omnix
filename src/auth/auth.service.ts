@@ -13,6 +13,9 @@ import { tenantStorage } from '../core/tenant/tenant.context';
 import { LoginDto } from './dto/login.dto';
 import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
 
+/** Previous refresh token stays usable this long after rotation (KI-070). */
+export const REFRESH_REUSE_GRACE_MS = 10_000;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -249,7 +252,26 @@ export class AuthService {
         return { error: 'Session revoked due to token reuse' };
       }
 
-      if (session.isRevoked) {
+      // Grace for parallel tabs (QA-1F decision 1, KI-070): a token that was
+      // rotated moments ago, in a family that is still live, gets a sibling
+      // session instead of revoking the family. Logout, password reset and
+      // reuse revocations never qualify, and neither does reuse after the
+      // window, so replaying a stolen token later still revokes everything.
+      const rotatedWithinGrace = async (candidate: {
+        revokedReason: string | null;
+        revokedAt: Date | null;
+      }) =>
+        candidate.revokedReason === 'Rotated' &&
+        !!candidate.revokedAt &&
+        Date.now() - candidate.revokedAt.getTime() <= REFRESH_REUSE_GRACE_MS &&
+        (await tx.session.count({
+          where: { familyId, isRevoked: false, expiresAt: { gt: new Date() } },
+        })) > 0;
+
+      const graceReuse =
+        session.isRevoked && (await rotatedWithinGrace(session));
+
+      if (session.isRevoked && !graceReuse) {
         // A revoked token being presented -> REUSE DETECTED -> revoke whole family
         await tx.session.updateMany({
           where: { familyId, isRevoked: false },
@@ -307,17 +329,27 @@ export class AuthService {
       }
 
       // Revoke old session atomically using compare-and-set
-      const updateResult = await tx.session.updateMany({
-        where: { id: session.id, isRevoked: false },
-        data: {
-          isRevoked: true,
-          revokedAt: new Date(),
-          revokedReason: 'Rotated',
-        },
-      });
+      const updateResult = graceReuse
+        ? { count: 1 }
+        : await tx.session.updateMany({
+            where: { id: session.id, isRevoked: false },
+            data: {
+              isRevoked: true,
+              revokedAt: new Date(),
+              revokedReason: 'Rotated',
+            },
+          });
 
-      // If count is 0, someone else rotated it concurrently!
-      if (updateResult.count === 0) {
+      // If count is 0, someone else rotated it concurrently! Within the grace
+      // window that is a parallel tab, not theft.
+      const concurrentRotation =
+        updateResult.count === 0
+          ? await tx.session.findUnique({ where: { id: session.id } })
+          : null;
+      if (
+        updateResult.count === 0 &&
+        !(concurrentRotation && (await rotatedWithinGrace(concurrentRotation)))
+      ) {
         await tx.session.updateMany({
           where: { familyId },
           data: {

@@ -36,6 +36,7 @@ interface SalesAgentService {
     data: AgentRequest,
     metadata?: Metadata,
   ): Observable<AgentReply>;
+  ping(data: Record<string, never>, metadata?: Metadata): Observable<unknown>;
 }
 interface DocumentProcessorService {
   ingestPdf(
@@ -101,6 +102,19 @@ export class GrpcClientService implements OnModuleInit {
         HttpStatus.BAD_GATEWAY,
       );
     }
+  }
+
+  /**
+   * Authenticated no-op used by readiness (KI-083): resolves only when the
+   * AI service is reachable and accepts INTERNAL_RPC_SECRET. Errors are left
+   * to the caller, which reports a check name only.
+   */
+  async ping(timeoutMs: number): Promise<void> {
+    await lastValueFrom(
+      this.salesAgentService!.ping({}, this.getMetadata()).pipe(
+        timeout(timeoutMs),
+      ),
+    );
   }
 
   generateReply(data: AgentRequest): Promise<AgentReply> {

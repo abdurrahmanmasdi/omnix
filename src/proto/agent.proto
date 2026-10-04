@@ -7,10 +7,16 @@ package agent;
 service SalesAgent {
   // Our primary synchronous generation method
   rpc GenerateReply (AgentRequest) returns (AgentReply) {}
+
+  // Cheap authenticated call for the backend readiness probe (KI-083).
+  rpc Ping (PingRequest) returns (PingReply) {}
   
   // We'll use this later when you want token-by-token streaming!
   // rpc StreamReply (AgentRequest) returns (stream AgentReply) {}
 }
+
+message PingRequest {}
+message PingReply {}
 
 // What NestJS sends to Python
 message AgentRequest {

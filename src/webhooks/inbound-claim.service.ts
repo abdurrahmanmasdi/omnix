@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import { alertConversationStaff } from '../notifications/conversation-staff-alert';
 
 const LEASE_MS = 120_000;
 const leaseEnd = () => new Date(Date.now() + LEASE_MS);
@@ -11,6 +12,46 @@ const leaseEnd = () => new Date(Date.now() + LEASE_MS);
 export class InboundClaimService {
   private readonly logger = new Logger(InboundClaimService.name);
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Decision 4 (QA-1F, KI-086): a clinic without an AI persona cannot be
+   * answered by the AI. Instead of skipping silently, pause the AI and alert
+   * the conversation's staff once. The aiPaused transition is the dedupe, so
+   * later messages and retried jobs add no alerts.
+   */
+  private async handOffWithoutPersona(
+    organizationId: string,
+    conversation: {
+      id: string;
+      leadId: string | null;
+      assignedAgentId: string | null;
+      lead?: { assignedAgentId: string | null } | null;
+    },
+  ) {
+    this.logger.warn(`AI_PERSONA_MISSING conversationId=${conversation.id}`);
+    await this.prisma.$transaction(async (tx) => {
+      const paused = await tx.conversation.updateMany({
+        where: { id: conversation.id, organizationId, aiPaused: false },
+        data: { aiPaused: true, stateVersion: { increment: 1 } },
+      });
+      if (paused.count !== 1) return;
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actor: 'system',
+          action: 'conversation.ai_paused',
+          targetId: conversation.id,
+          metadata: { reason: 'AI_PERSONA_MISSING' },
+        },
+      });
+      await alertConversationStaff(tx, {
+        organizationId,
+        conversation,
+        title: 'AI is not set up',
+        body: 'No AI persona is configured for this clinic, so the AI did not answer. The conversation is waiting for staff.',
+      });
+    });
+  }
 
   async claim(organizationId: string, conversationId: string, ids: string[]) {
     if (
@@ -58,6 +99,13 @@ export class InboundClaimService {
       channel.credentialId &&
       conversation.externalContactId;
     if (!eligible) {
+      if (
+        organization &&
+        !organization.aiPersona &&
+        !conversation.aiPaused &&
+        !conversation.lead?.optedOutAt
+      )
+        await this.handOffWithoutPersona(organizationId, conversation);
       await this.prisma.message.updateMany({
         where: {
           conversationId,

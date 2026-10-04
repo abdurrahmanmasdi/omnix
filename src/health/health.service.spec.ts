@@ -1,17 +1,12 @@
 import { ConfigService } from '@nestjs/config';
-import type { ClientGrpc } from '@nestjs/microservices';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { HealthService } from './health.service';
 
 const grpcClient = (error: Error | null) =>
   ({
-    getClientByServiceName: () => ({
-      waitForReady: (
-        _deadline: number,
-        callback: (error: Error | null) => void,
-      ) => callback(error),
-    }),
-  }) as unknown as ClientGrpc;
+    ping: jest.fn(() => (error ? Promise.reject(error) : Promise.resolve())),
+  }) as unknown as GrpcClientService;
 
 describe('HealthService.readiness (KI-033)', () => {
   const service = (dbOk: boolean, redisOk: boolean, grpcOk: boolean) => {

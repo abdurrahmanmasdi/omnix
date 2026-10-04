@@ -34,3 +34,8 @@ playwright/.auth/
 # Playwright fixtures (synthetic credentials, per run)
 playwright/.auth/
 *.fixture.json
+
+# Local environments and test output (CLN-1)
+venv/
+.venv/
+test-results/

@@ -20,9 +20,14 @@ import { CredentialsService } from '../credentials/credentials.service';
 import { OutboundAttemptService } from './outbound-attempt.service';
 import { mediaConsentRequestText, patientLanguage } from './patient-copy';
 import { PatientCommand, patientCommand } from './patient-commands';
-import { alertConversationStaff } from '../notifications/conversation-staff-alert';
+import {
+  alertChannelManagers,
+  alertConversationStaff,
+} from '../notifications/conversation-staff-alert';
 
 const CONSENT_REQUEST_PREFIX = 'consent-request-';
+const CREDENTIAL_MEDIA_MARKER =
+  '[Media not downloaded: WhatsApp connection needs attention.]';
 
 @Processor('whatsapp-messages')
 export class WebhooksProcessor extends WorkerHost {
@@ -251,6 +256,56 @@ export class WebhooksProcessor extends WorkerHost {
     await this.sendConsentRequest(organizationId, request, version);
   }
 
+  /**
+   * Reads the channel credential without letting a failure stop inbound
+   * persistence (KI-080). The first failure moves an ACTIVE channel to ERROR
+   * and alerts channel managers once; a later successful read restores it.
+   * The status transition is the dedupe, so retries and later messages do not
+   * repeat the alert.
+   */
+  private async channelCredential(
+    organizationId: string,
+    channel: { id: string; credentialId: string | null; status: string },
+  ): Promise<{ available: boolean; accessToken?: string }> {
+    // Legacy channel without a credential record: unchanged behavior.
+    if (!channel.credentialId) return { available: true };
+    try {
+      const active = await this.credentials.readActive(
+        organizationId,
+        channel.credentialId,
+      );
+      if (channel.status === 'ERROR') {
+        await this.prisma.channel.updateMany({
+          where: { id: channel.id, status: 'ERROR' },
+          data: { status: 'ACTIVE' },
+        });
+        this.logger.log(`CHANNEL_CREDENTIAL_RESTORED channelId=${channel.id}`);
+      }
+      return {
+        available: true,
+        accessToken: active.metaAccessToken || active.accessToken,
+      };
+    } catch {
+      this.logger.warn(
+        `CHANNEL_CREDENTIAL_UNAVAILABLE channelId=${channel.id}`,
+      );
+      await this.prisma.$transaction(async (tx) => {
+        const moved = await tx.channel.updateMany({
+          where: { id: channel.id, status: 'ACTIVE' },
+          data: { status: 'ERROR' },
+        });
+        if (moved.count > 0)
+          await alertChannelManagers(tx, {
+            organizationId,
+            channelId: channel.id,
+            title: 'WhatsApp connection needs attention',
+            body: 'The WhatsApp channel credential is not usable. Incoming messages are still saved, but the AI and outgoing messages are stopped until the connection is restored.',
+          });
+      });
+      return { available: false };
+    }
+  }
+
   async process(job: Job<WhatsAppWebhookPayload>): Promise<any> {
     // Run the whole webhook worker as a "System" so it can access the database freely
     return tenantStorage.run({ isSystemBypass: true }, async () => {
@@ -304,17 +359,15 @@ export class WebhooksProcessor extends WorkerHost {
               }
             }
             if (!value.messages || value.messages.length === 0) continue;
-            if (channel.status !== 'ACTIVE') continue;
+            // ERROR = credential problem: still save inbound (KI-080).
+            if (channel.status === 'DISCONNECTED') continue;
 
-            let accessTokenForMedia: string | undefined;
-            if (channel?.credentialId) {
-              const activeCred = await this.credentials.readActive(
-                organization.id,
-                channel.credentialId,
-              );
-              accessTokenForMedia =
-                activeCred.metaAccessToken || activeCred.accessToken;
-            }
+            const credentialState = await this.channelCredential(
+              organization.id,
+              channel,
+            );
+            const accessTokenForMedia = credentialState.accessToken;
+            const credentialAvailable = credentialState.available;
 
             // Process each incoming message
 
@@ -477,6 +530,14 @@ export class WebhooksProcessor extends WorkerHost {
 
               if (message.type === 'text' && message.text) {
                 messageContent = message.text.body;
+              } else if (
+                !credentialAvailable &&
+                consentGranted &&
+                (message.image?.id || message.audio?.id || message.voice?.id)
+              ) {
+                // Consent exists but the media cannot be fetched without the
+                // channel credential. Keep a visible marker, no download.
+                messageContent = CREDENTIAL_MEDIA_MARKER;
               } else if (message.type === 'image' && message.image?.id) {
                 if (consentGranted && accessTokenForMedia) {
                   const base64 =
@@ -523,9 +584,12 @@ export class WebhooksProcessor extends WorkerHost {
                 !conversation.lead?.optedOutAt &&
                 organization.isActive &&
                 !organization.deleted_at &&
-                channel.status === 'ACTIVE';
+                credentialAvailable;
               const leadId = conversation.leadId;
+              // Without a credential nothing patient-facing can be sent; the
+              // message is kept for staff and is not replayed on restore.
               const consentRequestText =
+                credentialAvailable &&
                 awaitingConsent &&
                 !conversation.aiPaused &&
                 !conversation.lead?.optedOutAt
@@ -650,6 +714,13 @@ export class WebhooksProcessor extends WorkerHost {
               if (isStop) {
                 this.logger.log(
                   `Recorded opt-out for tenant ${organization.id}, contact [REDACTED].`,
+                );
+                continue;
+              }
+
+              if (!credentialAvailable) {
+                this.logger.warn(
+                  `INBOUND_SAVED_WITHOUT_CREDENTIAL conversationId=${conversation.id}`,
                 );
                 continue;
               }
