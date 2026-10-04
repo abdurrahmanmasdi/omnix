@@ -152,3 +152,43 @@ describe("single-flight token refresh", () => {
     expect(mocks.resetSession).not.toHaveBeenCalled();
   });
 });
+
+describe("cross-tab refresh lock (KI-079)", () => {
+  it("two tabs take turns instead of refreshing at the same moment", async () => {
+    // Fake Web Locks shared by two independent module instances ("tabs").
+    let tail: Promise<unknown> = Promise.resolve();
+    const locks = {
+      request: vi.fn((_name: string, work: () => Promise<unknown>) => {
+        const run = tail.then(work);
+        tail = run.catch(() => undefined);
+        return run;
+      }),
+    };
+    vi.stubGlobal("navigator", { ...navigator, locks });
+    try {
+      vi.resetModules();
+      const tabA = await import("../api/token-refresh");
+      vi.resetModules();
+      const tabB = await import("../api/token-refresh");
+      const first = deferred();
+      mocks.post
+        .mockReset()
+        .mockReturnValueOnce(first.promise)
+        .mockResolvedValueOnce({ data: { access_token: "token-b", user } });
+
+      const a = tabA.refreshAccessToken();
+      const b = tabB.refreshAccessToken();
+      await vi.waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(mocks.post).toHaveBeenCalledTimes(1); // tab B waits for tab A
+
+      first.resolve({ data: { access_token: "token-a", user } });
+      await expect(a).resolves.toBe("token-a");
+      await expect(b).resolves.toBe("token-b");
+      expect(mocks.post).toHaveBeenCalledTimes(2);
+      expect(locks.request).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

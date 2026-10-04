@@ -15,6 +15,16 @@ export const API_URL =
 
 let inFlight: Promise<string> | null = null;
 
+// Across tabs: tabs share the refresh cookie, so they take turns (Web Locks).
+// The later tab then sends the already-rotated cookie instead of reusing the
+// old one at the same moment (KI-079 / KI-070). The backend also allows a
+// short reuse grace; the lock keeps that for true races only.
+const REFRESH_LOCK = "omnix-auth-refresh";
+function withRefreshLock<T>(work: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  return locks ? (locks.request(REFRESH_LOCK, work) as Promise<T>) : work();
+}
+
 /**
  * Refresh the access token once for every concurrent caller and install the
  * new session. Resolves with the new access token; rejects when the refresh
@@ -23,8 +33,9 @@ let inFlight: Promise<string> | null = null;
 export function refreshAccessToken(): Promise<string> {
   if (!inFlight) {
     const generation = getSessionGeneration();
-    inFlight = axios
-      .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
+    inFlight = withRefreshLock(() =>
+      axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true }),
+    )
       .then((response) => {
         if (generation !== getSessionGeneration()) {
           throw new CanceledError("Stale session refresh");
