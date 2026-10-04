@@ -48,4 +48,4 @@ The full cross-service gate runs from the backend repo (`../backend-v2/scripts/q
 
 ## Dead code and clutter: don't import, don't extend
 
-Dead (no importers): `components/leads/KanbanBoard.tsx`, `components/AddExperienceForm.tsx` (+ `.bak`), `hooks/useTenantQueryKey.ts`, `components/ui/accordion.tsx`. Root clutter: `patch*.sh`, `patch_*.py`, `Archive.zip` (extract `messages/{en,tr,ar}.json` before removal, KI-019), `product_vision.md`, `ARCHITECTURE_NEXTJS.md`. `test-results/`, `playwright/.auth/`, `.pytest_cache/` are not in `.gitignore` yet: add them before committing the P1-10 Playwright work. Deletion plan: `../../memory/cleanup-manifest.md` §2.
+Removed in CLN-1 (2026-10-04, branch `cln-1/cleanup`, no importers): `components/leads/KanbanBoard.tsx`, `components/AddExperienceForm.tsx` (+ `.bak`), `hooks/useTenantQueryKey.ts`, `components/ui/accordion.tsx`, root `patch*.sh`/`patch_*.py`, `product_vision.md`, `serivces.md`, `ARCHITECTURE_NEXTJS.md`. `Archive.zip` was removed in WP-C (translations in workspace `docs/archive/2026-09-frontend-i18n/`). `.gitignore` covers `test-results/`, `playwright/.auth/`, `.pytest_cache/`, venvs.

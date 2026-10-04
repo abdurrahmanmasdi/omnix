@@ -31,3 +31,8 @@ playwright/.auth/
 .pytest_cache/
 
 Archive.zip
+
+# Local environments (CLN-1)
+venv/
+.venv/
+.credential-deploy-*/
