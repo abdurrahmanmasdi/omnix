@@ -147,7 +147,8 @@ export class AuthController {
         refreshToken,
         req.headers['user-agent'],
         req.ip,
-        refreshDto.organizationId,
+        // A body-less POST leaves the DTO undefined (KI-090).
+        refreshDto?.organizationId,
       );
 
       // Rotate the refresh token for maximum security

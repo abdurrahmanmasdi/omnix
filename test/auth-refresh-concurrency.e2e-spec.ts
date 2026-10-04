@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import type { Server } from 'node:http';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { InvitationsService } from '../src/auth/invitations.service';
@@ -243,6 +244,18 @@ describe('Auth Refresh & Multi-Org (e2e)', () => {
         .set('Cookie', cookie)
         .send({})
         .expect(401);
+  });
+
+  it('4b. refreshes with a cookie and no request body (KI-090)', async () => {
+    const login = await request(app.getHttpServer() as Server)
+      .post('/auth/login')
+      .send({ email: userEmail, password })
+      .expect(200);
+    const res = await request(app.getHttpServer() as Server)
+      .post('/auth/refresh')
+      .set('Cookie', refreshCookie(login.headers))
+      .expect(200);
+    expect(res.body.access_token).toBeDefined();
   });
 
   it('5. should lose access if membership is suspended', async () => {
