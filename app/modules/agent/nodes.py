@@ -1,4 +1,5 @@
 import json
+from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from app.modules.agent.state import ConversationState
@@ -6,8 +7,8 @@ from app.modules.agent.actions import parse_virtual_action
 from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE
 from app.core.config import settings
 
-async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions) -> bool:
-    """Return True when a tool result cannot support a patient-facing answer."""
+async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions) -> Literal["handoff", "unverified"] | None:
+    """Select fixed handoff delivery for escalation or an unverified result."""
     tools_by_name = {
         "search_clinic_knowledge": search_clinic_knowledge,
         "fetch_social_proof": fetch_social_proof,
@@ -20,18 +21,18 @@ async def _execute_tool_calls(state: ConversationState, response, messages, new_
     }}
     for call in getattr(response, "tool_calls", []):
         if not isinstance(call, dict):
-            return True
+            return "unverified"
         tool_name, tool_args, tool_id = call.get("name"), call.get("args"), call.get("id")
         if (tool_name not in tools_by_name or not isinstance(tool_args, dict)
                 or not isinstance(tool_id, str) or not 1 <= len(tool_id) <= 128):
-            return True
+            return "unverified"
         try:
             result = await tools_by_name[tool_name].ainvoke(tool_args, config=config)
         except Exception:
-            return True
+            return "unverified"
         content = result.content if isinstance(result, ToolMessage) else str(result)
         if not isinstance(content, str) or content.startswith("UNVERIFIED:"):
-            return True
+            return "unverified"
         try:
             decoded = json.loads(content)
         except (TypeError, ValueError):
@@ -39,14 +40,16 @@ async def _execute_tool_calls(state: ConversationState, response, messages, new_
         if isinstance(decoded, dict) and "action" in decoded:
             action = parse_virtual_action(decoded)
             if action is None:
-                return True
+                return "unverified"
             new_pending_actions.append(json.dumps({"action": action[0], "payload": action[1]}))
+            if action[0] == "HANDOFF_TO_HUMAN":
+                return "handoff"
         elif tool_name == "escalate_to_human":
-            return True
+            return "unverified"
         tool_msg = ToolMessage(tool_call_id=tool_id, content=content, name=tool_name)
         messages.append(tool_msg)
         new_messages.append(tool_msg)
-    return False
+    return None
 
 from app.modules.agent.prompts import (
     AI_IDENTITY_PROMPT, EXTRACTOR_SYSTEM_PROMPT, VISION_PROMPT, HANDOFF_PROMPT, 
@@ -201,14 +204,15 @@ async def objection_handler_node(state: ConversationState):
     
     if getattr(response, "tool_calls", None):
         messages.append(response)
-        unverified = await _execute_tool_calls(
+        tool_outcome = await _execute_tool_calls(
             state, response, messages, new_messages, new_pending_actions
         )
-        if unverified:
-            new_pending_actions.append(json.dumps({
-                "action": "HANDOFF_TO_HUMAN",
-                "payload": {"reason": "tool_result_unverified"},
-            }))
+        if tool_outcome:
+            if tool_outcome == "unverified":
+                new_pending_actions.append(json.dumps({
+                    "action": "HANDOFF_TO_HUMAN",
+                    "payload": {"reason": "tool_result_unverified"},
+                }))
             new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
         else:
             final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
@@ -286,14 +290,15 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
     
     if getattr(response, "tool_calls", None):
         messages.append(response)
-        unverified = await _execute_tool_calls(
+        tool_outcome = await _execute_tool_calls(
             state, response, messages, new_messages, new_pending_actions
         )
-        if unverified:
-            new_pending_actions.append(json.dumps({
-                "action": "HANDOFF_TO_HUMAN",
-                "payload": {"reason": "tool_result_unverified"},
-            }))
+        if tool_outcome:
+            if tool_outcome == "unverified":
+                new_pending_actions.append(json.dumps({
+                    "action": "HANDOFF_TO_HUMAN",
+                    "payload": {"reason": "tool_result_unverified"},
+                }))
             new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
         else:
             final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
@@ -345,14 +350,15 @@ async def value_pitch_node(state: ConversationState):
     
     if getattr(response, "tool_calls", None):
         messages.append(response)
-        unverified = await _execute_tool_calls(
+        tool_outcome = await _execute_tool_calls(
             state, response, messages, new_messages, new_pending_actions
         )
-        if unverified:
-            new_pending_actions.append(json.dumps({
-                "action": "HANDOFF_TO_HUMAN",
-                "payload": {"reason": "tool_result_unverified"},
-            }))
+        if tool_outcome:
+            if tool_outcome == "unverified":
+                new_pending_actions.append(json.dumps({
+                    "action": "HANDOFF_TO_HUMAN",
+                    "payload": {"reason": "tool_result_unverified"},
+                }))
             new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
         else:
             final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
@@ -403,14 +409,15 @@ async def closing_node(state: ConversationState):
     
     if getattr(response, "tool_calls", None):
         messages.append(response)
-        unverified = await _execute_tool_calls(
+        tool_outcome = await _execute_tool_calls(
             state, response, messages, new_messages, new_pending_actions
         )
-        if unverified:
-            new_pending_actions.append(json.dumps({
-                "action": "HANDOFF_TO_HUMAN",
-                "payload": {"reason": "tool_result_unverified"},
-            }))
+        if tool_outcome:
+            if tool_outcome == "unverified":
+                new_pending_actions.append(json.dumps({
+                    "action": "HANDOFF_TO_HUMAN",
+                    "payload": {"reason": "tool_result_unverified"},
+                }))
             new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
         else:
             final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)
@@ -467,14 +474,15 @@ async def general_qa_node(state: ConversationState):
     
     if getattr(response, "tool_calls", None):
         messages.append(response)
-        unverified = await _execute_tool_calls(
+        tool_outcome = await _execute_tool_calls(
             state, response, messages, new_messages, new_pending_actions
         )
-        if unverified:
-            new_pending_actions.append(json.dumps({
-                "action": "HANDOFF_TO_HUMAN",
-                "payload": {"reason": "tool_result_unverified"},
-            }))
+        if tool_outcome:
+            if tool_outcome == "unverified":
+                new_pending_actions.append(json.dumps({
+                    "action": "HANDOFF_TO_HUMAN",
+                    "payload": {"reason": "tool_result_unverified"},
+                }))
             new_messages.append(AIMessage(content=SAFE_HANDOFF_MESSAGE))
         else:
             final_response = await LLMFactory.get_flagship_llm().ainvoke(messages)

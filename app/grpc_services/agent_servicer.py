@@ -99,6 +99,11 @@ def _blocked_reply(reason: str, language: str = "en"):
 
 
 class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
+    async def Ping(self, request, context):
+        # Behind the AuthInterceptor: an answer proves the backend's RPC secret
+        # is accepted (backend /ready, KI-083). No DB, no model.
+        return agent_pb2.PingReply()
+
     async def GenerateReply(self, request, context):
         # The whole turn (transcription, DB, graph, model calls) must finish before
         # Nest's 30 s gRPC timeout; past the deadline the patient gets the fixed

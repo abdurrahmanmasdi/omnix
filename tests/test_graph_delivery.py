@@ -94,8 +94,8 @@ def test_graph_preserves_valid_handoff_action(monkeypatch):
         json.dumps({"action": "HANDOFF_TO_HUMAN", "payload": {"reason": "patient_requested"}}),
         final_text="A coordinator can help with that.",
     )
-    assert result["messages"][-1].content == "A coordinator can help with that."
-    assert model.writer_calls == 2
+    assert result["messages"][-1].content == SAFE_HANDOFF_MESSAGE
+    assert model.writer_calls == 1
     assert json.loads(result["pending_crm_actions"][-1]) == {
         "action": "HANDOFF_TO_HUMAN", "payload": {"reason": "patient_requested"},
     }
@@ -115,7 +115,8 @@ def test_graph_rejects_malformed_action_and_tool_call_id(monkeypatch):
     assert invalid_id["messages"][-1].content == SAFE_HANDOFF_MESSAGE
 
 
-def test_real_graph_action_reaches_grpc_contract(monkeypatch):
+@pytest.mark.parametrize("patient_text,language", [("Could you explain?", "en"), ("Fiyat hakkında bilgi verir misiniz?", "tr")])
+def test_real_graph_action_reaches_grpc_contract(monkeypatch, patient_text, language):
     call = {"name": "escalate_to_human", "args": {"reason": "patient_requested"}, "id": "call_grpc"}
     model = FakeModel(call, "A coordinator can help with that.")
     monkeypatch.setattr(nodes.LLMFactory, "get_flagship_llm", lambda: model)
@@ -133,7 +134,7 @@ def test_real_graph_action_reaches_grpc_contract(monkeypatch):
     ))
     monkeypatch.setattr(agent_servicer.DatabaseService, "get_conversation_history", AsyncMock(return_value=[]))
     monkeypatch.setattr(agent_servicer.DatabaseService, "get_messages_by_ids", AsyncMock(
-        return_value=[SimpleNamespace(id="msg-s12", content="Could you explain?", mediaUrl=None)]
+        return_value=[SimpleNamespace(id="msg-s12", content=patient_text, mediaUrl=None)]
     ))
     reply = asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(
         agent_pb2.AgentRequest(
@@ -141,7 +142,8 @@ def test_real_graph_action_reaches_grpc_contract(monkeypatch):
             newMessageIds=["msg-s12"], clinicName="Synthetic Clinic",
         ), None
     ))
-    assert reply.replyText == "A coordinator can help with that."
+    assert reply.replyText == handoff_message("cannot_answer", language)
+    assert model.writer_calls == 1
     assert [(action.type, json.loads(action.payload)) for action in reply.actions] == [
         ("HANDOFF_TO_HUMAN", {"reason": "patient_requested"}),
     ]
