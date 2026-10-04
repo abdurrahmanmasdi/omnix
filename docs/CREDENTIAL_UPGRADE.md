@@ -14,7 +14,7 @@ Do not use direct `prisma migrate deploy` as the upgrade entry point. It skips t
 
 ## What the command does
 
-For a clean/pre-credential schema, a temporary migration directory contains byte-for-byte copies through `20260920140000_secure_credentials`. Prisma deploys that stage, which retains legacy source columns. The temporary directory is removed on normal success or failure. No data or key is written there.
+For a clean/pre-credential schema, a directory in the system temporary directory contains byte-for-byte copies through `20260920140000_secure_credentials`. This works with the non-root Docker runtime, whose `/app` directory is not writable. The generated config resolves Prisma and the schema from the application directory. Prisma deploys that stage, which retains legacy source columns. The temporary directory is removed on normal success or failure. No data or key is written there.
 
 For both staged and already-upgraded databases, one transaction locks credential/channel/organization writes, encrypts `PLAINTEXT_MIGRATE:` rows with the runtime AES-256-GCM codec, and migrates organization CRM and channel access tokens. It reads saved ciphertext back and verifies decryption. Channel references must match organization and provider. Conflicting credentials stop the transaction for operator resolution. Audit records (`credential.upgrade_verified`) and source cleanup commit together; a failure rolls everything back. Revoked/rotated credential statuses and IDs are preserved.
 
@@ -46,6 +46,11 @@ The first three counts must be zero. Audits contain source category, version, ve
 - `PRE_MVP_WHATSAPP_MIGRATION_REQUIRES_OPERATOR`: a schema predating September's channel migration still has organization-level WhatsApp credentials or account IDs. The old migration drops those fields. This case intentionally stops **before** migration; arrange an explicit encrypted channel backfill and verify it before continuing. This older upgrade path is not automated by S02.
 - `MIGRATION_DEPLOY_FAILED_Pxxxx`: inspect `_prisma_migrations` names, timestamps and completion state without dumping its potentially sensitive `logs` column. Prisma can retain a failed migration record. Determine whether its SQL committed partially before using `prisma migrate resolve --rolled-back <exact-failed-name>` after correcting the cause, or `--applied` only if every statement has been independently verified. Never blindly resolve or rewrite applied history.
 - Other failures stop with a fixed code, not raw PostgreSQL/Prisma errors. Check connectivity, permissions, locks and schema state using a restricted operator session. Keep ingress disabled until repair and schema verification succeed.
+
+Older images attempted to create `.credential-deploy-*` under `/app` during a first
+deployment. The non-root runtime rejects that write, reported only as
+`CREDENTIAL_UPGRADE_FAILED`. Deploy an image with system-temporary-directory
+staging; do not switch the application to root or bypass credential preflight.
 
 If failure happens after credential repair commits but before all later migrations succeed, rerun with the same key: encrypted records remain readable, audit intent is retained, and cleared sources cannot be recopied by the old migration. If returning to a prior application version requires plaintext columns, do **not** recreate them from ciphertext. Restore the pre-upgrade backup into an isolated database, verify it with its original matching key, and recover through a reviewed forward upgrade. Production backup restoration itself has not been exercised here.
 

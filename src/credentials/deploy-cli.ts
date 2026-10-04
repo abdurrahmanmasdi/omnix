@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { Client } from 'pg';
 import { credentialKey } from './credential-cipher';
 import { hasColumn, repairCredentials } from './credential-upgrade';
@@ -41,7 +42,9 @@ export function deployMigrations(root: string, through?: string): void {
     run(join(root, 'prisma.config.ts'));
     return;
   }
-  const staging = mkdtempSync(join(root, '.credential-deploy-'));
+  // The non-root runtime cannot write to /app. Keep migration staging in the
+  // system temp directory; schema and Prisma imports still resolve from root.
+  const staging = mkdtempSync(join(tmpdir(), 'omnix-credential-deploy-'));
   try {
     mkdirSync(join(staging, 'migrations'));
     for (const entry of readdirSync(migrations, { withFileTypes: true })) {
@@ -56,7 +59,7 @@ export function deployMigrations(root: string, through?: string): void {
     const config = join(staging, 'prisma.config.ts');
     writeFileSync(
       config,
-      `import { defineConfig } from 'prisma/config';\nexport default defineConfig({
+      `import { defineConfig } from ${JSON.stringify(require.resolve('prisma/config', { paths: [root] }))};\nexport default defineConfig({
       schema: ${JSON.stringify(join(root, 'prisma/schema.prisma'))},
       migrations: { path: ${JSON.stringify(join(staging, 'migrations'))} },
       datasource: { url: process.env.DATABASE_URL }
