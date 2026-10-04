@@ -1,10 +1,9 @@
-import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { ClientGrpc } from '@nestjs/microservices';
-import type { Client as GrpcClient } from '@grpc/grpc-js';
 import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
+import { GrpcClientService } from '../grpc-client/grpc-client.service';
 
 export type CheckName = 'database' | 'redis' | 'grpc';
 export interface Readiness {
@@ -31,7 +30,7 @@ export class HealthService implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    @Inject('AI_AGENT_PACKAGE') private readonly agentClient: ClientGrpc,
+    private readonly grpcClient: GrpcClientService,
   ) {}
 
   async readiness(): Promise<Readiness> {
@@ -79,14 +78,10 @@ export class HealthService implements OnModuleDestroy {
     await this.redis.ping();
   }
 
+  // An authenticated call, not just a connection: a wrong INTERNAL_RPC_SECRET
+  // must make the API not ready (KI-083).
   private grpc() {
-    const client =
-      this.agentClient.getClientByServiceName<GrpcClient>('SalesAgent');
-    return new Promise<void>((resolve, reject) =>
-      client.waitForReady(Date.now() + CHECK_TIMEOUT_MS, (error) =>
-        error ? reject(error) : resolve(),
-      ),
-    );
+    return this.grpcClient.ping(CHECK_TIMEOUT_MS);
   }
 
   async onModuleDestroy() {

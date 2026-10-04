@@ -5,14 +5,45 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import request from 'supertest';
-import { AppModule } from '../src/app.module';
 import { safeDeploy } from '../src/credentials/deploy-cli';
+import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
 
 // KI-033: liveness, readiness and metrics endpoints.
 jest.setTimeout(120_000);
 let admin: Client;
 let dbName: string;
 let app: INestApplication;
+// Fake AI service with the same bearer check as Python's AuthInterceptor; the
+// accepted secret can be changed to simulate a wrong INTERNAL_RPC_SECRET.
+let aiServer: grpc.Server;
+let acceptedSecret = '';
+
+async function startFakeAiService(): Promise<string> {
+  const definition = protoLoader.loadSync(
+    resolve(__dirname, '../src/proto/agent.proto'),
+  );
+  const pkg = grpc.loadPackageDefinition(definition) as unknown as {
+    agent: { SalesAgent: { service: grpc.ServiceDefinition } };
+  };
+  aiServer = new grpc.Server();
+  aiServer.addService(pkg.agent.SalesAgent.service, {
+    Ping: (call: grpc.ServerUnaryCall<unknown, unknown>, callback: any) => {
+      const token = call.metadata.get('authorization')[0];
+      if (token !== `Bearer ${acceptedSecret}`)
+        return callback({ code: grpc.status.UNAUTHENTICATED });
+      callback(null, {});
+    },
+  });
+  const port = await new Promise<number>((done, fail) =>
+    aiServer.bindAsync(
+      '127.0.0.1:0',
+      grpc.ServerCredentials.createInsecure(),
+      (error, bound) => (error ? fail(error) : done(bound)),
+    ),
+  );
+  return `127.0.0.1:${port}`;
+}
 
 beforeAll(async () => {
   const url = process.env.UPGRADE_TEST_ADMIN_URL;
@@ -26,6 +57,11 @@ beforeAll(async () => {
   testUrl.pathname = `/${dbName}`;
   process.env.DATABASE_URL = testUrl.toString();
   await safeDeploy(resolve(__dirname, '..'));
+  acceptedSecret = process.env.INTERNAL_RPC_SECRET ?? '';
+  process.env.PYTHON_SERVER_URL = await startFakeAiService();
+  // Imported after the env is set: the config module snapshots process.env.
+  const { AppModule } =
+    jest.requireActual<typeof import('../src/app.module')>('../src/app.module');
   const module = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();
@@ -35,6 +71,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app) await app.close();
+  aiServer?.forceShutdown();
   if (admin) {
     await admin.query(`DROP DATABASE "${dbName}" WITH (FORCE)`);
     await admin.end();
@@ -48,7 +85,32 @@ describe('health endpoints (KI-033)', () => {
       .expect(200, { status: 'ok' });
   });
 
-  it('GET /ready reports each dependency; no AI service here, so 503 with grpc failed', async () => {
+  it('GET /ready is ready when the AI service accepts the RPC secret (KI-083)', async () => {
+    await request(app.getHttpServer() as Server)
+      .get('/ready')
+      .expect(200, {
+        status: 'ready',
+        checks: { database: 'ok', redis: 'ok', grpc: 'ok' },
+      });
+  });
+
+  it('GET /ready is 503 naming grpc when the RPC secret is refused (KI-083)', async () => {
+    acceptedSecret = 'a-different-secret';
+    try {
+      const response = await request(app.getHttpServer() as Server)
+        .get('/ready')
+        .expect(503);
+      expect(response.body).toEqual({
+        status: 'not_ready',
+        checks: { database: 'ok', redis: 'ok', grpc: 'failed' },
+      });
+    } finally {
+      acceptedSecret = process.env.INTERNAL_RPC_SECRET ?? '';
+    }
+  });
+
+  it('GET /ready is 503 naming grpc when the AI service is down', async () => {
+    aiServer.forceShutdown();
     const response = await request(app.getHttpServer() as Server)
       .get('/ready')
       .expect(503);
