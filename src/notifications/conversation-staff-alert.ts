@@ -63,3 +63,55 @@ export async function alertConversationStaff(
   }
   return recipients.length;
 }
+
+/**
+ * Inside the caller's transaction: one SYSTEM_ALERT per active member who can
+ * manage channels (manage_channels + notifications:view), referencing the
+ * channel. Returns the recipient count. Title/body must not contain secrets.
+ */
+export async function alertChannelManagers(
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    channelId: string;
+    title: string;
+    body: string;
+  },
+): Promise<number> {
+  const { organizationId } = input;
+  const memberships = await tx.organizationMembership.findMany({
+    where: {
+      organizationId,
+      status: 'ACTIVE',
+      deletedAt: null,
+      user: { status: 'ACTIVE', deletedAt: null },
+    },
+    include: MEMBERSHIP_GRANTS_INCLUDE,
+  });
+  const recipients = memberships.filter(
+    (membership) =>
+      membershipHasPermission(membership, 'notifications:view') &&
+      membershipHasPermission(membership, 'manage_channels'),
+  );
+  for (const membership of recipients) {
+    const notification = await tx.notification.create({
+      data: {
+        organizationId,
+        userId: membership.userId,
+        type: NotificationType.SYSTEM_ALERT,
+        title: input.title,
+        body: input.body,
+        referenceId: input.channelId,
+        referenceType: 'CHANNEL',
+      },
+    });
+    await tx.outboxEvent.create({
+      data: {
+        organizationId,
+        topic: 'notification.broadcast',
+        payload: { organizationId, notificationId: notification.id },
+      },
+    });
+  }
+  return recipients.length;
+}

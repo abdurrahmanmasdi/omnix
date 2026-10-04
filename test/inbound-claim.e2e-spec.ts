@@ -148,6 +148,9 @@ function webhook(
     cancelPendingFollowUps: jest.fn().mockResolvedValue(undefined),
   },
   media: any = {},
+  credentials: any = {
+    readActive: jest.fn().mockResolvedValue({ accessToken: 'synthetic' }),
+  },
 ) {
   return new WebhooksProcessor(
     prismaService,
@@ -157,9 +160,7 @@ function webhook(
     { broadcastNewMessage: jest.fn() } as any,
     followUps,
     { record: jest.fn().mockResolvedValue(undefined) } as any,
-    {
-      readActive: jest.fn().mockResolvedValue({ accessToken: 'synthetic' }),
-    } as any,
+    credentials,
     outboundAttempts,
     { getService: jest.fn() } as any,
   );
@@ -2343,10 +2344,13 @@ it('sets a 30-day expiry on downloaded patient media and the cleanup leaves a ma
   expect(cleaned.content).toBe('[Patient Media - Expired and Deleted]');
 });
 
-async function staffMember(organizationId: string) {
+async function staffMember(
+  organizationId: string,
+  actions = ['notifications:view', 'leads:read:all'],
+) {
   return system(async () => {
     const grants = await Promise.all(
-      ['notifications:view', 'leads:read:all'].map((action) =>
+      actions.map((action) =>
         prisma.permission.upsert({
           where: { action },
           update: {},
@@ -3004,11 +3008,9 @@ it('does not re-run follow-up AI actions when the follow-up job is retried (KI-0
       return (target as any)[key];
     },
   });
-  const sendTextMessage = jest
-    .fn()
-    .mockImplementation(async () => ({
-      messages: [{ id: `wamid.${randomUUID()}` }],
-    }));
+  const sendTextMessage = jest.fn().mockImplementation(async () => ({
+    messages: [{ id: `wamid.${randomUUID()}` }],
+  }));
   const worker = new FollowUpProcessor(
     database,
     {} as any,
@@ -3057,4 +3059,79 @@ it('does not re-run follow-up AI actions when the follow-up job is retried (KI-0
     }),
   );
   expect((claim.metadata as any).batchKey).toBe(`followUp-${followUp.id}`);
+});
+
+it('saves inbound while the channel credential is revoked, alerts channel managers once, and resumes on restore (KI-080)', async () => {
+  const f = await fixture();
+  const manager = await staffMember(f.org.id, [
+    'notifications:view',
+    'manage_channels',
+  ]);
+  await staffMember(f.org.id); // no manage_channels: no channel alert
+  const readActive = jest
+    .fn()
+    .mockRejectedValue(new Error('Active credential not found'));
+  const outbound = { reconcileStatus: jest.fn(), sendBubble: jest.fn() };
+  const worker = webhook(prisma, outbound, undefined, {}, { readActive });
+  const first = inboundJob(f, 'Hello while revoked');
+  await expect(worker.process(first)).resolves.not.toThrow();
+  await worker.process(first); // Meta redelivery
+  await worker.process(inboundJob(f, 'Second while revoked'));
+  const saved = await system(() =>
+    prisma.message.findMany({
+      where: { conversationId: f.conv.id, type: 'LEAD_TEXT' },
+      orderBy: { createdAt: 'asc' },
+    }),
+  );
+  expect(saved.map((m) => [m.content, m.status])).toEqual([
+    ['Hello while revoked', 'PROCESSED'],
+    ['Second while revoked', 'PROCESSED'],
+  ]);
+  expect(outbound.sendBubble).not.toHaveBeenCalled();
+  const channel = await system(() =>
+    prisma.channel.findUniqueOrThrow({ where: { id: f.channel.id } }),
+  );
+  expect(channel.status).toBe('ERROR');
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0]).toMatchObject({
+    userId: manager.id,
+    type: 'SYSTEM_ALERT',
+    title: 'WhatsApp connection needs attention',
+    referenceType: 'CHANNEL',
+    referenceId: f.channel.id,
+  });
+  const generate = () =>
+    system(() =>
+      prisma.outboxEvent.count({
+        where: { organizationId: f.org.id, topic: 'generate-reply' },
+      }),
+    );
+  expect(await generate()).toBe(0);
+
+  // Credential restored: the next message takes the normal AI path; the
+  // messages saved during the outage are not replayed.
+  readActive.mockResolvedValue({ accessToken: 'synthetic' });
+  await worker.process(inboundJob(f, 'After restore'));
+  expect(
+    (
+      await system(() =>
+        prisma.channel.findUniqueOrThrow({ where: { id: f.channel.id } }),
+      )
+    ).status,
+  ).toBe('ACTIVE');
+  expect(await generate()).toBe(1);
+  const restored = await system(() =>
+    prisma.message.findFirstOrThrow({
+      where: { conversationId: f.conv.id, content: 'After restore' },
+    }),
+  );
+  expect(restored.status).toBe('PENDING');
+  expect(
+    await system(() =>
+      prisma.notification.count({ where: { organizationId: f.org.id } }),
+    ),
+  ).toBe(1);
 });
