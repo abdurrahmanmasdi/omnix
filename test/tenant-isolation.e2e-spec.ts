@@ -230,10 +230,13 @@ it('denies cross-tenant HTTP writes and forged signed memberships before provide
     .set('Authorization', `Bearer ${first.token}`)
     .send({ content: 'Unauthorized message' })
     .expect(404);
-  await request(app.getHttpServer())
-    .patch(`/conversations/${second.conversation.id}/toggle-ai`)
-    .set('Authorization', `Bearer ${first.token}`)
-    .expect(404);
+  // The deprecated, non-atomic toggle route is gone (KI-085), also for the
+  // conversation's own clinic.
+  for (const token of [first.token, second.token])
+    await request(app.getHttpServer())
+      .patch(`/conversations/${second.conversation.id}/toggle-ai`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   for (const route of ['ai-pause', 'ai-resume'])
     await request(app.getHttpServer())
       .post(`/conversations/${second.conversation.id}/${route}`)
