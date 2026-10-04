@@ -26,13 +26,25 @@ export function getSocketGeneration(): number {
   return socketGeneration;
 }
 
+export interface SocketHandlers {
+  onConnectError?: (err: Error) => void;
+  /**
+   * The server closed the connection (e.g. access-token expiry). Socket.IO
+   * does not reconnect by itself after this; the handler refreshes and
+   * calls socket.connect() (KI-079).
+   */
+  onServerDisconnect?: (socket: Socket) => void;
+  /** Latest access token, read on every (re)connect attempt. */
+  getToken?: () => string | null;
+}
+
 /**
  * Create or reuse the singleton socket connection.
  * Returns the socket and the generation it belongs to.
  */
 export function getOrCreateSocket(
   token: string,
-  onConnectError?: (err: Error) => void,
+  handlers: SocketHandlers = {},
 ): { socket: Socket; generation: number } {
   // T20: Return the global socket if it exists, even if it's currently connecting
   if (globalSocket) {
@@ -43,7 +55,9 @@ export function getOrCreateSocket(
   const myGeneration = socketGeneration;
 
   const newSocket = io(SOCKET_URL, {
-    auth: { token },
+    // A function, so reconnects after a refresh send the new token instead
+    // of the one the socket was created with (KI-079).
+    auth: (cb) => cb({ token: handlers.getToken?.() ?? token }),
     transports: ["websocket", "polling"],
     withCredentials: true,
     reconnectionAttempts: 10,
@@ -59,14 +73,17 @@ export function getOrCreateSocket(
     }
   });
 
-  newSocket.on("disconnect", () => {
+  newSocket.on("disconnect", (reason) => {
     if (socketGeneration === myGeneration) {
       connected = false;
       emitChange();
+      if (reason === "io server disconnect")
+        handlers.onServerDisconnect?.(newSocket);
     }
   });
 
-  if (onConnectError) {
+  if (handlers.onConnectError) {
+    const onConnectError = handlers.onConnectError;
     newSocket.on("connect_error", (err) => {
       if (socketGeneration === myGeneration) {
         connected = false;

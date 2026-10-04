@@ -81,7 +81,7 @@ export default function ChannelsSettingsPage() {
             CHANNELS & INTEGRATIONS
           </h1>
           <p className="text-brand-ice/60 font-medium mt-1">
-            Connect your OmniDesk AI agent to external messaging platforms.
+            Connect your OmniX AI agent to external messaging platforms.
           </p>
         </div>
         <Button

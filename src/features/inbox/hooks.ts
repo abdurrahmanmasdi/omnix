@@ -118,7 +118,11 @@ export function useInboxSocket(
         });
     };
     const reconnect = () => {
-      refreshList();
+      // Connection state changes can rerender consumers and cancel the event
+      // debounce timer. Reconcile immediately so reconnect never loses a refetch.
+      void queryClient.invalidateQueries({
+        queryKey: getConversationsControllerGetConversationsQueryKey(),
+      });
       if (activeId) {
         void queryClient.invalidateQueries({
           queryKey: getConversationsControllerGetConversationQueryKey(activeId),
