@@ -23,6 +23,7 @@ import {
   MEMBERSHIP_GRANTS_INCLUDE,
   membershipHasPermission,
 } from '../auth/permission.service';
+import { inBubbleOrder } from '../webhooks/bubble-order';
 
 @Processor('follow-up')
 export class FollowUpProcessor extends WorkerHost {
@@ -308,12 +309,13 @@ export class FollowUpProcessor extends WorkerHost {
             const idempotencyKeyBase = `followUp-${followUp.id}`;
 
             // Check if we already generated bubbles for this job
-            let existingBubbles = await this.prisma.message.findMany({
-              where: {
-                idempotencyKey: { startsWith: `${idempotencyKeyBase}-` },
-              },
-              orderBy: { createdAt: 'asc' },
-            });
+            let existingBubbles = inBubbleOrder(
+              await this.prisma.message.findMany({
+                where: {
+                  idempotencyKey: { startsWith: `${idempotencyKeyBase}-` },
+                },
+              }),
+            );
             let handoffAfterSend = existingBubbles.some(
               (bubble) =>
                 (bubble.metadata as { pendingHandoff?: boolean } | null)
@@ -483,12 +485,13 @@ export class FollowUpProcessor extends WorkerHost {
                 });
               }
 
-              existingBubbles = await this.prisma.message.findMany({
-                where: {
-                  idempotencyKey: { startsWith: `${idempotencyKeyBase}-` },
-                },
-                orderBy: { createdAt: 'asc' },
-              });
+              existingBubbles = inBubbleOrder(
+                await this.prisma.message.findMany({
+                  where: {
+                    idempotencyKey: { startsWith: `${idempotencyKeyBase}-` },
+                  },
+                }),
+              );
             }
 
             if (

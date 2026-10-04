@@ -3135,3 +3135,102 @@ it('saves inbound while the channel credential is revoked, alerts channel manage
     ),
   ).toBe(1);
 });
+
+it('sends the AI disclosure before the reply bubbles, also when resuming stored bubbles (KI-078)', async () => {
+  const sent = (send: jest.Mock) => send.mock.calls.map((call) => call[3]);
+  const processor = (send: jest.Mock, replyText: string) =>
+    new AiReplyProcessor(
+      prisma,
+      { sendTypingIndicator: jest.fn() } as any,
+      { broadcastNewMessage: jest.fn() } as any,
+      { executeActions: jest.fn() } as any,
+      { scheduleAutoFollowUps: jest.fn() } as any,
+      new AuditService(prisma),
+      new DeliveryAuthService(prisma),
+      claims,
+      new OutboundAttemptService(prisma, new DeliveryAuthService(prisma), {
+        sendTextMessage: send,
+      } as any),
+      { generateReply: async () => ({ replyText }) } as any,
+    );
+  const provider = () =>
+    jest.fn().mockImplementation(async () => ({
+      messages: [{ id: `wamid.${randomUUID()}` }],
+    }));
+  const run = (ai: AiReplyProcessor, f: any, inboundId: string) =>
+    ai.process({
+      id: randomUUID(),
+      data: {
+        organizationId: f.org.id,
+        conversationId: f.conv.id,
+        newMessageIds: [inboundId],
+      },
+    } as any);
+
+  // Fresh generation: disclosure, then every reply bubble in order.
+  const fresh = await fixture();
+  const freshSend = provider();
+  const freshInbound = await system(() => fresh.message());
+  await run(
+    processor(freshSend, 'First part|||Second part'),
+    fresh,
+    freshInbound.id,
+  );
+  const freshTexts = sent(freshSend);
+  expect(freshTexts).toHaveLength(3);
+  expect(freshTexts[0]).toMatch(/AI/i);
+  expect(freshTexts.slice(1)).toEqual(['First part', 'Second part']);
+
+  // Resume: stored bubbles whose creation order differs from their sequence
+  // are still sent by sequence, disclosure first.
+  const resumed = await fixture();
+  const resumedSend = provider();
+  const inbound = await system(() => resumed.message());
+  const batchKey = `ai-${inbound.id}-v${resumed.conv.stateVersion}`;
+  const stored = (index: number, content: string, role?: string) =>
+    system(() =>
+      prisma.message.create({
+        data: {
+          conversationId: resumed.conv.id,
+          content,
+          type: 'AI_TEXT',
+          handledBy: 'AI',
+          status: 'PENDING',
+          idempotencyKey: `${batchKey}-bubble-${index}`,
+          metadata: {
+            ...(role ? { role } : {}),
+            generationVersion: resumed.conv.stateVersion,
+          },
+        },
+      }),
+    );
+  await stored(2, 'Stored second');
+  await stored(1, 'Stored first');
+  await stored(0, 'Stored disclosure', 'disclosure');
+  await run(processor(resumedSend, 'unused'), resumed, inbound.id);
+  expect(sent(resumedSend)).toEqual([
+    'Stored disclosure',
+    'Stored first',
+    'Stored second',
+  ]);
+  for (const f of [fresh, resumed]) {
+    expect(
+      await system(() =>
+        prisma.message.count({
+          where: {
+            conversationId: f.conv.id,
+            type: 'AI_TEXT',
+            status: 'PENDING',
+          },
+        }),
+      ),
+    ).toBe(0);
+    expect(
+      await system(() =>
+        prisma.auditLog.count({
+          where: { organizationId: f.org.id, action: 'ai.disclosure_sent' },
+        }),
+      ),
+    ).toBe(1);
+  }
+});
