@@ -3234,3 +3234,47 @@ it('sends the AI disclosure before the reply bubbles, also when resuming stored 
     ).toBe(1);
   }
 });
+
+it('hands a conversation to staff once when the clinic has no AI persona (KI-086)', async () => {
+  const f = await fixture();
+  await staffMember(f.org.id);
+  await system(() =>
+    prisma.aiPersona.delete({ where: { organizationId: f.org.id } }),
+  );
+  for (let turn = 0; turn < 2; turn++) {
+    const inbound = await system(() => f.message());
+    expect(
+      await system(() => claims.claim(f.org.id, f.conv.id, [inbound.id])),
+    ).toBeNull();
+    expect(
+      (
+        await system(() =>
+          prisma.message.findUniqueOrThrow({ where: { id: inbound.id } }),
+        )
+      ).status,
+    ).toBe('PROCESSED');
+  }
+  const conversation = await system(() =>
+    prisma.conversation.findUniqueOrThrow({ where: { id: f.conv.id } }),
+  );
+  expect(conversation.aiPaused).toBe(true);
+  const alerts = await system(() =>
+    prisma.notification.findMany({ where: { organizationId: f.org.id } }),
+  );
+  expect(alerts).toHaveLength(1);
+  expect(alerts[0]).toMatchObject({
+    type: 'SYSTEM_ALERT',
+    title: 'AI is not set up',
+  });
+  expect(
+    await system(() =>
+      prisma.auditLog.count({
+        where: {
+          organizationId: f.org.id,
+          action: 'conversation.ai_paused',
+          actor: 'system',
+        },
+      }),
+    ),
+  ).toBe(1);
+});
