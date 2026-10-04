@@ -116,7 +116,7 @@ export default function CreateOrganizationPage() {
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
           <Building2 size={24} />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">OmniDesk</h1>
+        <h1 className="text-3xl font-bold tracking-tight">OmniX</h1>
       </div>
 
       <Card className="w-full max-w-xl shadow-lg">

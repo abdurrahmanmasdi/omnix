@@ -179,7 +179,9 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
       <div className="p-4 border-t border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-brand-deep/30 overflow-hidden shrink-0 border border-brand-electric/20 relative">
-            <Image src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.firstName || 'user'}`} alt="Avatar" fill className="object-cover" unoptimized />
+            <span aria-hidden="true" className="flex h-full w-full items-center justify-center text-xs font-semibold text-brand-ice">
+              {[user?.firstName, user?.lastName].map((name) => name?.trim().charAt(0) || '').join('').toLocaleUpperCase() || '?'}
+            </span>
           </div>
           <div className="flex flex-col flex-1 min-w-0">
             <span className="text-sm font-semibold text-brand-ice truncate">
