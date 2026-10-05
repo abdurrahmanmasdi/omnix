@@ -63,9 +63,18 @@ test.describe("staff and restricted access in the Inbox", () => {
       0,
     );
 
+    const deniedHistory = page.waitForResponse(
+      (response) =>
+        response.url().startsWith(`${API_URL}/conversations/`) &&
+        new URL(response.url()).pathname.endsWith("/messages") &&
+        response.request().method() === "GET",
+    );
     await page.getByText(patientName(a.assignedPatient)).click();
-    // Default locale is Turkish; role=alert is ReadError. 403 on history → "no access" copy.
-    const alert = page.getByRole("alert").filter({ hasText: "erişiminiz yok" });
+    expect((await deniedHistory).status()).toBe(403);
+    // The browser suite explicitly requests English. A denied history read must show an alert.
+    const alert = page.getByRole("alert").filter({
+      hasText: "You don't have access to this conversation's messages",
+    });
     await expect(alert).toBeVisible();
     const text = await page.locator("body").innerText();
     expect(text).not.toContain(a.assignedPatient.text);
