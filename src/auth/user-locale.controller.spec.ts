@@ -1,3 +1,4 @@
+import type { Server } from 'node:http';
 import { Test } from '@nestjs/testing';
 import {
   ExecutionContext,
@@ -10,7 +11,7 @@ import { JwtUserGuard } from './guards/jwt-user.guard';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('self locale endpoint', () => {
-  let app: INestApplication;
+  let app: INestApplication<Server>;
   const update = jest.fn().mockResolvedValue({ locale: 'AR' });
   beforeAll(async () => {
     const module = await Test.createTestingModule({
