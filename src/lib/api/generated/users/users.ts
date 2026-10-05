@@ -5,15 +5,30 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
   UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { LocaleResponseDto, UpdateLocaleDto } from "../../model";
+import type {
+  ChangePasswordDto,
+  LocaleResponseDto,
+  PasswordChangedDto,
+  UpdateLocaleDto,
+  UpdateUserProfileDto,
+  UserProfileDto,
+} from "../../model";
 
 import { customFetch } from "../../axios-client";
 
@@ -100,6 +115,325 @@ export const useUserLocaleControllerUpdateLocale = <
 > => {
   const mutationOptions =
     getUserLocaleControllerUpdateLocaleMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+export const userProfileControllerGet = (
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<UserProfileDto>(
+    { url: `/users/me`, method: "GET", signal },
+    options,
+  );
+};
+
+export const getUserProfileControllerGetQueryKey = () => {
+  return [`/users/me`] as const;
+};
+
+export const getUserProfileControllerGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof userProfileControllerGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof userProfileControllerGet>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getUserProfileControllerGetQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof userProfileControllerGet>>
+  > = ({ signal }) => userProfileControllerGet(requestOptions, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof userProfileControllerGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type UserProfileControllerGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof userProfileControllerGet>>
+>;
+export type UserProfileControllerGetQueryError = unknown;
+
+export function useUserProfileControllerGet<
+  TData = Awaited<ReturnType<typeof userProfileControllerGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof userProfileControllerGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof userProfileControllerGet>>,
+          TError,
+          Awaited<ReturnType<typeof userProfileControllerGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useUserProfileControllerGet<
+  TData = Awaited<ReturnType<typeof userProfileControllerGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof userProfileControllerGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof userProfileControllerGet>>,
+          TError,
+          Awaited<ReturnType<typeof userProfileControllerGet>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useUserProfileControllerGet<
+  TData = Awaited<ReturnType<typeof userProfileControllerGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof userProfileControllerGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+
+export function useUserProfileControllerGet<
+  TData = Awaited<ReturnType<typeof userProfileControllerGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof userProfileControllerGet>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getUserProfileControllerGetQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+export const userProfileControllerUpdate = (
+  updateUserProfileDto: UpdateUserProfileDto,
+  options?: SecondParameter<typeof customFetch>,
+) => {
+  return customFetch<UserProfileDto>(
+    {
+      url: `/users/me`,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      data: updateUserProfileDto,
+    },
+    options,
+  );
+};
+
+export const getUserProfileControllerUpdateMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof userProfileControllerUpdate>>,
+    TError,
+    { data: UpdateUserProfileDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof userProfileControllerUpdate>>,
+  TError,
+  { data: UpdateUserProfileDto },
+  TContext
+> => {
+  const mutationKey = ["userProfileControllerUpdate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof userProfileControllerUpdate>>,
+    { data: UpdateUserProfileDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return userProfileControllerUpdate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UserProfileControllerUpdateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof userProfileControllerUpdate>>
+>;
+export type UserProfileControllerUpdateMutationBody = UpdateUserProfileDto;
+export type UserProfileControllerUpdateMutationError = unknown;
+
+export const useUserProfileControllerUpdate = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof userProfileControllerUpdate>>,
+      TError,
+      { data: UpdateUserProfileDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof userProfileControllerUpdate>>,
+  TError,
+  { data: UpdateUserProfileDto },
+  TContext
+> => {
+  const mutationOptions =
+    getUserProfileControllerUpdateMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+export const userProfileControllerPassword = (
+  changePasswordDto: ChangePasswordDto,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<PasswordChangedDto>(
+    {
+      url: `/users/me/password`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: changePasswordDto,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getUserProfileControllerPasswordMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof userProfileControllerPassword>>,
+    TError,
+    { data: ChangePasswordDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof userProfileControllerPassword>>,
+  TError,
+  { data: ChangePasswordDto },
+  TContext
+> => {
+  const mutationKey = ["userProfileControllerPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof userProfileControllerPassword>>,
+    { data: ChangePasswordDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return userProfileControllerPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UserProfileControllerPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof userProfileControllerPassword>>
+>;
+export type UserProfileControllerPasswordMutationBody = ChangePasswordDto;
+export type UserProfileControllerPasswordMutationError = unknown;
+
+export const useUserProfileControllerPassword = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof userProfileControllerPassword>>,
+      TError,
+      { data: ChangePasswordDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof userProfileControllerPassword>>,
+  TError,
+  { data: ChangePasswordDto },
+  TContext
+> => {
+  const mutationOptions =
+    getUserProfileControllerPasswordMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
