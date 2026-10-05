@@ -181,6 +181,11 @@
                     "user": {
                       "type": "object",
                       "properties": {
+                        "locale": {
+                          "type": "string",
+                          "enum": ["EN", "TR", "AR"],
+                          "nullable": true
+                        },
                         "id": {
                           "type": "string"
                         },
@@ -228,7 +233,31 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["user"],
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "required": ["id", "locale"],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "locale": {
+                          "type": "string",
+                          "enum": ["EN", "TR", "AR"],
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -338,6 +367,40 @@
         },
         "summary": "Accept a clinic invitation",
         "tags": ["Authentication"]
+      }
+    },
+    "/users/me/locale": {
+      "patch": {
+        "operationId": "UserLocaleController_updateLocale",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLocaleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocaleResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Users"]
       }
     },
     "/organizations": {
@@ -1812,6 +1875,15 @@
                         "type": "string",
                         "example": "LEAD_ASSIGNED"
                       },
+                      "code": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "params": {
+                        "type": "object",
+                        "nullable": true,
+                        "additionalProperties": true
+                      },
                       "title": {
                         "type": "string",
                         "example": "Lead ready for handoff"
@@ -2556,6 +2628,37 @@
           }
         },
         "required": ["token"]
+      },
+      "UserLocale": {
+        "type": "string",
+        "enum": ["EN", "TR", "AR"]
+      },
+      "UpdateLocaleDto": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserLocale"
+              }
+            ]
+          }
+        },
+        "required": ["locale"]
+      },
+      "LocaleResponseDto": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserLocale"
+              }
+            ]
+          }
+        },
+        "required": ["locale"]
       },
       "CreateOrganizationDto": {
         "type": "object",

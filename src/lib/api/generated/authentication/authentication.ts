@@ -24,6 +24,7 @@ import type {
 import type {
   AcceptClinicInvitationDto,
   AcceptInvitationDto,
+  AuthControllerGetProfile200,
   AuthControllerLogout200,
   AuthControllerRefreshTokens200,
   ConsumeRecoveryDto,
@@ -536,7 +537,10 @@ export const authControllerGetProfile = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>({ url: `/auth/me`, method: "GET", signal }, options);
+  return customFetch<AuthControllerGetProfile200>(
+    { url: `/auth/me`, method: "GET", signal },
+    options,
+  );
 };
 
 export const getAuthControllerGetProfileQueryKey = () => {
