@@ -1,6 +1,9 @@
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import {
   Controller,
+  Patch,
+  Delete,
+  Body,
   Get,
   Post,
   Param,
@@ -16,6 +19,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicTeamService } from './clinic-team.service';
 import {
   ClinicMemberDto,
+  ChangeClinicMemberRoleDto,
+  ClinicMemberChangedDto,
   PendingClinicInvitationDto,
   GrantableClinicRoleDto,
   ClinicInvitationRevokedDto,
@@ -28,6 +33,28 @@ import {
 @Controller('organizations/current')
 export class ClinicTeamController {
   constructor(private readonly team: ClinicTeamService) {}
+  @Patch('members/:membershipId')
+  @ApiOkResponse({ type: ClinicMemberChangedDto })
+  changeRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('membershipId', ParseUUIDPipe) id: string,
+    @Body() dto: ChangeClinicMemberRoleDto,
+  ) {
+    return this.team.changeMember(
+      user.organizationId!,
+      id,
+      user.id,
+      dto.roleId,
+    );
+  }
+  @Delete('members/:membershipId')
+  @ApiOkResponse({ type: ClinicMemberChangedDto })
+  removeMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('membershipId', ParseUUIDPipe) id: string,
+  ) {
+    return this.team.changeMember(user.organizationId!, id, user.id);
+  }
   @Get('members')
   @ApiOkResponse({ type: [ClinicMemberDto] })
   members(@CurrentUser() user: AuthenticatedUser) {

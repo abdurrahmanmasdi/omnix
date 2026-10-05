@@ -1,3 +1,4 @@
+import { IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 export class ClinicMemberDto {
   @ApiProperty() id!: string;
@@ -29,4 +30,11 @@ export class ClinicInvitationIssuedDto {
 }
 export class ClinicInvitationRevokedDto {
   @ApiProperty() revoked!: boolean;
+}
+
+export class ChangeClinicMemberRoleDto {
+  @ApiProperty() @IsUUID() roleId!: string;
+}
+export class ClinicMemberChangedDto {
+  @ApiProperty() changed!: boolean;
 }
