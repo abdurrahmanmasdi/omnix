@@ -12,6 +12,7 @@ describe('AuthService Refresh Token Logic', () => {
 
   beforeEach(async () => {
     mockPrisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn((cb) => cb(mockPrisma)),
       session: {
         findFirst: jest.fn(),

@@ -235,7 +235,7 @@ export class AuthService {
 
     // Atomic refresh: lookup, validate, revoke old, create new — all in one tx
     const txResult = await this.prisma.$transaction(async (tx) => {
-      const session = await tx.session.findFirst({
+      let session = await tx.session.findFirst({
         where: { familyId, tokenHash },
       });
 
@@ -251,6 +251,10 @@ export class AuthService {
         });
         return { error: 'Session revoked due to token reuse' };
       }
+
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.userId}::uuid FOR UPDATE`;
+      session = await tx.session.findFirst({ where: { familyId, tokenHash } });
+      if (!session) return { error: 'Session not found' };
 
       // Grace for parallel tabs (QA-1F decision 1, KI-070): a token that was
       // rotated moments ago, in a family that is still live, gets a sibling
