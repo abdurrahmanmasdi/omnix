@@ -60,6 +60,12 @@ vi.mock("@/lib/api/generated/users/users", () => ({
   }),
   getUserProfileControllerGetQueryKey: () => ["/users/me"],
 }));
+vi.mock("@/lib/api/generated/authentication/authentication", () => ({
+  useAuthControllerGetProfile: () => ({
+    data: { user: { isPlatformAdmin: false } },
+    isError: false,
+  }),
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/profile",
   useRouter: () => ({ push: state.navigate }),

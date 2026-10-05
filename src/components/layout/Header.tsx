@@ -1,4 +1,5 @@
 "use client";
+import { useAuthControllerGetProfile } from "@/lib/api/generated/authentication/authentication";
 import { useUserProfileControllerGet } from "@/lib/api/generated/users/users";
 import { useTranslations } from "next-intl";
 import { useCopy } from "@/i18n/copy";
@@ -82,10 +83,14 @@ function useBreadcrumbs() {
 
 export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
   const copy = useCopy();
+  const platformText = useTranslations("Platform");
 
   const { t } = useInboxText();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const platformProfile = useAuthControllerGetProfile({
+    query: { enabled: !!user, retry: false },
+  });
   const breadcrumbs = useBreadcrumbs();
   const profile = useUserProfileControllerGet({ query: { enabled: !!user } });
   const p = useTranslations("Profile");
@@ -193,6 +198,12 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
               <Settings className="me-3 h-4 w-4 text-brand-ice/40" />
               {copy("Settings")}
             </DropdownMenuItem>
+            {platformProfile.data?.user.isPlatformAdmin === true &&
+              !platformProfile.isError && (
+                <DropdownMenuItem onClick={() => router.push("/platform")}>
+                  {platformText("title")}
+                </DropdownMenuItem>
+              )}
             <DropdownMenuSeparator className="my-1 bg-transparent/10" />
             <DropdownMenuItem
               className="rounded-lg font-medium text-red-400 focus:text-red-400 focus:bg-red-950/50 py-2.5 cursor-pointer"
