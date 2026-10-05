@@ -486,8 +486,6 @@ model OrganizationExperience {
   organizationId String @db.Uuid
 
   // Metadata to help the AI find the perfect match
-  code           String?
-  params         Json?
   title          String // e.g., "FUE Hair Transplant - 4000 Grafts"
   patientCountry String? // e.g., "Germany", "UK" (Crucial for building local trust)
   procedureType  String? // e.g., "Hair Transplant", "Dental Implants"
