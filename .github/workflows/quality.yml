@@ -9,11 +9,11 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: 75dccbdfbe1b506c6a71e9f734c21f06f3198212
+        default: 5420d6c1560dcf7e3e5c4adb89645df8f21d854f
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
-        default: 9700405cd3837f70b8e1784f89aa72ee7ca55b79
+        default: 90aac07e45dea5a75c27046785f8fb0b1ce9c9ca
 jobs:
   quality:
     # Environment admission alone cannot distinguish same-repo PRs from forks.
@@ -37,15 +37,15 @@ jobs:
         with:
           repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          # Pin the final P1-10 browser tests; Python retains the compatible Stage 1 contract.
-          ref: ${{ inputs.frontend_ref || '75dccbdfbe1b506c6a71e9f734c21f06f3198212' }}
+          # Pin coordinated QA-1f peers, including the cleaned API and authenticated Ping contract.
+          ref: ${{ inputs.frontend_ref || '5420d6c1560dcf7e3e5c4adb89645df8f21d854f' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: abdurrahmanmasdi/Omnix_py
           path: python-ai-service-v2
-          ref: ${{ inputs.python_ref || '9700405cd3837f70b8e1784f89aa72ee7ca55b79' }}
+          ref: ${{ inputs.python_ref || '90aac07e45dea5a75c27046785f8fb0b1ce9c9ca' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/setup-node@v4
