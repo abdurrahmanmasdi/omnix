@@ -533,3 +533,139 @@ it('saves self locale, exposes it via auth/me and rejects invalid updates', asyn
     .expect(401);
   expect(org.body).toBeDefined();
 });
+
+it('N2 profile updates self, rejects invalid/other-user fields and audits field names only', async () => {
+  const identity = await active();
+  const initial = await request(app.getHttpServer())
+    .get('/users/me')
+    .auth(identity.accessToken, { type: 'bearer' })
+    .expect(200);
+  await request(app.getHttpServer())
+    .patch('/users/me')
+    .auth(identity.accessToken, { type: 'bearer' })
+    .send({ phoneNumber: '' })
+    .expect(200);
+  const organization = await request(app.getHttpServer())
+    .post('/organizations')
+    .auth(identity.accessToken, { type: 'bearer' })
+    .send(workspace())
+    .expect(201);
+  expect(organization.body).toBeDefined();
+  const changed = await request(app.getHttpServer())
+    .patch('/users/me')
+    .auth(identity.accessToken, { type: 'bearer' })
+    .send({
+      firstName: 'Updated',
+      phoneNumber: '+905550001234',
+      whatsappNumber: '',
+      spokenLanguages: ['Turkish'],
+      locale: 'AR',
+    })
+    .expect(200);
+  expect(changed.body).toMatchObject({
+    id: initial.body.id,
+    firstName: 'Updated',
+    phoneNumber: '+905550001234',
+    whatsappNumber: null,
+    locale: 'AR',
+    email: identity.email,
+  });
+  expect(changed.body.memberships[0]).toMatchObject({
+    organizationName: 'Synthetic Clinic',
+    roleName: expect.any(String),
+    status: 'ACTIVE',
+  });
+  expect(changed.body.password_hash).toBeUndefined();
+  await request(app.getHttpServer()).get('/users/me').expect(401);
+  for (const fields of [
+    { userId: randomUUID() },
+    { email: 'change@example.invalid' },
+    { phoneNumber: 'bad' },
+    { firstName: null },
+  ]) {
+    await request(app.getHttpServer())
+      .patch('/users/me')
+      .auth(identity.accessToken, { type: 'bearer' })
+      .send(fields)
+      .expect(400);
+  }
+  const logs = await system(() =>
+    prisma.auditLog.findMany({
+      where: { actor: initial.body.id, action: 'PROFILE_UPDATED' },
+    }),
+  );
+  expect(logs).toHaveLength(2);
+  expect(logs.find((log) => log.organizationId === null)?.metadata).toEqual({
+    fields: ['phoneNumber'],
+  });
+  expect(logs.find((log) => log.organizationId !== null)?.metadata).toEqual({
+    fields: [
+      'firstName',
+      'spokenLanguages',
+      'locale',
+      'phoneNumber',
+      'whatsappNumber',
+    ],
+  });
+});
+
+it('N2 password change keeps current refresh family, renews access and revokes other sessions', async () => {
+  const identity = await active();
+  const login = () =>
+    request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: identity.email, password });
+  const current = await login().expect(200);
+  const other = await login().expect(200);
+  const cookie = (
+    current.headers['set-cookie'] as unknown as string[]
+  )[0].split(';')[0];
+  const otherCookie = (
+    other.headers['set-cookie'] as unknown as string[]
+  )[0].split(';')[0];
+  await request(app.getHttpServer())
+    .post('/users/me/password')
+    .auth(current.body.access_token as string, { type: 'bearer' })
+    .set('Cookie', cookie)
+    .send({ currentPassword: 'wrong', newPassword: 'SyntheticNewPassword123' })
+    .expect(401);
+  const changed = await request(app.getHttpServer())
+    .post('/users/me/password')
+    .auth(current.body.access_token as string, { type: 'bearer' })
+    .set('Cookie', cookie)
+    .send({ currentPassword: password, newPassword: 'SyntheticNewPassword123' })
+    .expect(200);
+  await request(app.getHttpServer())
+    .get('/users/me')
+    .auth(changed.body.access_token as string, { type: 'bearer' })
+    .expect(200);
+  await request(app.getHttpServer())
+    .get('/users/me')
+    .auth(other.body.access_token as string, { type: 'bearer' })
+    .expect(401);
+  await request(app.getHttpServer())
+    .post('/auth/refresh')
+    .set('Cookie', otherCookie)
+    .expect(401);
+  await request(app.getHttpServer())
+    .post('/auth/refresh')
+    .set('Cookie', cookie)
+    .expect(200);
+  const audit = await system(() =>
+    prisma.auditLog.findFirst({
+      where: {
+        actor: current.body.user.id as string,
+        action: 'PASSWORD_CHANGED',
+      },
+    }),
+  );
+  expect(audit).toMatchObject({
+    organizationId: null,
+    metadata: { fields: ['password'] },
+  });
+  await login().expect(401);
+  await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({ email: identity.email, password: 'SyntheticNewPassword123' })
+    .expect(200);
+});
