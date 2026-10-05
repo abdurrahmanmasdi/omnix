@@ -156,3 +156,10 @@
     @apply font-sans;
   }
 }
+
+html[lang="ar"] body {
+  font-family: var(--font-arabic), sans-serif;
+}
+html[lang="ar"] .font-montserrat {
+  font-family: var(--font-arabic), sans-serif;
+}

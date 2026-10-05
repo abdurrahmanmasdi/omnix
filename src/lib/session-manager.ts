@@ -3,13 +3,14 @@
 // Every auth path (login, signup, onboarding, axios refresh,
 // socket refresh, logout) routes through here.
 
-import { useAuthStore } from '@/store/auth-store';
-import { getQueryClient } from '@/providers/query-provider';
-import { disconnectSocket } from '@/lib/socket-runtime';
-import { incrementSessionGeneration } from '@/lib/session-scope';
+import { useAuthStore } from "@/store/auth-store";
+import { getQueryClient } from "@/providers/query-provider";
+import { disconnectSocket } from "@/lib/socket-runtime";
+import { incrementSessionGeneration } from "@/lib/session-scope";
 
 interface SessionUser {
   id: string;
+  locale?: "EN" | "TR" | "AR" | null;
   firstName?: string;
   lastName?: string;
   organizationId: string | null;
@@ -54,7 +55,11 @@ export function installSession(accessToken: string, user: SessionUser): void {
   }
 
   if (identityChanged) {
-    publishSessionEvent({ type: 'identity', id: user.id, organizationId: user.organizationId });
+    publishSessionEvent({
+      type: "identity",
+      id: user.id,
+      organizationId: user.organizationId,
+    });
   }
 
   // Store new credentials
@@ -77,7 +82,7 @@ export async function resetSession(broadcast = true): Promise<void> {
       // 1. Poison all in-flight requests immediately
       incrementSessionGeneration();
 
-      if (broadcast) publishSessionEvent({ type: 'logout' });
+      if (broadcast) publishSessionEvent({ type: "logout" });
 
       // Clear visible state synchronously, even if cancellation is slow.
       const qc = getQueryClient();
@@ -96,8 +101,11 @@ export async function resetSession(broadcast = true): Promise<void> {
       await cancellation;
 
       // 6. Hard navigate — replace() prevents back-button to protected page
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        window.location.replace('/login');
+      if (
+        typeof window !== "undefined" &&
+        window.location.pathname !== "/login"
+      ) {
+        window.location.replace("/login");
       }
     } finally {
       resetInProgress = null;
@@ -107,55 +115,81 @@ export async function resetSession(broadcast = true): Promise<void> {
   return resetInProgress;
 }
 
-
 // Only invalidations and identity IDs cross tabs. Tokens stay in memory.
-type SessionEvent = { type: 'logout' } | {
-  type: 'identity'; id: string; organizationId: string | null;
-};
-const SESSION_EVENT_KEY = 'omnix-session-event';
+type SessionEvent =
+  | { type: "logout" }
+  | {
+      type: "identity";
+      id: string;
+      organizationId: string | null;
+    };
+const SESSION_EVENT_KEY = "omnix-session-event";
 let publishSessionEvent: (event: SessionEvent) => void = () => {};
 let stopSessionSync: (() => void) | null = null;
 
 export function startSessionSync(): () => void {
   if (stopSessionSync) return stopSessionSync;
-  if (typeof window === 'undefined') return () => {};
+  if (typeof window === "undefined") return () => {};
 
   const receive = (data: unknown) => {
-    if (!data || typeof data !== 'object') return;
+    if (!data || typeof data !== "object") return;
     const event = data as Partial<SessionEvent>;
-    if (event.type === 'identity') {
-      if (typeof event.id !== 'string' ||
-          (event.organizationId !== null && typeof event.organizationId !== 'string')) return;
+    if (event.type === "identity") {
+      if (
+        typeof event.id !== "string" ||
+        (event.organizationId !== null &&
+          typeof event.organizationId !== "string")
+      )
+        return;
       const current = useAuthStore.getState().user;
       // A cold tab hydrating the shared cookie must not log out the same identity.
-      if (current?.id === event.id && current.organizationId === event.organizationId) return;
-    } else if (event.type !== 'logout') return;
+      if (
+        current?.id === event.id &&
+        current.organizationId === event.organizationId
+      )
+        return;
+    } else if (event.type !== "logout") return;
     void resetSession(false);
   };
 
   let channel: BroadcastChannel | null = null;
   try {
-    if (typeof BroadcastChannel !== 'undefined') channel = new BroadcastChannel('omnix-session');
-  } catch { /* Storage events work when the channel is unavailable. */ }
+    if (typeof BroadcastChannel !== "undefined")
+      channel = new BroadcastChannel("omnix-session");
+  } catch {
+    /* Storage events work when the channel is unavailable. */
+  }
   const onStorage = (event: StorageEvent) => {
     if (event.key !== SESSION_EVENT_KEY || !event.newValue) return;
-    try { receive(JSON.parse(event.newValue)); } catch { /* Ignore malformed data. */ }
+    try {
+      receive(JSON.parse(event.newValue));
+    } catch {
+      /* Ignore malformed data. */
+    }
   };
   if (channel) channel.onmessage = (event) => receive(event.data);
-  else window.addEventListener('storage', onStorage);
+  else window.addEventListener("storage", onStorage);
 
   publishSessionEvent = (event) => {
     if (channel) channel.postMessage(event);
     else {
       try {
-        window.localStorage.setItem(SESSION_EVENT_KEY, JSON.stringify({ ...event, nonce: crypto.randomUUID() }));
+        window.localStorage.setItem(
+          SESSION_EVENT_KEY,
+          JSON.stringify({ ...event, nonce: crypto.randomUUID() }),
+        );
         window.localStorage.removeItem(SESSION_EVENT_KEY);
-      } catch { /* Storage can be disabled by the browser. */ }
+      } catch {
+        /* Storage can be disabled by the browser. */
+      }
     }
   };
   stopSessionSync = () => {
-    if (channel) { channel.onmessage = null; channel.close(); }
-    window.removeEventListener('storage', onStorage);
+    if (channel) {
+      channel.onmessage = null;
+      channel.close();
+    }
+    window.removeEventListener("storage", onStorage);
     publishSessionEvent = () => {};
     stopSessionSync = null;
   };

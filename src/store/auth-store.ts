@@ -1,7 +1,8 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 interface User {
   id: string;
+  locale?: "EN" | "TR" | "AR" | null;
   firstName?: string;
   lastName?: string;
   organizationId: string | null;
