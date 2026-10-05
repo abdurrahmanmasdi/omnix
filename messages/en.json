@@ -599,7 +599,8 @@
     "mff17eaaff4d3": "e.g. Sarah",
     "m941b2b86caf6": "e.g. Ahmet",
     "mc60b143d6352": "e.g. Yilmaz",
-    "m7aa0fa576ab1": "e.g. 102345678901234"
+    "m7aa0fa576ab1": "e.g. 102345678901234",
+    "m4d40bea57123": "Clinic team"
   },
   "Notifications": {
     "GENERIC_NOTIFICATION": {
@@ -647,7 +648,9 @@
     "NO_CONTACT": "This conversation has no WhatsApp contact.",
     "CLINIC_INACTIVE": "The clinic account is inactive.",
     "DELIVERY_NOT_AUTHORIZED": "You do not have permission to view this data.",
-    "CURRENT_PASSWORD_INVALID": "Current password is incorrect."
+    "CURRENT_PASSWORD_INVALID": "Current password is incorrect.",
+    "CLINIC_INVITATION_NOT_FOUND": "Invitation not found.",
+    "CLINIC_INVITATION_NOT_PENDING": "This invitation is no longer pending. Refresh the list."
   },
   "Profile": {
     "title": "Profile",
@@ -686,6 +689,57 @@
       "ACTIVE": "Active",
       "PENDING": "Pending",
       "REJECTED": "Rejected"
+    }
+  },
+  "Team": {
+    "title": "Clinic team",
+    "description": "Manage staff invitations for your current clinic.",
+    "invite": "Invite staff",
+    "members": "Members",
+    "pending": "Pending invitations",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "joined": "Joined",
+    "expires": "Expires",
+    "issuer": "Issued by",
+    "actions": "Actions",
+    "loading": "Loading team…",
+    "loadFailed": "Team information could not be loaded.",
+    "retry": "Retry",
+    "noAccess": "You do not have permission to manage this clinic team.",
+    "noMembers": "No members found.",
+    "noInvitations": "No pending invitations.",
+    "noRoles": "No roles can be granted with your current permissions.",
+    "chooseRole": "Choose a role",
+    "create": "Create invitation",
+    "creating": "Creating…",
+    "invalidEmail": "Enter a valid email address.",
+    "saveFailed": "The invitation action could not be completed.",
+    "inviteReady": "Invitation ready",
+    "noEmail": "No email is sent. Copy the link and share it with the intended staff member.",
+    "link": "Invitation link",
+    "copyLink": "Copy link",
+    "copied": "Link copied.",
+    "copyFailed": "Copy failed. Select and copy the link manually.",
+    "newAccount": "The invitee can choose account details when opening this link.",
+    "existingAccount": "The invitee must sign in to their existing account to accept.",
+    "revoke": "Revoke invitation",
+    "revokeConfirm": "Revoke the invitation for {email}? This link will stop working.",
+    "cancel": "Cancel",
+    "confirmRevoke": "Confirm revocation",
+    "revoking": "Revoking…",
+    "revoked": "Invitation revoked.",
+    "statuses": {
+      "ACTIVE": "Active",
+      "PENDING": "Pending",
+      "REJECTED": "Rejected"
+    },
+    "roles": {
+      "Agent": "Agent",
+      "Manager": "Manager",
+      "Super Admin": "Super Admin"
     }
   }
 }

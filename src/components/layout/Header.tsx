@@ -39,6 +39,7 @@ interface HeaderProps {
 const LABEL_MAP: Record<string, string> = {
   dashboard: "Dashboard",
   profile: "Profile",
+  team: "Clinic team",
   leads: "Leads",
   conversations: "Conversations",
   pipeline: "Pipeline",

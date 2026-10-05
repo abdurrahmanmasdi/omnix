@@ -599,7 +599,8 @@
     "mff17eaaff4d3": "ör. Sarah",
     "m941b2b86caf6": "ör. Ahmet",
     "mc60b143d6352": "ör. Yılmaz",
-    "m7aa0fa576ab1": "ör. 102345678901234"
+    "m7aa0fa576ab1": "ör. 102345678901234",
+    "m4d40bea57123": "Klinik ekibi"
   },
   "Notifications": {
     "GENERIC_NOTIFICATION": {
@@ -647,7 +648,9 @@
     "NO_CONTACT": "Bu görüşmede WhatsApp kişisi yok.",
     "CLINIC_INACTIVE": "Klinik hesabı etkin değil.",
     "DELIVERY_NOT_AUTHORIZED": "Bu verileri görüntüleme izniniz yok.",
-    "CURRENT_PASSWORD_INVALID": "Mevcut şifre yanlış."
+    "CURRENT_PASSWORD_INVALID": "Mevcut şifre yanlış.",
+    "CLINIC_INVITATION_NOT_FOUND": "Davet bulunamadı.",
+    "CLINIC_INVITATION_NOT_PENDING": "Bu davet artık beklemiyor. Listeyi yenileyin."
   },
   "Profile": {
     "title": "Profil",
@@ -686,6 +689,57 @@
       "ACTIVE": "Aktif",
       "PENDING": "Bekliyor",
       "REJECTED": "Reddedildi"
+    }
+  },
+  "Team": {
+    "title": "Klinik ekibi",
+    "description": "Mevcut kliniğinizin personel davetlerini yönetin.",
+    "invite": "Personel davet et",
+    "members": "Üyeler",
+    "pending": "Bekleyen davetler",
+    "name": "Ad",
+    "email": "E-posta",
+    "role": "Rol",
+    "status": "Durum",
+    "joined": "Katılma tarihi",
+    "expires": "Son geçerlilik",
+    "issuer": "Davet eden",
+    "actions": "İşlemler",
+    "loading": "Ekip yükleniyor…",
+    "loadFailed": "Ekip bilgileri yüklenemedi.",
+    "retry": "Yeniden dene",
+    "noAccess": "Bu klinik ekibini yönetme izniniz yok.",
+    "noMembers": "Üye bulunamadı.",
+    "noInvitations": "Bekleyen davet yok.",
+    "noRoles": "Mevcut izinlerinizle atanabilecek rol yok.",
+    "chooseRole": "Bir rol seçin",
+    "create": "Davet oluştur",
+    "creating": "Oluşturuluyor…",
+    "invalidEmail": "Geçerli bir e-posta adresi girin.",
+    "saveFailed": "Davet işlemi tamamlanamadı.",
+    "inviteReady": "Davet hazır",
+    "noEmail": "E-posta gönderilmez. Bağlantıyı kopyalayıp davet ettiğiniz personele iletin.",
+    "link": "Davet bağlantısı",
+    "copyLink": "Bağlantıyı kopyala",
+    "copied": "Bağlantı kopyalandı.",
+    "copyFailed": "Kopyalanamadı. Bağlantıyı seçip elle kopyalayın.",
+    "newAccount": "Davet edilen kişi bu bağlantıyı açarak hesap bilgilerini belirleyebilir.",
+    "existingAccount": "Davet edilen kişi kabul etmek için mevcut hesabına giriş yapmalıdır.",
+    "revoke": "Daveti iptal et",
+    "revokeConfirm": "{email} için davet iptal edilsin mi? Bu bağlantı artık çalışmayacak.",
+    "cancel": "Vazgeç",
+    "confirmRevoke": "İptali onayla",
+    "revoking": "İptal ediliyor…",
+    "revoked": "Davet iptal edildi.",
+    "statuses": {
+      "ACTIVE": "Aktif",
+      "PENDING": "Bekliyor",
+      "REJECTED": "Reddedildi"
+    },
+    "roles": {
+      "Agent": "Temsilci",
+      "Manager": "Yönetici",
+      "Super Admin": "Süper yönetici"
     }
   }
 }
