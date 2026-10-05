@@ -646,6 +646,46 @@
     "OUTSIDE_24H_WINDOW": "Son hasta mesajının üzerinden 24 saat geçti. WhatsApp bu süreden sonra onaylı şablon gerektirir; henüz şablon yapılandırılmadı.",
     "NO_CONTACT": "Bu görüşmede WhatsApp kişisi yok.",
     "CLINIC_INACTIVE": "Klinik hesabı etkin değil.",
-    "DELIVERY_NOT_AUTHORIZED": "Bu verileri görüntüleme izniniz yok."
+    "DELIVERY_NOT_AUTHORIZED": "Bu verileri görüntüleme izniniz yok.",
+    "CURRENT_PASSWORD_INVALID": "Mevcut şifre yanlış."
+  },
+  "Profile": {
+    "title": "Profil",
+    "personal": "Kişisel bilgiler",
+    "email": "E-posta (salt okunur)",
+    "emailHelp": "Pilot süresince e-posta değiştirilemez.",
+    "firstName": "Ad",
+    "lastName": "Soyad",
+    "phoneNumber": "Telefon numarası",
+    "whatsappNumber": "WhatsApp numarası",
+    "spokenLanguages": "Konuşulan diller",
+    "languagesHelp": "Dilleri virgülle ayırın. En fazla 20 dil, her biri en fazla 50 karakter.",
+    "language": "Arayüz dili",
+    "password": "Şifre değiştir",
+    "passwordHelp": "En az 12 karakter, en fazla 72 UTF-8 bayt kullanın. Diğer oturumlar kapatılır; bu oturum devam eder.",
+    "currentPassword": "Mevcut şifre",
+    "newPassword": "Yeni şifre",
+    "confirmPassword": "Yeni şifreyi doğrulayın",
+    "changePassword": "Şifreyi güncelle",
+    "save": "Profili kaydet",
+    "saving": "Kaydediliyor…",
+    "saved": "Profil kaydedildi.",
+    "passwordSaved": "Şifre güncellendi. Diğer oturumlar iptal edildi.",
+    "loading": "Profil yükleniyor…",
+    "loadFailed": "Profil yüklenemedi.",
+    "saveFailed": "Değişiklikler kaydedilemedi.",
+    "retry": "Yeniden dene",
+    "namesRequired": "Ad ve soyad gereklidir.",
+    "invalidPhone": "+905550001234 gibi E.164 biçiminde bir numara kullanın veya boş bırakın.",
+    "invalidLanguages": "En fazla 20 dil, her biri en fazla 50 karakter kullanın.",
+    "invalidPassword": "Mevcut şifrenizi ve en az 12 karakter, en fazla 72 UTF-8 bayt içeren yeni şifreyi girin.",
+    "passwordMismatch": "Yeni şifreler eşleşmiyor.",
+    "memberships": "Klinik üyelikleri",
+    "noMemberships": "Klinik üyeliği yok",
+    "status": {
+      "ACTIVE": "Aktif",
+      "PENDING": "Bekliyor",
+      "REJECTED": "Reddedildi"
+    }
   }
 }

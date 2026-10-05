@@ -646,6 +646,46 @@
     "OUTSIDE_24H_WINDOW": "The last patient message is older than 24 hours. WhatsApp requires approved templates after that; none are configured yet.",
     "NO_CONTACT": "This conversation has no WhatsApp contact.",
     "CLINIC_INACTIVE": "The clinic account is inactive.",
-    "DELIVERY_NOT_AUTHORIZED": "You do not have permission to view this data."
+    "DELIVERY_NOT_AUTHORIZED": "You do not have permission to view this data.",
+    "CURRENT_PASSWORD_INVALID": "Current password is incorrect."
+  },
+  "Profile": {
+    "title": "Profile",
+    "personal": "Personal information",
+    "email": "Email (read-only)",
+    "emailHelp": "Email changes are unavailable during the pilot.",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "phoneNumber": "Phone number",
+    "whatsappNumber": "WhatsApp number",
+    "spokenLanguages": "Spoken languages",
+    "languagesHelp": "Separate languages with commas. Up to 20 languages, 50 characters each.",
+    "language": "Interface language",
+    "password": "Change password",
+    "passwordHelp": "Use 12 or more characters, up to 72 UTF-8 bytes. Other sessions will be signed out; this session continues.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "changePassword": "Update password",
+    "save": "Save profile",
+    "saving": "Saving…",
+    "saved": "Profile saved.",
+    "passwordSaved": "Password updated. Other sessions have been revoked.",
+    "loading": "Loading profile…",
+    "loadFailed": "Profile could not be loaded.",
+    "saveFailed": "Changes could not be saved.",
+    "retry": "Retry",
+    "namesRequired": "First and last name are required.",
+    "invalidPhone": "Use an E.164 phone number, such as +905550001234, or leave it empty.",
+    "invalidLanguages": "Use at most 20 languages, up to 50 characters each.",
+    "invalidPassword": "Enter the current password and a new password of at least 12 characters, up to 72 UTF-8 bytes.",
+    "passwordMismatch": "New passwords do not match.",
+    "memberships": "Clinic memberships",
+    "noMemberships": "No clinic membership",
+    "status": {
+      "ACTIVE": "Active",
+      "PENDING": "Pending",
+      "REJECTED": "Rejected"
+    }
   }
 }
