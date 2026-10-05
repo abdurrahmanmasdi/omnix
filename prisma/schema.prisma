@@ -83,12 +83,19 @@ model Organization {
   @@map("organizations")
 }
 
+enum UserLocale {
+  EN
+  TR
+  AR
+}
+
 model User {
   id                    String                   @id @default(uuid()) @db.Uuid
   email                 String                   @unique
   password_hash         String
   firstName             String
   lastName              String
+  locale                UserLocale?
   avatarUrl             String?
   phoneNumber           String?
   whatsappNumber        String?
@@ -479,6 +486,8 @@ model OrganizationExperience {
   organizationId String @db.Uuid
 
   // Metadata to help the AI find the perfect match
+  code           String?
+  params         Json?
   title          String // e.g., "FUE Hair Transplant - 4000 Grafts"
   patientCountry String? // e.g., "Germany", "UK" (Crucial for building local trust)
   procedureType  String? // e.g., "Hair Transplant", "Dental Implants"
@@ -535,6 +544,8 @@ model Notification {
   organizationId String           @db.Uuid
   userId         String           @db.Uuid // The recipient
   type           NotificationType
+  code           String?
+  params         Json?
   title          String // e.g., "Lead Ready for Transfer"
   body           String           @db.Text // e.g., "The AI handed off Abdulrahman. Needs a human."
   isRead         Boolean          @default(false)

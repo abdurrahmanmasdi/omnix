@@ -432,7 +432,7 @@ export class AuthService {
     const tx = txClient || this.prisma;
     const userRow = await tx.user.findUnique({
       where: { id: userId },
-      select: { securityVersion: true },
+      select: { securityVersion: true, locale: true },
     });
 
     const payload = {
@@ -488,6 +488,7 @@ export class AuthService {
         id: userId,
         firstName,
         lastName,
+        locale: userRow?.locale ?? null,
         organizationId,
         hasCompletedOnboarding: !!organizationId, // Useful boolean for your frontend!
       },

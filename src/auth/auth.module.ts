@@ -1,3 +1,4 @@
+import { UserLocaleController } from './user-locale.controller';
 import { Global } from '@nestjs/common';
 import { UserJwtStrategy } from './jwt-user.strategy';
 import { Module } from '@nestjs/common';
@@ -12,7 +13,7 @@ import { InvitationsController } from './invitations.controller';
 @Global()
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [AuthController, InvitationsController],
+  controllers: [AuthController, InvitationsController, UserLocaleController],
   providers: [
     AuthService,
     JwtStrategy,

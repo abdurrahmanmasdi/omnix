@@ -20,6 +20,8 @@ describe('JwtStrategy', () => {
     const strategy = new JwtStrategy(config, {
       user: {
         findUnique: jest.fn().mockResolvedValue({
+          email: payload.email,
+          locale: 'AR',
           status: 'ACTIVE',
           securityVersion: 1,
           memberships: [{ id: 'membership-1' }],
@@ -31,6 +33,7 @@ describe('JwtStrategy', () => {
     await expect(strategy.validate(payload)).resolves.toEqual({
       id: 'user-1',
       email: 'user@example.test',
+      locale: 'AR',
       organizationId: 'org-1',
       roleId: 'role-1',
     });
@@ -60,6 +63,8 @@ describe('JwtStrategy', () => {
       const strategy = new JwtStrategy(config, {
         user: {
           findUnique: jest.fn().mockResolvedValue({
+            email: payload.email,
+            locale: 'AR',
             status: 'ACTIVE',
             securityVersion: 2,
             memberships: [{ id: 'membership-1' }],
