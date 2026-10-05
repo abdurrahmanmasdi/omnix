@@ -20,6 +20,7 @@ export async function alertConversationStaff(
       assignedAgentId: string | null;
       lead?: { assignedAgentId: string | null } | null;
     };
+    code: string;
     title: string;
     body: string;
   },
@@ -47,6 +48,8 @@ export async function alertConversationStaff(
         organizationId,
         userId: membership.userId,
         type: NotificationType.SYSTEM_ALERT,
+        code: input.code,
+        params: {},
         title: input.title,
         body: input.body,
         referenceId: conversation.leadId ?? conversation.id,
@@ -74,6 +77,7 @@ export async function alertChannelManagers(
   input: {
     organizationId: string;
     channelId: string;
+    code: string;
     title: string;
     body: string;
   },
@@ -99,6 +103,8 @@ export async function alertChannelManagers(
         organizationId,
         userId: membership.userId,
         type: NotificationType.SYSTEM_ALERT,
+        code: input.code,
+        params: {},
         title: input.title,
         body: input.body,
         referenceId: input.channelId,

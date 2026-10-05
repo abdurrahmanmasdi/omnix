@@ -17,6 +17,16 @@ export class NotificationResponseDto {
   })
   type!: NotificationType;
 
+  @ApiPropertyOptional({ nullable: true, example: 'LEAD_HANDED_OFF' })
+  code?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    type: 'object',
+    additionalProperties: true,
+  })
+  params?: Record<string, unknown> | null;
+
   @ApiProperty({ example: 'Lead ready for handoff' })
   title!: string;
 

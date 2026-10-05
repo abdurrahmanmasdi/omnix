@@ -535,6 +535,8 @@ export class FollowUpProcessor extends WorkerHost {
                 await this.notificationEmitter.send({
                   organizationId: organization.id,
                   userId: lead.assignedAgentId as string,
+                  code: 'FOLLOW_UP_DRAFT',
+                  params: { name: `${lead.firstName} ${lead.lastName}` },
                   title: 'Draft Follow-Up Ready',
                   body: `AI generated a draft follow-up for ${lead.firstName} ${lead.lastName}.`,
                   referenceId: conversation.id,

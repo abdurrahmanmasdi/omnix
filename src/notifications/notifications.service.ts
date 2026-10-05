@@ -65,6 +65,8 @@ export class NotificationsService {
         !mayReadPii || (row.type === 'NEW_MESSAGE' && !mayReadMessages);
       return {
         ...row,
+        code: hideBody ? 'GENERIC_NOTIFICATION' : row.code,
+        params: hideBody ? {} : row.params,
         title: mayReadPii ? row.title : GENERIC_NOTIFICATION_TITLE,
         body: hideBody ? GENERIC_NOTIFICATION_BODY : row.body,
       };

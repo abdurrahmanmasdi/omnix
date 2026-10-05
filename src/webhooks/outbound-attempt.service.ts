@@ -451,6 +451,7 @@ export class OutboundAttemptService {
       const staffNotified = await alertConversationStaff(tx, {
         organizationId,
         conversation,
+        code: 'DELIVERY_UNKNOWN',
         title: 'Delivery uncertain',
         body: 'A WhatsApp message may or may not have reached the patient. Check WhatsApp before replying. The AI is paused for this conversation.',
       });
