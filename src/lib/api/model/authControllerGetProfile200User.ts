@@ -9,6 +9,7 @@ import type { AuthControllerGetProfile200UserLocale } from "./authControllerGetP
 
 export type AuthControllerGetProfile200User = {
   id: string;
+  isPlatformAdmin: boolean;
   /** @nullable */
   locale: AuthControllerGetProfile200UserLocale;
 };

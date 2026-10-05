@@ -1,4 +1,5 @@
 "use client";
+import { useUserProfileControllerGet } from "@/lib/api/generated/users/users";
 import { useCopy } from "@/i18n/copy";
 
 import { useState } from "react";
@@ -59,6 +60,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Settings className="me-2.5 h-4 w-4" />,
     matchPath: "/settings",
     children: [
+      {
+        href: "/dashboard/settings/team",
+        label: "Clinic team",
+        icon: <Users className="me-2 h-3.5 w-3.5" />,
+        matchPath: "/settings/team",
+      },
       {
         href: "/dashboard/settings/ai",
         label: "AI Settings",
@@ -122,6 +129,12 @@ export function Sidebar({
     pathname.includes("/settings"),
   );
   const user = useAuthStore((state) => state.user);
+  const profile = useUserProfileControllerGet({ query: { enabled: !!user } });
+  const canManageTeam =
+    !profile.isError &&
+    !!profile.data?.memberships.find(
+      (m) => m.organizationId === user?.organizationId,
+    )?.canManageTeam;
 
   const isActive = (item: NavItem) => {
     if (item.href === "/dashboard") return pathname === "/dashboard";
@@ -196,26 +209,32 @@ export function Sidebar({
                   }`}
                 >
                   <div className="ms-5 ps-3 border-s-2 border-white/5 space-y-0.5 py-0.5">
-                    {item.children.map((child) => (
-                      <Link
-                        key={child.href}
-                        href={child.href}
-                        onClick={onClose}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`w-full justify-start h-8 text-[12px] font-medium rounded-lg transition-all ${
-                            isExactActive(child)
-                              ? "bg-brand-electric/10 text-brand-cyan hover:bg-brand-electric/20 hover:text-brand-glow"
-                              : "text-brand-ice/70 hover:bg-transparent/5 hover:text-brand-ice"
-                          }`}
+                    {item.children
+                      .filter(
+                        (child) =>
+                          child.href !== "/dashboard/settings/team" ||
+                          canManageTeam,
+                      )
+                      .map((child) => (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          onClick={onClose}
                         >
-                          {child.icon}
-                          {copy(child.label)}
-                        </Button>
-                      </Link>
-                    ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`w-full justify-start h-8 text-[12px] font-medium rounded-lg transition-all ${
+                              isExactActive(child)
+                                ? "bg-brand-electric/10 text-brand-cyan hover:bg-brand-electric/20 hover:text-brand-glow"
+                                : "text-brand-ice/70 hover:bg-transparent/5 hover:text-brand-ice"
+                            }`}
+                          >
+                            {child.icon}
+                            {copy(child.label)}
+                          </Button>
+                        </Link>
+                      ))}
                   </div>
                 </div>
               </div>
