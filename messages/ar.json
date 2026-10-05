@@ -651,7 +651,13 @@
     "CURRENT_PASSWORD_INVALID": "كلمة المرور الحالية غير صحيحة.",
     "CLINIC_INVITATION_NOT_FOUND": "لم يتم العثور على الدعوة.",
     "CLINIC_INVITATION_NOT_PENDING": "هذه الدعوة لم تعد معلقة. حدّث القائمة.",
-    "RECOVERY_ACCOUNT_UNAVAILABLE": "يلزم حساب نشط لاستعادة كلمة المرور."
+    "RECOVERY_ACCOUNT_UNAVAILABLE": "يلزم حساب نشط لاستعادة كلمة المرور.",
+    "TEAM_SELF_CHANGE_FORBIDDEN": "لا يمكنك تغيير دورك أو إزالة نفسك.",
+    "TEAM_LAST_OWNER_REQUIRED": "يجب أن تحتفظ العيادة بمالك نشط واحد على الأقل.",
+    "TEAM_MEMBER_NOT_FOUND": "العضو غير موجود في هذه العيادة.",
+    "TEAM_ROLE_NOT_FOUND": "الدور غير موجود في هذه العيادة.",
+    "TEAM_PERMISSION_REQUIRED": "ليس لديك إذن لإدارة هذا الفريق.",
+    "INVITATION_ROLE_EXCEEDS_ISSUER": "لا يمكنك منح أذونات لا تمتلكها."
   },
   "Profile": {
     "title": "الملف الشخصي",
@@ -741,7 +747,18 @@
       "Agent": "موظف",
       "Manager": "مدير",
       "Super Admin": "المسؤول الأعلى"
-    }
+    },
+    "changeRole": "تغيير الدور",
+    "removeMember": "إزالة العضو",
+    "changeRoleTitle": "تغيير دور العضو",
+    "changeRoleNote": "عيّن دورًا جديدًا لـ {email}. سيتم إلغاء جلساته.",
+    "removeTitle": "إزالة العضو؟",
+    "removeNote": "هل تريد إزالة {email} من هذه العيادة؟ سيتم إلغاء جلساته.",
+    "confirmRemove": "تأكيد الإزالة",
+    "saveRole": "حفظ الدور",
+    "savingMember": "جارٍ الحفظ…",
+    "roleChanged": "تم تحديث دور العضو.",
+    "memberRemoved": "تمت إزالة العضو."
   },
   "Platform": {
     "title": "إدارة المنصة",

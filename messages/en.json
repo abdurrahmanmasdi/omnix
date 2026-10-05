@@ -651,7 +651,13 @@
     "CURRENT_PASSWORD_INVALID": "Current password is incorrect.",
     "CLINIC_INVITATION_NOT_FOUND": "Invitation not found.",
     "CLINIC_INVITATION_NOT_PENDING": "This invitation is no longer pending. Refresh the list.",
-    "RECOVERY_ACCOUNT_UNAVAILABLE": "An active account is required for recovery."
+    "RECOVERY_ACCOUNT_UNAVAILABLE": "An active account is required for recovery.",
+    "TEAM_SELF_CHANGE_FORBIDDEN": "You cannot change your own role or remove yourself.",
+    "TEAM_LAST_OWNER_REQUIRED": "The clinic must keep at least one active owner.",
+    "TEAM_MEMBER_NOT_FOUND": "Member not found in this clinic.",
+    "TEAM_ROLE_NOT_FOUND": "Role not found in this clinic.",
+    "TEAM_PERMISSION_REQUIRED": "You do not have permission to manage this team.",
+    "INVITATION_ROLE_EXCEEDS_ISSUER": "You cannot grant permissions you do not hold."
   },
   "Profile": {
     "title": "Profile",
@@ -741,7 +747,18 @@
       "Agent": "Agent",
       "Manager": "Manager",
       "Super Admin": "Super Admin"
-    }
+    },
+    "changeRole": "Change role",
+    "removeMember": "Remove",
+    "changeRoleTitle": "Change member role",
+    "changeRoleNote": "Assign a new role to {email}. Their sessions will be revoked.",
+    "removeTitle": "Remove member?",
+    "removeNote": "Remove {email} from this clinic? Their sessions will be revoked.",
+    "confirmRemove": "Confirm removal",
+    "saveRole": "Save role",
+    "savingMember": "Saving…",
+    "roleChanged": "Member role updated.",
+    "memberRemoved": "Member removed."
   },
   "Platform": {
     "title": "Platform administration",
