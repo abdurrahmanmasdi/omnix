@@ -9,7 +9,7 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: 61b92c9430cef5600f19f9989e9746bcfb5efa64
+        default: 31bd107b8670bfd13b44b2e5e667a731e2d3c01e
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
@@ -37,8 +37,8 @@ jobs:
         with:
           repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          # Pin the matching N5 frontend, including its generated member-management API.
-          ref: ${{ inputs.frontend_ref || '61b92c9430cef5600f19f9989e9746bcfb5efa64' }}
+          # Pin the matching N5 API contract and explicit-locale browser permission tests.
+          ref: ${{ inputs.frontend_ref || '31bd107b8670bfd13b44b2e5e667a731e2d3c01e' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/checkout@v4
