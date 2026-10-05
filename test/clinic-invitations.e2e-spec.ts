@@ -486,4 +486,229 @@ describe('Clinic Invitations (e2e)', () => {
       ).resolves.toMatchObject({ createsAccount: true });
     });
   });
+
+  const access = (
+    user: { id: string; email: string },
+    organizationId: string,
+    roleId: string,
+  ) =>
+    app.get(JwtService).sign(
+      {
+        sub: user.id,
+        email: user.email,
+        organizationId,
+        roleId,
+        securityVersion: 1,
+      },
+      { secret: process.env.JWT_ACCESS_SECRET },
+    );
+  it('N3 lists only current clinic members/invitations and refuses cross-clinic revocation', async () =>
+    system(async () => {
+      const a = await clinicWithRoles('team-a');
+      const b = await clinicWithRoles('team-b');
+      const tokenA = access(a.owner, a.org.id, a.roles.get('Super Admin')!.id);
+      const tokenB = access(b.owner, b.org.id, b.roles.get('Super Admin')!.id);
+      const server = app.getHttpServer() as Server;
+      const members = await request(server)
+        .get('/organizations/current/members')
+        .query({ organizationId: b.org.id })
+        .auth(tokenA, { type: 'bearer' })
+        .expect(200);
+      expect(members.body).toHaveLength(1);
+      expect(members.body[0]).toMatchObject({
+        userId: a.owner.id,
+        email: a.owner.email,
+        status: 'ACTIVE',
+        roleName: 'Super Admin',
+        joinedAt: expect.any(String),
+      });
+      const issuedA = await request(server)
+        .post('/auth/invitations/clinic')
+        .auth(tokenA, { type: 'bearer' })
+        .send({
+          email: `team-a-${randomUUID()}@example.invalid`,
+          roleId: a.roles.get('Agent')!.id,
+        })
+        .expect(201);
+      const issuedB = await request(server)
+        .post('/auth/invitations/clinic')
+        .auth(tokenB, { type: 'bearer' })
+        .send({
+          email: `team-b-${randomUUID()}@example.invalid`,
+          roleId: b.roles.get('Agent')!.id,
+        })
+        .expect(201);
+      const list = await request(server)
+        .get('/organizations/current/invitations')
+        .auth(tokenA, { type: 'bearer' })
+        .expect(200);
+      expect(list.body).toHaveLength(1);
+      expect(list.body[0]).toMatchObject({
+        id: issuedA.body.invitationId,
+        roleName: 'Agent',
+        issuer: 'Owner team-a',
+      });
+      expect(
+        Object.keys(list.body[0] as Record<string, unknown>).sort(),
+      ).toEqual(['email', 'expiresAt', 'id', 'issuer', 'roleName']);
+      await request(server)
+        .post(
+          `/organizations/current/invitations/${issuedB.body.invitationId}/revoke`,
+        )
+        .auth(tokenA, { type: 'bearer' })
+        .expect(404);
+      await request(server)
+        .post(
+          `/organizations/current/invitations/${issuedA.body.invitationId}/revoke`,
+        )
+        .auth(tokenA, { type: 'bearer' })
+        .expect(200, { revoked: true });
+      await request(server)
+        .post('/auth/invitations/clinic/accept')
+        .send({
+          token: issuedA.body.token,
+          firstName: 'Synthetic',
+          lastName: 'Staff',
+          password: 'SyntheticPassword123',
+        })
+        .expect(401);
+      const pending = await request(server)
+        .get('/organizations/current/invitations')
+        .auth(tokenA, { type: 'bearer' })
+        .expect(200);
+      expect(pending.body).toEqual([]);
+      const event = await prisma.accountActivationEvent.findFirst({
+        where: {
+          invitationId: issuedA.body.invitationId as string,
+          action: 'REVOKED',
+        },
+      });
+      expect(event?.actor).toBe(a.owner.id);
+    }));
+
+  it('N3 denies team endpoints without organization:manage, including list and revoke', async () =>
+    system(async () => {
+      const clinic = await clinicWithRoles('team-denied');
+      const staff = await prisma.user.create({
+        data: {
+          email: `team-denied-${randomUUID()}@example.invalid`,
+          firstName: 'Restricted',
+          lastName: 'Staff',
+          password_hash: '!synthetic',
+          status: 'ACTIVE',
+        },
+      });
+      await prisma.organizationMembership.create({
+        data: {
+          userId: staff.id,
+          organizationId: clinic.org.id,
+          roleId: clinic.roles.get('Agent')!.id,
+          status: 'ACTIVE',
+        },
+      });
+      const token = access(staff, clinic.org.id, clinic.roles.get('Agent')!.id);
+      const server = app.getHttpServer() as Server;
+      for (const path of ['members', 'invitations', 'roles']) {
+        await request(server)
+          .get(`/organizations/current/${path}`)
+          .auth(token, { type: 'bearer' })
+          .expect(403);
+        await request(server).get(`/organizations/current/${path}`).expect(401);
+      }
+      await request(server)
+        .post(`/organizations/current/invitations/${randomUUID()}/revoke`)
+        .auth(token, { type: 'bearer' })
+        .expect(403);
+      await request(server)
+        .post('/auth/invitations/clinic')
+        .auth(token, { type: 'bearer' })
+        .send({
+          email: `denied-${randomUUID()}@example.invalid`,
+          roleId: clinic.roles.get('Agent')!.id,
+        })
+        .expect(403);
+      const self = await request(server)
+        .get('/users/me')
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(self.body.memberships[0].canManageTeam).toBe(false);
+    }));
+
+  it('N3 grantable roles honor permission overrides and omit expired/consumed pending rows', async () =>
+    system(async () => {
+      const clinic = await clinicWithRoles('team-grants');
+      const staff = await prisma.user.create({
+        data: {
+          email: `team-grants-${randomUUID()}@example.invalid`,
+          firstName: 'Grant',
+          lastName: 'Staff',
+          password_hash: '!synthetic',
+          status: 'ACTIVE',
+        },
+      });
+      const membership = await prisma.organizationMembership.create({
+        data: {
+          userId: staff.id,
+          organizationId: clinic.org.id,
+          roleId: clinic.roles.get('Agent')!.id,
+          status: 'ACTIVE',
+        },
+      });
+      const manage = await prisma.permission.findUniqueOrThrow({
+        where: { action: 'organization:manage' },
+      });
+      await prisma.membershipPermissionOverride.create({
+        data: {
+          membershipId: membership.id,
+          permissionId: manage.id,
+          is_granted: true,
+        },
+      });
+      const token = access(staff, clinic.org.id, clinic.roles.get('Agent')!.id);
+      const server = app.getHttpServer() as Server;
+      const roles = await request(server)
+        .get('/organizations/current/roles')
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(roles.body).toEqual([
+        { id: clinic.roles.get('Agent')!.id, name: 'Agent' },
+      ]);
+      const self = await request(server)
+        .get('/users/me')
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(self.body.memberships[0].canManageTeam).toBe(true);
+      const grant = await prisma.permission.findUniqueOrThrow({
+        where: { action: 'leads:manage' },
+      });
+      await prisma.membershipPermissionOverride.create({
+        data: {
+          membershipId: membership.id,
+          permissionId: grant.id,
+          is_granted: false,
+        },
+      });
+      const none = await request(server)
+        .get('/organizations/current/roles')
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(none.body).toEqual([]);
+      const expired = await invitations.issueClinicInvitation(
+        {
+          email: `expired-${randomUUID()}@example.invalid`,
+          roleId: clinic.roles.get('Agent')!.id,
+        },
+        clinic.owner.id,
+        clinic.org.id,
+      );
+      await prisma.accountInvitation.update({
+        where: { id: expired.invitationId },
+        data: { expiresAt: new Date(0) },
+      });
+      const list = await request(server)
+        .get('/organizations/current/invitations')
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(list.body).toEqual([]);
+    }));
 });
