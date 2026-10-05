@@ -10,6 +10,8 @@ function row(overrides: Partial<Notification>): Notification {
     organizationId: ORG,
     userId: USER,
     type: 'NEW_MESSAGE',
+    code: null,
+    params: null,
     title: 'Message from Ayse Yilmaz',
     body: 'Hello, my number is +90 555 000 00 00',
     isRead: false,
@@ -82,5 +84,30 @@ describe('NotificationsService read-time generalization (KI-011)', () => {
     const { service } = build(['leads:read:all'], [stored]);
     await service.getUserNotifications(ORG, USER);
     expect(stored.title).toBe('Message from Ayse Yilmaz');
+  });
+});
+
+describe('notification translation metadata', () => {
+  it('returns code and params to authorized recipients', async () => {
+    const { service } = build(
+      ['leads:read:all', 'leads:read:pii', 'leads:read:messages'],
+      [row({ code: 'NEW_MESSAGE', params: { name: 'Synthetic' } })],
+    );
+    expect((await service.getUserNotifications(ORG, USER))[0]).toMatchObject({
+      code: 'NEW_MESSAGE',
+      params: { name: 'Synthetic' },
+    });
+  });
+  it('redacts params after permission revocation', async () => {
+    const { service } = build(
+      ['leads:read:all'],
+      [row({ code: 'NEW_MESSAGE', params: { name: 'Secret' } })],
+    );
+    const [notification] = await service.getUserNotifications(ORG, USER);
+    expect(notification).toMatchObject({
+      code: 'GENERIC_NOTIFICATION',
+      params: {},
+    });
+    expect(JSON.stringify(notification)).not.toContain('Secret');
   });
 });

@@ -65,6 +65,12 @@ export class NotificationsController {
             type: 'string',
             example: 'LEAD_ASSIGNED',
           },
+          code: { type: 'string', nullable: true },
+          params: {
+            type: 'object',
+            nullable: true,
+            additionalProperties: true,
+          },
           title: {
             type: 'string',
             example: 'Lead ready for handoff',

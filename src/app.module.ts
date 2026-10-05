@@ -30,7 +30,8 @@ import { MetricsModule } from './core/metrics/metrics.module';
 import { HealthModule } from './health/health.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
-import { APP_GUARD } from '@nestjs/core';
+import { HttpErrorCodeFilter } from './core/http-error-code.filter';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './core/guards/csrf.guard';
 import { validateEnv } from './config/env.validation';
 import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
@@ -100,6 +101,7 @@ import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
   ],
   controllers: [AppController],
   providers: [
+    { provide: APP_FILTER, useClass: HttpErrorCodeFilter },
     AppService,
     {
       provide: APP_GUARD,

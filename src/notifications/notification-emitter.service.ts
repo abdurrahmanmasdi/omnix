@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PermissionService } from '../auth/permission.service';
 import {
   GENERIC_NOTIFICATION_BODY,
@@ -11,6 +11,8 @@ export interface SendNotificationDto {
   organizationId: string;
   userId: string;
   type: NotificationType;
+  code?: string;
+  params?: Prisma.InputJsonObject;
   title: string;
   body: string;
   referenceId?: string;
@@ -116,6 +118,14 @@ export class NotificationEmitterService {
           type: data.type,
           title,
           body,
+          code:
+            !mayReadPii || (data.type === 'NEW_MESSAGE' && !mayReadMessages)
+              ? 'GENERIC_NOTIFICATION'
+              : (data.code ?? data.type),
+          params:
+            !mayReadPii || (data.type === 'NEW_MESSAGE' && !mayReadMessages)
+              ? {}
+              : (data.params ?? {}),
           referenceId: data.referenceId,
           referenceType: data.referenceType,
         },

@@ -47,6 +47,7 @@ export class InboundClaimService {
       await alertConversationStaff(tx, {
         organizationId,
         conversation,
+        code: 'AI_PERSONA_MISSING',
         title: 'AI is not set up',
         body: 'No AI persona is configured for this clinic, so the AI did not answer. The conversation is waiting for staff.',
       });

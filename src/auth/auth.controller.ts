@@ -113,6 +113,11 @@ export class AuthController {
         user: {
           type: 'object',
           properties: {
+            locale: {
+              type: 'string',
+              enum: ['EN', 'TR', 'AR'],
+              nullable: true,
+            },
             id: { type: 'string' },
             firstName: { type: 'string' },
             lastName: { type: 'string' },
@@ -183,6 +188,27 @@ export class AuthController {
   @UseGuards(JwtAuthGuard) // 🛡️ THE BOUNCER IS ACTIVE!
   @ApiBearerAuth() // Tells Swagger this route requires a token
   @ApiOperation({ summary: 'Get the currently logged-in user profile' })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      type: 'object',
+      required: ['user'],
+      properties: {
+        user: {
+          type: 'object',
+          required: ['id', 'locale'],
+          properties: {
+            id: { type: 'string' },
+            locale: {
+              type: 'string',
+              enum: ['EN', 'TR', 'AR'],
+              nullable: true,
+            },
+          },
+        },
+      },
+    },
+  })
   getProfile(@Req() req: Request) {
     // Because the Guard passed, `req.user` is guaranteed to exist and be valid!
     return {

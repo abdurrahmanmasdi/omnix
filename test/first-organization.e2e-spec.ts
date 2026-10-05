@@ -494,3 +494,42 @@ it('rejects a tenant token after membership revocation or account deletion', asy
     .auth(created.body.access_token as string, { type: 'bearer' })
     .expect(401);
 });
+
+it('saves self locale, exposes it via auth/me and rejects invalid updates', async () => {
+  const user = await active();
+  const org = await request(app.getHttpServer())
+    .post('/organizations')
+    .set('Authorization', `Bearer ${user.accessToken}`)
+    .send(workspace())
+    .expect(201);
+  const login = await request(app.getHttpServer())
+    .post('/auth/login')
+    .send({ email: user.email, password })
+    .expect(200);
+  const token = login.body.access_token;
+  const me = await request(app.getHttpServer())
+    .get('/auth/me')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
+  expect(me.body.user.locale).toBeNull();
+  await request(app.getHttpServer())
+    .patch('/users/me/locale')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ locale: 'AR' })
+    .expect(200, { locale: 'AR' });
+  const updated = await request(app.getHttpServer())
+    .get('/auth/me')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200);
+  expect(updated.body.user.locale).toBe('AR');
+  await request(app.getHttpServer())
+    .patch('/users/me/locale')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ locale: 'FR' })
+    .expect(400);
+  await request(app.getHttpServer())
+    .patch('/users/me/locale')
+    .send({ locale: 'EN' })
+    .expect(401);
+  expect(org.body).toBeDefined();
+});

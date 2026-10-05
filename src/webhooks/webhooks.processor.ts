@@ -108,6 +108,7 @@ export class WebhooksProcessor extends WorkerHost {
           await alertConversationStaff(tx, {
             organizationId,
             conversation: context.conversation,
+            code: 'PATIENT_OPTED_OUT',
             title: 'Patient sent STOP',
             body: 'The patient sent STOP. The AI is paused and automated messages are off. You can still reply manually.',
           });
@@ -298,6 +299,7 @@ export class WebhooksProcessor extends WorkerHost {
           await alertChannelManagers(tx, {
             organizationId,
             channelId: channel.id,
+            code: 'CHANNEL_UNAVAILABLE',
             title: 'WhatsApp connection needs attention',
             body: 'The WhatsApp channel credential is not usable. Incoming messages are still saved, but the AI and outgoing messages are stopped until the connection is restored.',
           });
@@ -758,6 +760,10 @@ export class WebhooksProcessor extends WorkerHost {
                     organizationId: conversation.organizationId,
                     userId: conversation.assignedAgentId, // Route directly to the human who owns this conversation
                     type: NotificationType.NEW_MESSAGE,
+                    params: {
+                      name: `${lead?.firstName || ''} ${lead?.lastName || ''}`,
+                      preview: wpMessage.content.substring(0, 50),
+                    },
                     title: `New Message from ${`${lead?.firstName || ''} ${lead?.lastName || ''}`}`,
                     body:
                       wpMessage.content.length > 50
