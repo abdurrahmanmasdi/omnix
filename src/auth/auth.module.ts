@@ -1,3 +1,4 @@
+import { PlatformAccessService } from '../platform/platform-access.service';
 import { UserProfileController } from './user-profile.controller';
 import { UserProfileService } from './user-profile.service';
 import { UserLocaleController } from './user-locale.controller';
@@ -23,12 +24,18 @@ import { InvitationsController } from './invitations.controller';
   ],
   providers: [
     AuthService,
+    PlatformAccessService,
     UserProfileService,
     JwtStrategy,
     UserJwtStrategy,
     PermissionService,
     InvitationsService,
   ],
-  exports: [AuthService, PermissionService],
+  exports: [
+    AuthService,
+    PermissionService,
+    InvitationsService,
+    PlatformAccessService,
+  ],
 })
 export class AuthModule {}

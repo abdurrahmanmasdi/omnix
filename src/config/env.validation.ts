@@ -1,3 +1,4 @@
+import { isEmail } from 'class-validator';
 import { credentialKey } from '../credentials/credential-cipher';
 import { grpcTransportProblems } from '../grpc-client/grpc-transport';
 
@@ -31,6 +32,7 @@ export interface AppEnv {
   INTERNAL_GRPC_TLS_SERVER_NAME?: string;
   PATIENT_MEDIA_RETENTION_DAYS?: number;
   METRICS_TOKEN?: string;
+  PLATFORM_ADMIN_EMAILS?: string;
 }
 
 const NODE_ENVS: NodeEnv[] = ['development', 'test', 'production'];
@@ -188,6 +190,15 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
       'PATIENT_MEDIA_RETENTION_DAYS must be an integer from 1 to 3650',
     );
 
+  const PLATFORM_ADMIN_EMAILS = text('PLATFORM_ADMIN_EMAILS');
+  if (
+    PLATFORM_ADMIN_EMAILS &&
+    !PLATFORM_ADMIN_EMAILS.split(',').every((email) => isEmail(email.trim()))
+  )
+    problems.push(
+      'PLATFORM_ADMIN_EMAILS must be a comma-separated list of emails',
+    );
+
   if (problems.length) {
     throw new Error(
       [
@@ -221,5 +232,6 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     INTERNAL_GRPC_TLS_SERVER_NAME: text('INTERNAL_GRPC_TLS_SERVER_NAME'),
     PATIENT_MEDIA_RETENTION_DAYS,
     METRICS_TOKEN,
+    PLATFORM_ADMIN_EMAILS,
   };
 }

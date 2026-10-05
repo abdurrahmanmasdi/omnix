@@ -1,3 +1,4 @@
+import { PlatformModule } from './platform/platform.module';
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { GrpcClientModule } from './grpc-client/grpc-client.module';
 import { BullModule } from '@nestjs/bullmq';
@@ -82,6 +83,7 @@ import { hashedIp, THROTTLERS } from './core/guards/custom-throttler.guard';
     HealthModule,
     WebhooksModule,
     AuthModule,
+    PlatformModule,
     PrismaModule,
     OrganizationsModule,
     EventsModule,
