@@ -72,6 +72,7 @@ export class ChangePasswordDto {
   newPassword!: string;
 }
 export class ProfileMembershipDto {
+  @ApiProperty() canManageTeam!: boolean;
   @ApiProperty() organizationId!: string;
   @ApiProperty() organizationName!: string;
   @ApiProperty() roleName!: string;

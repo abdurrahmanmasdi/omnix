@@ -1,4 +1,8 @@
 import {
+  MEMBERSHIP_GRANTS_INCLUDE,
+  membershipHasPermission,
+} from './permission.service';
+import {
   Injectable,
   UnauthorizedException,
   ConflictException,
@@ -46,7 +50,7 @@ export class UserProfileService {
             where: { deletedAt: null },
             include: {
               organization: { select: { name: true } },
-              role: { select: { name: true } },
+              ...MEMBERSHIP_GRANTS_INCLUDE,
             },
           },
         },
@@ -59,6 +63,9 @@ export class UserProfileService {
           organizationName: m.organization.name,
           roleName: m.role.name,
           status: m.status,
+          canManageTeam:
+            m.status === 'ACTIVE' &&
+            membershipHasPermission(m, 'organization:manage'),
         })),
       };
     });

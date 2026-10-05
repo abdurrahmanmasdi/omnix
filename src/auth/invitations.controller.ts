@@ -1,3 +1,4 @@
+import { ClinicInvitationIssuedDto } from '../organizations/dto/clinic-team.dto';
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import {
   ApiOperation,
@@ -43,6 +44,7 @@ export class InvitationsController {
     return this.invitations.accept(dto);
   }
 
+  @ApiResponse({ status: 201, type: ClinicInvitationIssuedDto })
   @Post('invitations/clinic')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
