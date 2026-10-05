@@ -1,4 +1,5 @@
 "use client";
+import { MemberActions } from "./MemberActions";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useQueryClient } from "@tanstack/react-query";
@@ -58,6 +59,10 @@ export default function TeamPage() {
   const [error, setError] = useState<unknown>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [memberChanged, setMemberChanged] = useState<"role" | "remove" | null>(
+    null,
+  );
+  const inviteRoles = roles.data?.filter((r) => r.name !== "Super Admin");
   const [revoked, setRevoked] = useState(false);
   const date = (value: string) =>
     new Intl.DateTimeFormat(locale, {
@@ -116,7 +121,7 @@ export default function TeamPage() {
           <p className="text-muted-foreground">{t("description")}</p>
         </div>
         <Button
-          disabled={!roles.data?.length || roles.isError}
+          disabled={!inviteRoles?.length || roles.isError}
           onClick={() => {
             setOpen(true);
             setRevoked(false);
@@ -125,6 +130,11 @@ export default function TeamPage() {
           {t("invite")}
         </Button>
       </div>
+      {memberChanged && (
+        <p role="status">
+          {t(memberChanged === "role" ? "roleChanged" : "memberRemoved")}
+        </p>
+      )}
       {revoked && <p role="status">{t("revoked")}</p>}
       {roles.isError ? (
         readError(roles.error, () => {
@@ -148,11 +158,13 @@ export default function TeamPage() {
             <table className="w-full text-start text-sm">
               <thead>
                 <tr>
-                  {["name", "email", "role", "status", "joined"].map((key) => (
-                    <th key={key} className="text-start p-3">
-                      {t(key)}
-                    </th>
-                  ))}
+                  {["name", "email", "role", "status", "joined", "actions"].map(
+                    (key) => (
+                      <th key={key} className="text-start p-3">
+                        {t(key)}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -170,6 +182,14 @@ export default function TeamPage() {
                     </td>
                     <td className="p-3 whitespace-nowrap">
                       {date(m.joinedAt)}
+                    </td>
+                    <td className="p-3">
+                      <MemberActions
+                        member={m}
+                        roles={roles.isError ? [] : (roles.data ?? [])}
+                        allowed={allowed}
+                        onChanged={setMemberChanged}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -276,7 +296,7 @@ export default function TeamPage() {
                   setLocalError("invalidEmail");
                   return;
                 }
-                if (!roles.data?.some((r) => r.id === roleId)) {
+                if (!inviteRoles?.some((r) => r.id === roleId)) {
                   setLocalError("chooseRole");
                   return;
                 }
@@ -313,7 +333,7 @@ export default function TeamPage() {
                   required
                 >
                   <option value="">{t("chooseRole")}</option>
-                  {roles.data?.map((r) => (
+                  {inviteRoles?.map((r) => (
                     <option key={r.id} value={r.id}>
                       {role(r.name)}
                     </option>

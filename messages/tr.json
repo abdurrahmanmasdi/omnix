@@ -651,7 +651,13 @@
     "CURRENT_PASSWORD_INVALID": "Mevcut şifre yanlış.",
     "CLINIC_INVITATION_NOT_FOUND": "Davet bulunamadı.",
     "CLINIC_INVITATION_NOT_PENDING": "Bu davet artık beklemiyor. Listeyi yenileyin.",
-    "RECOVERY_ACCOUNT_UNAVAILABLE": "Kurtarma için aktif bir hesap gerekir."
+    "RECOVERY_ACCOUNT_UNAVAILABLE": "Kurtarma için aktif bir hesap gerekir.",
+    "TEAM_SELF_CHANGE_FORBIDDEN": "Kendi rolünüzü değiştiremez veya kendinizi kaldıramazsınız.",
+    "TEAM_LAST_OWNER_REQUIRED": "Klinikte en az bir aktif sahip kalmalıdır.",
+    "TEAM_MEMBER_NOT_FOUND": "Bu klinikte üye bulunamadı.",
+    "TEAM_ROLE_NOT_FOUND": "Bu klinikte rol bulunamadı.",
+    "TEAM_PERMISSION_REQUIRED": "Bu ekibi yönetme izniniz yok.",
+    "INVITATION_ROLE_EXCEEDS_ISSUER": "Sahip olmadığınız izinleri veremezsiniz."
   },
   "Profile": {
     "title": "Profil",
@@ -741,7 +747,18 @@
       "Agent": "Temsilci",
       "Manager": "Yönetici",
       "Super Admin": "Süper yönetici"
-    }
+    },
+    "changeRole": "Rolü değiştir",
+    "removeMember": "Üyeyi kaldır",
+    "changeRoleTitle": "Üyenin rolünü değiştir",
+    "changeRoleNote": "{email} için yeni bir rol atayın. Oturumları iptal edilecek.",
+    "removeTitle": "Üye kaldırılsın mı?",
+    "removeNote": "{email} bu klinikten kaldırılsın mı? Oturumları iptal edilecek.",
+    "confirmRemove": "Kaldırmayı onayla",
+    "saveRole": "Rolü kaydet",
+    "savingMember": "Kaydediliyor…",
+    "roleChanged": "Üyenin rolü güncellendi.",
+    "memberRemoved": "Üye kaldırıldı."
   },
   "Platform": {
     "title": "Platform yönetimi",
