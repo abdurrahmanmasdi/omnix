@@ -1,3 +1,5 @@
+import { UserProfileController } from './user-profile.controller';
+import { UserProfileService } from './user-profile.service';
 import { UserLocaleController } from './user-locale.controller';
 import { Global } from '@nestjs/common';
 import { UserJwtStrategy } from './jwt-user.strategy';
@@ -13,9 +15,15 @@ import { InvitationsController } from './invitations.controller';
 @Global()
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [AuthController, InvitationsController, UserLocaleController],
+  controllers: [
+    AuthController,
+    InvitationsController,
+    UserLocaleController,
+    UserProfileController,
+  ],
   providers: [
     AuthService,
+    UserProfileService,
     JwtStrategy,
     UserJwtStrategy,
     PermissionService,
