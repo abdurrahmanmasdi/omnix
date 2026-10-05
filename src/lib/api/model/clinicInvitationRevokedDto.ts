@@ -6,10 +6,6 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface ProfileMembershipDto {
-  canManageTeam: boolean;
-  organizationId: string;
-  organizationName: string;
-  roleName: string;
-  status: string;
+export interface ClinicInvitationRevokedDto {
+  revoked: boolean;
 }

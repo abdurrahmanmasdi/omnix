@@ -6,10 +6,10 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface ProfileMembershipDto {
-  canManageTeam: boolean;
-  organizationId: string;
-  organizationName: string;
+export interface PendingClinicInvitationDto {
+  id: string;
+  email: string;
   roleName: string;
-  status: string;
+  issuer: string;
+  expiresAt: string;
 }

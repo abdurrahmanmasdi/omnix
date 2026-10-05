@@ -334,7 +334,14 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicInvitationIssuedDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -538,6 +545,120 @@
         ],
         "summary": "Create a new organization and get updated tokens",
         "tags": ["Organizations"]
+      }
+    },
+    "/organizations/current/members": {
+      "get": {
+        "operationId": "ClinicTeamController_members",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClinicMemberDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Team"]
+      }
+    },
+    "/organizations/current/invitations": {
+      "get": {
+        "operationId": "ClinicTeamController_invitations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingClinicInvitationDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Team"]
+      }
+    },
+    "/organizations/current/roles": {
+      "get": {
+        "operationId": "ClinicTeamController_roles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GrantableClinicRoleDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Team"]
+      }
+    },
+    "/organizations/current/invitations/{id}/revoke": {
+      "post": {
+        "operationId": "ClinicTeamController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicInvitationRevokedDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Team"]
       }
     },
     "/conversations": {
@@ -2694,6 +2815,25 @@
         },
         "required": ["email", "roleId"]
       },
+      "ClinicInvitationIssuedDto": {
+        "type": "object",
+        "properties": {
+          "invitationId": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createsAccount": {
+            "type": "boolean"
+          }
+        },
+        "required": ["invitationId", "token", "expiresAt", "createsAccount"]
+      },
       "AcceptClinicInvitationDto": {
         "type": "object",
         "properties": {
@@ -2753,6 +2893,9 @@
       "ProfileMembershipDto": {
         "type": "object",
         "properties": {
+          "canManageTeam": {
+            "type": "boolean"
+          },
           "organizationId": {
             "type": "string"
           },
@@ -2766,7 +2909,13 @@
             "type": "string"
           }
         },
-        "required": ["organizationId", "organizationName", "roleName", "status"]
+        "required": [
+          "canManageTeam",
+          "organizationId",
+          "organizationName",
+          "roleName",
+          "status"
+        ]
       },
       "UserProfileDto": {
         "type": "object",
@@ -2914,6 +3063,93 @@
           }
         },
         "required": ["name", "slug"]
+      },
+      "ClinicMemberDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "roleId": {
+            "type": "string"
+          },
+          "roleName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "firstName",
+          "lastName",
+          "email",
+          "roleId",
+          "roleName",
+          "status",
+          "joinedAt"
+        ]
+      },
+      "PendingClinicInvitationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "roleName": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "email", "roleName", "issuer", "expiresAt"]
+      },
+      "GrantableClinicRoleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"]
+      },
+      "ClinicInvitationRevokedDto": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": ["revoked"]
       },
       "InboxPatientDto": {
         "type": "object",

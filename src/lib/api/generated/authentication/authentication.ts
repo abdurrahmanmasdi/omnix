@@ -27,6 +27,7 @@ import type {
   AuthControllerGetProfile200,
   AuthControllerLogout200,
   AuthControllerRefreshTokens200,
+  ClinicInvitationIssuedDto,
   ConsumeRecoveryDto,
   IssueClinicInvitationDto,
   LoginDto,
@@ -877,7 +878,7 @@ export const invitationsControllerIssueClinic = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
 ) => {
-  return customFetch<void>(
+  return customFetch<ClinicInvitationIssuedDto>(
     {
       url: `/auth/invitations/clinic`,
       method: "POST",

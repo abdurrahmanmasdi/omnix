@@ -94,3 +94,8 @@ export * from "./userLocale";
 export * from "./userProfileDto";
 export * from "./userProfileDtoLocale";
 export * from "./webhooksControllerVerifyWebhookParams";
+export * from "./clinicInvitationIssuedDto";
+export * from "./clinicInvitationRevokedDto";
+export * from "./clinicMemberDto";
+export * from "./grantableClinicRoleDto";
+export * from "./pendingClinicInvitationDto";
