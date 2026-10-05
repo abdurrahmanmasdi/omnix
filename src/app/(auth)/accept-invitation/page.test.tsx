@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import { messages } from "@/i18n/messages";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,19 +57,33 @@ describe("pilot invitation UI", () => {
       "",
       `/accept-invitation#token=${token}&type=clinic`,
     );
-    await act(async () => root.render(<AcceptInvitationPage />));
+    await act(async () =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages.en}>
+          <AcceptInvitationPage />
+        </NextIntlClientProvider>,
+      ),
+    );
     expect(window.location.hash).toBe("");
     expect(container.textContent).toContain("Accept Clinic Invitation");
     expect(container.textContent).toContain("You are logged in as Synthetic");
     expect(container.querySelector("form")).toBeNull();
-    expect(container.querySelector("button")?.textContent).toBe("Accept invitation");
+    expect(container.querySelector("button")?.textContent).toBe(
+      "Accept invitation",
+    );
   });
 
   it("removes the capability from browser history and activates without session cookies", async () => {
     vi.mocked(axios.post).mockResolvedValue({
       data: { message: "Account activated" },
     });
-    await act(async () => root.render(<AcceptInvitationPage />));
+    await act(async () =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages.en}>
+          <AcceptInvitationPage />
+        </NextIntlClientProvider>,
+      ),
+    );
     expect(window.location.hash).toBe("");
     await submit();
     expect(container.textContent).toContain("Account activated");
@@ -86,7 +102,13 @@ describe("pilot invitation UI", () => {
 
   it("does not send an activation request without an invitation", async () => {
     window.history.replaceState(null, "", "/accept-invitation");
-    await act(async () => root.render(<AcceptInvitationPage />));
+    await act(async () =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages.en}>
+          <AcceptInvitationPage />
+        </NextIntlClientProvider>,
+      ),
+    );
     await submit();
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
     expect(axios.post).not.toHaveBeenCalled();
@@ -94,7 +116,13 @@ describe("pilot invitation UI", () => {
 
   it("shows a recovery message for an invalid invitation without reporting success", async () => {
     vi.mocked(axios.post).mockRejectedValue({ response: { status: 401 } });
-    await act(async () => root.render(<AcceptInvitationPage />));
+    await act(async () =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages.en}>
+          <AcceptInvitationPage />
+        </NextIntlClientProvider>,
+      ),
+    );
     await submit();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Activation could not be completed",
@@ -104,7 +132,13 @@ describe("pilot invitation UI", () => {
   });
 
   it("replaces public registration with pilot access information", async () => {
-    await act(async () => root.render(<SignupPage />));
+    await act(async () =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages.en}>
+          <SignupPage />
+        </NextIntlClientProvider>,
+      ),
+    );
     expect(container.textContent).toContain(
       "Public signup is not available yet.",
     );

@@ -1,13 +1,15 @@
-'use client';
+"use client";
+import { useCopy } from "@/i18n/copy";
 
-import { useMemo } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useAuthStore } from '@/store/auth-store';
-import { useInboxText } from '@/features/inbox/i18n';
-import { NotificationBell } from '@/components/layout/NotificationBell';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
+import { useMemo } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuthStore } from "@/store/auth-store";
+import { useInboxText } from "@/features/inbox/i18n";
+import { NotificationBell } from "@/components/layout/NotificationBell";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +17,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   ChevronRight,
   Menu,
@@ -23,7 +25,7 @@ import {
   User,
   Settings,
   ChevronsUpDown,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface HeaderProps {
   onLogout: () => void;
@@ -33,16 +35,19 @@ interface HeaderProps {
 
 // ─── Breadcrumb Generator ───────────────────────────────
 const LABEL_MAP: Record<string, string> = {
-  dashboard: 'Dashboard',
-  leads: 'Leads',
-  conversations: 'Conversations',
-  pipeline: 'Pipeline',
-  settings: 'Settings',
-  'lead-sources': 'Lead Sources',
-  'pipeline-stages': 'Pipeline Stages',
-  experiences: 'Experiences',
-  documents: 'Documents',
-  notifications: 'Notifications',
+  dashboard: "Dashboard",
+  leads: "Leads",
+  conversations: "Conversations",
+  pipeline: "Pipeline",
+  settings: "Settings",
+  ai: "AI Settings",
+  channels: "Channels",
+  integrations: "Integrations",
+  "lead-sources": "Lead Sources",
+  "pipeline-stages": "Pipeline Stages",
+  experiences: "Experiences",
+  documents: "Documents",
+  notifications: "Notifications",
 };
 
 function useBreadcrumbs() {
@@ -50,18 +55,20 @@ function useBreadcrumbs() {
 
   return useMemo(() => {
     const segments = pathname
-      .replace('/dashboard', '')
-      .split('/')
+      .replace("/dashboard", "")
+      .split("/")
       .filter(Boolean);
 
-    const crumbs = [{ label: 'Dashboard', href: '/dashboard' }];
+    const crumbs = [{ label: "Dashboard", href: "/dashboard" }];
 
-    let path = '/dashboard';
+    let path = "/dashboard";
     for (const seg of segments) {
       path += `/${seg}`;
       crumbs.push({
-        label: LABEL_MAP[seg] || seg.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        href: path === '/dashboard/settings' ? '/dashboard/settings/ai' : path,
+        label:
+          LABEL_MAP[seg] ||
+          seg.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        href: path === "/dashboard/settings" ? "/dashboard/settings/ai" : path,
       });
     }
 
@@ -70,6 +77,8 @@ function useBreadcrumbs() {
 }
 
 export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
+  const copy = useCopy();
+
   const { t } = useInboxText();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -77,7 +86,16 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
 
   return (
     <header className="h-16 border-b border-white/5 bg-brand-navy/50 backdrop-blur-xl flex items-center justify-between px-3 md:px-8 shrink-0">
-      <Button className="md:hidden" variant="ghost" size="icon" aria-label={t('menu')} aria-expanded={menuOpen} onClick={onMenu}><Menu /></Button>
+      <Button
+        className="md:hidden"
+        variant="ghost"
+        size="icon"
+        aria-label={t("menu")}
+        aria-expanded={menuOpen}
+        onClick={onMenu}
+      >
+        <Menu />
+      </Button>
       {/* Left: Breadcrumbs */}
       <div className="flex items-center space-x-1 min-w-0">
         {breadcrumbs.map((crumb, i) => {
@@ -89,14 +107,18 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
               )}
               {isLast ? (
                 <span className="text-sm font-bold text-brand-ice truncate">
-                  {crumb.label === 'Conversations' ? t('inbox') : crumb.label}
+                  {crumb.label === "Conversations"
+                    ? t("inbox")
+                    : copy(crumb.label)}
                 </span>
               ) : (
                 <Link
                   href={crumb.href}
                   className="text-sm font-medium text-brand-ice/60 hover:text-brand-ice transition-colors truncate"
                 >
-                  {crumb.label === 'Conversations' ? t('inbox') : crumb.label}
+                  {crumb.label === "Conversations"
+                    ? t("inbox")
+                    : copy(crumb.label)}
                 </Link>
               )}
             </div>
@@ -107,6 +129,7 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
       {/* Right: Actions */}
       <div className="flex items-center space-x-2">
         {/* Notification Bell */}
+        <LocaleSwitcher />
         <NotificationBell />
 
         {/* User Profile Dropdown */}
@@ -119,7 +142,8 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
             >
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-brand-deep text-brand-ice text-xs font-bold">
-                  {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0) || ''}
+                  {user?.firstName?.charAt(0)}
+                  {user?.lastName?.charAt(0) || ""}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden lg:flex flex-col items-start">
@@ -139,19 +163,23 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
               <p className="text-sm font-bold text-brand-ice">
                 {user?.firstName} {user?.lastName}
               </p>
-              <p className="text-xs text-brand-ice/40 font-medium mt-0.5">Administrator</p>
+              <p className="text-xs text-brand-ice/40 font-medium mt-0.5">
+                {copy("Administrator")}
+              </p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="my-1 bg-transparent/10" />
             <DropdownMenuItem className="rounded-lg font-medium text-brand-ice hover:bg-transparent/5 py-2.5 cursor-pointer">
-              <User className="mr-3 h-4 w-4 text-brand-ice/40" /> Profile
+              <User className="me-3 h-4 w-4 text-brand-ice/40" />
+              {copy("Profile")}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="rounded-lg font-medium text-brand-ice hover:bg-transparent/5 py-2.5 cursor-pointer"
               onClick={() => {
-                router.push('/dashboard/settings/lead-sources');
+                router.push("/dashboard/settings/lead-sources");
               }}
             >
-              <Settings className="mr-3 h-4 w-4 text-brand-ice/40" /> Settings
+              <Settings className="me-3 h-4 w-4 text-brand-ice/40" />
+              {copy("Settings")}
             </DropdownMenuItem>
             <DropdownMenuSeparator className="my-1 bg-transparent/10" />
             <DropdownMenuItem
@@ -159,7 +187,8 @@ export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
               data-testid="sign-out"
               onClick={onLogout}
             >
-              <LogOut className="mr-3 h-4 w-4" /> Sign out
+              <LogOut className="me-3 h-4 w-4" />
+              {copy("Sign out")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

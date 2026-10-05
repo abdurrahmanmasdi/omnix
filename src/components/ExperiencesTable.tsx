@@ -1,4 +1,5 @@
 "use client";
+import { useCopy } from "@/i18n/copy";
 
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -66,6 +67,8 @@ function normalizeExperiences(data: unknown): ExperienceRecord[] {
 }
 
 export default function ExperiencesTable() {
+  const copy = useCopy();
+
   const queryClient = useQueryClient();
   const organizationId = useAuthStore((state) => state.user?.organizationId);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -134,7 +137,9 @@ export default function ExperiencesTable() {
   if (!organizationId) {
     return (
       <div className="rounded-2xl border border-white/10 bg-transparent p-6 text-sm text-brand-ice/60">
-        No organization selected. Finish onboarding to manage experiences.
+        {copy(
+          "No organization selected. Finish onboarding to manage experiences.",
+        )}
       </div>
     );
   }
@@ -144,33 +149,37 @@ export default function ExperiencesTable() {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
         <div>
           <h2 className="text-lg font-semibold text-brand-ice">
-            Experiences Library
+            {copy("Experiences Library")}
           </h2>
           <p className="text-sm text-brand-ice/60">
-            Manage social proof stories for your organization.
+            {copy("Manage social proof stories for your organization.")}
           </p>
         </div>
-        <Button onClick={openCreateModal}>Add New</Button>
+        <Button onClick={openCreateModal}>{copy("Add New")}</Button>
       </div>
 
       {experiencesMissingImageConsent.length > 0 && (
         <div className="border-b border-amber-400/30 bg-amber-400/10 px-6 py-3 text-sm text-amber-100">
-          {experiencesMissingImageConsent.length} experience
-          {experiencesMissingImageConsent.length === 1 ? " has" : "s have"}{" "}
-          patient images without recorded media consent. Do not use or share
-          these images until consent is documented.
+          {experiencesMissingImageConsent.length}
+          {copy("experience")}
+          {experiencesMissingImageConsent.length === 1
+            ? copy("has")
+            : copy("s have")}{" "}
+          {copy(
+            "patient images without recorded media consent. Do not use or share these images until consent is documented.",
+          )}
         </div>
       )}
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-[#051126] text-left text-xs uppercase tracking-wide text-brand-ice/60">
+          <thead className="bg-[#051126] text-start text-xs uppercase tracking-wide text-brand-ice/60">
             <tr>
-              <th className="px-6 py-3">Title</th>
-              <th className="px-6 py-3">Country</th>
-              <th className="px-6 py-3">Procedure</th>
-              <th className="px-6 py-3">Story Preview</th>
-              <th className="px-6 py-3 text-right">Actions</th>
+              <th className="px-6 py-3">{copy("Title")}</th>
+              <th className="px-6 py-3">{copy("Country")}</th>
+              <th className="px-6 py-3">{copy("Procedure")}</th>
+              <th className="px-6 py-3">{copy("Story Preview")}</th>
+              <th className="px-6 py-3 text-end">{copy("Actions")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -180,7 +189,7 @@ export default function ExperiencesTable() {
                   colSpan={5}
                   className="px-6 py-8 text-center text-brand-ice/60"
                 >
-                  Loading experiences...
+                  {copy("Loading experiences...")}
                 </td>
               </tr>
             )}
@@ -188,7 +197,7 @@ export default function ExperiencesTable() {
             {experiencesQuery.isError && (
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-rose-600">
-                  Unable to load experiences right now.
+                  {copy("Unable to load experiences end now.")}
                 </td>
               </tr>
             )}
@@ -201,7 +210,7 @@ export default function ExperiencesTable() {
                     colSpan={5}
                     className="px-6 py-10 text-center text-brand-ice/60"
                   >
-                    No experiences added yet.
+                    {copy("No experiences added yet.")}
                   </td>
                 </tr>
               )}
@@ -209,7 +218,7 @@ export default function ExperiencesTable() {
             {experiences.map((experience, index) => (
               <tr key={experience.id ?? experience.title ?? index}>
                 <td className="px-6 py-4 font-medium text-brand-ice">
-                  {experience.title || "Untitled"}
+                  {experience.title || copy("Untitled")}
                 </td>
                 <td className="px-6 py-4 text-brand-ice/60">
                   {experience.patientCountry || "-"}
@@ -219,7 +228,7 @@ export default function ExperiencesTable() {
                 </td>
                 <td className="px-6 py-4 text-brand-ice/60">
                   <p className="max-w-xs truncate">
-                    {experience.storyText || "No story provided."}
+                    {experience.storyText || copy("No story provided.")}
                   </p>
                 </td>
                 <td className="px-6 py-4">
@@ -230,7 +239,7 @@ export default function ExperiencesTable() {
                       onClick={() => openEditModal(experience)}
                       disabled={!experience.id}
                     >
-                      Edit
+                      {copy("Edit")}
                     </Button>
                     <Button
                       variant="destructive"
@@ -240,7 +249,7 @@ export default function ExperiencesTable() {
                         !experience.id || deleteExperienceMutation.isPending
                       }
                     >
-                      Delete
+                      {copy("Delete")}
                     </Button>
                   </div>
                 </td>
@@ -282,6 +291,8 @@ function ExperienceFormModal({
   onClose,
   onSaved,
 }: ExperienceFormModalProps) {
+  const copy = useCopy();
+
   const createExperienceMutation = useExperiencesControllerCreateExperience();
   const updateExperienceMutation = useExperiencesControllerUpdate();
   const [formError, setFormError] = useState<string | null>(null);
@@ -398,58 +409,66 @@ function ExperienceFormModal({
               id="experience-modal-title"
               className="text-xl font-semibold text-brand-ice"
             >
-              {mode === "edit" ? "Edit Experience" : "Add Experience"}
+              {mode === "edit"
+                ? copy("Edit Experience")
+                : copy("Add Experience")}
             </h3>
             <p className="text-sm text-brand-ice/60">
               {mode === "edit"
-                ? "Update story details for this patient experience."
-                : "Create a new story to highlight patient outcomes."}
+                ? copy("Update story details for this patient experience.")
+                : copy("Create a new story to highlight patient outcomes.")}
             </p>
           </div>
           <Button variant="ghost" onClick={handleClose} disabled={isSaving}>
-            Close
+            {copy("Close")}
           </Button>
         </div>
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)}>
           <div className="grid gap-5 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="experience-title">Title</Label>
+              <Label htmlFor="experience-title">{copy("Title")}</Label>
               <Input
                 id="experience-title"
-                placeholder="Confident smile after implants"
+                placeholder={copy("Confident smile after implants")}
                 {...register("title", { required: "Title is required" })}
                 disabled={isSaving}
               />
               {formState.errors.title && (
                 <p className="text-xs text-rose-600">
-                  {formState.errors.title.message}
+                  {copy(formState.errors.title.message)}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="experience-country">Patient Country</Label>
+              <Label htmlFor="experience-country">
+                {copy("Patient Country")}
+              </Label>
               <Input
                 id="experience-country"
-                placeholder="United Kingdom"
+                placeholder={copy("United Kingdom")}
                 {...register("patientCountry")}
                 disabled={isSaving}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="experience-procedure">Procedure Type</Label>
+              <Label htmlFor="experience-procedure">
+                {copy("Procedure Type")}
+              </Label>
               <Input
                 id="experience-procedure"
-                placeholder="Dental implants"
+                placeholder={copy("Dental implants")}
                 {...register("procedureType")}
                 disabled={isSaving}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="experience-before">Before Image URL</Label>
+              <Label htmlFor="experience-before">
+                {copy("Before Image URL")}
+              </Label>
               <Input
                 id="experience-before"
                 type="url"
@@ -460,7 +479,9 @@ function ExperienceFormModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="experience-after">After Image URL</Label>
+              <Label htmlFor="experience-after">
+                {copy("After Image URL")}
+              </Label>
               <Input
                 id="experience-after"
                 type="url"
@@ -479,16 +500,19 @@ function ExperienceFormModal({
               disabled={isSaving}
             />
             <span>
-              I confirm the clinic has documented media consent for every
-              patient image attached to this experience.
+              {copy(
+                "I confirm the clinic has documented media consent for every patient image attached to this experience.",
+              )}
             </span>
           </label>
 
           <div className="space-y-2">
-            <Label htmlFor="experience-story">The Story</Label>
+            <Label htmlFor="experience-story">{copy("The Story")}</Label>
             <textarea
               id="experience-story"
-              placeholder="Describe the patient's journey, timeline, and outcome."
+              placeholder={copy(
+                "Describe the patient's journey, timeline, and outcome.",
+              )}
               rows={5}
               disabled={isSaving}
               {...register("storyText", {
@@ -498,14 +522,14 @@ function ExperienceFormModal({
             />
             {formState.errors.storyText && (
               <p className="text-xs text-rose-600">
-                {formState.errors.storyText.message}
+                {copy(formState.errors.storyText.message)}
               </p>
             )}
           </div>
 
           {formError && (
             <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
-              {formError}
+              {copy(formError)}
             </div>
           )}
 
@@ -516,14 +540,14 @@ function ExperienceFormModal({
               onClick={handleClose}
               disabled={isSaving}
             >
-              Cancel
+              {copy("Cancel")}
             </Button>
             <Button type="submit" disabled={isSaving}>
               {isSaving
-                ? "Saving..."
+                ? copy("Saving...")
                 : mode === "edit"
-                  ? "Update Experience"
-                  : "Create Experience"}
+                  ? copy("Update Experience")
+                  : copy("Create Experience")}
             </Button>
           </div>
         </form>

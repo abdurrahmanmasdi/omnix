@@ -1,4 +1,6 @@
 "use client";
+import { useBackendError } from "@/i18n/backend";
+import { useCopy } from "@/i18n/copy";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +26,9 @@ import {
 import { installSession } from "@/lib/session-manager";
 
 export default function LoginPage() {
+  const copy = useCopy();
+  const backendError = useBackendError();
+
   const router = useRouter();
 
   // 1. Initialize React Hook Form with Zod validation
@@ -44,7 +49,7 @@ export default function LoginPage() {
       { data }, // Orval expects the body payload inside a 'data' property
       {
         onSuccess: (response) => {
-          toast.success("Welcome back!");
+          toast.success(copy("Welcome back!"));
 
           // The backend sends us { access_token, user }
           const { access_token, user } = response as unknown as {
@@ -67,10 +72,7 @@ export default function LoginPage() {
         },
         onError: (error: unknown) => {
           // Extract the error message from our NestJS backend
-          const err = error as { response?: { data?: { message?: string } } };
-          const message =
-            err.response?.data?.message || "Invalid email or password";
-          toast.error(message);
+          toast.error(backendError(error, "Invalid email or password"));
         },
       },
     );
@@ -83,7 +85,7 @@ export default function LoginPage() {
           OmniX
         </CardTitle>
         <CardDescription>
-          Enter your email and password to log in to your CRM.
+          {copy("Enter your email and password to log in to your CRM.")}
         </CardDescription>
       </CardHeader>
 
@@ -91,7 +93,7 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
           {/* Email Field */}
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{copy("Email")}</Label>
             <Input
               id="email"
               type="email"
@@ -101,14 +103,14 @@ export default function LoginPage() {
             />
             {form.formState.errors.email && (
               <p className="text-sm text-red-500">
-                {form.formState.errors.email.message}
+                {copy(form.formState.errors.email.message)}
               </p>
             )}
           </div>
 
           {/* Password Field */}
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{copy("Password")}</Label>
             <Input
               id="password"
               type="password"
@@ -117,7 +119,7 @@ export default function LoginPage() {
             />
             {form.formState.errors.password && (
               <p className="text-sm text-red-500">
-                {form.formState.errors.password.message}
+                {copy(form.formState.errors.password.message)}
               </p>
             )}
           </div>
@@ -129,15 +131,15 @@ export default function LoginPage() {
             className="w-full"
             disabled={loginMutation.isPending}
           >
-            {loginMutation.isPending ? "Logging in..." : "Log in"}
+            {loginMutation.isPending ? copy("Logging in...") : copy("Log in")}
           </Button>
           <div className="text-center text-sm text-slate-500">
-            Need pilot access?{" "}
+            {copy("Need pilot access?")}{" "}
             <Link
               href="/signup"
               className="text-blue-600 hover:underline font-medium"
             >
-              Invitation information
+              {copy("Invitation information")}
             </Link>
           </div>
         </CardFooter>

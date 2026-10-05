@@ -1,22 +1,26 @@
-'use client';
+"use client";
+import { useCopy } from "@/i18n/copy";
 
-import { useState } from 'react';
-import { FilterCondition, FilterOperator } from '@/lib/utils/ast-filter-builder';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useState } from "react";
+import {
+  FilterCondition,
+  FilterOperator,
+} from "@/lib/utils/ast-filter-builder";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Filter, Plus, Trash2 } from 'lucide-react';
+} from "@/components/ui/select";
+import { Filter, Plus, Trash2 } from "lucide-react";
 
 export interface FilterFieldDef {
   label: string;
   value: string;
-  type: 'text' | 'number' | 'select';
+  type: "text" | "number" | "select";
   options?: { label: string; value: string }[];
 }
 
@@ -31,25 +35,31 @@ export function FilterBuilder({
   fields,
   initialConditions = [],
   onFiltersChange,
-  title = 'Advanced Filters',
+  title = "Advanced Filters",
 }: FilterBuilderProps) {
-  const [conditions, setConditions] = useState<FilterCondition[]>(initialConditions);
+  const copy = useCopy();
+
+  const [conditions, setConditions] =
+    useState<FilterCondition[]>(initialConditions);
 
   const OPERATORS: { label: string; value: FilterOperator }[] = [
-    { label: 'Equals', value: 'equals' },
-    { label: 'Contains', value: 'contains' },
-    { label: 'Greater Than', value: 'greaterThan' },
-    { label: 'Less Than', value: 'lessThan' },
-    { label: 'Starts With', value: 'startsWith' },
-    { label: 'Ends With', value: 'endsWith' },
+    { label: "Equals", value: "equals" },
+    { label: "Contains", value: "contains" },
+    { label: "Greater Than", value: "greaterThan" },
+    { label: "Less Than", value: "lessThan" },
+    { label: "Starts With", value: "startsWith" },
+    { label: "Ends With", value: "endsWith" },
   ];
 
   const addCondition = () => {
     const defaultField = fields[0];
     const newCondition: FilterCondition = {
       field: defaultField.value,
-      operator: 'equals',
-      value: defaultField.type === 'select' ? defaultField.options?.[0]?.value || 'none' : '',
+      operator: "equals",
+      value:
+        defaultField.type === "select"
+          ? defaultField.options?.[0]?.value || "none"
+          : "",
     };
     setConditions([...conditions, newCondition]);
   };
@@ -59,15 +69,18 @@ export function FilterBuilder({
     setConditions(updated);
   };
 
-  const updateCondition = (index: number, updates: Partial<FilterCondition>) => {
+  const updateCondition = (
+    index: number,
+    updates: Partial<FilterCondition>,
+  ) => {
     const updated = conditions.map((c, i) => {
       if (i === index) {
         const newCondition = { ...c, ...updates };
         if (updates.field) {
-          const fieldDef = fields.find(f => f.value === updates.field);
-          if (fieldDef?.type === 'select') {
-            newCondition.value = fieldDef.options?.[0]?.value || 'none';
-            newCondition.operator = 'equals';
+          const fieldDef = fields.find((f) => f.value === updates.field);
+          if (fieldDef?.type === "select") {
+            newCondition.value = fieldDef.options?.[0]?.value || "none";
+            newCondition.operator = "equals";
           }
         }
         return newCondition;
@@ -91,10 +104,17 @@ export function FilterBuilder({
       <div className="p-5 border-b flex items-center justify-between bg-[#051126]/80 backdrop-blur-sm">
         <div className="flex items-center space-x-2">
           <Filter className="h-4 w-4 text-blue-600" />
-          <h4 className="font-bold text-xs uppercase tracking-widest text-slate-700">{title}</h4>
+          <h4 className="font-bold text-xs uppercase tracking-widest text-slate-700">
+            {title}
+          </h4>
         </div>
-        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-[10px] font-black uppercase tracking-tighter text-slate-400 hover:text-slate-900">
-          RESET ALL
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={clearFilters}
+          className="h-8 text-[10px] font-black uppercase tracking-tighter text-slate-400 hover:text-slate-900"
+        >
+          {copy("RESET ALL")}
         </Button>
       </div>
 
@@ -104,26 +124,41 @@ export function FilterBuilder({
             <div className="h-12 w-12 rounded-2xl bg-[#051126] flex items-center justify-center mb-3 border border-white/5 shadow-inner">
               <Filter className="h-5 w-5 text-slate-300" />
             </div>
-            <p className="text-sm font-bold text-slate-900 uppercase tracking-tight">Precision Filtering</p>
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mt-1">Add rules to slice your data</p>
+            <p className="text-sm font-bold text-slate-900 uppercase tracking-tight">
+              {copy("Precision Filtering")}
+            </p>
+            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mt-1">
+              {copy("Add rules to slice your data")}
+            </p>
           </div>
         ) : (
           conditions.map((condition, index) => {
-            const currentField = fields.find(f => f.value === condition.field);
-            
+            const currentField = fields.find(
+              (f) => f.value === condition.field,
+            );
+
             return (
-              <div key={index} className="group flex items-center space-x-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <div
+                key={index}
+                className="group flex items-center space-x-2 animate-in fade-in slide-in-from-top-1 duration-200"
+              >
                 <Select
                   value={condition.field}
-                  onValueChange={(val) => updateCondition(index, { field: val })}
+                  onValueChange={(val) =>
+                    updateCondition(index, { field: val })
+                  }
                 >
                   <SelectTrigger className="w-[140px] h-10 text-[11px] font-bold rounded-xl border-white/10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     {fields.map((f) => (
-                      <SelectItem key={f.value} value={f.value} className="text-[11px] font-bold">
-                        {f.label}
+                      <SelectItem
+                        key={f.value}
+                        value={f.value}
+                        className="text-[11px] font-bold"
+                      >
+                        {copy(f.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -131,47 +166,64 @@ export function FilterBuilder({
 
                 <Select
                   value={condition.operator}
-                  onValueChange={(val) => updateCondition(index, { operator: val as FilterOperator })}
-                  disabled={currentField?.type === 'select'}
+                  onValueChange={(val) =>
+                    updateCondition(index, { operator: val as FilterOperator })
+                  }
+                  disabled={currentField?.type === "select"}
                 >
                   <SelectTrigger className="w-[110px] h-10 text-[11px] font-black text-slate-400 rounded-xl border-white/10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
                     {OPERATORS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-[11px] font-bold">
-                        {o.label}
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        className="text-[11px] font-bold"
+                      >
+                        {copy(o.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
                 <div className="flex-1 min-w-[120px]">
-                  {currentField?.type === 'select' ? (
+                  {currentField?.type === "select" ? (
                     <Select
                       value={condition.value as string}
-                      onValueChange={(val) => updateCondition(index, { value: val })}
+                      onValueChange={(val) =>
+                        updateCondition(index, { value: val })
+                      }
                     >
                       <SelectTrigger className="w-full h-10 text-[11px] font-bold rounded-xl border-white/10 bg-[#051126] border-none shadow-inner">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
                         {currentField.options?.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-[11px] font-bold">
-                            {opt.label}
+                          <SelectItem
+                            key={opt.value}
+                            value={opt.value}
+                            className="text-[11px] font-bold"
+                          >
+                            {copy(opt.label)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   ) : (
                     <Input
-                      type={currentField?.type === 'number' ? 'number' : 'text'}
-                      placeholder="Enter criteria..."
+                      type={currentField?.type === "number" ? "number" : "text"}
+                      placeholder={copy("Enter criteria...")}
                       className="h-10 text-[11px] font-bold rounded-xl border-white/10 bg-[#051126] border-none shadow-inner"
                       value={condition.value as string | number}
-                      onChange={(e) => updateCondition(index, { 
-                        value: currentField?.type === 'number' ? Number(e.target.value) : e.target.value 
-                      })}
+                      onChange={(e) =>
+                        updateCondition(index, {
+                          value:
+                            currentField?.type === "number"
+                              ? Number(e.target.value)
+                              : e.target.value,
+                        })
+                      }
                     />
                   )}
                 </div>
@@ -191,12 +243,21 @@ export function FilterBuilder({
       </div>
 
       <div className="p-5 border-t bg-[#051126] flex items-center justify-between">
-        <Button variant="outline" size="sm" onClick={addCondition} className="h-10 text-[10px] font-black uppercase tracking-widest border-white/10 rounded-xl px-5">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Rule
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addCondition}
+          className="h-10 text-[10px] font-black uppercase tracking-widest border-white/10 rounded-xl px-5"
+        >
+          <Plus className="me-2 h-4 w-4" />
+          {copy("Add Rule")}
         </Button>
-        <Button size="sm" onClick={applyFilters} className="h-10 text-[10px] font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 shadow-none shadow-blue-100 rounded-xl px-6">
-          Execute Filter
+        <Button
+          size="sm"
+          onClick={applyFilters}
+          className="h-10 text-[10px] font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 shadow-none shadow-blue-100 rounded-xl px-6"
+        >
+          {copy("Execute Filter")}
         </Button>
       </div>
     </div>

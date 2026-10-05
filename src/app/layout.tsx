@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { InboxLocaleProvider } from "@/features/inbox/i18n";
+import { AppLocaleProvider } from "@/i18n/provider";
+import { getLocale } from "next-intl/server";
+import { asLocale } from "@/i18n/locale";
 import QueryProvider from "@/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -39,27 +41,36 @@ const interExt = localFont({
   fallback: [],
 });
 
+const arabic = localFont({
+  src: "./fonts/noto-sans-arabic.ttf",
+  variable: "--font-arabic",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "OmniX — AI International Patient Coordinator",
   description: "Clinic patient enquiries, AI coordination and staff handoff.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = asLocale(await getLocale()) ?? "tr";
   return (
     <html
-      lang="tr"
-      className={`${montserrat.variable} ${inter.variable} ${montserratExt.variable} ${interExt.variable}`}
+      lang={locale}
+      dir={locale === "ar" ? "rtl" : "ltr"}
+      suppressHydrationWarning
+      className={`${montserrat.variable} ${inter.variable} ${montserratExt.variable} ${interExt.variable} ${arabic.variable}`}
     >
       <body className={`font-inter bg-background text-foreground antialiased`}>
         <QueryProvider>
-          <InboxLocaleProvider>
+          <AppLocaleProvider initialLocale={locale}>
             {children}
             <Toaster />
-          </InboxLocaleProvider>
+          </AppLocaleProvider>
         </QueryProvider>
       </body>
     </html>

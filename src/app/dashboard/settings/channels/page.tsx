@@ -1,4 +1,6 @@
 "use client";
+import { useLocale } from "next-intl";
+import { useCopy } from "@/i18n/copy";
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +33,9 @@ import {
 import { AddChannelModal } from "@/components/channels/AddChannelModal";
 
 export default function ChannelsSettingsPage() {
+  const copy = useCopy();
+  const locale = useLocale();
+
   const queryClient = useQueryClient();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
@@ -60,12 +65,12 @@ export default function ChannelsSettingsPage() {
       { id: channelToDelete },
       {
         onSuccess: () => {
-          toast.success("Channel disconnected successfully");
+          toast.success(copy("Channel disconnected successfully"));
           queryClient.invalidateQueries({ queryKey: [`/channels`] });
           setChannelToDelete(null);
         },
         onError: () => {
-          toast.error("Failed to disconnect channel");
+          toast.error(copy("Failed to disconnect channel"));
           setChannelToDelete(null);
         },
       },
@@ -78,18 +83,20 @@ export default function ChannelsSettingsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-brand-ice tracking-tight flex items-center">
-            CHANNELS & INTEGRATIONS
+            {copy("CHANNELS & INTEGRATIONS")}
           </h1>
           <p className="text-brand-ice/60 font-medium mt-1">
-            Connect your OmniX AI agent to external messaging platforms.
+            {copy(
+              "Connect your OmniX AI agent to external messaging platforms.",
+            )}
           </p>
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
           className="bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-brand-electric/20 h-11 rounded-xl font-bold transition-all active:scale-95"
         >
-          <Plus className="mr-2 h-4 w-4" />
-          Connect WhatsApp
+          <Plus className="me-2 h-4 w-4" />
+          {copy("Connect WhatsApp")}
         </Button>
       </div>
 
@@ -105,18 +112,19 @@ export default function ChannelsSettingsPage() {
               <MessageCircle className="h-8 w-8" />
             </div>
             <h3 className="text-xl font-bold text-brand-ice mb-2">
-              No Channels Connected
+              {copy("No Channels Connected")}
             </h3>
             <p className="text-brand-ice/60 max-w-md font-medium mb-8">
-              Connect a WhatsApp channel for the supervised pilot. Other
-              messaging platforms need separate setup and verification.
+              {copy(
+                "Connect a WhatsApp channel for the supervised pilot. Other messaging platforms need separate setup and verification.",
+              )}
             </p>
             <Button
               onClick={() => setIsAddModalOpen(true)}
               className="bg-brand-electric hover:bg-brand-electric/80 font-bold h-11 px-8 rounded-xl shadow-none shadow-brand-electric/20 transition-all active:scale-95"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Add First Channel
+              <Plus className="me-2 h-4 w-4" />
+              {copy("Add First Channel")}
             </Button>
           </CardContent>
         </Card>
@@ -133,7 +141,7 @@ export default function ChannelsSettingsPage() {
                 key={channel.id}
                 className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10"
               >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                <div className="absolute top-0 start-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
@@ -148,8 +156,8 @@ export default function ChannelsSettingsPage() {
                           variant="outline"
                           className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-wider"
                         >
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Active
+                          <CheckCircle2 className="h-3 w-3 me-1" />
+                          {copy("Active")}
                         </Badge>
                       </div>
                     </div>
@@ -158,7 +166,7 @@ export default function ChannelsSettingsPage() {
                   <div className="space-y-3 mt-6 pt-6 border-t border-white/10">
                     <div>
                       <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
-                        Account ID
+                        {copy("Account ID")}
                       </p>
                       <p className="font-medium text-brand-ice/80 text-sm truncate">
                         {channel.providerAccountId}
@@ -166,10 +174,10 @@ export default function ChannelsSettingsPage() {
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
-                        Connected On
+                        {copy("Connected On")}
                       </p>
                       <p className="font-medium text-brand-ice/80 text-sm">
-                        {new Date(channel.createdAt).toLocaleDateString()}
+                        {new Date(channel.createdAt).toLocaleDateString(locale)}
                       </p>
                     </div>
                   </div>
@@ -180,8 +188,8 @@ export default function ChannelsSettingsPage() {
                       onClick={() => setChannelToDelete(channel.id)}
                       className="text-red-400 hover:text-red-400 hover:bg-red-500/10 h-9 font-bold"
                     >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Disconnect
+                      <Trash2 className="h-4 w-4 me-2" />
+                      {copy("Disconnect")}
                     </Button>
                   </div>
                 </CardContent>
@@ -205,13 +213,13 @@ export default function ChannelsSettingsPage() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center text-red-400 font-bold text-xl">
-              <AlertCircle className="mr-2 h-6 w-6" />
-              Disconnect Channel
+              <AlertCircle className="me-2 h-6 w-6" />
+              {copy("Disconnect Channel")}
             </DialogTitle>
             <DialogDescription className="text-brand-ice/60 font-medium pt-2">
-              Are you sure you want to disconnect this channel? Your AI agent
-              will no longer be able to send or receive messages through this
-              provider. This action cannot be undone.
+              {copy(
+                "Are you sure you want to disconnect this channel? Your AI agent will no longer be able to send or receive messages through this provider. This action cannot be undone.",
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6 gap-2">
@@ -222,7 +230,7 @@ export default function ChannelsSettingsPage() {
               disabled={deleteChannelMutation.isPending}
               className="font-bold h-11 px-6 rounded-xl"
             >
-              Cancel
+              {copy("Cancel")}
             </Button>
             <Button
               type="button"
@@ -233,11 +241,11 @@ export default function ChannelsSettingsPage() {
             >
               {deleteChannelMutation.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Disconnecting...
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                  {copy("Disconnecting...")}
                 </>
               ) : (
-                "Disconnect"
+                copy("Disconnect")
               )}
             </Button>
           </DialogFooter>

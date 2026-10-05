@@ -1,4 +1,6 @@
 "use client";
+import { useBackendError } from "@/i18n/backend";
+import { useCopy } from "@/i18n/copy";
 
 import { useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +20,9 @@ import { axiosInstance } from "@/lib/api/axios-client";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function IntegrationsSettingsPage() {
+  const copy = useCopy();
+  const backendError = useBackendError();
+
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
@@ -25,7 +30,7 @@ export default function IntegrationsSettingsPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token.trim()) {
-      toast.error("Please enter a HubSpot access token.");
+      toast.error(copy("Please enter a HubSpot access token."));
       return;
     }
 
@@ -36,14 +41,12 @@ export default function IntegrationsSettingsPage() {
         accessToken: token.trim(),
         providerAccountId: "hubspot-oauth",
       });
-      toast.success("HubSpot connected successfully.");
+      toast.success(copy("HubSpot connected successfully."));
       setToken("");
       // Refresh channels so they appear
       queryClient.invalidateQueries({ queryKey: ["/channels"] });
     } catch (error: any) {
-      toast.error(
-        error.response?.data?.message || "Failed to connect HubSpot.",
-      );
+      toast.error(backendError(error, "Failed to connect HubSpot."));
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -60,10 +63,10 @@ export default function IntegrationsSettingsPage() {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-brand-ice">
-                Integrations
+                {copy("Integrations")}
               </CardTitle>
               <CardDescription className="text-brand-ice/60 font-medium">
-                Connect HubSpot to sync leads and deals.
+                {copy("Connect HubSpot to sync leads and deals.")}
               </CardDescription>
             </div>
           </div>
@@ -76,7 +79,7 @@ export default function IntegrationsSettingsPage() {
                 htmlFor="hubspotToken"
                 className="text-xs font-bold uppercase tracking-widest text-brand-ice/60"
               >
-                HubSpot Private App Access Token
+                {copy("HubSpot Private App Access Token")}
               </Label>
               <Input
                 id="hubspotToken"
@@ -87,8 +90,9 @@ export default function IntegrationsSettingsPage() {
                 className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20"
               />
               <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
-                Create a private app in HubSpot and paste its access token here.
-                The token is verified immediately and stored encrypted at rest.
+                {copy(
+                  "Create a private app in HubSpot and paste its access token here. The token is verified immediately and stored encrypted at rest.",
+                )}
               </p>
             </div>
 
@@ -99,11 +103,11 @@ export default function IntegrationsSettingsPage() {
                 className="h-11 px-8 rounded-lg bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-blue-100 font-bold transition-all active:scale-95"
               >
                 {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <Save className="mr-2 h-4 w-4" />
+                  <Save className="me-2 h-4 w-4" />
                 )}
-                {isLoading ? "Saving..." : "Save Token"}
+                {isLoading ? copy("Saving...") : copy("Save Token")}
               </Button>
             </div>
           </form>

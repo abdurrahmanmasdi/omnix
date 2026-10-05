@@ -1,4 +1,6 @@
 "use client";
+import { useBackendError } from "@/i18n/backend";
+import { useCopy } from "@/i18n/copy";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,7 +22,10 @@ import {
   createChannelSchema,
   type CreateChannelInput,
 } from "@/lib/validations/channel";
-import { useChannelsControllerCreateChannel, getChannelsControllerGetChannelsQueryKey } from "@/lib/api/generated/channels/channels";
+import {
+  useChannelsControllerCreateChannel,
+  getChannelsControllerGetChannelsQueryKey,
+} from "@/lib/api/generated/channels/channels";
 
 interface AddChannelModalProps {
   isOpen: boolean;
@@ -31,6 +36,9 @@ export function AddChannelModal({
   isOpen,
   onOpenChange,
 }: AddChannelModalProps) {
+  const copy = useCopy();
+  const backendError = useBackendError();
+
   const queryClient = useQueryClient();
   const createChannelMutation = useChannelsControllerCreateChannel();
 
@@ -53,18 +61,21 @@ export function AddChannelModal({
       { data },
       {
         onSuccess: () => {
-          toast.success("WhatsApp Channel connected successfully!");
-          queryClient.invalidateQueries({ queryKey: getChannelsControllerGetChannelsQueryKey() });
+          toast.success(copy("WhatsApp Channel connected successfully!"));
+          queryClient.invalidateQueries({
+            queryKey: getChannelsControllerGetChannelsQueryKey(),
+          });
           reset();
           onOpenChange(false);
         },
         onError: (error: unknown) => {
           // Catch 400 bad request or other errors
           console.error(error);
-          const err = error as { response?: { data?: { message?: string } } };
           toast.error(
-            err?.response?.data?.message ||
+            backendError(
+              error,
               "Invalid token or Meta API rejected the connection.",
+            ),
           );
         },
       },
@@ -76,25 +87,27 @@ export function AddChannelModal({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">
-            Connect WhatsApp
+            {copy("Connect WhatsApp")}
           </DialogTitle>
           <DialogDescription className="text-brand-ice/60 font-medium">
-            Link your Meta developer app to start receiving and sending
-            messages.
+            {copy(
+              "Link your Meta developer app to start receiving and sending messages.",
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <Alert className="bg-blue-50 border-blue-200 text-blue-900 mt-2">
           <Info className="h-4 w-4 text-blue-600" />
           <AlertTitle className="font-bold text-blue-900">
-            Meta API Setup
+            {copy("Meta API Setup")}
           </AlertTitle>
           <AlertDescription className="text-blue-800 text-xs mt-1">
-            Enter the <strong>Phone Number ID</strong> and{" "}
-            <strong>System User Access Token</strong> generated from your Meta
-            Developer Portal. Ensure the token has the
-            `whatsapp_business_messaging` and `whatsapp_business_management`
-            permissions.
+            {copy("Enter the")}
+            <strong>{copy("Phone Number ID")}</strong> {copy("and")}{" "}
+            <strong>{copy("System User Access Token")}</strong>
+            {copy(
+              "generated from your Meta Developer Portal. Ensure the token has the `whatsapp_business_messaging` and `whatsapp_business_management` permissions.",
+            )}
           </AlertDescription>
         </Alert>
 
@@ -105,24 +118,24 @@ export function AddChannelModal({
                 htmlFor="providerAccountId"
                 className="font-bold text-slate-700"
               >
-                Phone Number ID
+                {copy("Phone Number ID")}
               </Label>
               <Input
                 id="providerAccountId"
-                placeholder="e.g. 102345678901234"
+                placeholder={copy("e.g. 102345678901234")}
                 {...register("providerAccountId")}
                 className={`h-11 ${errors.providerAccountId ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               />
               {errors.providerAccountId && (
                 <p className="text-red-500 text-xs font-semibold">
-                  {errors.providerAccountId.message}
+                  {copy(errors.providerAccountId.message)}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="accessToken" className="font-bold text-slate-700">
-                Permanent Access Token
+                {copy("Permanent Access Token")}
               </Label>
               <Input
                 id="accessToken"
@@ -133,7 +146,7 @@ export function AddChannelModal({
               />
               {errors.accessToken && (
                 <p className="text-red-500 text-xs font-semibold">
-                  {errors.accessToken.message}
+                  {copy(errors.accessToken.message)}
                 </p>
               )}
             </div>
@@ -147,7 +160,7 @@ export function AddChannelModal({
               className="font-bold h-11 px-6 rounded-xl"
               disabled={createChannelMutation.isPending}
             >
-              Cancel
+              {copy("Cancel")}
             </Button>
             <Button
               type="submit"
@@ -156,11 +169,11 @@ export function AddChannelModal({
             >
               {createChannelMutation.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Connecting...
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                  {copy("Connecting...")}
                 </>
               ) : (
-                "Connect WhatsApp"
+                copy("Connect WhatsApp")
               )}
             </Button>
           </div>

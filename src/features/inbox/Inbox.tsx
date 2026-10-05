@@ -118,7 +118,7 @@ export function Inbox() {
     [],
   );
   const connected = useInboxSocket(id, onUnseen);
-  const { t, locale, setLocale } = useInboxText();
+  const { t } = useInboxText();
   const notifications = useNotificationsControllerGetNotifications({
     limit: 100,
   });
@@ -152,21 +152,10 @@ export function Inbox() {
         <span className="text-xs text-muted-foreground" role="status">
           {connected ? t("connected") : t("disconnected")}
         </span>
-        <select
-          aria-label={t("language")}
-          value={locale}
-          onChange={(event) =>
-            setLocale(event.target.value === "en" ? "en" : "tr")
-          }
-          className="rounded-md border border-border bg-background p-2 text-sm"
-        >
-          <option value="tr">Türkçe</option>
-          <option value="en">English</option>
-        </select>
       </div>
       <div className="flex min-h-0 flex-1">
         <div
-          className={`${id ? "hidden md:block" : "block"} w-full shrink-0 border-r border-border md:w-80`}
+          className={`${id ? "hidden md:block" : "block"} w-full shrink-0 border-e border-border md:w-80`}
         >
           <ConversationList
             filter={filter}

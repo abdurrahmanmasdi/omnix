@@ -1,4 +1,6 @@
 "use client";
+import { useBackendError } from "@/i18n/backend";
+import { useCopy } from "@/i18n/copy";
 
 import { useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -34,17 +36,20 @@ import {
 } from "@/components/ui/card";
 
 export default function CreateOrganizationPage() {
+  const copy = useCopy();
+  const backendError = useBackendError();
+
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
 
   const form = useForm<CreateOrganizationFormData>({
     resolver: zodResolver(createOrganizationSchema) as never,
-    defaultValues: { 
-      name: "", 
-      slug: "", 
+    defaultValues: {
+      name: "",
+      slug: "",
       agentTone: "Professional & Empathetic",
       businessRules: [{ rule: "" }],
-      industry_category: "MEDICAL_TOURISM" 
+      industry_category: "MEDICAL_TOURISM",
     },
   });
 
@@ -62,8 +67,8 @@ export default function CreateOrganizationPage() {
       const generatedSlug = name
         .toLowerCase()
         .trim()
-        .replace(/[\s_]+/g, '-')
-        .replace(/[^\w-]+/g, '');
+        .replace(/[\s_]+/g, "-")
+        .replace(/[^\w-]+/g, "");
       form.setValue("slug", generatedSlug, { shouldValidate: true });
     }
   }, [name, isSlugDirty, form]);
@@ -72,7 +77,7 @@ export default function CreateOrganizationPage() {
 
   const onSubmit = (data: CreateOrganizationFormData) => {
     const finalRules = data.businessRules
-      ? data.businessRules.map(r => r.rule.trim()).filter(Boolean)
+      ? data.businessRules.map((r) => r.rule.trim()).filter(Boolean)
       : [];
 
     const payload = {
@@ -87,7 +92,7 @@ export default function CreateOrganizationPage() {
       { data: payload as never },
       {
         onSuccess: (response) => {
-          toast.success("Workspace created successfully!");
+          toast.success(copy("Workspace created successfully!"));
 
           if (user) {
             installSession(response.access_token, {
@@ -101,10 +106,7 @@ export default function CreateOrganizationPage() {
           router.push("/dashboard");
         },
         onError: (error: unknown) => {
-          const err = error as { response?: { data?: { message?: string } } };
-          toast.error(
-            err.response?.data?.message || "Failed to create workspace",
-          );
+          toast.error(backendError(error, "Failed to create workspace"));
         },
       },
     );
@@ -121,9 +123,11 @@ export default function CreateOrganizationPage() {
 
       <Card className="w-full max-w-xl shadow-lg">
         <CardHeader>
-          <CardTitle>Name your Workspace</CardTitle>
+          <CardTitle>{copy("Name your Workspace")}</CardTitle>
           <CardDescription>
-            Let&apos;s set up your clinic&apos;s AI Sales Agent and CRM environment.
+            {copy(
+              "Let's set up your clinic's AI Sales Agent and CRM environment.",
+            )}
           </CardDescription>
         </CardHeader>
 
@@ -131,76 +135,95 @@ export default function CreateOrganizationPage() {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Clinic Name</Label>
+                <Label htmlFor="name">{copy("Clinic Name")}</Label>
                 <Input
                   id="name"
-                  placeholder="Istanbul Premium Hair"
+                  placeholder={copy("Istanbul Premium Hair")}
                   {...form.register("name")}
                 />
                 {form.formState.errors.name && (
                   <p className="text-sm text-red-500">
-                    {form.formState.errors.name.message}
+                    {copy(form.formState.errors.name.message)}
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="slug">Workspace URL Slug</Label>
+                <Label htmlFor="slug">{copy("Workspace URL Slug")}</Label>
                 <Input
                   id="slug"
-                  placeholder="istanbul-premium-hair"
+                  placeholder={copy("istanbul-premium-hair")}
                   {...form.register("slug")}
                 />
                 {form.formState.errors.slug && (
                   <p className="text-sm text-red-500">
-                    {form.formState.errors.slug.message}
+                    {copy(form.formState.errors.slug.message)}
                   </p>
                 )}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="agentTone">AI Agent Tone</Label>
+              <Label htmlFor="agentTone">{copy("AI Agent Tone")}</Label>
               <Select
-                onValueChange={(value) => form.setValue("agentTone", value, { shouldValidate: true })}
+                onValueChange={(value) =>
+                  form.setValue("agentTone", value, { shouldValidate: true })
+                }
                 defaultValue={form.getValues("agentTone")}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a tone" />
+                  <SelectValue placeholder={copy("Select a tone")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Professional & Empathetic">Professional & Empathetic</SelectItem>
-                  <SelectItem value="Luxury & Exclusive">Luxury & Exclusive</SelectItem>
-                  <SelectItem value="Friendly & Casual">Friendly & Casual</SelectItem>
-                  <SelectItem value="Direct & Clinical">Direct & Clinical</SelectItem>
+                  <SelectItem value="Professional & Empathetic">
+                    {copy("Professional & Empathetic")}
+                  </SelectItem>
+                  <SelectItem value="Luxury & Exclusive">
+                    {copy("Luxury & Exclusive")}
+                  </SelectItem>
+                  <SelectItem value="Friendly & Casual">
+                    {copy("Friendly & Casual")}
+                  </SelectItem>
+                  <SelectItem value="Direct & Clinical">
+                    {copy("Direct & Clinical")}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {form.formState.errors.agentTone && (
                 <p className="text-sm text-red-500">
-                  {form.formState.errors.agentTone.message}
+                  {copy(form.formState.errors.agentTone.message)}
                 </p>
               )}
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label>Business Rules</Label>
+                <Label>{copy("Business Rules")}</Label>
               </div>
               <p className="text-xs text-slate-500 pb-1">
-                Define the guidelines your AI Agent must follow when chatting with patients.
+                {copy(
+                  "Define the guidelines your AI Agent must follow when chatting with patients.",
+                )}
               </p>
-              
+
               <div className="space-y-3">
                 {fields.map((field, index) => (
                   <div key={field.id} className="flex items-start space-x-2">
                     <div className="flex-1 space-y-1">
                       <Input
-                        placeholder="e.g. Never quote an exact price before a consultation."
-                        {...form.register(`businessRules.${index}.rule` as const)}
+                        placeholder={copy(
+                          "e.g. Never quote an exact price before a consultation.",
+                        )}
+                        {...form.register(
+                          `businessRules.${index}.rule` as const,
+                        )}
                       />
                       {form.formState.errors.businessRules?.[index]?.rule && (
                         <p className="text-sm text-red-500">
-                          {form.formState.errors.businessRules[index]?.rule?.message}
+                          {copy(
+                            form.formState.errors.businessRules[index]?.rule
+                              ?.message,
+                          )}
                         </p>
                       )}
                     </div>
@@ -212,7 +235,7 @@ export default function CreateOrganizationPage() {
                       onClick={() => remove(index)}
                     >
                       <Trash2 size={18} />
-                      <span className="sr-only">Remove rule</span>
+                      <span className="sr-only">{copy("Remove rule")}</span>
                     </Button>
                   </div>
                 ))}
@@ -225,14 +248,15 @@ export default function CreateOrganizationPage() {
                 className="mt-2 text-blue-600 border-blue-200 hover:bg-blue-50"
                 onClick={() => append({ rule: "" })}
               >
-                <Plus size={16} className="mr-2" />
-                Add Rule
+                <Plus size={16} className="me-2" />
+                {copy("Add Rule")}
               </Button>
-              {form.formState.errors.businessRules && !Array.isArray(form.formState.errors.businessRules) && (
-                <p className="text-sm text-red-500">
-                  {form.formState.errors.businessRules.message}
-                </p>
-              )}
+              {form.formState.errors.businessRules &&
+                !Array.isArray(form.formState.errors.businessRules) && (
+                  <p className="text-sm text-red-500">
+                    {copy(form.formState.errors.businessRules.message)}
+                  </p>
+                )}
             </div>
           </CardContent>
 
@@ -242,7 +266,9 @@ export default function CreateOrganizationPage() {
               className="w-full"
               disabled={createOrgMutation.isPending}
             >
-              {createOrgMutation.isPending ? "Creating..." : "Create Workspace"}
+              {createOrgMutation.isPending
+                ? copy("Creating...")
+                : copy("Create Workspace")}
             </Button>
           </CardFooter>
         </form>

@@ -1,4 +1,7 @@
 "use client";
+import { useLocale } from "next-intl";
+import { useNotificationText } from "@/i18n/backend";
+import { useCopy } from "@/i18n/copy";
 
 import { useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -32,9 +35,12 @@ import {
   AlertCircle,
   ExternalLink,
 } from "lucide-react";
-import type { NotificationInvalidationPayload } from '@/lib/contracts/socket-events.generated';
-import { notificationRoute, resolveNotification } from '@/features/inbox/notifications';
-import { useInboxText } from '@/features/inbox/i18n';
+import type { NotificationInvalidationPayload } from "@/lib/contracts/socket-events.generated";
+import {
+  notificationRoute,
+  resolveNotification,
+} from "@/features/inbox/notifications";
+import { useInboxText } from "@/features/inbox/i18n";
 import { toast } from "sonner";
 
 // ─── Helpers ────────────────────────────────────────────
@@ -53,19 +59,24 @@ function getNotificationIcon(type?: string) {
   }
 }
 
-function timeAgo(dateStr?: string): string {
+function timeAgo(dateStr: string | undefined, locale: string): string {
   if (!dateStr) return "";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  const minutes = Math.floor(
+    (Date.now() - new Date(dateStr).getTime()) / 60000,
+  );
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (minutes < 60) return formatter.format(-minutes, "minute");
+  if (minutes < 1440)
+    return formatter.format(-Math.floor(minutes / 60), "hour");
+  return formatter.format(-Math.floor(minutes / 1440), "day");
 }
 
 // ─── Component ──────────────────────────────────────────
 export function NotificationBell() {
+  const copy = useCopy();
+  const locale = useLocale();
+  const notificationText = useNotificationText();
+
   const router = useRouter();
   const { t } = useInboxText();
   const seenNotifications = useRef(new Set<string>());
@@ -95,22 +106,45 @@ export function NotificationBell() {
       if (seen.has(payload.id)) return;
       seen.add(payload.id);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getNotificationsControllerGetNotificationsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getNotificationsControllerGetUnreadCountQueryKey() }),
+        queryClient.invalidateQueries({
+          queryKey: getNotificationsControllerGetNotificationsQueryKey(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getNotificationsControllerGetUnreadCountQueryKey(),
+        }),
       ]);
       try {
-        const rows = await queryClient.fetchQuery(getNotificationsControllerGetNotificationsQueryOptions({ limit: 100 }, { query: { staleTime: 0 } }));
+        const rows = await queryClient.fetchQuery(
+          getNotificationsControllerGetNotificationsQueryOptions(
+            { limit: 100 },
+            { query: { staleTime: 0 } },
+          ),
+        );
         const notification = resolveNotification(payload, rows);
         if (!notification) return;
         const route = notificationRoute(notification);
-        const options = { description: notification.body, duration: 10000,
-          ...(route ? { action: { label: t('open'), onClick: () => router.push(route) } } : {}),
+        const options = {
+          description: notificationText(notification, "body"),
+          duration: 10000,
+          ...(route
+            ? {
+                action: { label: t("open"), onClick: () => router.push(route) },
+              }
+            : {}),
         };
-        if (notification.type === 'LEAD_HANDED_OFF') toast.warning(notification.title || t('handed_off'), options);
-        else toast.info(notification.title || t('notifications'), options);
+        if (notification.type === "LEAD_HANDED_OFF")
+          toast.warning(
+            notificationText(notification, "title") || t("handed_off"),
+            options,
+          );
+        else
+          toast.info(
+            notificationText(notification, "title") || t("notifications"),
+            options,
+          );
       } catch {
         // Failed or forbidden detail reads must never expose socket-supplied patient data.
-        toast.info(t('notifications'));
+        toast.info(t("notifications"));
       }
     };
 
@@ -118,7 +152,7 @@ export function NotificationBell() {
     return () => {
       socket.off("new_notification", handler);
     };
-  }, [socket, queryClient, router, t]);
+  }, [socket, queryClient, router, t, notificationText]);
 
   // ─── Click → Mark Read + Route ────────────────────────
   const handleClickNotification = useCallback(
@@ -167,7 +201,7 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="relative h-10 w-10 rounded-xl hover:bg-[#01081A] transition-colors"
-          aria-label={t('notifications')}
+          aria-label={t("notifications")}
         >
           <Bell className="h-[18px] w-[18px] text-brand-ice/60" />
           {count > 0 && (
@@ -186,7 +220,9 @@ export function NotificationBell() {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-[#051126]/50">
           <div className="flex items-center space-x-2">
-            <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
+            <h3 className="text-sm font-bold text-slate-900">
+              {copy("Notifications")}
+            </h3>
             {count > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/10 text-red-400 px-1.5 text-xs font-bold">
                 {count}
@@ -201,8 +237,8 @@ export function NotificationBell() {
               onClick={handleMarkAllRead}
               disabled={markAllMutation.isPending}
             >
-              <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
-              Mark all read
+              <CheckCheck className="me-1.5 h-3.5 w-3.5" />
+              {copy("Mark all read")}
             </Button>
           )}
         </div>
@@ -214,9 +250,11 @@ export function NotificationBell() {
               <div className="h-12 w-12 rounded-2xl bg-[#01081A] flex items-center justify-center mb-3">
                 <Bell className="h-5 w-5 text-slate-300" />
               </div>
-              <p className="text-sm font-medium text-brand-ice/60">All quiet</p>
+              <p className="text-sm font-medium text-brand-ice/60">
+                {copy("All quiet")}
+              </p>
               <p className="text-xs text-slate-400 mt-1">
-                You have no notifications yet.
+                {copy("You have no notifications yet.")}
               </p>
             </div>
           ) : (
@@ -225,7 +263,7 @@ export function NotificationBell() {
                 <button
                   key={n.id}
                   onClick={() => handleClickNotification(n)}
-                  className={`w-full text-left px-5 py-3.5 flex items-start gap-3.5 hover:bg-[#051126]/80 transition-colors group ${
+                  className={`w-full text-start px-5 py-3.5 flex items-start gap-3.5 hover:bg-[#051126]/80 transition-colors group ${
                     !n.isRead ? "bg-blue-50/30" : ""
                   }`}
                 >
@@ -242,15 +280,15 @@ export function NotificationBell() {
                     <p
                       className={`text-sm leading-snug ${!n.isRead ? "font-bold text-slate-900" : "font-medium text-brand-ice/80"}`}
                     >
-                      {n.title}
+                      {notificationText(n, "title")}
                     </p>
                     {n.body && (
                       <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
-                        {n.body}
+                        {notificationText(n, "body")}
                       </p>
                     )}
                     <p className="text-xs font-medium text-slate-400 mt-1.5">
-                      {timeAgo(n.createdAt)}
+                      {timeAgo(n.createdAt, locale)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 mt-1">
@@ -276,7 +314,7 @@ export function NotificationBell() {
                 className="text-xs font-bold text-brand-ice/60 hover:text-blue-600 h-8"
                 onClick={() => router.push("/dashboard/conversations")}
               >
-                Open Inbox
+                {copy("Open Inbox")}
               </Button>
             </div>
           </>

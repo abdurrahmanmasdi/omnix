@@ -5,8 +5,11 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
+import type { AuthControllerRefreshTokens200UserLocale } from "./authControllerRefreshTokens200UserLocale";
 
 export type AuthControllerRefreshTokens200User = {
+  /** @nullable */
+  locale?: AuthControllerRefreshTokens200UserLocale;
   id?: string;
   firstName?: string;
   lastName?: string;

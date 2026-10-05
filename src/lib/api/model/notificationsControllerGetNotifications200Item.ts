@@ -5,12 +5,17 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
+import type { NotificationsControllerGetNotifications200ItemParams } from "./notificationsControllerGetNotifications200ItemParams";
 
 export type NotificationsControllerGetNotifications200Item = {
   id?: string;
   organizationId?: string;
   userId?: string;
   type?: string;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  params?: NotificationsControllerGetNotifications200ItemParams;
   title?: string;
   body?: string;
   isRead?: boolean;
