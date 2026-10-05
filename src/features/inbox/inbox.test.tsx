@@ -14,7 +14,7 @@ import type { InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axiosInstance } from "@/lib/api/axios-client";
 import type { InboxConversationDto, InboxMessageDto } from "@/lib/api/model";
-import { InboxLocaleProvider } from "./i18n";
+import { AppLocaleProvider } from "@/i18n/provider";
 import { Composer } from "./Composer";
 import { ConversationHeader } from "./ConversationHeader";
 import { Thread } from "./Thread";
@@ -69,7 +69,7 @@ let client: QueryClient;
 function mount(children: React.ReactNode) {
   return render(
     <QueryClientProvider client={client}>
-      <InboxLocaleProvider>{children}</InboxLocaleProvider>
+      <AppLocaleProvider>{children}</AppLocaleProvider>
     </QueryClientProvider>,
   );
 }

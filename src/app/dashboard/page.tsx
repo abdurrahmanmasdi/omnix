@@ -1,35 +1,55 @@
-'use client';
+"use client";
+import { useLocale } from "next-intl";
+import { useCopy } from "@/i18n/copy";
 
-import { ReadError } from '@/features/inbox/ReadError';
-import { useAuthStore } from '@/store/auth-store';
-import { useAnalyticsControllerGetSummary } from '@/lib/api/generated/analytics/analytics';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { formatDistanceToNow } from 'date-fns';
-import { 
-  Users, 
-  Bot, 
-  AlertCircle, 
+import { ReadError } from "@/features/inbox/ReadError";
+import { useAuthStore } from "@/store/auth-store";
+import { useAnalyticsControllerGetSummary } from "@/lib/api/generated/analytics/analytics";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow } from "date-fns";
+import {
+  Users,
+  Bot,
+  AlertCircle,
   TrendingUp,
   Clock,
   ArrowRight,
-  Phone
-} from 'lucide-react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+  Phone,
+} from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
-  const user = useAuthStore((state) => state.user);
-  
-  // Refetch frequently on dashboard
-  const { data, isLoading, isError, error, refetch } = useAnalyticsControllerGetSummary({
-    query: {
-      refetchInterval: 30000,
-    }
-  });
+  const copy = useCopy();
+  const locale = useLocale();
 
-  const summary = (data as { totalLeads: number; activeConversations: number; needsAttention: number; aiConversionRate: number; recentActivity: { id: string; status: string; firstName?: string; lastName?: string; phoneNumber?: string; pipelineStage?: { name: string }; updatedAt: string }[] }) || {
+  const user = useAuthStore((state) => state.user);
+
+  // Refetch frequently on dashboard
+  const { data, isLoading, isError, error, refetch } =
+    useAnalyticsControllerGetSummary({
+      query: {
+        refetchInterval: 30000,
+      },
+    });
+
+  const summary = (data as {
+    totalLeads: number;
+    activeConversations: number;
+    needsAttention: number;
+    aiConversionRate: number;
+    recentActivity: {
+      id: string;
+      status: string;
+      firstName?: string;
+      lastName?: string;
+      phoneNumber?: string;
+      pipelineStage?: { name: string };
+      updatedAt: string;
+    }[];
+  }) || {
     totalLeads: 0,
     activeConversations: 0,
     needsAttention: 0,
@@ -39,7 +59,15 @@ export default function DashboardPage() {
 
   const hasNeedsAttention = summary.needsAttention > 0;
 
-  if (isError) return <ReadError error={error} retry={() => { void refetch(); }} />;
+  if (isError)
+    return (
+      <ReadError
+        error={error}
+        retry={() => {
+          void refetch();
+        }}
+      />
+    );
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -50,10 +78,10 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-black text-brand-ice tracking-tight">
-          Welcome back, {user?.firstName}!
+          {copy("Welcome back,")} {user?.firstName}!
         </h1>
         <p className="text-brand-ice/60 font-medium mt-1">
-          Clinic workspace totals and recent activity.
+          {copy("Clinic workspace totals and recent activity.")}
         </p>
       </div>
 
@@ -61,75 +89,103 @@ export default function DashboardPage() {
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {/* Metric 1: Total Leads */}
         <Card className="border-white/10 shadow-none hover:shadow-none transition-shadow relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-500" />
+          <div className="absolute top-0 start-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-bold text-brand-ice/60 uppercase tracking-wide">
-              Total Leads
+              {copy("Total Leads")}
             </CardTitle>
             <div className="h-8 w-8 bg-brand-electric/10 rounded-lg flex items-center justify-center">
               <Users className="h-4 w-4 text-brand-cyan" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-brand-ice">{summary.totalLeads.toLocaleString()}</div>
-            <p className="text-xs font-medium text-brand-ice/60 mt-1">Total patient enquiries</p>
+            <div className="text-3xl font-black text-brand-ice">
+              {summary.totalLeads.toLocaleString(locale)}
+            </div>
+            <p className="text-xs font-medium text-brand-ice/60 mt-1">
+              {copy("Total patient enquiries")}
+            </p>
           </CardContent>
         </Card>
 
         {/* Metric 2: Active AI Conversations */}
         <Card className="border-white/10 shadow-none hover:shadow-none transition-shadow relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
+          <div className="absolute top-0 start-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-bold text-brand-ice/60 uppercase tracking-wide">
-              Active AI Chats
+              {copy("Active AI Chats")}
             </CardTitle>
             <div className="h-8 w-8 bg-brand-cyan/10 rounded-lg flex items-center justify-center">
               <Bot className="h-4 w-4 text-emerald-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-brand-ice">{summary.activeConversations.toLocaleString()}</div>
-            <p className="text-xs font-medium text-brand-ice/60 mt-1">Ongoing automated conversations</p>
+            <div className="text-3xl font-black text-brand-ice">
+              {summary.activeConversations.toLocaleString(locale)}
+            </div>
+            <p className="text-xs font-medium text-brand-ice/60 mt-1">
+              {copy("Ongoing automated conversations")}
+            </p>
           </CardContent>
         </Card>
 
         {/* Metric 3: Needs Attention */}
-        <Card className={`shadow-none hover:shadow-none transition-shadow relative overflow-hidden ${
-          hasNeedsAttention ? 'border-amber-500/30 bg-amber-500/200/10 ring-2 ring-amber-500/20' : 'border-white/10'
-        }`}>
-          <div className={`absolute top-0 left-0 w-full h-1 ${hasNeedsAttention ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-brand-electric to-brand-violet'}`} />
+        <Card
+          className={`shadow-none hover:shadow-none transition-shadow relative overflow-hidden ${
+            hasNeedsAttention
+              ? "border-amber-500/30 bg-amber-500/200/10 ring-2 ring-amber-500/20"
+              : "border-white/10"
+          }`}
+        >
+          <div
+            className={`absolute top-0 start-0 w-full h-1 ${hasNeedsAttention ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-gradient-to-r from-brand-electric to-brand-violet"}`}
+          />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className={`text-sm font-bold uppercase tracking-wide ${hasNeedsAttention ? 'text-amber-400' : 'text-brand-ice/60'}`}>
-              Needs Attention
+            <CardTitle
+              className={`text-sm font-bold uppercase tracking-wide ${hasNeedsAttention ? "text-amber-400" : "text-brand-ice/60"}`}
+            >
+              {copy("Needs Attention")}
             </CardTitle>
-            <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${hasNeedsAttention ? 'bg-amber-500/20' : 'bg-[#01081A]'}`}>
-              <AlertCircle className={`h-4 w-4 ${hasNeedsAttention ? 'text-amber-400' : 'text-brand-ice/60'}`} />
+            <div
+              className={`h-8 w-8 rounded-lg flex items-center justify-center ${hasNeedsAttention ? "bg-amber-500/20" : "bg-[#01081A]"}`}
+            >
+              <AlertCircle
+                className={`h-4 w-4 ${hasNeedsAttention ? "text-amber-400" : "text-brand-ice/60"}`}
+              />
             </div>
           </CardHeader>
           <CardContent>
-            <div className={`text-3xl font-black ${hasNeedsAttention ? 'text-amber-400 animate-pulse' : 'text-brand-ice'}`}>
-              {summary.needsAttention.toLocaleString()}
+            <div
+              className={`text-3xl font-black ${hasNeedsAttention ? "text-amber-400 animate-pulse" : "text-brand-ice"}`}
+            >
+              {summary.needsAttention.toLocaleString(locale)}
             </div>
-            <p className={`text-xs font-medium mt-1 ${hasNeedsAttention ? 'text-amber-400' : 'text-brand-ice/60'}`}>
-              Requires human intervention
+            <p
+              className={`text-xs font-medium mt-1 ${hasNeedsAttention ? "text-amber-400" : "text-brand-ice/60"}`}
+            >
+              {copy("Requires human intervention")}
             </p>
           </CardContent>
         </Card>
 
         {/* Share of leads in READY_TO_BOOK or WON pipeline status. */}
         <Card className="border-white/10 shadow-none hover:shadow-none transition-shadow relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-500" />
+          <div className="absolute top-0 start-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-bold text-brand-ice/60 uppercase tracking-wide">
-              Pipeline progress
+              {copy("Pipeline progress")}
             </CardTitle>
             <div className="h-8 w-8 bg-brand-electric/10 rounded-lg flex items-center justify-center">
               <TrendingUp className="h-4 w-4 text-indigo-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-brand-ice">{summary.aiConversionRate}%</div>
-            <p className="text-xs font-medium text-brand-ice/60 mt-1">Ready to book or won; not confirmed revenue</p>
+            <div className="text-3xl font-black text-brand-ice">
+              {summary.aiConversionRate}%
+            </div>
+            <p className="text-xs font-medium text-brand-ice/60 mt-1">
+              {copy("Ready to book or won; not confirmed revenue")}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -137,11 +193,16 @@ export default function DashboardPage() {
       {/* Recent Activity Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-brand-ice tracking-tight">Recent Lead Activity</h2>
+          <h2 className="text-xl font-bold text-brand-ice tracking-tight">
+            {copy("Recent Lead Activity")}
+          </h2>
           <Link href="/dashboard/leads">
-            <Button variant="ghost" className="text-brand-cyan font-bold hover:bg-brand-electric/10">
-              View All Leads
-              <ArrowRight className="ml-2 h-4 w-4" />
+            <Button
+              variant="ghost"
+              className="text-brand-cyan font-bold hover:bg-brand-electric/10"
+            >
+              {copy("View All Leads")}
+              <ArrowRight className="ms-2 h-4 w-4" />
             </Button>
           </Link>
         </div>
@@ -152,62 +213,88 @@ export default function DashboardPage() {
               <div className="h-12 w-12 bg-[#051126] rounded-2xl flex items-center justify-center mb-4 border border-white/10">
                 <Users className="h-6 w-6 text-brand-ice/40" />
               </div>
-              <p className="text-brand-ice/60 font-medium">No recent lead activity.</p>
+              <p className="text-brand-ice/60 font-medium">
+                {copy("No recent lead activity.")}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {summary.recentActivity.map((activity: { id: string; status: string; firstName?: string; lastName?: string; phoneNumber?: string; pipelineStage?: { name: string }; updatedAt: string }) => {
-                // Determine AI status UI mapping
-                const isHandedOff = activity.status === 'HANDED_OFF';
-                
-                return (
-                  <div key={activity.id} className="p-4 flex items-center justify-between hover:bg-[#051126] transition-colors">
-                    {/* Left: Lead Info */}
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 bg-[#01081A] rounded-full flex flex-col items-center justify-center shrink-0 border border-white/10">
-                        <span className="text-xs font-black text-brand-ice/60">
-                          {activity.firstName?.[0] || 'U'}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-brand-ice text-sm">
-                          {activity.firstName} {activity.lastName}
-                        </h4>
-                        <div className="flex items-center text-xs text-brand-ice/60 font-medium mt-0.5">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {activity.phoneNumber}
+              {summary.recentActivity.map(
+                (activity: {
+                  id: string;
+                  status: string;
+                  firstName?: string;
+                  lastName?: string;
+                  phoneNumber?: string;
+                  pipelineStage?: { name: string };
+                  updatedAt: string;
+                }) => {
+                  // Determine AI status UI mapping
+                  const isHandedOff = activity.status === "HANDED_OFF";
+
+                  return (
+                    <div
+                      key={activity.id}
+                      className="p-4 flex items-center justify-between hover:bg-[#051126] transition-colors"
+                    >
+                      {/* Left: Lead Info */}
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 bg-[#01081A] rounded-full flex flex-col items-center justify-center shrink-0 border border-white/10">
+                          <span className="text-xs font-black text-brand-ice/60">
+                            {activity.firstName?.[0] || "U"}
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-brand-ice text-sm">
+                            {activity.firstName} {activity.lastName}
+                          </h4>
+                          <div className="flex items-center text-xs text-brand-ice/60 font-medium mt-0.5">
+                            <Phone className="h-3 w-3 me-1" />
+                            {activity.phoneNumber}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Middle: Stage & AI Status */}
-                    <div className="flex items-center gap-3">
-                      {activity.pipelineStage && (
-                        <Badge variant="secondary" className="bg-[#01081A] text-brand-ice/80 font-bold border-none uppercase tracking-wide text-[10px]">
-                          {activity.pipelineStage.name}
-                        </Badge>
-                      )}
-                      
-                      {isHandedOff ? (
-                        <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/20 text-[10px] uppercase font-bold tracking-wider">
-                          Handed Off (Paused)
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20 text-[10px] uppercase font-bold tracking-wider">
-                          <Bot className="h-3 w-3 mr-1" />
-                          AI Active
-                        </Badge>
-                      )}
-                    </div>
+                      {/* Middle: Stage & AI Status */}
+                      <div className="flex items-center gap-3">
+                        {activity.pipelineStage && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-[#01081A] text-brand-ice/80 font-bold border-none uppercase tracking-wide text-[10px]"
+                          >
+                            {activity.pipelineStage.name}
+                          </Badge>
+                        )}
 
-                    {/* Right: Time */}
-                    <div className="flex items-center text-xs text-brand-ice/60 font-medium min-w-[100px] justify-end">
-                      <Clock className="h-3 w-3 mr-1.5" />
-                      {formatDistanceToNow(new Date(activity.updatedAt), { addSuffix: true })}
+                        {isHandedOff ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-amber-500/20 text-amber-400 border-amber-500/20 text-[10px] uppercase font-bold tracking-wider"
+                          >
+                            {copy("Handed Off (Paused)")}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20 text-[10px] uppercase font-bold tracking-wider"
+                          >
+                            <Bot className="h-3 w-3 me-1" />
+                            {copy("AI Active")}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Right: Time */}
+                      <div className="flex items-center text-xs text-brand-ice/60 font-medium min-w-[100px] justify-end">
+                        <Clock className="h-3 w-3 me-1.5" />
+                        {formatDistanceToNow(new Date(activity.updatedAt), {
+                          addSuffix: true,
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                },
+              )}
             </div>
           )}
         </Card>

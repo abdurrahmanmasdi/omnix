@@ -74,7 +74,7 @@ export function PatientPanel({
   return (
     <aside
       aria-label={t("details")}
-      className="h-full overflow-y-auto border-l border-border p-4 text-sm"
+      className="h-full overflow-y-auto border-s border-border p-4 text-sm"
     >
       <h3 className="mb-3 text-base font-semibold">{t("details")}</h3>
       <form

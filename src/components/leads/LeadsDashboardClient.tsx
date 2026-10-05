@@ -1,4 +1,5 @@
 "use client";
+import { useCopy } from "@/i18n/copy";
 
 import { getLeadsControllerFindAllQueryKey } from "@/lib/api/generated/leads/leads";
 import { getPipelineStagesControllerFindAllQueryKey } from "@/lib/api/generated/pipeline-stages/pipeline-stages";
@@ -28,6 +29,8 @@ import { LeadsTable } from "./LeadsTable";
 import { LeadsPagination } from "./LeadsPagination";
 
 export function LeadsDashboardClient() {
+  const copy = useCopy();
+
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -155,10 +158,14 @@ export function LeadsDashboardClient() {
       await queryClient.cancelQueries({ queryKey: ["/pipeline-stages"] });
 
       // Invalidate all leads queries (list, individual, any filtered view)
-      queryClient.invalidateQueries({ queryKey: getLeadsControllerFindAllQueryKey() });
+      queryClient.invalidateQueries({
+        queryKey: getLeadsControllerFindAllQueryKey(),
+      });
 
       // Invalidate pipeline stages since lead stage assignments may have changed
-      queryClient.invalidateQueries({ queryKey: getPipelineStagesControllerFindAllQueryKey() });
+      queryClient.invalidateQueries({
+        queryKey: getPipelineStagesControllerFindAllQueryKey(),
+      });
     };
 
     socket.on("onLeadUpdate", handleLeadUpdate);
@@ -217,35 +224,37 @@ export function LeadsDashboardClient() {
   const handleDelete = useCallback(
     (id: string) => {
       if (
-        confirm("Are you sure you want to delete this patient record?")
+        confirm(copy("Are you sure you want to delete this patient record?"))
       ) {
         deleteMutation.mutate(
           { id },
           {
             onSuccess: () => {
-              toast.success("Patient record deleted");
+              toast.success(copy("Patient record deleted"));
               refetch();
             },
             onError: () =>
               toast.error(
-                "Could not delete the patient record. Please try again.",
+                copy("Could not delete the patient record. Please try again."),
               ),
           },
         );
       }
     },
-    [deleteMutation, refetch],
+    [copy, deleteMutation, refetch],
   );
 
   const handleOpenConversation = useCallback(
     (conversationId?: string) => {
       if (conversationId) {
-        router.push(`/dashboard/conversations?conversation=${encodeURIComponent(conversationId)}`);
+        router.push(
+          `/dashboard/conversations?conversation=${encodeURIComponent(conversationId)}`,
+        );
       } else {
-        toast.error("No conversation linked to this patient yet.");
+        toast.error(copy("No conversation linked to this patient yet."));
       }
     },
-    [router],
+    [copy, router],
   );
 
   const handleClearFilters = useCallback(
@@ -275,7 +284,6 @@ export function LeadsDashboardClient() {
 
         <CardContent className="p-0">
           <LeadsTable
-             
             leads={leads as any}
             sources={sources}
             isLoading={isLoading}

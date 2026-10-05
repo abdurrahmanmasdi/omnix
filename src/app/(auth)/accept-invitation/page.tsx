@@ -1,4 +1,6 @@
 "use client";
+import { useBackendError } from "@/i18n/backend";
+import { useCopy } from "@/i18n/copy";
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -17,6 +19,9 @@ import {
 import { useAuthStore } from "@/store/auth-store";
 
 export default function AcceptInvitationPage() {
+  const copy = useCopy();
+  const backendError = useBackendError();
+
   const token = useRef("");
   const [invitationType, setInvitationType] = useState("");
   const [pending, setPending] = useState(false);
@@ -44,7 +49,7 @@ export default function AcceptInvitationPage() {
       setError("Open the invitation link provided by your pilot contact.");
       return;
     }
-    
+
     let password = "";
     let firstName = "";
     let lastName = "";
@@ -54,7 +59,7 @@ export default function AcceptInvitationPage() {
       password = String(form.get("password") ?? "");
       firstName = String(form.get("firstName") ?? "").trim();
       lastName = String(form.get("lastName") ?? "").trim();
-      
+
       if (new TextEncoder().encode(password).length > 72) {
         setError("Please choose a password no longer than 72 UTF-8 bytes.");
         return;
@@ -64,9 +69,10 @@ export default function AcceptInvitationPage() {
     setPending(true);
     setError("");
     try {
-      const url = invitationType === "clinic"
-        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/invitations/clinic/accept`
-        : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/accept-invitation`;
+      const url =
+        invitationType === "clinic"
+          ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/invitations/clinic/accept`
+          : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/auth/accept-invitation`;
 
       const payload: any = { token: token.current };
       if (password) payload.password = password;
@@ -79,18 +85,20 @@ export default function AcceptInvitationPage() {
       }
 
       await axios.post(url, payload, options);
-      
+
       token.current = "";
       setComplete(true);
-      
+
       if (accessToken && invitationType === "clinic") {
         setTimeout(() => {
-           window.location.href = "/";
+          window.location.href = "/";
         }, 1500);
       }
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Activation could not be completed. Your invitation may have expired or already been used. Try logging in, or ask your pilot contact for a new invitation.",
+        err.response?.data?.code ||
+          err.response?.data?.message ||
+          "Activation could not be completed. Your invitation may have expired or already been used. Try logging in, or ask your pilot contact for a new invitation.",
       );
     } finally {
       setPending(false);
@@ -103,36 +111,62 @@ export default function AcceptInvitationPage() {
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle>
-          {complete ? (isExistingUserClinicInvite ? "Invitation accepted" : "Account activated") : (isExistingUserClinicInvite ? "Accept Clinic Invitation" : "Accept your pilot invitation")}
+          {complete
+            ? isExistingUserClinicInvite
+              ? copy("Invitation accepted")
+              : copy("Account activated")
+            : isExistingUserClinicInvite
+              ? copy("Accept Clinic Invitation")
+              : copy("Accept your pilot invitation")}
         </CardTitle>
         <CardDescription>
           {complete
-            ? (isExistingUserClinicInvite ? "You have successfully joined the clinic." : "Log in with your invited email address and the password you just chose.")
-            : (isExistingUserClinicInvite ? `You are logged in as ${user.firstName || "this account"}. Click below to accept the invitation.` : "Choose your account details to join.")}
+            ? isExistingUserClinicInvite
+              ? copy("You have successfully joined the clinic.")
+              : copy(
+                  "Log in with your invited email address and the password you just chose.",
+                )
+            : isExistingUserClinicInvite
+              ? `You are logged in as ${user.firstName || copy("this account")}. Click below to accept the invitation.`
+              : copy("Choose your account details to join.")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {complete ? (
           !isExistingUserClinicInvite && (
             <Link href="/login" className="text-blue-600 hover:underline">
-              Continue to login
+              {copy("Continue to login")}
             </Link>
           )
         ) : isExistingUserClinicInvite ? (
-           <div className="space-y-4">
+          <div className="space-y-4">
             {error && (
               <p role="alert" className="text-sm text-red-600">
-                {error}
+                {backendError(
+                  {
+                    response: {
+                      data: {
+                        code: error ?? undefined,
+                        message: error ?? undefined,
+                      },
+                    },
+                  },
+                  "",
+                )}
               </p>
             )}
-            <Button onClick={() => accept()} className="w-full" disabled={pending}>
-              {pending ? "Accepting…" : "Accept invitation"}
+            <Button
+              onClick={() => accept()}
+              className="w-full"
+              disabled={pending}
+            >
+              {pending ? copy("Accepting…") : copy("Accept invitation")}
             </Button>
           </div>
         ) : (
           <form onSubmit={accept} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName">First name</Label>
+              <Label htmlFor="firstName">{copy("First name")}</Label>
               <Input
                 id="firstName"
                 name="firstName"
@@ -143,7 +177,7 @@ export default function AcceptInvitationPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lastName">Last name</Label>
+              <Label htmlFor="lastName">{copy("Last name")}</Label>
               <Input
                 id="lastName"
                 name="lastName"
@@ -154,7 +188,7 @@ export default function AcceptInvitationPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{copy("Password")}</Label>
               <Input
                 id="password"
                 name="password"
@@ -166,16 +200,26 @@ export default function AcceptInvitationPage() {
                 disabled={pending}
               />
               <p className="text-sm text-slate-500">
-                Use at least 12 characters.
+                {copy("Use at least 12 characters.")}
               </p>
             </div>
             {error && (
               <p role="alert" className="text-sm text-red-600">
-                {error}
+                {backendError(
+                  {
+                    response: {
+                      data: {
+                        code: error ?? undefined,
+                        message: error ?? undefined,
+                      },
+                    },
+                  },
+                  "",
+                )}
               </p>
             )}
             <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Activating…" : "Activate account"}
+              {pending ? copy("Activating…") : copy("Activate account")}
             </Button>
           </form>
         )}

@@ -1,4 +1,5 @@
 "use client";
+
 import { useInboxText } from "@/features/inbox/i18n";
 
 export default function ErrorPage({

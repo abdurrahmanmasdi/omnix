@@ -1,4 +1,5 @@
 "use client";
+import { useCopy } from "@/i18n/copy";
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -53,6 +54,8 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function AiSettingsPage() {
+  const copy = useCopy();
+
   const queryClient = useQueryClient();
 
   // --- Orval-generated GET hook ---
@@ -123,10 +126,10 @@ export default function AiSettingsPage() {
         queryClient.invalidateQueries({
           queryKey: getAiPersonaControllerGetPersonaQueryKey(),
         });
-        toast.success("AI Configuration saved!");
+        toast.success(copy("AI Configuration saved!"));
       },
       onError: (error) => {
-        toast.error("Failed to save AI configuration.");
+        toast.error(copy("Failed to save AI configuration."));
         console.error(error);
       },
     },
@@ -164,10 +167,10 @@ export default function AiSettingsPage() {
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-brand-ice">
-                AI Agent Configuration
+                {copy("AI Agent Configuration")}
               </CardTitle>
               <CardDescription className="text-brand-ice/60 font-medium">
-                Customize how your AI employee talks to patients.
+                {copy("Customize how your AI employee talks to patients.")}
               </CardDescription>
             </div>
           </div>
@@ -178,7 +181,7 @@ export default function AiSettingsPage() {
             <div className="flex flex-col items-center justify-center py-24 space-y-4">
               <Loader2 className="h-8 w-8 animate-spin text-brand-cyan" />
               <p className="text-sm font-medium text-brand-ice/60">
-                Loading AI configuration...
+                {copy("Loading AI configuration...")}
               </p>
             </div>
           ) : (
@@ -189,17 +192,17 @@ export default function AiSettingsPage() {
                     htmlFor="clinicName"
                     className="text-xs font-bold uppercase tracking-widest text-brand-ice/60"
                   >
-                    Clinic Name
+                    {copy("Clinic Name")}
                   </Label>
                   <Input
                     id="clinicName"
                     {...register("clinicName")}
-                    placeholder="e.g. Smile Dental Clinic"
+                    placeholder={copy("e.g. Smile Dental Clinic")}
                     className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20"
                   />
                   {errors.clinicName && (
                     <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">
-                      {errors.clinicName.message}
+                      {copy(errors.clinicName.message)}
                     </p>
                   )}
                 </div>
@@ -209,17 +212,17 @@ export default function AiSettingsPage() {
                     htmlFor="agentName"
                     className="text-xs font-bold uppercase tracking-widest text-brand-ice/60"
                   >
-                    Agent Name
+                    {copy("Agent Name")}
                   </Label>
                   <Input
                     id="agentName"
                     {...register("agentName")}
-                    placeholder="e.g. Sarah"
+                    placeholder={copy("e.g. Sarah")}
                     className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20"
                   />
                   {errors.agentName && (
                     <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">
-                      {errors.agentName.message}
+                      {copy(errors.agentName.message)}
                     </p>
                   )}
                 </div>
@@ -230,7 +233,7 @@ export default function AiSettingsPage() {
                   htmlFor="tone"
                   className="text-xs font-bold uppercase tracking-widest text-brand-ice/60"
                 >
-                  Agent Tone
+                  {copy("Agent Tone")}
                 </Label>
                 <Select
                   value={toneValue}
@@ -240,30 +243,31 @@ export default function AiSettingsPage() {
                     id="tone"
                     className="h-11 rounded-lg border-white/10"
                   >
-                    <SelectValue placeholder="Select a tone" />
+                    <SelectValue placeholder={copy("Select a tone")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Professional and empathetic">
-                      Professional and empathetic
+                      {copy("Professional and empathetic")}
                     </SelectItem>
                     <SelectItem value="Luxury and exclusive">
-                      Luxury and exclusive
+                      {copy("Luxury and exclusive")}
                     </SelectItem>
                     <SelectItem value="Friendly and casual">
-                      Friendly and casual
+                      {copy("Friendly and casual")}
                     </SelectItem>
                     <SelectItem value="Direct and clinical">
-                      Direct and clinical
+                      {copy("Direct and clinical")}
                     </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
-                  This dictates the style of language the AI will use with
-                  patients.
+                  {copy(
+                    "This dictates the style of language the AI will use with patients.",
+                  )}
                 </p>
                 {errors.tone && (
                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">
-                    {errors.tone.message}
+                    {copy(errors.tone.message)}
                   </p>
                 )}
               </div>
@@ -273,21 +277,24 @@ export default function AiSettingsPage() {
                   htmlFor="handoffMessage"
                   className="text-xs font-bold uppercase tracking-widest text-brand-ice/60"
                 >
-                  Handoff Message
+                  {copy("Handoff Message")}
                 </Label>
                 <Input
                   id="handoffMessage"
                   {...register("handoffMessage")}
-                  placeholder="e.g. Let me transfer you to our human agent..."
+                  placeholder={copy(
+                    "e.g. Let me transfer you to our human agent...",
+                  )}
                   className="h-11 rounded-lg border-white/10 focus:ring-blue-500/20"
                 />
                 <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
-                  The last message the AI will send before passing the chat to a
-                  human.
+                  {copy(
+                    "The last message the AI will send before passing the chat to a human.",
+                  )}
                 </p>
                 {errors.handoffMessage && (
                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">
-                    {errors.handoffMessage.message}
+                    {copy(errors.handoffMessage.message)}
                   </p>
                 )}
               </div>
@@ -297,21 +304,24 @@ export default function AiSettingsPage() {
                   htmlFor="businessRules"
                   className="text-xs font-bold uppercase tracking-widest text-brand-ice/60"
                 >
-                  Business Rules
+                  {copy("Business Rules")}
                 </Label>
                 <Textarea
                   id="businessRules"
                   {...register("businessRules")}
-                  placeholder="e.g. If a patient asks about implants, require an X-ray before giving an exact price."
+                  placeholder={copy(
+                    "e.g. If a patient asks about implants, require an X-ray before giving an exact price.",
+                  )}
                   className="min-h-[120px] rounded-lg border-white/10 focus:ring-blue-500/20 resize-y"
                 />
                 <p className="text-[10px] text-brand-ice/60 font-medium italic mt-1">
-                  Specific instructions, rules, or JSON data to guide the
-                  AI&apos;s decision-making.
+                  {copy(
+                    "Specific instructions, rules, or JSON data to guide the AI's decision-making.",
+                  )}
                 </p>
                 {errors.businessRules && (
                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">
-                    {errors.businessRules.message}
+                    {copy(errors.businessRules.message)}
                   </p>
                 )}
               </div>
@@ -323,11 +333,13 @@ export default function AiSettingsPage() {
                   className="h-11 px-8 rounded-lg bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-blue-100 font-bold transition-all active:scale-95"
                 >
                   {mutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="me-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <Save className="mr-2 h-4 w-4" />
+                    <Save className="me-2 h-4 w-4" />
                   )}
-                  {mutation.isPending ? "Saving..." : "Save Configuration"}
+                  {mutation.isPending
+                    ? copy("Saving...")
+                    : copy("Save Configuration")}
                 </Button>
               </div>
             </form>

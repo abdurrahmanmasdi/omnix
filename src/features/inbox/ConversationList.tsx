@@ -79,7 +79,7 @@ export function ConversationList({
             key={row.id}
             aria-current={row.id === activeId ? "true" : undefined}
             onClick={() => onSelect(row.id)}
-            className={`w-full border-b border-border p-4 text-left text-sm hover:bg-accent ${row.id === activeId ? "bg-accent" : ""}`}
+            className={`w-full border-b border-border p-4 text-start text-sm hover:bg-accent ${row.id === activeId ? "bg-accent" : ""}`}
           >
             <div className="flex items-center justify-between gap-2">
               <strong className="truncate">
