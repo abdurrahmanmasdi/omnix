@@ -9,7 +9,7 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: 5420d6c1560dcf7e3e5c4adb89645df8f21d854f
+        default: 1491d87002495f74cb3d90bf93ab358f696a01ae
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
@@ -37,8 +37,8 @@ jobs:
         with:
           repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          # Pin coordinated QA-1f peers, including the cleaned API and authenticated Ping contract.
-          ref: ${{ inputs.frontend_ref || '5420d6c1560dcf7e3e5c4adb89645df8f21d854f' }}
+          # Pin the matching N1 API contract and explicit-locale browser permission tests.
+          ref: ${{ inputs.frontend_ref || '1491d87002495f74cb3d90bf93ab358f696a01ae' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/checkout@v4
