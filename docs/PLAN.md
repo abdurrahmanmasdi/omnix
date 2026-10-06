@@ -1,15 +1,33 @@
 # OmniX plan — the compass
 
 ## Now
-_Rewrite this section at the end of every card/session (≤ 25 lines). Last: 2026-10-06 (M4 implementation)._
+_Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-06 23:00 (AI-1 reviewed)._
 
-- **Goal:** find out if clinics want this **before building more** (D-030). Success = one Istanbul clinic agrees to a 14-day pilot and uses OmniX with real patients.
-- **What already works (enough to demo and to pilot):** WhatsApp → AI reply (from the clinic's approved knowledge) → handoff to staff (AI pauses, alert) → staff reply from the Inbox; leads + pipeline; TR/EN/AR dashboard; team roles; clinic connects WhatsApp by pasting Cloud API credentials in Settings → Channels (works for a **dedicated number** that is not on the phone app).
-- **M4 WhatsApp coexistence implemented for review** on `m4/whatsapp-coexistence`: v4 signup + encrypted credentials, read-only history, phone echoes pause/version-bump the AI, Inbox phone/history markers and channel verification. Synthetic tests verified; **live acceptance still pending** founder-supervised Meta test assets, Business verification/Tech Provider review and a new v4 Login configuration. Everything else is frozen except pilot-blocking fixes; M1–M3 wait until a clinic asks.
-- **This week (founder, no code):** (1) push the repo + switch Railway (steps in `LOG.md`); (2) M5 go-live basics; (3) staging demo clinic with synthetic knowledge; (4) show it to clinics from `reference/research/` and ask for a pilot.
-- **Founder, start today:** Meta Business verification + Tech Provider app review — M4 cannot go live without it and Meta is slow.
-- **Parked:** P2-01 partial work (schema + migration, untested) on branch `p2-01/coordination-records` @ `44033f6`.
+- **Goal:** find out what clinics need before building more (D-030) and make the AI conversation excellent (D-031).
+- **Merged on `main`:** M4 WhatsApp coexistence (live Meta test pending verification) and AI-1 eval set + runner (`apps/python-ai-service-v2/evals/`).
+- **Founder next:** (1) run the **baseline eval** of today's AI (command in `LOG.md`, ≤ $5) and keep the report; (2) Meta setup + verification; (3) Railway switch (V1); (4) D2 mystery shopping + D3 interviews (materials from Claude).
+- **Next build card:** **AI-2 coordinator v2** (prompt in chat 2026-10-06). Then AI-3 tuning using the baseline + v2 reports and D2/D3 findings.
+- **Research done:** playbook (`reference/product/AI_SALES_PLAYBOOK.md`), D1 market map (`reference/research/D1_MARKET_MAP_2026-10.md`).
 - **Open founder decisions:** Q14 pilot mode (draft mode recommended), Q5 which clinic.
+- **Parked:** P2-01 partial work on `p2-01/coordination-records` @ `44033f6`.
+
+## Discovery — learn what the market needs (D-031)
+
+| Step | What | Who | Output |
+| --- | --- | --- | --- |
+| D1 | Desk research: how Istanbul dental clinics get and handle international leads (ads, agencies, Instagram), team sizes, tools they already pay for (WhatsApp Business, Kommo, respond.io, Bitrix24…), AI/chatbot competitors and prices. Builds on `reference/research/OMNA-9_Competitor_Landscape_Brief.md` | Claude | **Done** — `reference/research/D1_MARKET_MAP_2026-10.md` |
+| D2 | Mystery shopping: message 10 clinics on WhatsApp as a patient (script + sheet from Claude); log reply time, price handling, photo request, follow-ups | Founder | Filled sheet |
+| D3 | 5 interviews with clinic owners/coordinators (question guide from Claude, "Mom Test" style: past behavior, not opinions) | Founder | Notes per interview |
+| D4 | Synthesis: rank needs by pain × frequency × willingness to pay → what to build, what to drop, pricing, pitch | Claude | Updated `PLAN.md` + playbook |
+| D5 | Pilot offer to the best-fit clinic | Founder | Signed pilot |
+
+## AI cards (D-031)
+
+| # | Card | Status |
+| --- | --- | --- |
+| AI-1 | Eval set (~40 scenarios EN/TR/AR) + simulated patient + judge + hard checks + one command; synthetic demo clinic fact sheet; runs with a fake model in tests, real model only when the founder runs it | **Done** (PR #2); baseline run by founder pending |
+| AI-2 | Coordinator v2: playbook guidelines file + clinic fact sheet in prompt + one agent + tools, behind a per-clinic switch; old graph kept until v2 wins on evals | **NEXT** |
+| AI-3 | Tune guidelines from eval failures + D2/D3 findings; compare 2–3 models (quality vs cost); switch default | queued |
 
 ## Validate first (D-030)
 

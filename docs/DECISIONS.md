@@ -175,3 +175,13 @@ _D-011…D-016: decisions already made in the project's plan documents (CTO plan
 - Context: founder wants to test the market before building more; the current product (WhatsApp AI replies, handoff, Inbox, leads, TR/EN/AR) is enough to demo and pilot.
 - Decision: (1) next work is validation: deploy, go-live basics, a staging demo, 10 clinic conversations, one pilot (`PLAN.md` V1–V5). (2) The only build card now is **M4 = P2-04 + P2-05 WhatsApp coexistence** — the clinic keeps its own number and phone app, a better experience than a second Cloud API number. (3) M1–M3 wait until a pilot clinic needs them; P2-01 partial work parked on `p2-01/coordination-records` @ 44033f6 (schema + migration, untested, not merged). (4) CI runs by hand only (`workflow_dispatch`); agents never wait for or fix CI unless the founder asks.
 - Consequences: Meta Business verification + Tech Provider review is now on the critical path (founder). Until it passes, a pilot can start on a dedicated Cloud API number.
+
+## D-031 — The AI conversation is the core; measure it, then rebuild it; discover market needs in parallel
+- Date: 2026-10-06 · Status: accepted (founder: "the messaging is the main core… make it best")
+- Decision: (1) AI work follows `docs/reference/product/AI_SALES_PLAYBOOK.md`: AI-1 eval set first, AI-2 one coordinator agent with playbook guidelines + clinic fact sheet (replaces the forced-qualification router and five writer nodes, KI-020), AI-3 tuning + model choice by eval. (2) Discovery D1–D5 runs in parallel; its findings can change the playbook and the build list. (3) Builders no longer edit `PLAN.md`; the planner updates it after review (fewer merge conflicts).
+- Consequences: paid model calls are allowed only for founder-run eval runs (small, a few dollars); unit tests stay on fake models.
+
+## D-032 — Coexistence: imported and unknown-number contacts stay AI-paused
+- Date: 2026-10-06 · Status: accepted (founder, Q15 option a)
+- Decision: conversations created from imported WhatsApp history (up to 180 days) or from a phone-app echo to an unknown number are AI-paused and have no lead; the AI answers only new contacts unless staff resume it. A later patient inbound can link a lead but keeps the pause.
+- Consequences: existing patients keep their human relationship; revisit (option b/c: resume after N days of silence, or a clinic setting) after the pilot.

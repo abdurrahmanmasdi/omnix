@@ -1,7 +1,7 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-091 · Q15 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-091 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
 
@@ -145,7 +145,7 @@ Pending wording (not KIs): KI-025/060/047 copy drafts → F02; KI-064 Turkish ST
 - Needed: a Turkish speaker (ideally the design partner) confirms the STOP words (`mesaj gönderme`, `artık mesaj`, proposed `durdur`, `abonelikten çık` / `abonelikten cik`), whether bare `dur` should count (ambiguous: "wait"), START (`BAŞLA`), and the draft EN/TR handoff, consent-request and disclosure copy (F02). `iptal` / `cancel` are deliberately not opt-outs (D-021). Final lists: old evidence WP-B1_FOLLOWUPS_2026-10-03 (backup zip). Also covers KI-064 / KI-087.
 
 ---
-**Resolved:** Q1 → D-008 · Q2 → D-009 (now D-027) · Q7 monorepo → D-027 · Q8 → D-017 · Q9 → D-019 · Q12 → D-020. Parked list: empty (CI token item closed by D-027).
+**Resolved:** Q15 old contacts stay AI-paused → D-032 · Q1 → D-008 · Q2 → D-009 (now D-027) · Q7 monorepo → D-027 · Q8 → D-017 · Q9 → D-019 · Q12 → D-020. Parked list: empty (CI token item closed by D-027).
 
 ## 3. Improvement ideas (IMP) — open only
 
