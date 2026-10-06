@@ -1,0 +1,15 @@
+{
+  "src/audit/audit.service.spec.ts|@typescript-eslint/no-unsafe-argument": 1,
+  "src/auth/guards/permissions.guard.ts|@typescript-eslint/no-unsafe-argument": 2,
+  "src/channels/channels.controller.spec.ts|@typescript-eslint/no-unsafe-argument": 2,
+  "src/channels/channels.service.spec.ts|@typescript-eslint/no-unsafe-argument": 1,
+  "src/common/query/query-builder.service.ts|@typescript-eslint/no-unsafe-argument": 1,
+  "src/conversations/conversations.controller.spec.ts|@typescript-eslint/no-unsafe-argument": 2,
+  "src/events/events/events.gateway.spec.ts|@typescript-eslint/no-unsafe-argument": 1,
+  "src/modules/integration/crm/adapters/hubspot.adapter.ts|@typescript-eslint/no-unsafe-argument": 8,
+  "src/modules/integration/crm/adapters/zoho.adapter.ts|@typescript-eslint/no-unsafe-argument": 8,
+  "src/webhooks/webhooks.controller.spec.ts|@typescript-eslint/no-unsafe-argument": 3,
+  "src/webhooks/whatsapp-media.service.ts|@typescript-eslint/no-unsafe-argument": 1,
+  "test/auth-refresh-concurrency.e2e-spec.ts|@typescript-eslint/no-unsafe-argument": 9,
+  "test/authorization-socket.e2e-spec.ts|@typescript-eslint/no-unsafe-argument": 1
+}

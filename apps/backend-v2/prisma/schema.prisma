@@ -1,0 +1,787 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"] // Enable extensions
+}
+
+// generator erd {
+//   provider = "prisma-erd-generator"
+//   output   = "../ERD.svg"
+//   theme    = "forest"
+// }
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector] // Tell Prisma to use pgvector
+}
+
+// ------------------------------------------------------
+// Core Organization (Tenant) Model
+// ------------------------------------------------------
+
+enum AgentTier {
+  JUNIOR
+  STANDARD
+  SENIOR
+  MANAGER
+}
+
+enum AvailabilityStatus {
+  ACTIVE
+  ON_LEAVE
+  OFF_SHIFT
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+model Organization {
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String
+  slug              String    @unique
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deleted_at        DateTime?
+  industry_category String?
+  logo_url          String?
+  public_email      String?
+  public_phone      String?
+  tax_number        String?
+  tax_office        String?
+  website_url       String?
+
+  // Meta / WhatsApp API Credentials
+  metaAccountId String? @unique
+
+  // Deprecated legacy field. New integrations use Credential records.
+  crmSyncEnabled Boolean @default(false)
+
+  // Relationships
+  conversations      Conversation[]
+  aiPersona          AiPersona?
+  leadSources        LeadSource[]
+  knowledgeBase      OrganizationKnowledge[]
+  memberships        OrganizationMembership[]
+  roles              Role[]
+  pipelineStages     PipelineStage[]
+  leads              Lead[]
+  documentations     OrganizationDocumentation[]
+  experiences        OrganizationExperience[]
+  notifications      Notification[]
+  channels           Channel[]
+  Battlecard         OrganizationBattlecard[]
+  scheduledFollowUps ScheduledFollowUp[]
+  auditLogs          AuditLog[]
+  crmSyncLogs        CrmSyncLog[]
+  credentials        Credential[]
+  outboundAttempts   OutboundAttempt[]
+  accountInvitations AccountInvitation[]
+
+  @@map("organizations")
+}
+
+enum UserLocale {
+  EN
+  TR
+  AR
+}
+
+model User {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  email                 String                   @unique
+  password_hash         String
+  firstName             String
+  lastName              String
+  locale                UserLocale?
+  avatarUrl             String?
+  phoneNumber           String?
+  whatsappNumber        String?
+  spokenLanguages       String[]                 @default([])
+  createdAt             DateTime                 @default(now())
+  deletedAt             DateTime?
+  status                UserStatus               @default(PENDING)
+  securityVersion       Int                      @default(1)
+  assignedConversations Conversation[]           @relation("ConversationAgent")
+  sentMessages          Message[]                @relation("SentMessages")
+  memberships           OrganizationMembership[]
+  assignedLeads         Lead[]
+  notifications         Notification[]
+  sessions              Session[]
+  invitations           AccountInvitation[]
+  activationEvents      AccountActivationEvent[]
+
+  @@map("users")
+}
+
+model OrganizationMembership {
+  id                  String                         @id @default(uuid()) @db.Uuid
+  userId              String                         @db.Uuid
+  organizationId      String                         @db.Uuid
+  roleId              String                         @db.Uuid
+  jobTitle            String?
+  agentTier           AgentTier                      @default(STANDARD)
+  availabilityStatus  AvailabilityStatus             @default(ACTIVE)
+  status              MembershipStatus               @default(PENDING)
+  permissionOverrides MembershipPermissionOverride[]
+  createdAt           DateTime                       @default(now())
+  deletedAt           DateTime?
+  organization        Organization                   @relation(fields: [organizationId], references: [id])
+  role                Role                           @relation(fields: [roleId], references: [id])
+  user                User                           @relation(fields: [userId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([userId])
+  @@index([roleId])
+  @@map("organization_memberships")
+}
+
+model MembershipPermissionOverride {
+  id           String                 @id @default(uuid()) @db.Uuid
+  membershipId String                 @db.Uuid
+  permissionId String                 @db.Uuid
+  is_granted   Boolean
+  membership   OrganizationMembership @relation(fields: [membershipId], references: [id])
+  permission   Permission             @relation(fields: [permissionId], references: [id])
+
+  @@unique([membershipId, permissionId])
+  @@index([membershipId])
+  @@index([permissionId])
+  @@map("membership_permission_overrides")
+}
+
+model Permission {
+  id                            String                         @id @default(uuid()) @db.Uuid
+  action                        String                         @unique
+  description                   String?
+  membershipPermissionOverrides MembershipPermissionOverride[]
+  rolePermissions               RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  organizationId     String?                  @db.Uuid
+  name               String
+  name_translations  Json?
+  is_system          Boolean                  @default(false)
+  slug               String?
+  createdAt          DateTime                 @default(now())
+  deletedAt          DateTime?
+  memberships        OrganizationMembership[]
+  rolePermissions    RolePermission[]
+  organization       Organization?            @relation(fields: [organizationId], references: [id])
+  accountInvitations AccountInvitation[]
+
+  @@index([organizationId])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+enum Priority {
+  HOT
+  WARM
+  COLD
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFYING // AI is actively talking to them
+  QUALIFIED
+  READY_TO_BOOK // AI triggered booking tool (needs confirmation)
+  READY_TO_PAY // AI triggered payment intent tool
+  HANDED_OFF // Moved to human queue for complex medical/operations
+  UNQUALIFIED
+  WON
+  LOST
+}
+
+enum Currency {
+  USD
+  TRY
+  EUR
+  GBP
+}
+
+enum ExternalCrmType {
+  HUB_SPOT
+  ZOHO
+  NONE
+}
+
+model Lead {
+  id                      String          @id @default(uuid()) @db.Uuid
+  organizationId          String          @db.Uuid
+  pipelineStageId         String?         @db.Uuid
+  assignedAgentId         String?         @db.Uuid
+  sourceId                String?         @db.Uuid
+  firstName               String
+  lastName                String
+  nativeName              String?
+  gender                  Gender          @default(UNKNOWN)
+  email                   String?
+  phoneNumber             String
+  country                 String
+  timezone                String
+  primaryLanguage         String
+  preferredLanguage       String?
+  socialLinks             Json?
+  summary                 String?         @db.Text
+  status                  LeadStatus      @default(NEW)
+  priority                Priority        @default(WARM)
+  estimatedValue          Decimal?
+  currency                Currency        @default(USD)
+  expectedServiceDate     DateTime?
+  nextFollowUpAt          DateTime?
+  optedOutAt              DateTime?
+  optOutReason            String?
+  mediaConsentGranted     Boolean         @default(false)
+  mediaConsentGrantedAt   DateTime?
+  mediaConsentSource      String?
+  mediaConsentWithdrawnAt DateTime?
+  mediaConsentPurpose     String?
+  mediaConsentText        String?
+  mediaConsentResponseId  String?
+  mediaConsentChannel     String?
+  externalCrmType         ExternalCrmType @default(NONE)
+  externalContactId       String?
+  externalDealId          String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  deletedAt               DateTime?
+  assignedAgent           User?           @relation(fields: [assignedAgentId], references: [id])
+  organization            Organization    @relation(fields: [organizationId], references: [id])
+  source                  LeadSource?     @relation(fields: [sourceId], references: [id])
+  pipelineStage           PipelineStage?  @relation(fields: [pipelineStageId], references: [id])
+  conversation            Conversation?   @relation("LeadConversation")
+
+  @@unique([organizationId, phoneNumber])
+  @@index([organizationId])
+  @@index([pipelineStageId])
+  @@index([assignedAgentId])
+  @@index([sourceId])
+  @@index([status])
+  @@index([priority])
+  @@map("leads")
+}
+
+model LeadSource {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  leads          Lead[]
+
+  @@index([organizationId])
+  @@map("lead_sources")
+}
+
+model PipelineStage {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  orderIndex     Int
+  mappedStatus   LeadStatus?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+  leads          Lead[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("pipeline_stages")
+}
+
+// ------------------------------------------------------
+// Domain Models (Isolated by organizationId)
+// ------------------------------------------------------
+enum ActiveHandler {
+  AI
+  HUMAN
+}
+
+enum MessageType {
+  LEAD_TEXT
+  LEAD_MEDIA
+  USER_TEXT
+  USER_MEDIA
+  AI_TEXT
+  AI_DRAFT
+  AI_MEDIA
+  SYSTEM_PROMPT
+  TOOL_CALL
+  TOOL_RESULT
+}
+
+enum MessageStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  SENT
+  CANCELLED
+  FAILED
+  DELIVERED
+  READ
+}
+
+model Conversation {
+  id                   String    @id @default(uuid()) @db.Uuid
+  organizationId       String    @db.Uuid
+  externalContactId    String?
+  status               String    @default("ACTIVE") // ACTIVE, CLOSED, ESCALATED
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+  leadId               String?   @unique @db.Uuid
+  aiPaused             Boolean   @default(false)
+  aiDisclosureSent     Boolean   @default(false)
+  stateVersion         Int       @default(1)
+  generationOwner      String?
+  generationLeaseUntil DateTime?
+  assignedAgentId      String?   @db.Uuid
+  channelId            String?   @db.Uuid
+
+  lead               Lead?               @relation("LeadConversation", fields: [leadId], references: [id])
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel            Channel?            @relation(fields: [channelId], references: [id])
+  messages           Message[]
+  outboundAttempts   OutboundAttempt[]
+  assignedAgent      User?               @relation("ConversationAgent", fields: [assignedAgentId], references: [id])
+  scheduledFollowUps ScheduledFollowUp[]
+
+  @@unique([organizationId, externalContactId])
+  @@index([generationLeaseUntil])
+  @@map("conversations")
+}
+
+model Message {
+  id                   String        @id @default(uuid())
+  conversationId       String        @db.Uuid
+  senderId             String?       @db.Uuid // Nullable because the AI or System doesn't have a standard User ID or leadId after creating leads
+  content              String
+  mediaUrl             String? // For Voice Notes, Images, etc.
+  mediaExpiresAt       DateTime? // Defines short-lived storage for patient media
+  type                 MessageType   @default(USER_TEXT)
+  metadata             Json? // To store Tool Call JSON, execution times, token counts
+  handledBy            ActiveHandler @default(AI) // Determines if AI or Human
+  status               MessageStatus @default(PENDING)
+  processingOwner      String?
+  processingLeaseUntil DateTime?
+  recoveryQueuedAt     DateTime?
+  metaMessageId        String?       @unique // WhatsApp's specific message ID
+  idempotencyKey       String?       @unique // To prevent duplicate outbound sends
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  deletedAt            DateTime?
+
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User?            @relation("SentMessages", fields: [senderId], references: [id])
+  outboundAttempt OutboundAttempt?
+
+  @@index([status, processingLeaseUntil])
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+enum OutboundAttemptStatus {
+  PENDING
+  SENDING
+  ACCEPTED
+  UNKNOWN
+  FAILED
+  CANCELLED
+}
+
+model OutboundAttempt {
+  id                  String                @id @default(uuid()) @db.Uuid
+  organizationId      String                @db.Uuid
+  conversationId      String                @db.Uuid
+  messageId           String                @unique
+  dedupeKey           String                @unique
+  conversationVersion Int                   @default(0)
+  purpose             String                @default("reply")
+  status              OutboundAttemptStatus @default(PENDING)
+  providerId          String?               @unique
+  attemptCount        Int                   @default(0)
+  startedAt           DateTime?
+  acceptedAt          DateTime?
+  // Set once when an UNKNOWN attempt is routed to staff (AI paused + alert).
+  escalatedAt         DateTime?
+  lastErrorCode       String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([status, startedAt])
+  @@index([organizationId, conversationId])
+  @@map("outbound_attempts")
+}
+
+model OrganizationDocumentation {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  fileName       String
+  filePath       String // Local path like "/uploads/prices.pdf"
+  status         String   @default("PENDING") // PENDING, PROCESSED, ERROR
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  knowledge    OrganizationKnowledge[] // Link to the vector chunks
+
+  @@index([organizationId])
+  @@map("organization_documentations")
+}
+
+model OrganizationKnowledge {
+  id              String                       @id @default(uuid()) @db.Uuid
+  organizationId  String                       @db.Uuid
+  documentationId String?                      @db.Uuid // Add this!
+  file_name       String
+  content         String                       @db.Text
+  embedding       Unsupported("vector(3072)")? // 3072 is standard for Gemini embeddings
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  organization  Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documentation OrganizationDocumentation? @relation(fields: [documentationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([documentationId])
+  @@map("organization_knowledge")
+}
+
+model OrganizationExperience {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+
+  // Metadata to help the AI find the perfect match
+  title          String // e.g., "FUE Hair Transplant - 4000 Grafts"
+  patientCountry String? // e.g., "Germany", "UK" (Crucial for building local trust)
+  procedureType  String? // e.g., "Hair Transplant", "Dental Implants"
+
+  // The actual story (The AI will read this and summarize it for the patient)
+  storyText String @db.Text
+
+  // Visual proof! The AI can send these links directly in the WhatsApp chat
+  beforeImageUrl  String?
+  afterImageUrl   String?
+  consentObtained Boolean @default(false)
+
+  // 🚀 The Vector Search Embedding (Gemini 3072 dimensions)
+  embedding Unsupported("vector(3072)")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("organization_experiences")
+}
+
+model OrganizationBattlecard {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+
+  competitorName String
+  objectionType  String // e.g., "PRICE", "QUALITY", "FEAR", "LOCATION"
+  rebuttalText   String @db.Text
+
+  // The Vector Search Embedding (Gemini 3072 dimensions)
+  embedding Unsupported("vector(3072)")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("organization_battlecards")
+}
+
+enum NotificationType {
+  LEAD_ASSIGNED
+  LEAD_HANDED_OFF
+  NEW_MESSAGE
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid // The recipient
+  type           NotificationType
+  code           String?
+  params         Json?
+  title          String // e.g., "Lead Ready for Transfer"
+  body           String           @db.Text // e.g., "The AI handed off Abdulrahman. Needs a human."
+  isRead         Boolean          @default(false)
+  // Polymorphic relations (Tells the frontend where to navigate when clicked)
+  referenceId    String?          @db.Uuid // e.g., The Lead ID
+  referenceType  String? // e.g., "LEAD", "CONVERSATION"
+  createdAt      DateTime         @default(now())
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+  @@index([userId, isRead]) // Super fast querying for "Unread count" badge
+  @@map("notifications")
+}
+
+model AiPersona {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @unique @db.Uuid
+  agentName        String   @default("Assistant")
+  clinicName       String
+  tone             String   @default("Professional and empathetic")
+  businessRules    Json?
+  handoffMessage   String   @default("I will transfer you to our medical coordinator.")
+  aiDisclosureText String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("ai_personas")
+}
+
+model AuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String?      @db.Uuid
+  actor          String       @default("system")
+  action         String
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
+
+model CrmSyncLog {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
+  leadId            String       @db.Uuid
+  externalContactId String?
+  fieldsHash        String
+  syncedAt          DateTime     @default(now())
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, leadId])
+  @@map("crm_sync_logs")
+}
+
+// ------------------------------------------------------
+// Channels (Omnichannel Architecture)
+// ------------------------------------------------------
+
+enum ChannelProvider {
+  WHATSAPP_CLOUD_API
+  INSTAGRAM_GRAPH_API
+}
+
+enum ChannelStatus {
+  ACTIVE
+  ERROR
+  DISCONNECTED
+}
+
+model Channel {
+  id                String          @id @default(uuid()) @db.Uuid
+  organizationId    String          @db.Uuid
+  provider          ChannelProvider
+  providerAccountId String
+  // Legacy plaintext value. New connections must use credentialId.
+  accessToken       String?
+  credentialId      String?         @db.Uuid
+  status            ChannelStatus   @default(ACTIVE)
+  metadata          Json? // Additional provider-specific configurations
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential    Credential?    @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  conversations Conversation[]
+
+  @@unique([organizationId, provider, providerAccountId])
+  @@map("channels")
+}
+
+enum CredentialProvider {
+  WHATSAPP_CLOUD_API
+  INSTAGRAM_GRAPH_API
+  HUBSPOT
+  ZOHO
+}
+
+enum CredentialStatus {
+  ACTIVE
+  ROTATED
+  REVOKED
+  ERROR
+}
+
+model Credential {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  provider         CredentialProvider
+  encryptedPayload String
+  keyVersion       Int                @default(1)
+  status           CredentialStatus   @default(ACTIVE)
+  lastVerifiedAt   DateTime?
+  lastError        String?
+  expiresAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channels         Channel[]
+
+  @@index([organizationId, provider, status])
+  @@map("credentials")
+}
+
+enum FollowUpType {
+  AUTO_NO_REPLY
+  AI_SCHEDULED
+}
+
+enum FollowUpStatus {
+  PENDING
+  SENT
+  CANCELLED
+}
+
+model ScheduledFollowUp {
+  id                   String         @id @default(uuid()) @db.Uuid
+  conversationId       String         @db.Uuid
+  organizationId       String         @db.Uuid
+  type                 FollowUpType
+  status               FollowUpStatus @default(PENDING)
+  attempt              Int            @default(1)
+  scheduledAt          DateTime
+  bullJobId            String?
+  processingOwner      String?
+  processingLeaseUntil DateTime?
+  recoveryQueuedAt     DateTime?
+  aiContext            String?        @db.Text
+  sentAt               DateTime?
+  cancelledAt          DateTime?
+  cancelReason         String?
+  createdAt            DateTime       @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, status])
+  @@index([organizationId])
+  @@index([scheduledAt, status])
+  @@index([processingLeaseUntil])
+  @@map("scheduled_follow_ups")
+}
+
+model OutboxEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @db.Uuid
+  topic          String
+  payload        Json
+  status         String    @default("PENDING") // PENDING, PROCESSED, FAILED
+  error          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  @@index([status, createdAt])
+  @@index([status, updatedAt])
+  @@map("outbox_events")
+}
+
+model Session {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String
+  familyId       String
+  expiresAt      DateTime
+  isRevoked      Boolean   @default(false)
+  revokedAt      DateTime?
+  revokedReason  String?
+  deviceMetadata Json?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model AccountInvitation {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @db.Uuid
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?       @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roleId         String?       @db.Uuid
+  role           Role?         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tokenHash      String        @unique
+  purpose        String        @default("PILOT_ACTIVATION")
+  issuedBy       String
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  revokedAt      DateTime?
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("account_invitations")
+}
+
+model AccountActivationEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitationId String   @db.Uuid
+  action       String
+  actor        String
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("account_activation_events")
+}

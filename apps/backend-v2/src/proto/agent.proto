@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+// This namespace is used by both NestJS and Python
+package agent;
+
+// The Service Definition
+service SalesAgent {
+  // Our primary synchronous generation method
+  rpc GenerateReply (AgentRequest) returns (AgentReply) {}
+
+  // Cheap authenticated call for the backend readiness probe (KI-083).
+  rpc Ping (PingRequest) returns (PingReply) {}
+  
+  // We'll use this later when you want token-by-token streaming!
+  // rpc StreamReply (AgentRequest) returns (stream AgentReply) {}
+}
+
+message PingRequest {}
+message PingReply {}
+
+// What NestJS sends to Python
+message AgentRequest {
+  string organizationId = 1;
+  string conversationId = 2;
+  repeated string newMessageIds = 3;
+  string clinicName = 4;
+  string agentTone = 5;
+  string businessRulesJson = 6;
+  string imageBase64 = 7;
+  string audioBase64 = 8;
+  int32 totalMessageCount = 9;
+  string leadSummary = 10;
+  bool isFollowUp = 11;
+  string followUpContext = 12;
+  uint32 contractVersion = 13;
+}
+
+// What Python sends back to NestJS
+message AgentReply {
+  string replyText = 1;
+  bool safetyFlag = 2;
+  int32 confidenceScore = 3;
+
+  // 🚀 New: Support for Multimodal replies (Images/Links)
+  string mediaUrl = 4;
+
+  // 🚀 New: Tool Call instructions for NestJS to handle
+  repeated ToolAction actions = 5;
+  uint32 contractVersion = 6;
+}
+
+message ToolAction {
+  string type = 1; // "UPDATE_LEAD", "CREATE_APPOINTMENT", etc.
+  string payload = 2; // JSON string with data like { "status": "WARM", "firstName": "John" }
+}

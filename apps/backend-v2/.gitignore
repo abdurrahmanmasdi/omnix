@@ -1,0 +1,41 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Prisma
+prisma/*.db
+
+# Tests
+/coverage
+/.nyc_output
+
+/uploads
+.credential-deploy-*/
+
+playwright/.auth/
+
+.pytest_cache/
+
+# Playwright fixtures (synthetic credentials, per run)
+playwright/.auth/
+*.fixture.json
+
+# Local environments and test output (CLN-1)
+venv/
+.venv/
+test-results/

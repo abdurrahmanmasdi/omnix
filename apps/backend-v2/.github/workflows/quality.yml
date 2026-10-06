@@ -1,0 +1,69 @@
+name: Cross-service quality
+permissions:
+  contents: read
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      frontend_ref:
+        description: Frontend branch or commit for a coordinated contract release
+        required: false
+        default: 31bd107b8670bfd13b44b2e5e667a731e2d3c01e
+      python_ref:
+        description: Python branch or commit for a coordinated contract release
+        required: false
+        default: 90aac07e45dea5a75c27046785f8fb0b1ce9c9ca
+jobs:
+  quality:
+    # Environment admission alone cannot distinguish same-repo PRs from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: ci-private-peers
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: backend-v2
+          persist-credentials: false
+      - name: Require peer repository read access
+        env:
+          CROSS_REPO_READ_TOKEN: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+        run: |
+          if [ -z "$CROSS_REPO_READ_TOKEN" ]; then
+            echo '::error::Configure CROSS_REPO_READ_TOKEN with read access to Omnix_FE and Omnix_py.'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: abdurrahmanmasdi/Omnix_FE
+          path: frontend-v2
+          # Pin the matching N5 API contract and explicit-locale browser permission tests.
+          ref: ${{ inputs.frontend_ref || '31bd107b8670bfd13b44b2e5e667a731e2d3c01e' }}
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: abdurrahmanmasdi/Omnix_py
+          path: python-ai-service-v2
+          ref: ${{ inputs.python_ref || '90aac07e45dea5a75c27046785f8fb0b1ce9c9ca' }}
+          token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: backend-v2/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend-v2/package-lock.json
+            frontend-v2/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            python-ai-service-v2/requirements.txt
+            python-ai-service-v2/requirements-dev.txt
+      - name: Run quality gate
+        run: bash backend-v2/scripts/quality-gate.sh
+      - name: Run database acceptance suite
+        # Every disposable-DB suite (KI-016). app.e2e/auth.e2e are legacy scaffolding (KI-066), not run.
+        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|permission-matrix|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|platform-admin|credential-upgrade|runtime-role-passwords|health'

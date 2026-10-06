@@ -1,0 +1,40 @@
+syntax = "proto3";
+package rag;
+
+service DocumentProcessor {
+  rpc IngestPdf (IngestRequest) returns (IngestResponse) {}
+  rpc DeleteFile (DeleteRequest) returns (DeleteResponse) {}
+  rpc EmbedExperience (EmbedExperienceRequest) returns (EmbedExperienceResponse);
+}
+
+message IngestRequest {
+  string organizationId = 1;
+  string documentationId = 2; 
+  string fileName = 3;
+  bytes fileContent = 4; 
+}
+
+message IngestResponse {
+  bool success = 1;
+  int32 chunksProcessed = 2;
+}
+
+message DeleteRequest {
+  string organizationId = 1;
+  string fileName = 2;
+}
+
+message DeleteResponse {
+  bool success = 1;
+  int32 chunksDeleted = 2;
+}
+
+message EmbedExperienceRequest {
+  string experience_id = 1;
+  string organization_id = 2;
+}
+
+message EmbedExperienceResponse {
+  bool success = 1;
+  string message = 2;
+}
