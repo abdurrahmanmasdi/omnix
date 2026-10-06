@@ -1,0 +1,40 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Dependencies / build / caches
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.next/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+test-results/
+playwright-report/
+playwright/.auth/
+.credential-deploy-*/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Local only
+_backup/
+_to_delete/
+tmp/
+graphify-out/
