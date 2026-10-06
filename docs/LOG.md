@@ -65,3 +65,8 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 ## 2026-10-06 23:55 — KI-098 fix (planner, at founder request)
 - Cause of the occasional v1 `BadRequestError`: dangling AI tool call in history (see KI-098). Fix in `nodes.py` (7 call sites use `clean_history`) + `tests/test_clean_history.py`. Verified here: whole-file syntax + the 4 helper tests with stub messages (the Mac venv cannot run on the device shell); founder runs the real tests below.
 - Founder: `cd apps/python-ai-service-v2 && OPENAI_API_KEY=synthetic-test-key INTERNAL_RPC_SECRET=synthetic-rpc-secret DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic .venv/bin/python -m pytest -q tests/test_clean_history.py tests/test_graph_delivery.py`
+
+## 2026-10-07 00:15 — First real comparison v1 vs v2 (founder runs, planner review)
+- Same settings (all gpt-6-luna, reasoning none, temps 0.3/0.1/0), 40 scenarios each. **v1: 10/40 pass (25%), avg 3.69/5, est. $0.20. v2: 25/40 (62.5%), avg 4.03/5, est. $0.03** (one call per turn instead of a chain).
+- v2 failures were mostly an eval artifact: the fact sheet said "fictional evaluation fixture", so v2 refused to quote "unverified" prices (6 price scenarios). Fixed in `evals/runner.py` (`agent_facts`: the agent sees clinic facts without eval labels; judge/hard checks unchanged).
+- Real bug: "are you a human or an AI?" hits the input policy as a human request → handoff copy without AI disclosure (both v1 and v2). Fixed: `human_request` handoff copy now starts with the AI disclosure (EN/TR) in `app/modules/safety/policy.py`. Next: rerun both.

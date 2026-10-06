@@ -105,6 +105,20 @@ class MeteredModel:
 EVAL_ORG_ID = '00000000-0000-4000-8000-000000000001'
 
 
+def agent_facts(facts):
+    """Facts as a real clinic would supply them: no eval-only labels. The judge
+    and hard checks still use the full fixture."""
+    def clean(v):
+        if isinstance(v, dict):
+            return {k: clean(x) for k, x in v.items() if k not in ('synthetic', 'notice')}
+        if isinstance(v, list):
+            return [clean(x) for x in v]
+        if isinstance(v, str):
+            return re.sub(r'\b[Ff]ictional\s+(?:policy:\s*)?', '', v)
+        return v
+    return clean(facts)
+
+
 class AgentHarness:
     def __init__(self, facts, models, agent='v1'):
         if agent not in {'v1', 'v2'}:
@@ -150,7 +164,7 @@ class AgentHarness:
         self.stack.enter_context(patch.object(database, 'SessionLocal', side_effect=AssertionError('DB forbidden in eval')))
         self.stack.enter_context(patch.object(tools, 'SessionLocal', side_effect=AssertionError('DB forbidden in eval')))
         db = agent_servicer.DatabaseService
-        self.stack.enter_context(patch.object(db, 'get_clinic_knowledge', AsyncMock(return_value=json.dumps(self.facts, ensure_ascii=False))))
+        self.stack.enter_context(patch.object(db, 'get_clinic_knowledge', AsyncMock(return_value=json.dumps(agent_facts(self.facts), ensure_ascii=False))))
         self.stack.enter_context(patch.object(db, 'get_conversation_lead_info', AsyncMock(return_value=SimpleNamespace(
             lead_id='eval-lead', firstName='Guest', lastName=None, status='NEW', externalContactId=None))))
         self.stack.enter_context(patch.object(db, 'get_conversation_history', self.get_history))
@@ -162,7 +176,7 @@ class AgentHarness:
 
     async def knowledge(self, **kwargs):
         from app.modules.agent.tools import QUOTED_DATA_HEADER
-        return QUOTED_DATA_HEADER + json.dumps(self.facts, ensure_ascii=False)
+        return QUOTED_DATA_HEADER + json.dumps(agent_facts(self.facts), ensure_ascii=False)
 
     async def unverified(self, **kwargs):
         return 'UNVERIFIED: No approved patient story or competitor comparison in this fixture.'
@@ -182,7 +196,7 @@ class AgentHarness:
         self.photo = scenario.get('attachment') == 'synthetic_photo' and not self.history
         result = await self.servicer.GenerateReply(self.pb.AgentRequest(
             organizationId=EVAL_ORG_ID, conversationId='eval-' + scenario['id'], newMessageIds=['new'],
-            clinicName=self.facts['clinic_name'], agentTone='warm concise', leadSummary=self.summary,
+            clinicName=agent_facts(self.facts)['clinic_name'], agentTone='warm concise', leadSummary=self.summary,
             totalMessageCount=len(self.history) + 1,
             businessRulesJson=json.dumps({'maxSentences': 3, 'preferredLanguage': scenario['language']})), None)
         actions = [{'type': a.type, 'payload': json.loads(a.payload)} for a in result.actions]
