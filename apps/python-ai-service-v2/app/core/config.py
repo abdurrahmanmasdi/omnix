@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from app.infrastructure.model_options import optional_temperature, optional_reasoning
 
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     CHEAP_TEMPERATURE: float | None = None
     CHEAP_REASONING_EFFORT: str | None = None
 
+    COORDINATOR_V2_ORG_IDS: str = ""
     COORDINATOR_KNOWLEDGE_MAX_CHARS: int = Field(24000, gt=0, le=200000)
 
     GRPC_PORT: int = Field(50051, ge=1, le=65535)
@@ -76,6 +78,19 @@ class Settings(BaseSettings):
     @classmethod
     def _reasoning(cls, value):
         return optional_reasoning(value)
+
+    @field_validator("COORDINATOR_V2_ORG_IDS")
+    @classmethod
+    def _coordinator_orgs(cls, value):
+        if not value.strip():
+            return ""
+        try:
+            ids = [str(UUID(part.strip())) for part in value.split(',')]
+        except (ValueError, AttributeError):
+            raise ValueError("COORDINATOR_V2_ORG_IDS must contain comma-separated UUIDs") from None
+        if len(set(ids)) != len(ids):
+            raise ValueError("COORDINATOR_V2_ORG_IDS must not contain duplicates")
+        return ','.join(ids)
 
     @field_validator("DATABASE_URL")
     @classmethod
