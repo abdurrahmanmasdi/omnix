@@ -1,0 +1,84 @@
+import logging
+
+import grpc
+import rag_pb2
+import rag_pb2_grpc
+from app.modules.rag.document_processor import DocumentService, validate_pdf_size
+from app.modules.rag.experience_processor import ExperienceProcessor
+from app.core.database import SessionLocal
+
+logger = logging.getLogger(__name__)
+
+
+class DocumentProcessorServicer(rag_pb2_grpc.DocumentProcessorServicer):
+    async def IngestPdf(self, request, context):
+        org_id = getattr(request, 'organizationId', getattr(request, 'organization_id', None))
+        doc_id = getattr(request, 'documentationId', getattr(request, 'documentation_id', None))
+        file_name = getattr(request, 'fileName', getattr(request, 'file_name', None))
+        file_content = getattr(request, 'fileContent', getattr(request, 'file_content', None))
+
+        try:
+            validate_pdf_size(file_content)
+        except ValueError:
+            context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            context.set_details("PDF_TOO_LARGE")
+            return rag_pb2.IngestResponse(success=False, chunksProcessed=0)
+
+        logger.info("DOCUMENT_INGEST_STARTED document_id=%s", doc_id)
+        
+        db = SessionLocal()
+        try:
+            doc_service = DocumentService(db_session=db)
+            
+            chunks = await doc_service.process_and_save_pdf(
+                org_id=org_id,
+                documentation_id=doc_id,
+                file_name=file_name,
+                file_content=file_content
+            )
+            
+            return rag_pb2.IngestResponse(success=True, chunksProcessed=chunks)
+        except Exception as e:
+            logger.error("DOCUMENT_INGEST_FAILED document_id=%s", doc_id)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("DOCUMENT_INGEST_FAILED")
+            return rag_pb2.IngestResponse(success=False, chunksProcessed=0)
+        finally:
+            db.close()
+
+    async def EmbedExperience(self, request, context):
+        processor = ExperienceProcessor()
+        success = await processor.embed_and_save_experience(
+            experience_id=request.experience_id,
+            org_id=request.organization_id
+        )
+        
+        if success:
+            return rag_pb2.EmbedExperienceResponse(
+                success=True, 
+                message="Vector generated and saved successfully."
+            )
+        else:
+            return rag_pb2.EmbedExperienceResponse(
+                success=False, 
+                message="Failed to generate vector."
+            )
+
+    async def DeleteFile(self, request, context):
+        logger.info("DOCUMENT_DELETE_STARTED organization_id=%s", request.organizationId)
+        
+        db = SessionLocal()
+        try:
+            doc_service = DocumentService(db_session=db)
+            deleted_count = await doc_service.delete_file_knowledge(
+                org_id=request.organizationId,
+                file_name=request.fileName
+            )
+            return rag_pb2.DeleteResponse(success=True, chunksDeleted=deleted_count)
+        except Exception as e:
+            logger.error("DOCUMENT_DELETE_FAILED organization_id=%s", request.organizationId)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("DOCUMENT_DELETE_FAILED")
+            return rag_pb2.DeleteResponse(success=False, chunksDeleted=0)
+        finally:
+            db.close()
