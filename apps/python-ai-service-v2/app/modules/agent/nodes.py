@@ -1,11 +1,44 @@
 import json
 from typing import Literal
 from pydantic import BaseModel, Field
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from app.modules.agent.state import ConversationState
 from app.modules.agent.actions import parse_virtual_action
 from app.modules.safety.policy import SAFE_HANDOFF_MESSAGE
 from app.core.config import settings
+
+def clean_history(messages) -> list:
+    """Return history the provider accepts: every AI tool call is followed by a
+    ToolMessage for each of its ids, and no ToolMessage is orphaned. Incomplete
+    tool exchanges (e.g. a tool that ended in a handoff) are dropped, keeping any
+    AI text. Fixes BadRequest 400 on the next model call (KI-098)."""
+    messages = list(messages)
+    keep = [True] * len(messages)
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        calls = getattr(msg, "tool_calls", None) or []
+        if getattr(msg, "type", "") == "ai" and calls:
+            ids = {c.get("id") for c in calls if isinstance(c, dict)}
+            j, answered = i + 1, set()
+            while j < len(messages) and getattr(messages[j], "type", "") == "tool":
+                answered.add(getattr(messages[j], "tool_call_id", None))
+                j += 1
+            if not ids or not ids.issubset(answered):
+                keep[i] = False
+                for k in range(i + 1, j):
+                    keep[k] = False
+                text = msg.content if isinstance(msg.content, str) else ""
+                if text.strip():
+                    messages[i] = AIMessage(content=text)
+                    keep[i] = True
+            i = j
+            continue
+        if getattr(msg, "type", "") == "tool":
+            keep[i] = False  # orphan tool result
+        i += 1
+    return [m for m, k in zip(messages, keep) if k]
+
 
 async def _execute_tool_calls(state: ConversationState, response, messages, new_messages, new_pending_actions) -> Literal["handoff", "unverified"] | None:
     """Select fixed handoff delivery for escalation or an unverified result."""
@@ -193,7 +226,7 @@ async def objection_handler_node(state: ConversationState):
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     
     smart_writer_llm = _get_smart_llm()
     response = await smart_writer_llm.ainvoke(messages)
@@ -280,7 +313,7 @@ IMPORTANT: The patient just sent an image. Our vision system analyzed it as: "{v
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     smart_writer_llm = _get_smart_llm()
     response = await smart_writer_llm.ainvoke(messages)
     
@@ -339,7 +372,7 @@ async def value_pitch_node(state: ConversationState):
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     
     smart_writer_llm = _get_smart_llm()
     response = await smart_writer_llm.ainvoke(messages)
@@ -399,7 +432,7 @@ async def closing_node(state: ConversationState):
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
     
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     smart_writer_llm = _get_smart_llm()
     response = await smart_writer_llm.ainvoke(messages)
     
@@ -430,7 +463,7 @@ async def closing_node(state: ConversationState):
 
 async def out_of_domain_node(state: ConversationState):
     prompt = OUT_OF_DOMAIN_PROMPT
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     flagship_llm = LLMFactory.get_flagship_llm()
     response = await flagship_llm.ainvoke(messages)
     return {"messages": [response], "current_stage": "OUT_OF_DOMAIN"}
@@ -464,7 +497,7 @@ async def general_qa_node(state: ConversationState):
     if not state.get("is_compliant", True) and state.get("compliance_feedback"):
         prompt += "\n\nCRITICAL COMPLIANCE FEEDBACK ON PREVIOUS ATTEMPT: " + state.get("compliance_feedback") + "\nYou MUST fix this hallucination immediately."
 
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     
     smart_writer_llm = _get_smart_llm()
     response = await smart_writer_llm.ainvoke(messages)
@@ -499,7 +532,7 @@ SUMMARY_TRUNCATION_MARK = " [summary truncated]"
 
 async def summarizer_node(state: ConversationState):
     prompt = SUMMARIZER_PROMPT
-    messages = [SystemMessage(content=prompt)] + list(state.get("messages", []))
+    messages = [SystemMessage(content=prompt)] + clean_history(state.get("messages", []))
     extractor_llm = LLMFactory.get_extractor_llm()
     response = await extractor_llm.ainvoke(messages)
     
@@ -525,7 +558,7 @@ async def compliance_checker_node(state: ConversationState):
         return {"is_compliant": True}
 
     prompt = COMPLIANCE_CHECKER_PROMPT
-    checker_messages = [SystemMessage(content=prompt)] + list(messages)
+    checker_messages = [SystemMessage(content=prompt)] + clean_history(messages)
     
     cheap_llm = LLMFactory.get_cheap_llm()
     checker = cheap_llm.with_structured_output(ComplianceOutput)

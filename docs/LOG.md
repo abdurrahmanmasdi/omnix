@@ -61,3 +61,7 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 ## 2026-10-06 23:50 — AI-2 review (planner)
 - 8 commits, Python only (+docs); servicer change is just the per-clinic switch, sandwich kept (input policy → agent → `check_output` → action validation → fail closed); v2 off by default (empty allowlist); no contract/proto/Nest change. Scenario edits = disclosure wording only (KI-092 fix). Reported 118 targeted + 225 full (exit 139 at shutdown, KI-096).
 - Found: defaults no longer send reasoning/temperature → production behavior change (KI-097). Fair comparison must run v1 and v2 with the same production-like settings (none + 0.3/0.1/0.0 on gpt-6-luna). KI-095 (appointment-confirmation wording not blocked) must be fixed before any pilot (AI-3).
+
+## 2026-10-06 23:55 — KI-098 fix (planner, at founder request)
+- Cause of the occasional v1 `BadRequestError`: dangling AI tool call in history (see KI-098). Fix in `nodes.py` (7 call sites use `clean_history`) + `tests/test_clean_history.py`. Verified here: whole-file syntax + the 4 helper tests with stub messages (the Mac venv cannot run on the device shell); founder runs the real tests below.
+- Founder: `cd apps/python-ai-service-v2 && OPENAI_API_KEY=synthetic-test-key INTERNAL_RPC_SECRET=synthetic-rpc-secret DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic .venv/bin/python -m pytest -q tests/test_clean_history.py tests/test_graph_delivery.py`
