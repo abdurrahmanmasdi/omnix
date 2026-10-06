@@ -17,7 +17,7 @@ import type { InboxConversationDto, InboxMessageDto } from "@/lib/api/model";
 import { AppLocaleProvider } from "@/i18n/provider";
 import { Composer } from "./Composer";
 import { ConversationHeader } from "./ConversationHeader";
-import { Thread } from "./Thread";
+import { Thread, MessageBubble } from "./Thread";
 import { ConversationList } from "./ConversationList";
 import { ReadError } from "./ReadError";
 import { useInboxSocket } from "./hooks";
@@ -419,5 +419,34 @@ describe("Inbox user flows", () => {
     });
     mount(<ReadError messages error={error} retry={() => {}} />);
     expect(screen.getByRole("alert")).toHaveTextContent("erişiminiz yok");
+  });
+});
+
+describe("coexistence Inbox markers", () => {
+  it("shows phone staff messages and read-only imported history", () => {
+    mount(
+      <>
+        <MessageBubble
+          message={{
+            ...message,
+            type: "USER_TEXT",
+            handledBy: "HUMAN",
+            status: "SENT",
+            origin: "WHATSAPP_PHONE",
+          }}
+        />
+        <MessageBubble
+          message={{ ...message, id: "history", origin: "WHATSAPP_HISTORY" }}
+        />
+      </>,
+    );
+    expect(
+      screen.getByText(
+        /Sent from phone|Telefondan gönderildi|أُرسلت من الهاتف/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Imported history|İçe aktarılan geçmiş|سجل مستورد/),
+    ).toBeInTheDocument();
   });
 });

@@ -108,3 +108,4 @@ export * from "./userLocale";
 export * from "./userProfileDto";
 export * from "./userProfileDtoLocale";
 export * from "./webhooksControllerVerifyWebhookParams";
+export * from "./inboxMessageDtoOrigin";

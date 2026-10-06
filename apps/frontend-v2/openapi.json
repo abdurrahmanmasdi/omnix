@@ -3652,6 +3652,11 @@
           "handledBy": {
             "type": "string"
           },
+          "origin": {
+            "type": "string",
+            "enum": ["WHATSAPP_PHONE", "WHATSAPP_HISTORY"],
+            "description": "Safe message origin; raw provider metadata is never exposed"
+          },
           "status": {
             "type": "string",
             "description": "Delivery/processing state. UNKNOWN is preserved from the outbound attempt."

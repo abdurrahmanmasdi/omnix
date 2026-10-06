@@ -362,6 +362,8 @@ export class WebhooksProcessor extends WorkerHost {
                 throw new Error('COEXISTENCE_HANDLER_UNAVAILABLE');
               if (change.field === 'history')
                 await this.coexistence.history(channel, value);
+              if (change.field === 'smb_message_echoes')
+                await this.coexistence.echoes(channel, value);
               continue; // Never enter the inbound/AI pipeline for coexistence data.
             }
 

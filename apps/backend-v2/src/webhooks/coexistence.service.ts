@@ -54,6 +54,13 @@ export class CoexistenceService {
     }
   }
 
+  async echoes(channel: Channel, value: WhatsAppChangeValue) {
+    for (const message of value.message_echoes ?? []) {
+      if (!/^\d+$/.test(message.to)) continue;
+      await this.store(channel, message.to, message, true);
+    }
+  }
+
   private async store(
     channel: Channel,
     contact: string,
@@ -94,6 +101,7 @@ export class CoexistenceService {
                 externalContactId: contact,
                 deletedAt: null,
               },
+              include: { lead: { select: { optedOutAt: true } } },
             });
             if (
               conversation?.channelId &&
@@ -108,6 +116,33 @@ export class CoexistenceService {
                   channelId: channel.id,
                   externalContactId: contact,
                   aiPaused: true,
+                },
+                include: { lead: { select: { optedOutAt: true } } },
+              });
+            }
+            if (echo) {
+              await tx.conversation.update({
+                where: {
+                  id: conversation.id,
+                  organizationId: channel.organizationId,
+                },
+                data: {
+                  aiPaused: true,
+                  stateVersion: { increment: 1 },
+                  channelId: channel.id,
+                },
+              });
+              await tx.auditLog.create({
+                data: {
+                  organizationId: channel.organizationId,
+                  actor: 'webhook:whatsapp-phone',
+                  action: 'conversation.phone_message_received',
+                  targetId: conversation.id,
+                  metadata: {
+                    sourceMessageId: message.id,
+                    aiPausedBefore: conversation.aiPaused,
+                    patientOptedOut: !!conversation.lead?.optedOutAt,
+                  },
                 },
               });
             }

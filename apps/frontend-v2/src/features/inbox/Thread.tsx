@@ -17,6 +17,14 @@ export function MessageBubble({ message }: { message: InboxMessageDto }) {
       className={`max-w-[90%] rounded-xl border p-3 text-sm ${who === "patient" ? "me-auto border-border bg-muted" : who === "system" ? "mx-auto border-border" : "ms-auto border-brand-electric/30 bg-brand-electric/10"} ${message.type === "AI_DRAFT" ? "border-dashed" : ""}`}
     >
       <p className="mb-1 text-xs font-semibold">{t(who)}</p>
+      {message.origin === "WHATSAPP_PHONE" && (
+        <p className="mb-1 text-xs font-semibold">☎ {t("sentFromPhone")}</p>
+      )}
+      {message.origin === "WHATSAPP_HISTORY" && (
+        <p className="mb-1 text-xs text-muted-foreground">
+          {t("importedHistory")}
+        </p>
+      )}
       <p className="whitespace-pre-wrap break-words" dir="auto">
         {message.content}
       </p>

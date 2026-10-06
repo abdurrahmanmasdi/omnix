@@ -68,5 +68,11 @@ export function toInboxMessage(
 ) {
   const dto = toPublicMessageDto(message);
   if (message.outboundAttempt?.status === 'UNKNOWN') dto.status = 'UNKNOWN';
-  return dto;
+  const origin = (message.metadata as Prisma.JsonObject | null)?.origin;
+  return {
+    ...dto,
+    ...(origin === 'WHATSAPP_PHONE' || origin === 'WHATSAPP_HISTORY'
+      ? { origin }
+      : {}),
+  };
 }
