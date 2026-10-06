@@ -13,6 +13,7 @@ export default defineConfig({
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3001",
+    locale: "en-US",
     trace: process.env.PLAYWRIGHT_TRACE === "1" ? "retain-on-failure" : "off",
     screenshot: "off",
     video: "off",

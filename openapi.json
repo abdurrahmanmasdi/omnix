@@ -703,6 +703,80 @@
         "tags": ["Organizations"]
       }
     },
+    "/organizations/current/members/{membershipId}": {
+      "patch": {
+        "operationId": "ClinicTeamController_changeRole",
+        "parameters": [
+          {
+            "name": "membershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeClinicMemberRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicMemberChangedDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Team"]
+      },
+      "delete": {
+        "operationId": "ClinicTeamController_removeMember",
+        "parameters": [
+          {
+            "name": "membershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicMemberChangedDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Team"]
+      }
+    },
     "/organizations/current/members": {
       "get": {
         "operationId": "ClinicTeamController_members",
@@ -3307,6 +3381,24 @@
           }
         },
         "required": ["name", "slug"]
+      },
+      "ChangeClinicMemberRoleDto": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string"
+          }
+        },
+        "required": ["roleId"]
+      },
+      "ClinicMemberChangedDto": {
+        "type": "object",
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          }
+        },
+        "required": ["changed"]
       },
       "ClinicMemberDto": {
         "type": "object",

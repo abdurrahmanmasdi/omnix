@@ -69,6 +69,14 @@ vi.mock("@/lib/api/generated/users/users", () => ({
   }),
 }));
 vi.mock("@/lib/api/generated/clinic-team/clinic-team", () => ({
+  useClinicTeamControllerChangeRole: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useClinicTeamControllerRemoveMember: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
   useClinicTeamControllerMembers: () => fake.members,
   useClinicTeamControllerInvitations: () => fake.invitations,
   useClinicTeamControllerRoles: () => fake.roles,
@@ -250,4 +258,16 @@ it("disables invitations when no role may be granted", () => {
   show();
   expect(screen.getByRole("button", { name: "Invite staff" })).toBeDisabled();
   expect(screen.getByText(/No roles can be granted/)).toBeInTheDocument();
+});
+
+it("N5 owner role is excluded from invitations even when grantable for role changes", () => {
+  fake.roles.data = [
+    { id: "agent", name: "Agent" },
+    { id: "owner", name: "Super Admin" },
+  ];
+  show();
+  fireEvent.click(screen.getByRole("button", { name: "Invite staff" }));
+  expect(
+    screen.queryByRole("option", { name: "Super Admin" }),
+  ).not.toBeInTheDocument();
 });

@@ -22,7 +22,9 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ChangeClinicMemberRoleDto,
   ClinicInvitationRevokedDto,
+  ClinicMemberChangedDto,
   ClinicMemberDto,
   GrantableClinicRoleDto,
   PendingClinicInvitationDto,
@@ -32,6 +34,171 @@ import { customFetch } from "../../axios-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
+export const clinicTeamControllerChangeRole = (
+  membershipId: string,
+  changeClinicMemberRoleDto: ChangeClinicMemberRoleDto,
+  options?: SecondParameter<typeof customFetch>,
+) => {
+  return customFetch<ClinicMemberChangedDto>(
+    {
+      url: `/organizations/current/members/${membershipId}`,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      data: changeClinicMemberRoleDto,
+    },
+    options,
+  );
+};
+
+export const getClinicTeamControllerChangeRoleMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clinicTeamControllerChangeRole>>,
+    TError,
+    { membershipId: string; data: ChangeClinicMemberRoleDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clinicTeamControllerChangeRole>>,
+  TError,
+  { membershipId: string; data: ChangeClinicMemberRoleDto },
+  TContext
+> => {
+  const mutationKey = ["clinicTeamControllerChangeRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clinicTeamControllerChangeRole>>,
+    { membershipId: string; data: ChangeClinicMemberRoleDto }
+  > = (props) => {
+    const { membershipId, data } = props ?? {};
+
+    return clinicTeamControllerChangeRole(membershipId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClinicTeamControllerChangeRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clinicTeamControllerChangeRole>>
+>;
+export type ClinicTeamControllerChangeRoleMutationBody =
+  ChangeClinicMemberRoleDto;
+export type ClinicTeamControllerChangeRoleMutationError = unknown;
+
+export const useClinicTeamControllerChangeRole = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof clinicTeamControllerChangeRole>>,
+      TError,
+      { membershipId: string; data: ChangeClinicMemberRoleDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof clinicTeamControllerChangeRole>>,
+  TError,
+  { membershipId: string; data: ChangeClinicMemberRoleDto },
+  TContext
+> => {
+  const mutationOptions =
+    getClinicTeamControllerChangeRoleMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+export const clinicTeamControllerRemoveMember = (
+  membershipId: string,
+  options?: SecondParameter<typeof customFetch>,
+) => {
+  return customFetch<ClinicMemberChangedDto>(
+    { url: `/organizations/current/members/${membershipId}`, method: "DELETE" },
+    options,
+  );
+};
+
+export const getClinicTeamControllerRemoveMemberMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clinicTeamControllerRemoveMember>>,
+    TError,
+    { membershipId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clinicTeamControllerRemoveMember>>,
+  TError,
+  { membershipId: string },
+  TContext
+> => {
+  const mutationKey = ["clinicTeamControllerRemoveMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clinicTeamControllerRemoveMember>>,
+    { membershipId: string }
+  > = (props) => {
+    const { membershipId } = props ?? {};
+
+    return clinicTeamControllerRemoveMember(membershipId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClinicTeamControllerRemoveMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clinicTeamControllerRemoveMember>>
+>;
+
+export type ClinicTeamControllerRemoveMemberMutationError = unknown;
+
+export const useClinicTeamControllerRemoveMember = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof clinicTeamControllerRemoveMember>>,
+      TError,
+      { membershipId: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof clinicTeamControllerRemoveMember>>,
+  TError,
+  { membershipId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getClinicTeamControllerRemoveMemberMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
 export const clinicTeamControllerMembers = (
   options?: SecondParameter<typeof customFetch>,
   signal?: AbortSignal,
