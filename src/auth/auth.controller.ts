@@ -22,7 +22,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ConsumeRecoveryDto } from './dto/consume-recovery.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtUserGuard } from './guards/jwt-user.guard';
+import { PlatformAccessService } from '../platform/platform-access.service';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { CustomThrottlerGuard } from '../core/guards/custom-throttler.guard';
 import { isProduction } from '../config/runtime';
@@ -36,7 +37,10 @@ const SESSION_ROUTE = { auth: true, default: true, session: false };
 @Throttle({ auth: { limit: 10, ttl: 60000 } })
 @SkipThrottle({ loginIp: true, session: true })
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly platformAccess: PlatformAccessService,
+  ) {}
 
   @Post('signup')
   @ApiOperation({
@@ -185,7 +189,7 @@ export class AuthController {
 
   @Get('me')
   @SkipThrottle(SESSION_ROUTE)
-  @UseGuards(JwtAuthGuard) // 🛡️ THE BOUNCER IS ACTIVE!
+  @UseGuards(JwtUserGuard) // 🛡️ THE BOUNCER IS ACTIVE!
   @ApiBearerAuth() // Tells Swagger this route requires a token
   @ApiOperation({ summary: 'Get the currently logged-in user profile' })
   @ApiResponse({
@@ -196,9 +200,10 @@ export class AuthController {
       properties: {
         user: {
           type: 'object',
-          required: ['id', 'locale'],
+          required: ['id', 'locale', 'isPlatformAdmin'],
           properties: {
             id: { type: 'string' },
+            isPlatformAdmin: { type: 'boolean' },
             locale: {
               type: 'string',
               enum: ['EN', 'TR', 'AR'],
@@ -213,7 +218,12 @@ export class AuthController {
     // Because the Guard passed, `req.user` is guaranteed to exist and be valid!
     return {
       message: 'You have successfully bypassed the guard!',
-      user: req.user,
+      user: {
+        ...req.user,
+        isPlatformAdmin: this.platformAccess.allows(
+          req.user as { email: string; status: string },
+        ),
+      },
     };
   }
 

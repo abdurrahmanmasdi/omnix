@@ -9,7 +9,7 @@ on:
       frontend_ref:
         description: Frontend branch or commit for a coordinated contract release
         required: false
-        default: 1491d87002495f74cb3d90bf93ab358f696a01ae
+        default: 31bd107b8670bfd13b44b2e5e667a731e2d3c01e
       python_ref:
         description: Python branch or commit for a coordinated contract release
         required: false
@@ -37,8 +37,8 @@ jobs:
         with:
           repository: abdurrahmanmasdi/Omnix_FE
           path: frontend-v2
-          # Pin the matching N1 API contract and explicit-locale browser permission tests.
-          ref: ${{ inputs.frontend_ref || '1491d87002495f74cb3d90bf93ab358f696a01ae' }}
+          # Pin the matching N5 API contract and explicit-locale browser permission tests.
+          ref: ${{ inputs.frontend_ref || '31bd107b8670bfd13b44b2e5e667a731e2d3c01e' }}
           token: ${{ secrets.CROSS_REPO_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/checkout@v4
@@ -66,4 +66,4 @@ jobs:
         run: bash backend-v2/scripts/quality-gate.sh
       - name: Run database acceptance suite
         # Every disposable-DB suite (KI-016). app.e2e/auth.e2e are legacy scaffolding (KI-066), not run.
-        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|permission-matrix|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|credential-upgrade|runtime-role-passwords|health'
+        run: bash backend-v2/test/run-credential-upgrade.sh 'pilot|first-organization|tenant-isolation|authorization-socket|permission-matrix|inbound-claim|media-consent|auth-refresh-concurrency|abuse-controls|account-recovery|clinic-invitations|platform-admin|credential-upgrade|runtime-role-passwords|health'

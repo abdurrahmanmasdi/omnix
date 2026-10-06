@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ForbiddenException,
   GoneException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -89,32 +90,58 @@ export class AuthService {
   }
 
   async issueRecovery(email: string, operator: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
-    if (!user || user.deletedAt || user.status !== 'ACTIVE') {
-      throw new Error(
-        'Account is not active or suspended. Cannot issue recovery token.',
-      );
-    }
-    const tokenBytes = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(`PASSWORD_RECOVERY:${tokenBytes}`)
-      .digest('hex');
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
-
-    await this.prisma.accountInvitation.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        purpose: 'PASSWORD_RECOVERY',
-        issuedBy: operator,
-        expiresAt,
-      },
-    });
-    return { token: tokenBytes };
+    if (!operator.trim() || operator.length > 120)
+      throw new BadRequestException('RECOVERY_INPUT_INVALID');
+    return tenantStorage.run({ isSystemBypass: true }, () =>
+      this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.findFirst({
+          where: {
+            email: { equals: email.toLowerCase().trim(), mode: 'insensitive' },
+            deletedAt: null,
+            status: 'ACTIVE',
+          },
+        });
+        if (!user)
+          throw new BadRequestException({
+            code: 'RECOVERY_ACCOUNT_UNAVAILABLE',
+            message: 'An active account is required.',
+          });
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto
+          .createHash('sha256')
+          .update(`PASSWORD_RECOVERY:${token}`)
+          .digest('hex');
+        const invitation = await tx.accountInvitation.create({
+          data: {
+            userId: user.id,
+            tokenHash,
+            purpose: 'PASSWORD_RECOVERY',
+            issuedBy: operator,
+            expiresAt: new Date(Date.now() + 3600000),
+          },
+        });
+        await tx.accountActivationEvent.create({
+          data: {
+            userId: user.id,
+            invitationId: invitation.id,
+            action: 'RECOVERY_ISSUED',
+            actor: operator,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            action: 'PASSWORD_RECOVERY_ISSUED',
+            actor: operator,
+            targetId: invitation.id,
+          },
+        });
+        return {
+          token,
+          invitationId: invitation.id,
+          expiresAt: invitation.expiresAt,
+        };
+      }),
+    );
   }
 
   async consumeRecovery(dto: ConsumeRecoveryDto) {
@@ -235,7 +262,7 @@ export class AuthService {
 
     // Atomic refresh: lookup, validate, revoke old, create new — all in one tx
     const txResult = await this.prisma.$transaction(async (tx) => {
-      const session = await tx.session.findFirst({
+      let session = await tx.session.findFirst({
         where: { familyId, tokenHash },
       });
 
@@ -251,6 +278,10 @@ export class AuthService {
         });
         return { error: 'Session revoked due to token reuse' };
       }
+
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.userId}::uuid FOR UPDATE`;
+      session = await tx.session.findFirst({ where: { familyId, tokenHash } });
+      if (!session) return { error: 'Session not found' };
 
       // Grace for parallel tabs (QA-1F decision 1, KI-070): a token that was
       // rotated moments ago, in a family that is still live, gets a sibling

@@ -41,7 +41,7 @@ const invalidClinic = () =>
 export class InvitationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Operator-only CLI entry point: deliberately not exposed through an HTTP route.
+  // Shared operator entry point: CLI and allowlisted platform administration.
   async issue(email: string, operator: string) {
     email = email.trim().toLowerCase();
     if (!isEmail(email) || !operator.trim() || operator.length > 120) {
@@ -112,6 +112,13 @@ export class InvitationsService {
             actor: operator,
           },
         });
+        await tx.auditLog.create({
+          data: {
+            action: 'OWNER_INVITATION_ISSUED',
+            actor: operator,
+            targetId: invitation.id,
+          },
+        });
         return {
           invitationId: invitation.id,
           userId: user.id,
@@ -127,12 +134,17 @@ export class InvitationsService {
       throw new BadRequestException('INVITATION_INPUT_INVALID');
     return tenantStorage.run({ isSystemBypass: true }, () =>
       this.prisma.$transaction(async (tx) => {
-        const invitation = await tx.accountInvitation.findUnique({
-          where: { id: invitationId },
+        const invitation = await tx.accountInvitation.findFirst({
+          where: { id: invitationId, purpose: PURPOSE },
         });
         if (!invitation) throw new BadRequestException('INVITATION_NOT_FOUND');
         const changed = await tx.accountInvitation.updateMany({
-          where: { id: invitationId, consumedAt: null, revokedAt: null },
+          where: {
+            id: invitationId,
+            purpose: PURPOSE,
+            consumedAt: null,
+            revokedAt: null,
+          },
           data: { revokedAt: new Date() },
         });
         if (changed.count)
@@ -144,6 +156,14 @@ export class InvitationsService {
               actor: operator,
             },
           });
+        await tx.auditLog.create({
+          data: {
+            action: 'OWNER_INVITATION_REVOKED',
+            actor: operator,
+            targetId: invitationId,
+            metadata: { revoked: changed.count === 1 },
+          },
+        });
         return { revoked: changed.count === 1 };
       }),
     );

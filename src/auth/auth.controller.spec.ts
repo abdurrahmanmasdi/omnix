@@ -1,3 +1,4 @@
+import { PlatformAccessService } from '../platform/platform-access.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth.controller';
@@ -14,6 +15,10 @@ describe('AuthController', () => {
       ],
       providers: [
         AuthController,
+        {
+          provide: PlatformAccessService,
+          useValue: { allows: jest.fn().mockReturnValue(false) },
+        },
         { provide: AuthService, useValue: { methodName: jest.fn() } },
         {
           provide: PermissionService,

@@ -34,6 +34,31 @@ const problemsOf = (env: Record<string, unknown>) => {
 };
 
 describe('validateEnv', () => {
+  it('keeps platform access optional and rejects malformed allowlists without leaking values', () => {
+    expect(validateEnv(valid()).PLATFORM_ADMIN_EMAILS).toBeUndefined();
+    expect(
+      validateEnv({ ...valid(), PLATFORM_ADMIN_EMAILS: '' })
+        .PLATFORM_ADMIN_EMAILS,
+    ).toBeUndefined();
+    expect(
+      validateEnv({
+        ...valid(),
+        PLATFORM_ADMIN_EMAILS: 'Founder@example.invalid, STAFF@example.invalid',
+      }).PLATFORM_ADMIN_EMAILS,
+    ).toBeDefined();
+    expect(
+      problemsOf({
+        ...valid(),
+        PLATFORM_ADMIN_EMAILS: 'private-invalid-value',
+      }).join(' '),
+    ).toContain('PLATFORM_ADMIN_EMAILS');
+    expect(
+      problemsOf({
+        ...valid(),
+        PLATFORM_ADMIN_EMAILS: 'private-invalid-value',
+      }).join(' '),
+    ).not.toContain('private-invalid-value');
+  });
   it('accepts a complete production configuration', () => {
     expect(() => validateEnv(valid())).not.toThrow();
   });

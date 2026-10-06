@@ -578,13 +578,13 @@ model AiPersona {
 
 model AuditLog {
   id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
+  organizationId String?      @db.Uuid
   actor          String       @default("system")
   action         String
   targetId       String?
   metadata       Json?
   createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
   @@map("audit_logs")
