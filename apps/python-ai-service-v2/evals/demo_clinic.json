@@ -1,0 +1,24 @@
+{
+  "synthetic": true,
+  "notice": "Entirely fictional evaluation fixture. No real clinic, doctor, patient, credentials or clinical promises.",
+  "clinic_name": "Fictional Bosphorus PaperSmile Dental",
+  "location": "Fictional Demo Plaza, Şişli, Istanbul, Türkiye; no real street address",
+  "languages": ["en", "tr", "ar"],
+  "treatments": [
+    {"id": "implant", "name": "Single dental implant", "price_eur": [650, 950], "unit": "per implant, crown excluded", "included": ["consultation", "local anaesthesia", "implant placement", "routine clinic follow-up"], "process": "Assessment first; initial visit typically 3-5 days. Healing and second visit determined by dentist; no individual timeline promised."},
+    {"id": "zirconia_crown", "name": "Zirconia crown", "price_eur": [220, 320], "unit": "per tooth", "included": ["consultation", "preparation", "temporary crown if needed", "fitting"], "process": "Typically 5-7 clinic days after dentist assessment; suitability and duration vary."},
+    {"id": "veneer", "name": "Ceramic veneer", "price_eur": [300, 450], "unit": "per tooth", "included": ["consultation", "shade discussion", "fitting"], "process": "Typically 5-7 clinic days after assessment; not suitable for everyone."},
+    {"id": "whitening", "name": "Clinic whitening", "price_eur": [180, 250], "unit": "per session", "included": ["consultation", "clinic whitening session"], "process": "One clinic day if approved by dentist; outcome and sensitivity vary."}
+  ],
+  "excluded": ["flights", "hotel", "airport transfers", "bone grafts", "medication", "extra treatment not listed"],
+  "warranty": "Fictional policy: crowns and veneers have a 2-year manufacturing-defect warranty, subject to dentist review and routine check-ups. Trauma, misuse and clinical complications excluded. No lifetime guarantee or guaranteed medical outcome. Implant warranty not published; staff must confirm.",
+  "doctors": [
+    {"name": "Dr. Fictional Ada Demo", "role": "General dentist; crown and veneer consultations", "qualifications": "No real credentials or awards claimed"},
+    {"name": "Dr. Fictional Deniz Sample", "role": "Dentist; implant consultations", "qualifications": "No real credentials or awards claimed"}
+  ],
+  "process": ["Discuss enquiry and preferred language", "Offer consultation request", "Dentist assesses suitability and written personalised quote", "Staff confirm appointment availability", "Treatment only after informed consent", "Clinic follow-up; complications referred to clinical staff"],
+  "payment": "EUR quotes; card or bank transfer through staff-approved channels. No payment details collected in chat. Deposits, instalments, refunds and discounts must be confirmed by staff.",
+  "booking": "Consultation requests are not confirmed appointments; staff confirm availability. Consultation fee is not published.",
+  "medical": "No diagnosis or personal medical advice in chat; medical risk, medication, emergencies and post-operative issues go to clinical staff.",
+  "evidence": "No approved patient stories, photos, ratings or competitor comparisons in this fixture. Staff must confirm requests for those."
+}
