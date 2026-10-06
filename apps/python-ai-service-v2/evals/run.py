@@ -62,10 +62,16 @@ def make_models(ledger):
     missing = [name for name in ['OPENAI_API_KEY', *names.values()] if not os.environ.get(name)]
     if missing:
         raise ValueError('Missing environment variables: ' + ', '.join(missing))
+    from app.infrastructure.model_options import model_options
+    # Validate every role before constructing any client.
+    options = {role: model_options(os.environ.get(name.removesuffix('_MODEL') + '_TEMPERATURE'),
+                                  os.environ.get(name.removesuffix('_MODEL') + '_REASONING_EFFORT'))
+               for role, name in names.items()}
     return {role: MeteredModel(ChatOpenAI(
         model=os.environ[name], api_key=os.environ['OPENAI_API_KEY'], timeout=20,
-        max_retries=0, max_tokens=1024, model_kwargs={'reasoning_effort': 'none'}), ledger)
+        max_retries=0, max_tokens=1024, **options[role]), ledger)
         for role, name in names.items()}
+
 
 
 def escaped(text):

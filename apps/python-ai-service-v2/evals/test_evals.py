@@ -239,3 +239,28 @@ def test_dotenv_is_never_read(monkeypatch):
                             DATABASE_URL='postgresql://synthetic:synthetic@127.0.0.1:1/eval',
                             INTERNAL_RPC_SECRET='synthetic-rpc-secret')
         assert settings.ENVIRONMENT == 'test'
+
+
+@pytest.mark.parametrize('prefix', ['FLAGSHIP', 'EXTRACTOR', 'CHEAP', 'EVAL_PATIENT', 'EVAL_JUDGE'])
+def test_eval_model_options_are_per_role(monkeypatch, prefix):
+    from evals.run import make_models
+    names = ['FLAGSHIP', 'EXTRACTOR', 'CHEAP', 'EVAL_PATIENT', 'EVAL_JUDGE']
+    monkeypatch.setenv('OPENAI_API_KEY', 'synthetic-key')
+    for name in names:
+        monkeypatch.setenv(name + '_MODEL', name)
+        monkeypatch.setenv(name + '_TEMPERATURE', '')
+        monkeypatch.setenv(name + '_REASONING_EFFORT', '')
+    monkeypatch.setenv(prefix + '_TEMPERATURE', '0')
+    monkeypatch.setenv(prefix + '_REASONING_EFFORT', 'low')
+    captured = []
+    monkeypatch.setattr('langchain_openai.ChatOpenAI', lambda **kw: captured.append(kw))
+    make_models(Ledger())
+    for kw in captured:
+        if kw['model'] == prefix:
+            assert kw['temperature'] == 0 and kw['model_kwargs'] == {'reasoning_effort': 'low'}
+        else:
+            assert 'temperature' not in kw and 'model_kwargs' not in kw
+    monkeypatch.setenv(prefix + '_TEMPERATURE', 'nan')
+    with pytest.raises(ValueError):
+        make_models(Ledger())
+    assert len(captured) == 5

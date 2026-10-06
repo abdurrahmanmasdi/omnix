@@ -1,6 +1,7 @@
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from openai import AsyncOpenAI
 from app.core.config import settings
+from app.infrastructure.model_options import model_options
 
 # Model names come from Settings (rule 12); these aliases keep existing imports working.
 EMBEDDING_MODEL = settings.EMBEDDING_MODEL
@@ -18,8 +19,8 @@ class LLMFactory:
         return ChatOpenAI(
             model=settings.CHEAP_MODEL,
             api_key=settings.OPENAI_API_KEY, 
-            temperature=settings.CHEAP_TEMPERATURE if temperature is None else temperature,
-            model_kwargs={"reasoning_effort": "none"},
+            **model_options(settings.CHEAP_TEMPERATURE if temperature is None else temperature,
+                            settings.CHEAP_REASONING_EFFORT),
             timeout=settings.LLM_TIMEOUT_SECONDS,
             max_retries=settings.LLM_MAX_RETRIES,
         )
@@ -29,8 +30,8 @@ class LLMFactory:
         return ChatOpenAI(
             model=settings.EXTRACTOR_MODEL,
             api_key=settings.OPENAI_API_KEY, 
-            temperature=settings.EXTRACTOR_TEMPERATURE if temperature is None else temperature,
-            model_kwargs={"reasoning_effort": "none"},
+            **model_options(settings.EXTRACTOR_TEMPERATURE if temperature is None else temperature,
+                            settings.EXTRACTOR_REASONING_EFFORT),
             timeout=settings.LLM_TIMEOUT_SECONDS,
             max_retries=settings.LLM_MAX_RETRIES,
         )
@@ -40,8 +41,8 @@ class LLMFactory:
         return ChatOpenAI(
             model=settings.FLAGSHIP_MODEL,
             api_key=settings.OPENAI_API_KEY, 
-            temperature=settings.FLAGSHIP_TEMPERATURE if temperature is None else temperature,
-            model_kwargs={"reasoning_effort": "none"},
+            **model_options(settings.FLAGSHIP_TEMPERATURE if temperature is None else temperature,
+                            settings.FLAGSHIP_REASONING_EFFORT),
             timeout=settings.LLM_TIMEOUT_SECONDS,
             max_retries=settings.LLM_MAX_RETRIES,
         )
