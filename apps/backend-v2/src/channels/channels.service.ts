@@ -100,10 +100,34 @@ export class ChannelsService {
         providerAccountId: true,
         status: true,
         credentialId: true,
+        metadata: true,
+        credential: { select: { status: true, lastVerifiedAt: true } },
         createdAt: true,
         updatedAt: true,
       },
     });
+  }
+
+  async verifyConnection(organizationId: string, id: string) {
+    const channel = await this.prisma.channel.findFirst({
+      where: { id, organizationId },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+    if (
+      channel.status === 'DISCONNECTED' ||
+      channel.provider !== 'WHATSAPP_CLOUD_API' ||
+      !channel.credentialId
+    )
+      return { available: false };
+    const available = await this.whatsappService.verifyCredentials(
+      channel.credentialId,
+      organizationId,
+    );
+    await this.prisma.channel.updateMany({
+      where: { id, organizationId, status: { not: 'DISCONNECTED' } },
+      data: { status: available ? 'ACTIVE' : 'ERROR' },
+    });
+    return { available };
   }
 
   async deleteChannel(organizationId: string, id: string) {

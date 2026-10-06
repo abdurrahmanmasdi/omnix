@@ -2946,6 +2946,68 @@
         "summary": "Get aggregated analytics for the dashboard",
         "tags": ["Analytics"]
       }
+    },
+    "/channels/embedded-signup/config": {
+      "get": {
+        "operationId": "ChannelsController_getEmbeddedSignupConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddedSignupConfigDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": ["Channels"]
+      }
+    },
+    "/channels/embedded-signup": {
+      "post": {
+        "operationId": "ChannelsController_connectEmbeddedSignup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddedSignupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Channels"]
+      }
+    },
+    "/channels/{id}/verify": {
+      "post": {
+        "operationId": "ChannelsController_verifyConnection",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Channels"]
+      }
     }
   },
   "info": {
@@ -3589,6 +3651,11 @@
           },
           "handledBy": {
             "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "enum": ["WHATSAPP_PHONE", "WHATSAPP_HISTORY"],
+            "description": "Safe message origin; raw provider metadata is never exposed"
           },
           "status": {
             "type": "string",
@@ -4390,6 +4457,36 @@
           "aiConversionRate",
           "recentActivity"
         ]
+      },
+      "EmbeddedSignupConfigDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true
+          },
+          "configId": {
+            "type": "string",
+            "nullable": true
+          },
+          "graphVersion": {
+            "type": "string"
+          }
+        },
+        "required": ["available", "appId", "configId", "graphVersion"]
+      },
+      "EmbeddedSignupDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Single-use Facebook Login for Business authorization code"
+          }
+        },
+        "required": ["code"]
       }
     }
   }

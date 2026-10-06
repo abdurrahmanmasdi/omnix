@@ -80,6 +80,8 @@ describe('ChannelsService', () => {
         providerAccountId: true,
         status: true,
         credentialId: true,
+        metadata: true,
+        credential: { select: { status: true, lastVerifiedAt: true } },
         createdAt: true,
         updatedAt: true,
       },

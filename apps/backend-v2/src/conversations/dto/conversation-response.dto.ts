@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class InboxMessageDto {
   @ApiProperty() id: string;
@@ -8,6 +8,11 @@ export class InboxMessageDto {
   @ApiProperty({ type: String, nullable: true }) mediaUrl: string | null;
   @ApiProperty() type: string;
   @ApiProperty() handledBy: string;
+  @ApiPropertyOptional({
+    enum: ['WHATSAPP_PHONE', 'WHATSAPP_HISTORY'],
+    description: 'Safe message origin; raw provider metadata is never exposed',
+  })
+  origin?: 'WHATSAPP_PHONE' | 'WHATSAPP_HISTORY';
   @ApiProperty({
     description:
       'Delivery/processing state. UNKNOWN is preserved from the outbound attempt.',

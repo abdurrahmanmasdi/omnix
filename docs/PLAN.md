@@ -1,11 +1,11 @@
 # OmniX plan — the compass
 
 ## Now
-_Rewrite this section at the end of every card/session (≤ 25 lines). Last: 2026-10-06 22:00._
+_Rewrite this section at the end of every card/session (≤ 25 lines). Last: 2026-10-06 (M4 implementation)._
 
 - **Goal:** find out if clinics want this **before building more** (D-030). Success = one Istanbul clinic agrees to a 14-day pilot and uses OmniX with real patients.
 - **What already works (enough to demo and to pilot):** WhatsApp → AI reply (from the clinic's approved knowledge) → handoff to staff (AI pauses, alert) → staff reply from the Inbox; leads + pipeline; TR/EN/AR dashboard; team roles; clinic connects WhatsApp by pasting Cloud API credentials in Settings → Channels (works for a **dedicated number** that is not on the phone app).
-- **Only one build card now: M4 WhatsApp coexistence** (founder 2026-10-06: clinics keep their own number and phone app — a much better experience than a second Cloud API number). Everything else is frozen except fixes a pilot clinic needs; M1–M3 wait until a clinic asks.
+- **M4 WhatsApp coexistence implemented for review** on `m4/whatsapp-coexistence`: v4 signup + encrypted credentials, read-only history, phone echoes pause/version-bump the AI, Inbox phone/history markers and channel verification. Synthetic tests verified; **live acceptance still pending** founder-supervised Meta test assets, Business verification/Tech Provider review and a new v4 Login configuration. Everything else is frozen except pilot-blocking fixes; M1–M3 wait until a clinic asks.
 - **This week (founder, no code):** (1) push the repo + switch Railway (steps in `LOG.md`); (2) M5 go-live basics; (3) staging demo clinic with synthetic knowledge; (4) show it to clinics from `reference/research/` and ask for a pilot.
 - **Founder, start today:** Meta Business verification + Tech Provider app review — M4 cannot go live without it and Meta is slow.
 - **Parked:** P2-01 partial work (schema + migration, untested) on branch `p2-01/coordination-records` @ `44033f6`.
@@ -30,7 +30,7 @@ _Rewrite this section at the end of every card/session (≤ 25 lines). Last: 202
 | M1 | **P2-01** Coordination records | Records for consultations, staff tasks, notes, patient facts, outcomes (backend only) | — | Before M2/M3 |
 | M2 | **P2-02 + P2-08** Owned handoff + notes + phone alert | Handoff becomes a task a staff member claims; private notes; one push alert per handoff | M1 | Clinic misses handoffs or wants notes |
 | M3 | **P2-03** Consultation request → confirm → attended | Tracked consultation journey | M2 | Clinic wants bookings tracked in OmniX |
-| M4 | **P2-04 + P2-05** (no dependency on M1) Connect the clinic's existing WhatsApp number (coexistence) + phone-app replies pause the AI | Clinic keeps its number and phone app | **Meta Business verification + Tech Provider** (founder; start now, it is slow) | **Now** (founder decision 2026-10-06) |
+| M4 | **P2-04 + P2-05** (no dependency on M1) Connect the clinic's existing WhatsApp number (coexistence) + phone-app replies pause the AI | Clinic keeps its number and phone app | **Meta Business verification + Tech Provider** (founder; start now, it is slow) | **Implemented; PR review + founder-supervised Meta test pending** |
 | M5 | Go-live basics | (now V2) | Railway | Before real patients |
 
 Full original card text: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → grep `#### P2-0X`. Acceptance criteria: `reference/plan/CTO_DELIVERY_BACKLOG_2026-09-27.md`. Embedded Signup v2/v3 die 15 Oct 2026 — M4 builds only on v4.
@@ -45,6 +45,7 @@ Existing handoff (AI action, UNKNOWN routing, STOP alert) creates one `Coordinat
 New versioned AI action `request_consultation` on both sides of the contract; Nest validates and returns a receipt (`committed|rejected|retryable_failure`); the reply may say "request recorded" only when committed. Staff: confirm (slot, duration, attests the clinic calendar is free), reschedule, cancel, attended/no-show; no duplicate or overlapping confirmations. Patient-facing times in the patient's IANA time zone (test across the late-October DST change). Inbox consultation card, TR/EN. Founder demo: one synthetic patient from enquiry to attended. Stop: no calendar sync (D-014), no reminders.
 
 ### M4 — P2-04 + P2-05 WhatsApp coexistence (short)
+**Status (2026-10-06):** implementation and synthetic checks complete on `m4/whatsapp-coexistence`; review and founder-supervised Meta test remain. No live provider call, deployment or database migration was performed. Meta docs re-read in Chrome (v4 page updated 2026-09-03; coexistence 2026-06-26); Graph API default v26.0, session-info schema 3.
 Re-check Meta's current docs first. Embedded Signup v4 with `whatsapp_business_app_onboarding`; backend swaps the code server-side, stores the token encrypted, creates the channel, subscribes `history`, `smb_app_state_sync`, `smb_message_echoes`; idempotent. History import read-only, deduped, no AI run, no sends. Graph API version in one config value (KI-076). Echoes (`smb_message_echoes`) → stored as staff message "sent from phone", AI paused + `stateVersion` bumped in one transaction (in-flight AI reply dropped). Ideas ⚑ #14: the channel shows whether it is alive. Live test only with Meta test assets and the founder present.
 
 ## Pilot gate — before the first real patient

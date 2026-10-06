@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import {
   useChannelsControllerGetChannels,
   useChannelsControllerDeleteChannel,
+  getChannelsControllerGetChannelsQueryKey,
 } from "@/lib/api/generated/channels/channels";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +31,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+import { ChannelHealth } from "@/components/channels/ChannelHealth";
+import { EmbeddedSignupButton } from "@/components/channels/EmbeddedSignupButton";
 import { AddChannelModal } from "@/components/channels/AddChannelModal";
 
 export default function ChannelsSettingsPage() {
@@ -40,7 +43,11 @@ export default function ChannelsSettingsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
 
-  const { data: channelsData, isLoading } = useChannelsControllerGetChannels();
+  const {
+    data: channelsData,
+    isLoading,
+    isError,
+  } = useChannelsControllerGetChannels();
   const deleteChannelMutation = useChannelsControllerDeleteChannel();
 
   const channels = (
@@ -56,6 +63,15 @@ export default function ChannelsSettingsPage() {
     provider: string;
     providerAccountId: string;
     createdAt: string;
+    status: string;
+    credential?: { status: string; lastVerifiedAt: string | null };
+    metadata?: {
+      subscriptionState?: string;
+      historySyncState?: string;
+      contactsSyncState?: string;
+      historyProgress?: number;
+      onboardingAt?: string;
+    };
   }[];
 
   const handleDelete = () => {
@@ -66,7 +82,9 @@ export default function ChannelsSettingsPage() {
       {
         onSuccess: () => {
           toast.success(copy("Channel disconnected successfully"));
-          queryClient.invalidateQueries({ queryKey: [`/channels`] });
+          queryClient.invalidateQueries({
+            queryKey: getChannelsControllerGetChannelsQueryKey(),
+          });
           setChannelToDelete(null);
         },
         onError: () => {
@@ -91,17 +109,24 @@ export default function ChannelsSettingsPage() {
             )}
           </p>
         </div>
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-brand-electric/20 h-11 rounded-xl font-bold transition-all active:scale-95"
-        >
-          <Plus className="me-2 h-4 w-4" />
-          {copy("Connect WhatsApp")}
-        </Button>
+        <div className="flex flex-col gap-3">
+          <EmbeddedSignupButton />
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-brand-electric hover:bg-brand-electric/80 shadow-none shadow-brand-electric/20 h-11 rounded-xl font-bold transition-all active:scale-95"
+          >
+            <Plus className="me-2 h-4 w-4" />
+            {copy("Use credential fallback")}
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {isError ? (
+        <p role="alert">
+          {copy("Channels could not be loaded. Please try again.")}
+        </p>
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-brand-cyan" />
         </div>
@@ -130,72 +155,75 @@ export default function ChannelsSettingsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {channels.map(
-            (channel: {
-              id: string;
-              provider: string;
-              providerAccountId: string;
-              createdAt: string;
-            }) => (
-              <Card
-                key={channel.id}
-                className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10"
-              >
-                <div className="absolute top-0 start-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
-                        <MessageCircle className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-brand-ice leading-none mb-1">
-                          {channel.provider}
-                        </h3>
-                        <Badge
-                          variant="outline"
-                          className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-wider"
-                        >
-                          <CheckCircle2 className="h-3 w-3 me-1" />
-                          {copy("Active")}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 mt-6 pt-6 border-t border-white/10">
-                    <div>
-                      <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
-                        {copy("Account ID")}
-                      </p>
-                      <p className="font-medium text-brand-ice/80 text-sm truncate">
-                        {channel.providerAccountId}
-                      </p>
+          {channels.map((channel) => (
+            <Card
+              key={channel.id}
+              className="relative overflow-hidden shadow-none hover:shadow-none transition-shadow group border-white/10"
+            >
+              <div className="absolute top-0 start-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 bg-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
+                      <MessageCircle className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
-                        {copy("Connected On")}
-                      </p>
-                      <p className="font-medium text-brand-ice/80 text-sm">
-                        {new Date(channel.createdAt).toLocaleDateString(locale)}
-                      </p>
+                      <h3 className="font-bold text-brand-ice leading-none mb-1">
+                        {channel.provider}
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] uppercase font-bold tracking-wider"
+                      >
+                        <CheckCircle2 className="h-3 w-3 me-1" />
+                        {copy(
+                          channel.status === "DISCONNECTED"
+                            ? "Disconnected"
+                            : channel.status === "ERROR" ||
+                                channel.credential?.status === "ERROR"
+                              ? "Connection needs attention"
+                              : channel.credential?.lastVerifiedAt
+                                ? "Last verification succeeded"
+                                : "Connection not verified",
+                        )}
+                      </Badge>
                     </div>
                   </div>
+                </div>
 
-                  <div className="mt-6 flex justify-end">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setChannelToDelete(channel.id)}
-                      className="text-red-400 hover:text-red-400 hover:bg-red-500/10 h-9 font-bold"
-                    >
-                      <Trash2 className="h-4 w-4 me-2" />
-                      {copy("Disconnect")}
-                    </Button>
+                <div className="space-y-3 mt-6 pt-6 border-t border-white/10">
+                  <div>
+                    <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
+                      {copy("Account ID")}
+                    </p>
+                    <p className="font-medium text-brand-ice/80 text-sm truncate">
+                      {channel.providerAccountId}
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-            ),
-          )}
+                  <div>
+                    <p className="text-[10px] font-bold text-brand-ice/60 uppercase tracking-widest mb-1">
+                      {copy("Connected On")}
+                    </p>
+                    <p className="font-medium text-brand-ice/80 text-sm">
+                      {new Date(channel.createdAt).toLocaleDateString(locale)}
+                    </p>
+                  </div>
+                </div>
+
+                <ChannelHealth channel={channel} />
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setChannelToDelete(channel.id)}
+                    className="text-red-400 hover:text-red-400 hover:bg-red-500/10 h-9 font-bold"
+                  >
+                    <Trash2 className="h-4 w-4 me-2" />
+                    {copy("Disconnect")}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 

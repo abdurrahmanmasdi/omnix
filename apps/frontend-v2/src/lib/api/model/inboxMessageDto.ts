@@ -5,6 +5,7 @@
  * The AI Sales Agent CRM API Documentation
  * OpenAPI spec version: 1.0
  */
+import type { InboxMessageDtoOrigin } from "./inboxMessageDtoOrigin";
 
 export interface InboxMessageDto {
   id: string;
@@ -16,6 +17,8 @@ export interface InboxMessageDto {
   mediaUrl: string | null;
   type: string;
   handledBy: string;
+  /** Safe message origin; raw provider metadata is never exposed */
+  origin?: InboxMessageDtoOrigin;
   /** Delivery/processing state. UNKNOWN is preserved from the outbound attempt. */
   status: string;
   createdAt: string;

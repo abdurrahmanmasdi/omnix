@@ -1,8 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import axios from 'axios';
+import { ConfigService } from '@nestjs/config';
+import { metaGraphUrl } from '../config/meta-graph';
 
 const DEFAULT_PATIENT_MEDIA_RETENTION_DAYS = 30;
 
@@ -38,7 +40,10 @@ export class WhatsappMediaService implements OnModuleInit {
   }
   private readonly logger = new Logger(WhatsappMediaService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly config?: ConfigService,
+  ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async cleanupExpiredMedia() {
@@ -96,7 +101,7 @@ export class WhatsappMediaService implements OnModuleInit {
     try {
       // Step 1: Get the media URL from the Graph API using the media ID
       const metadataResponse = await axios.get(
-        `https://graph.facebook.com/v19.0/${mediaId}`,
+        `${metaGraphUrl(this.config)}/${mediaId}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

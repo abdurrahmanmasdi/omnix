@@ -1,3 +1,4 @@
+import { DEFAULT_META_GRAPH_VERSION } from './meta-graph';
 import { isEmail } from 'class-validator';
 import { credentialKey } from '../credentials/credential-cipher';
 import { grpcTransportProblems } from '../grpc-client/grpc-transport';
@@ -20,6 +21,9 @@ export interface AppEnv {
   JWT_ACCESS_EXPIRATION: string;
   JWT_REFRESH_EXPIRATION: string;
   META_APP_SECRET: string;
+  META_GRAPH_API_VERSION: string;
+  META_APP_ID?: string;
+  META_EMBEDDED_SIGNUP_CONFIG_ID?: string;
   META_VERIFY_TOKEN: string;
   INTERNAL_RPC_SECRET: string;
   INTEGRATION_CREDENTIAL_KEY: string;
@@ -127,6 +131,18 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
       );
   }
 
+  const META_GRAPH_API_VERSION =
+    text('META_GRAPH_API_VERSION') ?? DEFAULT_META_GRAPH_VERSION;
+  if (!/^v\d+\.0$/.test(META_GRAPH_API_VERSION))
+    problems.push('META_GRAPH_API_VERSION must have the form v25.0');
+  const META_APP_ID = text('META_APP_ID');
+  const META_EMBEDDED_SIGNUP_CONFIG_ID = text('META_EMBEDDED_SIGNUP_CONFIG_ID');
+  for (const [name, value] of [
+    ['META_APP_ID', META_APP_ID],
+    ['META_EMBEDDED_SIGNUP_CONFIG_ID', META_EMBEDDED_SIGNUP_CONFIG_ID],
+  ])
+    if (value && !/^\d+$/.test(value))
+      problems.push(`${name} must be a numeric identifier`);
   const META_APP_SECRET = required('META_APP_SECRET');
   const META_VERIFY_TOKEN = required('META_VERIFY_TOKEN');
   const INTERNAL_RPC_SECRET = required('INTERNAL_RPC_SECRET');
@@ -219,6 +235,9 @@ export function validateEnv(raw: Record<string, unknown>): AppEnv {
     JWT_ACCESS_EXPIRATION,
     JWT_REFRESH_EXPIRATION,
     META_APP_SECRET,
+    META_GRAPH_API_VERSION,
+    META_APP_ID,
+    META_EMBEDDED_SIGNUP_CONFIG_ID,
     META_VERIFY_TOKEN,
     INTERNAL_RPC_SECRET,
     INTEGRATION_CREDENTIAL_KEY,

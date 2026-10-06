@@ -9,6 +9,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { EmbeddedSignupService } from './embedded-signup.service';
+import {
+  EmbeddedSignupDto,
+  EmbeddedSignupConfigDto,
+} from './dto/embedded-signup.dto';
 import { ChannelsService } from './channels.service';
 import { CreateChannelDto } from './dto/create-channel.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,7 +26,28 @@ import type { AuthenticatedUser } from '../auth/decorators/current-user.decorato
 @Controller('channels')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ChannelsController {
-  constructor(private readonly channelsService: ChannelsService) {}
+  constructor(
+    private readonly channelsService: ChannelsService,
+    private readonly embeddedSignup: EmbeddedSignupService,
+  ) {}
+
+  @Get('embedded-signup/config')
+  @RequirePermissions('manage_channels')
+  @ApiResponse({ status: 200, type: EmbeddedSignupConfigDto })
+  getEmbeddedSignupConfig() {
+    return this.embeddedSignup.configuration();
+  }
+
+  @Post('embedded-signup')
+  @RequirePermissions('manage_channels')
+  connectEmbeddedSignup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: EmbeddedSignupDto,
+  ) {
+    if (!user.organizationId)
+      throw new BadRequestException('Organization not found for the user');
+    return this.embeddedSignup.connect(user.organizationId, dto.code);
+  }
 
   @Post()
   @RequirePermissions('manage_channels')
@@ -48,6 +74,17 @@ export class ChannelsController {
       throw new BadRequestException('Organization not found for the user');
     }
     return this.channelsService.getChannels(user.organizationId);
+  }
+
+  @Post(':id/verify')
+  @RequirePermissions('manage_channels')
+  verifyConnection(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    if (!user.organizationId)
+      throw new BadRequestException('Organization not found for the user');
+    return this.channelsService.verifyConnection(user.organizationId, id);
   }
 
   @Delete(':id')

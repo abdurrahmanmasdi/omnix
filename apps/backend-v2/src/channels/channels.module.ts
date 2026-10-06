@@ -1,3 +1,5 @@
+import { CoexistenceSyncService } from './coexistence-sync.service';
+import { EmbeddedSignupService } from './embedded-signup.service';
 import { AuthModule } from '../auth/auth.module';
 import { Module } from '@nestjs/common';
 import { ChannelsController } from './channels.controller';
@@ -14,6 +16,6 @@ import { CredentialsModule } from '../credentials/credentials.module';
     CredentialsModule,
   ],
   controllers: [ChannelsController],
-  providers: [ChannelsService],
+  providers: [ChannelsService, EmbeddedSignupService, CoexistenceSyncService],
 })
 export class ChannelsModule {}

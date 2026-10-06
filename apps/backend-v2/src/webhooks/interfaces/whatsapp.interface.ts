@@ -19,6 +19,12 @@ export interface WhatsAppChangeValue {
     display_phone_number: string;
     phone_number_id: string;
   };
+  history?: {
+    metadata?: { phase: number; chunk_order: number; progress: number };
+    errors?: { code: number }[];
+    threads?: { id: string; messages?: WhatsAppMessage[] }[];
+  }[];
+  message_echoes?: (WhatsAppMessage & { to: string })[];
   contacts?: WhatsAppContact[];
   messages?: WhatsAppMessage[];
   statuses?: WhatsAppStatus[];
@@ -32,6 +38,7 @@ export interface WhatsAppContact {
 }
 
 export interface WhatsAppMessage {
+  to?: string;
   from: string; // The customer's phone number
   id: string; // The specific message ID
   timestamp: string;
@@ -43,6 +50,8 @@ export interface WhatsAppMessage {
     | 'document'
     | 'interactive'
     | 'button'
+    | 'media_placeholder'
+    | 'video'
     | 'unknown';
   text?: {
     body: string;

@@ -1,3 +1,4 @@
+import { CoexistenceService } from './coexistence.service';
 import { Module } from '@nestjs/common';
 
 import { BullModule } from '@nestjs/bullmq';
@@ -61,6 +62,7 @@ import { FAILED_JOB_RETENTION } from '../core/queue/job-retention';
   controllers: [WebhooksController],
   providers: [
     WebhooksService,
+    CoexistenceService,
     WebhooksProcessor,
     AiReplyProcessor,
     FollowUpService,
