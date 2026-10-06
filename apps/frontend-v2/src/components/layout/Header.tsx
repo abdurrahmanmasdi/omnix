@@ -1,0 +1,221 @@
+"use client";
+import { useAuthControllerGetProfile } from "@/lib/api/generated/authentication/authentication";
+import { useUserProfileControllerGet } from "@/lib/api/generated/users/users";
+import { useTranslations } from "next-intl";
+import { useCopy } from "@/i18n/copy";
+
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
+import { useMemo } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuthStore } from "@/store/auth-store";
+import { useInboxText } from "@/features/inbox/i18n";
+import { NotificationBell } from "@/components/layout/NotificationBell";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  ChevronRight,
+  Menu,
+  LogOut,
+  User,
+  Settings,
+  ChevronsUpDown,
+} from "lucide-react";
+
+interface HeaderProps {
+  onLogout: () => void;
+  onMenu: () => void;
+  menuOpen: boolean;
+}
+
+// ─── Breadcrumb Generator ───────────────────────────────
+const LABEL_MAP: Record<string, string> = {
+  dashboard: "Dashboard",
+  profile: "Profile",
+  team: "Clinic team",
+  leads: "Leads",
+  conversations: "Conversations",
+  pipeline: "Pipeline",
+  settings: "Settings",
+  ai: "AI Settings",
+  channels: "Channels",
+  integrations: "Integrations",
+  "lead-sources": "Lead Sources",
+  "pipeline-stages": "Pipeline Stages",
+  experiences: "Experiences",
+  documents: "Documents",
+  notifications: "Notifications",
+};
+
+function useBreadcrumbs() {
+  const pathname = usePathname();
+
+  return useMemo(() => {
+    const segments = pathname
+      .replace("/dashboard", "")
+      .split("/")
+      .filter(Boolean);
+
+    const crumbs = [{ label: "Dashboard", href: "/dashboard" }];
+
+    let path = "/dashboard";
+    for (const seg of segments) {
+      path += `/${seg}`;
+      crumbs.push({
+        label:
+          LABEL_MAP[seg] ||
+          seg.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        href: path === "/dashboard/settings" ? "/dashboard/settings/ai" : path,
+      });
+    }
+
+    return crumbs;
+  }, [pathname]);
+}
+
+export function Header({ onLogout, onMenu, menuOpen }: HeaderProps) {
+  const copy = useCopy();
+  const platformText = useTranslations("Platform");
+
+  const { t } = useInboxText();
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const platformProfile = useAuthControllerGetProfile({
+    query: { enabled: !!user, retry: false },
+  });
+  const breadcrumbs = useBreadcrumbs();
+  const profile = useUserProfileControllerGet({ query: { enabled: !!user } });
+  const p = useTranslations("Profile");
+  const currentMembership = profile.data?.memberships.find(
+    (m) => m.organizationId === user?.organizationId,
+  );
+
+  return (
+    <header className="h-16 border-b border-white/5 bg-brand-navy/50 backdrop-blur-xl flex items-center justify-between px-3 md:px-8 shrink-0">
+      <Button
+        className="md:hidden"
+        variant="ghost"
+        size="icon"
+        aria-label={t("menu")}
+        aria-expanded={menuOpen}
+        onClick={onMenu}
+      >
+        <Menu />
+      </Button>
+      {/* Left: Breadcrumbs */}
+      <div className="flex items-center space-x-1 min-w-0">
+        {breadcrumbs.map((crumb, i) => {
+          const isLast = i === breadcrumbs.length - 1;
+          return (
+            <div key={crumb.href} className="flex items-center">
+              {i > 0 && (
+                <ChevronRight className="h-3.5 w-3.5 text-brand-ice/40 mx-1.5 shrink-0" />
+              )}
+              {isLast ? (
+                <span className="text-sm font-bold text-brand-ice truncate">
+                  {crumb.label === "Conversations"
+                    ? t("inbox")
+                    : copy(crumb.label)}
+                </span>
+              ) : (
+                <Link
+                  href={crumb.href}
+                  className="text-sm font-medium text-brand-ice/60 hover:text-brand-ice transition-colors truncate"
+                >
+                  {crumb.label === "Conversations"
+                    ? t("inbox")
+                    : copy(crumb.label)}
+                </Link>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Right: Actions */}
+      <div className="flex items-center space-x-2">
+        {/* Notification Bell */}
+        <LocaleSwitcher />
+        <NotificationBell />
+
+        {/* User Profile Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              data-testid="user-menu"
+              className="h-10 px-2 rounded-xl hover:bg-transparent/5 transition-colors flex items-center gap-2"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-brand-deep text-brand-ice text-xs font-bold">
+                  {user?.firstName?.charAt(0)}
+                  {user?.lastName?.charAt(0) || ""}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden lg:flex flex-col items-start">
+                <span className="text-sm font-bold text-brand-ice leading-none">
+                  {user?.firstName} {user?.lastName}
+                </span>
+              </div>
+              <ChevronsUpDown className="h-3.5 w-3.5 text-brand-ice/40 hidden lg:block" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={8}
+            className="w-56 shadow-2xl border-white/10 bg-[#051126] text-brand-ice rounded-xl p-2"
+          >
+            <DropdownMenuLabel className="px-3 py-2">
+              <p className="text-sm font-bold text-brand-ice">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <p className="text-xs text-brand-ice/40 font-medium mt-0.5">
+                {currentMembership?.roleName ?? p("noMemberships")}
+              </p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="my-1 bg-transparent/10" />
+            <DropdownMenuItem
+              onClick={() => router.push("/dashboard/profile")}
+              className="rounded-lg font-medium text-brand-ice hover:bg-transparent/5 py-2.5 cursor-pointer"
+            >
+              <User className="me-3 h-4 w-4 text-brand-ice/40" />
+              {copy("Profile")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="rounded-lg font-medium text-brand-ice hover:bg-transparent/5 py-2.5 cursor-pointer"
+              onClick={() => {
+                router.push("/dashboard/settings/lead-sources");
+              }}
+            >
+              <Settings className="me-3 h-4 w-4 text-brand-ice/40" />
+              {copy("Settings")}
+            </DropdownMenuItem>
+            {platformProfile.data?.user.isPlatformAdmin === true &&
+              !platformProfile.isError && (
+                <DropdownMenuItem onClick={() => router.push("/platform")}>
+                  {platformText("title")}
+                </DropdownMenuItem>
+              )}
+            <DropdownMenuSeparator className="my-1 bg-transparent/10" />
+            <DropdownMenuItem
+              className="rounded-lg font-medium text-red-400 focus:text-red-400 focus:bg-red-950/50 py-2.5 cursor-pointer"
+              data-testid="sign-out"
+              onClick={onLogout}
+            >
+              <LogOut className="me-3 h-4 w-4" />
+              {copy("Sign out")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  );
+}

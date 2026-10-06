@@ -1,0 +1,25 @@
+{
+  "message": {
+    "id": "msg-1", "conversationId": "conv-1", "senderId": null,
+    "content": "Hello", "mediaUrl": null, "type": "LEAD_TEXT",
+    "handledBy": "AI", "status": "PROCESSED",
+    "createdAt": "2026-09-28T00:00:00.000Z", "updatedAt": "2026-09-28T00:00:00.000Z"
+  },
+  "lead": {
+    "id": "lead-1", "organizationId": "org-1", "assignedAgentId": null,
+    "firstName": "A", "lastName": "B", "email": null, "phoneNumber": "+15550000000",
+    "country": "US", "timezone": "UTC", "primaryLanguage": "en", "status": "NEW",
+    "priority": "WARM", "summary": null,
+    "createdAt": "2026-09-28T00:00:00.000Z", "updatedAt": "2026-09-28T00:00:00.000Z"
+  },
+  "conversation": {
+    "id": "conv-1", "organizationId": "org-1", "externalContactId": null,
+    "status": "ACTIVE", "leadId": "lead-1", "aiPaused": false,
+    "assignedAgentId": null,
+    "createdAt": "2026-09-28T00:00:00.000Z", "updatedAt": "2026-09-28T00:00:00.000Z"
+  },
+  "notification": {
+    "id": "notif-1", "organizationId": "org-1", "type": "UPDATE",
+    "title": "New notification", "body": "Open notifications to view details."
+  }
+}
