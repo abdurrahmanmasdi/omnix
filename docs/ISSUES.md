@@ -1,7 +1,7 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-091 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-094 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
 
@@ -33,6 +33,15 @@ Default off (WP-A). Remains: LangSmith tracing env unknown; subprocessor/consent
 
 **KI-074 — No Railway health check; failed start replaces working deploy** · high (before real traffic) · open
 Set Healthcheck Path `/health` on Backend (+ Python/Frontend), re-test missing-variable case, rehearse rollback. Owner: founder (close-out b) + developer re-test.
+
+**KI-091 — Model settings break newer models** · high · open
+`llm_factory.py` (and `evals/run.py`) always send `reasoning_effort: "none"` + a temperature. gpt-6.1-sol rejects both (400), gpt-6-luna accepts them; every request with sol fails → fixed handoff. Fix: per-role settings, send only what is configured. Also check Railway model names. Owner: AI-2 item 0.
+
+**KI-092 — Eval runner: simulated patient answers as the clinic; judge expects disclosure in every reply** · high (eval validity) · open
+Baseline 2026-10-06 (5 scenarios, all gpt-6-luna): the patient model replied "I'm an AI assistant… crowns cost €220–€320" (roles swapped), and the judge failed replies for missing AI disclosure although the backend sends the disclosure message. Scores until fixed are not trustworthy. Owner: AI-2 item 0.
+
+**KI-093 — Compliance checker false positives hand off simple questions** · high · open
+Baseline: a correct per-tooth price question ended in "AI failed compliance checks multiple times" → handoff; one competitor-objection turn failed with BadRequestError → "system_exception" handoff. Owner: AI-2 (v2 replaces the graph; keep `check_output`).
 
 ### Medium
 

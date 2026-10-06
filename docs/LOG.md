@@ -45,3 +45,7 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 ## 2026-10-06 23:00 — AI-1 review (planner) + D1 research
 - AI-1 reviewed read-only: 5 commits, only `apps/python-ai-service-v2/evals/` + LOG; **no production code touched**; keys/models read from shell env only (test proves no dotenv read); hard checks = grounded EUR price, AI identity when asked, ≤ 3 sentences, ≤ 1 question, same language; judge LLM for the rest. Reported 45 eval tests + Python suite 170/170 across runs. Limits: heuristic language/identity checks; fact sheet in full, so retrieval quality is not measured.
 - Planner commit `7fd3464` (playbook, AI cards, D-031) had not reached GitHub before the M4 merge — re-applied on `main` with this entry. D1 market map added. D-032 (Q15 option a).
+
+## 2026-10-06 23:30 — First baseline attempts (founder runs, planner review)
+- Run 1 (sol as extractor/judge): 40/40 BadRequestError, nothing billed — sol rejects `reasoning_effort:none` and temperature ≠ 1 (KI-091).
+- Run 2 (all gpt-6-luna, 5 scenarios, ~$0.09): 0/5 pass, avg 2.94/5. Not trustworthy yet: patient role swapped + judge demands disclosure each reply (KI-092). Real signals: compliance checker hands off a simple price question; one BadRequest → system_exception (KI-093); asks for photos early. Full 40 ≈ $0.70 on luna. Next: AI-2 with item 0 fixes, then baseline (old) vs v2 in one run.
