@@ -139,7 +139,7 @@ if (require.main === module) {
           ? message
           : 'CREDENTIAL_UPGRADE_FAILED';
       console.error(
-        `${code}: deployment stopped; see docs/CREDENTIAL_UPGRADE.md`,
+        `${code}: deployment stopped; see docs/reference/ops/CREDENTIAL_UPGRADE.md`,
       );
       process.exitCode = 1;
     });

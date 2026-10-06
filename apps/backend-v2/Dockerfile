@@ -41,6 +41,6 @@ RUN mkdir -p uploads && chown node:node uploads
 # Runs as the image's unprivileged 'node' user.
 USER node
 
-# Migrations are a separate deploy step: `npm run db:deploy:prod` (docs/DEPLOYMENT.md).
+# Migrations are a separate deploy step: `npm run db:deploy:prod` (docs/reference/ops/BACKEND_DEPLOYMENT.md at the repo root).
 # Railway manages port exposure automatically based on $PORT
 CMD ["npm", "run", "start:prod"]

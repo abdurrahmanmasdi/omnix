@@ -73,7 +73,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch(() => {
-    console.error('INVITATION_OPERATION_FAILED: see docs/PILOT_ACTIVATION.md');
+    console.error('INVITATION_OPERATION_FAILED: see docs/reference/ops/PILOT_ACTIVATION.md');
     process.exitCode = 1;
   });
 }

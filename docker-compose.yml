@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: omnidesk
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d omnidesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-migrate:
+    build:
+      context: ./apps/backend-v2
+      dockerfile: Dockerfile
+    command: node dist/src/credentials/deploy-cli.js
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/omnidesk?schema=public
+      INTEGRATION_CREDENTIAL_KEY: ${INTEGRATION_CREDENTIAL_KEY:?Set a persistent 32-byte base64 credential encryption key}
+
+  python-ai-service-v2:
+    build:
+      context: ./apps/python-ai-service-v2
+    ports:
+      - "50051:50051"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://omnix_python_runtime:python_runtime_secret@postgres:5432/omnidesk?schema=public
+
+  backend-v2:
+    build:
+      context: ./apps/backend-v2
+    ports:
+      - "3000:3001"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      python-ai-service-v2:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/omnidesk?schema=public
+      RUNTIME_DATABASE_URL: postgresql://omnix_backend_runtime:backend_runtime_secret@postgres:5432/omnidesk?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      INTEGRATION_CREDENTIAL_KEY: ${INTEGRATION_CREDENTIAL_KEY:?Set a persistent 32-byte base64 credential encryption key}
+
+  frontend-v2:
+    build:
+      context: ./apps/frontend-v2
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      backend-v2:
+        condition: service_started
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      PORT: 3001

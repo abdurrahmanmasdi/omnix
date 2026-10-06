@@ -38,3 +38,6 @@ _backup/
 _to_delete/
 tmp/
 graphify-out/
+
+# Obsidian per-user state
+docs/.obsidian/workspace*.json
