@@ -104,6 +104,8 @@ def write_report(results, scenarios, ledger, directory=ROOT / 'reports'):
     for result in sorted(results, key=lambda r: (r['passed'], r['score'], r['id']))[:10]:
         lines += [f'### {result["id"]}: {"PASS" if result["passed"] else "FAIL"}, {result["score"]:.2f}/5',
                   f'Complete: {result["complete"]}; expected handoff check: {result["handoff"]}; error: {result["error"]}.', '']
+        for error in result.get('provider_errors', []):
+            lines += [f'Provider error: {escaped(error)}', '']
         for turn in result['turns']:
             lines += [f'Patient: {escaped(turn["patient"])}', '', f'AI: {escaped(turn["reply"])}', '',
                       f'Actions: {escaped(json.dumps(turn["actions"], ensure_ascii=False))}',

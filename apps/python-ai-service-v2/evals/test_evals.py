@@ -104,7 +104,7 @@ class FakeModel:
             return AIMessage(content=json.dumps({'score': 4, 'reason': 'Synthetic test verdict',
                                                  'must_do_met': True, 'must_not_do_met': True}))
         if self.role == 'patient':
-            lang = json.loads(messages[-1].content)['scenario']['language']
+            lang = language_of(messages[-1].content)
             return AIMessage(content={'en': 'What does the price include?', 'tr': 'Fiyat neyi içeriyor?', 'ar': 'ماذا يشمل السعر؟'}[lang])
         if not isinstance(messages[-1], ToolMessage):
             return AIMessage(content='', tool_calls=[{'name': 'search_clinic_knowledge',
@@ -264,3 +264,30 @@ def test_eval_model_options_are_per_role(monkeypatch, prefix):
     with pytest.raises(ValueError):
         make_models(Ledger())
     assert len(captured) == 5
+
+
+def test_patient_perspective_and_rubric():
+    from evals.runner import patient_messages, RUBRIC
+    scenario = load_scenarios(ROOT / 'scenarios.json')[0]
+    messages = patient_messages(scenario, [{'patient': 'How much?', 'reply': 'Our crowns cost EUR 220–320.'}])
+    assert [m.type for m in messages] == ['system', 'ai', 'human']
+    assert messages[1].content == 'How much?'
+    assert messages[2].content.startswith('Our crowns')
+    assert 'ONLY the fictional PATIENT' in messages[0].content
+    assert 'ONLY when the patient asks' in RUBRIC
+    assert 'must explain why' in RUBRIC
+
+
+def test_provider_error_is_reported_without_keys(monkeypatch, tmp_path):
+    monkeypatch.setenv('OPENAI_API_KEY', 'synthetic-private-key')
+    ledger = Ledger(limit=10)
+    models = fake_models(ledger)
+    class Failure:
+        async def ainvoke(self, messages):
+            raise ValueError('Unsupported reasoning_effort; key synthetic-private-key sk-secret-token')
+    models['judge'] = MeteredModel(Failure(), ledger)
+    scenarios = load_scenarios(ROOT / 'scenarios.json')[:1]
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger))
+    report = write_report(results, scenarios, ledger, tmp_path).read_text()
+    assert 'Unsupported reasoning_effort' in report
+    assert 'synthetic-private-key' not in report and 'sk-secret-token' not in report
