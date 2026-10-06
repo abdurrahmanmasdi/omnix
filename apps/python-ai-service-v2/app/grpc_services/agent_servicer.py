@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
+from app.modules.coordinator.coordinator import run_coordinator
 from app.modules.agent.actions import parse_virtual_action, CONTRACT_VERSION
 from app.modules.safety.policy import (
     DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
@@ -289,7 +290,11 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 
             # 4. RUN THE LANGGRAPH AGENT
             config = {"configurable": {"organization_id": org_id}}
-            final_state = await agent_app.ainvoke(state_data, config=config)
+            if org_id in settings.COORDINATOR_V2_ORG_IDS.split(',') and org_id:
+                config['configurable']['conversation_id'] = conv_id
+                final_state = await run_coordinator(state_data, config)
+            else:
+                final_state = await agent_app.ainvoke(state_data, config=config)
             
             # 5. Extract Final Content & Media
             ai_reply_msg = final_state["messages"][-1]

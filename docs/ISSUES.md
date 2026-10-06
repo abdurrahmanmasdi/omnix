@@ -1,7 +1,7 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-094 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-097 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
 
@@ -34,16 +34,20 @@ Default off (WP-A). Remains: LangSmith tracing env unknown; subprocessor/consent
 **KI-074 — No Railway health check; failed start replaces working deploy** · high (before real traffic) · open
 Set Healthcheck Path `/health` on Backend (+ Python/Frontend), re-test missing-variable case, rehearse rollback. Owner: founder (close-out b) + developer re-test.
 
-**KI-091 — Model settings break newer models** · high · open
-`llm_factory.py` (and `evals/run.py`) always send `reasoning_effort: "none"` + a temperature. gpt-6.1-sol rejects both (400), gpt-6-luna accepts them; every request with sol fails → fixed handoff. Fix: per-role settings, send only what is configured. Also check Railway model names. Owner: AI-2 item 0.
+**KI-093 — Compliance checker false positives hand off simple questions** · high · partial
+AI-2 opt-in v2 bypasses the LLM compliance-checker loop and keeps deterministic output checks. V1 remains unchanged behind the default-off switch. Founder-run baseline/v2 evals are still needed before enabling clinics. Owner: AI-3 tuning.
 
-**KI-092 — Eval runner: simulated patient answers as the clinic; judge expects disclosure in every reply** · high (eval validity) · open
-Baseline 2026-10-06 (5 scenarios, all gpt-6-luna): the patient model replied "I'm an AI assistant… crowns cost €220–€320" (roles swapped), and the judge failed replies for missing AI disclosure although the backend sends the disclosure message. Scores until fixed are not trustworthy. Owner: AI-2 item 0.
+**KI-094 — Knowledge approval is operational, not represented in the schema** · high · open
+[verified] `organization_knowledge` has no approval field; parent documentation status is processing state only. V2 and existing retrieval use this clinic-uploaded collection, scoped by request organization. Enable v2 only after the clinic's uploaded knowledge pack is approved operationally; future explicit approval/provenance needs a cross-service/schema card. Owner: approved-knowledge card (Phase 3).
 
-**KI-093 — Compliance checker false positives hand off simple questions** · high · open
-Baseline: a correct per-tooth price question ended in "AI failed compliance checks multiple times" → handoff; one competitor-objection turn failed with BadRequestError → "system_exception" handoff. Owner: AI-2 (v2 replaces the graph; keep `check_output`).
+**KI-095 — Output policy misses appointment-confirmation wording** · high · open
+[verified] Existing `DeliverySafetyPolicy.check_output("Your appointment is confirmed.")` allows the text. AI-2 guidelines and eval judge forbid confirmation, but deterministic prevention is incomplete in both versions. Found while testing AI-2; not changed outside the card. Owner: safety policy card.
 
 ### Medium
+
+**KI-096 — Local Python suite crashes after passing at interpreter shutdown** · med · open
+[verified] AI-2 full Python suite once: 225 passed, then process exit 139 (signal 11) after pytest summary; no test assertion failures. Subsequent affected-unit run: 118 passed, exit 0. Cause not diagnosed; do not treat full-suite process as clean. Owner: local runtime/test investigation.
+
 
 **KI-005 — LLM compliance check skipped on out-of-domain path** · med · partial
 Deterministic `check_output` covers every reply; "conversation not found" hole closed (KI-054). Remains: LLM checker on OOD path. Owner: developer, Phase 3.
@@ -114,7 +118,7 @@ Owner: founder (Q13) + developer.
 `ERD.svg` last changed 2026-09-03 (fe044ef), 22 schema commits ago (no OutboundAttempt). Regenerate or delete in a docs pass. Backend `uploads/` (ignored, local PDFs): confirm synthetic or delete locally. Owner: developer / founder.
 
 ---
-**Closed** (full text in git history / backup zip): KI-076 2026-10-06 (M4: one `META_GRAPH_API_VERSION`, default v26.0, including media and SDK); KI-015 2026-10-06 (monorepo, no peer token — D-027); KI-003, 009 (→021), 011, 012, 014, 016, 019, 022, 023, 024, 025, 027, 028, 029, 030, 031, 032, 034, 035, 036, 038, 039, 040, 042, 043, 046, 047, 048, 049, 051, 052, 053, 054, 057, 060, 061, 062, 063, 064, 065 (→068), 069, 074a, 077 (D-020 recorded 2026-10-04); 001 folded into 067; 021 + 066 fixed 2026-10-04 by CLN-1 (backend 95a9c46, frontend 364da78, Python 8c1d515; merged). KI-071 was never assigned. QA-1F fixed 2026-10-04 on `qa-1f/fixes` (merged to `main` 2026-10-04): KI-070 backend 74202ca; KI-078 backend 71897f4; KI-079 frontend 6e92264; KI-080 backend eb24f85; KI-082 Python 4ff4ec5; KI-083 backend 700ff29 + Python 91c24ad; KI-084 frontend c2115c4; KI-085 backend 0b3576b + frontend c3b49a5; KI-086 backend 35a9cae; KI-090 backend 5d505b0; KI-072 backend 194697f + frontend f416701 (lint-staged installed, existing `.lintstagedrc.json` used). Fix details and verification: old evidence QA-1_2026-10-04 (backup zip).
+**Closed** (AI-2, 2026-10-06): KI-091 (optional, startup-validated per-role model options in production/evals; Railway model-name verification remains KI-006); KI-092 (patient-perspective roles/persona, backend-owned disclosure rubric, photo-purpose rule, redacted provider errors). **Earlier closed** (full text in git history / backup zip): KI-076 2026-10-06 (M4: one `META_GRAPH_API_VERSION`, default v26.0, including media and SDK); KI-015 2026-10-06 (monorepo, no peer token — D-027); KI-003, 009 (→021), 011, 012, 014, 016, 019, 022, 023, 024, 025, 027, 028, 029, 030, 031, 032, 034, 035, 036, 038, 039, 040, 042, 043, 046, 047, 048, 049, 051, 052, 053, 054, 057, 060, 061, 062, 063, 064, 065 (→068), 069, 074a, 077 (D-020 recorded 2026-10-04); 001 folded into 067; 021 + 066 fixed 2026-10-04 by CLN-1 (backend 95a9c46, frontend 364da78, Python 8c1d515; merged). KI-071 was never assigned. QA-1F fixed 2026-10-04 on `qa-1f/fixes` (merged to `main` 2026-10-04): KI-070 backend 74202ca; KI-078 backend 71897f4; KI-079 frontend 6e92264; KI-080 backend eb24f85; KI-082 Python 4ff4ec5; KI-083 backend 700ff29 + Python 91c24ad; KI-084 frontend c2115c4; KI-085 backend 0b3576b + frontend c3b49a5; KI-086 backend 35a9cae; KI-090 backend 5d505b0; KI-072 backend 194697f + frontend f416701 (lint-staged installed, existing `.lintstagedrc.json` used). Fix details and verification: old evidence QA-1_2026-10-04 (backup zip).
 Pending wording (not KIs): KI-025/060/047 copy drafts → F02; KI-064 Turkish STOP words → Q13.
 
 ## 2. Open questions (Q)

@@ -1,4 +1,7 @@
 from typing import Literal
+from uuid import UUID
+
+from app.infrastructure.model_options import optional_temperature, optional_reasoning
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,7 +25,7 @@ class Settings(BaseSettings):
     # Off: patient photos are never sent to a model (KI-058).
     PATIENT_IMAGE_ANALYSIS_ENABLED: bool = False
 
-    # Models (rule 12: from config, not code). reasoning_effort "none" stays in the factory.
+    # Models and optional sampling settings are per role; unset/empty = provider default.
     FLAGSHIP_MODEL: str = Field("gpt-5.6-luna", min_length=1)
     EXTRACTOR_MODEL: str = Field("gpt-5.6-terra", min_length=1)
     CHEAP_MODEL: str = Field("gpt-5.6-luna", min_length=1)
@@ -30,9 +33,15 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = Field("text-embedding-3-large", min_length=1)
     # Must match the pgvector column size.
     EMBEDDING_DIMENSIONS: int = Field(3072, gt=0)
-    FLAGSHIP_TEMPERATURE: float = Field(0.3, ge=0.0, le=2.0)
-    EXTRACTOR_TEMPERATURE: float = Field(0.1, ge=0.0, le=2.0)
-    CHEAP_TEMPERATURE: float = Field(0.0, ge=0.0, le=2.0)
+    FLAGSHIP_TEMPERATURE: float | None = None
+    FLAGSHIP_REASONING_EFFORT: str | None = None
+    EXTRACTOR_TEMPERATURE: float | None = None
+    EXTRACTOR_REASONING_EFFORT: str | None = None
+    CHEAP_TEMPERATURE: float | None = None
+    CHEAP_REASONING_EFFORT: str | None = None
+
+    COORDINATOR_V2_ORG_IDS: str = ""
+    COORDINATOR_KNOWLEDGE_MAX_CHARS: int = Field(24000, gt=0, le=200000)
 
     GRPC_PORT: int = Field(50051, ge=1, le=65535)
     # Internal gRPC transport (KI-002), same switch name as the Nest backend; see
@@ -59,6 +68,29 @@ class Settings(BaseSettings):
         str_strip_whitespace=True,
         hide_input_in_errors=True,
     )
+
+    @field_validator("FLAGSHIP_TEMPERATURE", "EXTRACTOR_TEMPERATURE", "CHEAP_TEMPERATURE", mode="before")
+    @classmethod
+    def _temperature(cls, value):
+        return optional_temperature(value)
+
+    @field_validator("FLAGSHIP_REASONING_EFFORT", "EXTRACTOR_REASONING_EFFORT", "CHEAP_REASONING_EFFORT", mode="before")
+    @classmethod
+    def _reasoning(cls, value):
+        return optional_reasoning(value)
+
+    @field_validator("COORDINATOR_V2_ORG_IDS")
+    @classmethod
+    def _coordinator_orgs(cls, value):
+        if not value.strip():
+            return ""
+        try:
+            ids = [str(UUID(part.strip())) for part in value.split(',')]
+        except (ValueError, AttributeError):
+            raise ValueError("COORDINATOR_V2_ORG_IDS must contain comma-separated UUIDs") from None
+        if len(set(ids)) != len(ids):
+            raise ValueError("COORDINATOR_V2_ORG_IDS must not contain duplicates")
+        return ','.join(ids)
 
     @field_validator("DATABASE_URL")
     @classmethod

@@ -87,7 +87,8 @@ class FakeModel:
         self.calls = calls if calls is not None else []
 
     def bind_tools(self, tools):
-        assert {t.name for t in tools} >= {'search_clinic_knowledge'}
+        self.tools = {t.name for t in tools}
+        assert self.tools & {'search_clinic_knowledge', 'escalate_to_human'}
         return self
 
     def with_structured_output(self, schema):
@@ -104,8 +105,20 @@ class FakeModel:
             return AIMessage(content=json.dumps({'score': 4, 'reason': 'Synthetic test verdict',
                                                  'must_do_met': True, 'must_not_do_met': True}))
         if self.role == 'patient':
-            lang = json.loads(messages[-1].content)['scenario']['language']
+            lang = language_of(messages[-1].content)
             return AIMessage(content={'en': 'What does the price include?', 'tr': 'Fiyat neyi içeriyor?', 'ar': 'ماذا يشمل السعر؟'}[lang])
+        v2 = 'Guidelines:' in messages[0].content
+        if v2:
+            data = json.loads(next(m.content for m in messages if m.type == 'human' and '"label": "recent messages"' in m.content))['data']
+            content = next(m['content'] for m in reversed(data) if m['role'] == 'human')
+            if isinstance(content, list):
+                content = ' '.join(c.get('text', '') for c in content if isinstance(c, dict))
+            lang = language_of(str(content))
+            return AIMessage(content={
+                'en': 'I am the clinic AI assistant. Implant prices are EUR 650–950, excluding the crown.',
+                'tr': 'Ben kliniğin yapay zeka asistanıyım. İmplant fiyatı 650–950 avro, kaplama hariç.',
+                'ar': 'أنا مساعد ذكاء اصطناعي للعيادة. سعر الزرعة 650–950 يورو ولا يشمل التاج.',
+            }.get(lang, 'I am the clinic AI assistant.'))
         if not isinstance(messages[-1], ToolMessage):
             return AIMessage(content='', tool_calls=[{'name': 'search_clinic_knowledge',
                 'args': {'search_query': 'clinic facts'}, 'id': 'eval-call'}])
@@ -134,16 +147,18 @@ def deny_network(monkeypatch):
     monkeypatch.setattr(socket, 'create_connection', deny)
 
 
-def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path):
+@pytest.mark.parametrize('agent', ['v1', 'v2'])
+def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path, agent):
     deny_network(monkeypatch)
     scenarios = load_scenarios(ROOT / 'scenarios.json')
     ledger = Ledger(limit=100)
-    results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger))
+    results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger, agent=agent))
     assert len(results) == 40
     assert all(r['complete'] for r in results), [(r['id'], r['error']) for r in results if r['error']]
     assert all(r['turns'] for r in results)
     assert any(r['passed'] for r in results)
-    assert any(not r['passed'] for r in results if r['id'].startswith('ar-'))
+    if agent == 'v1':
+        assert any(not r['passed'] for r in results if r['id'].startswith('ar-'))
     path = write_report(results, scenarios, ledger, tmp_path)
     report = path.read_text()
     assert 'Pass rate' in report and 'Average reply score' in report and 'Estimated token cost' in report
@@ -151,11 +166,12 @@ def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path):
     assert ledger.cost > 0
 
 
-def test_full_cli_with_fake_models(monkeypatch, tmp_path):
+@pytest.mark.parametrize('agent', ['v1', 'v2'])
+def test_full_cli_with_fake_models(monkeypatch, tmp_path, agent):
     deny_network(monkeypatch)
     monkeypatch.setattr('evals.run.make_models', fake_models)
     monkeypatch.setattr('evals.run.write_report', lambda r, s, l: write_report(r, s, l, tmp_path))
-    assert main(['--only', 'en-implant-price', '--max-scenarios', '1']) == 0
+    assert main(['--agent', agent, '--only', 'en-implant-price', '--max-scenarios', '1']) == 0
     assert len(list(tmp_path.glob('*.md'))) == 1
 
 
@@ -239,3 +255,71 @@ def test_dotenv_is_never_read(monkeypatch):
                             DATABASE_URL='postgresql://synthetic:synthetic@127.0.0.1:1/eval',
                             INTERNAL_RPC_SECRET='synthetic-rpc-secret')
         assert settings.ENVIRONMENT == 'test'
+
+
+@pytest.mark.parametrize('prefix', ['FLAGSHIP', 'EXTRACTOR', 'CHEAP', 'EVAL_PATIENT', 'EVAL_JUDGE'])
+def test_eval_model_options_are_per_role(monkeypatch, prefix):
+    from evals.run import make_models
+    names = ['FLAGSHIP', 'EXTRACTOR', 'CHEAP', 'EVAL_PATIENT', 'EVAL_JUDGE']
+    monkeypatch.setenv('OPENAI_API_KEY', 'synthetic-key')
+    for name in names:
+        monkeypatch.setenv(name + '_MODEL', name)
+        monkeypatch.setenv(name + '_TEMPERATURE', '')
+        monkeypatch.setenv(name + '_REASONING_EFFORT', '')
+    monkeypatch.setenv(prefix + '_TEMPERATURE', '0')
+    monkeypatch.setenv(prefix + '_REASONING_EFFORT', 'low')
+    captured = []
+    monkeypatch.setattr('langchain_openai.ChatOpenAI', lambda **kw: captured.append(kw))
+    make_models(Ledger())
+    for kw in captured:
+        if kw['model'] == prefix:
+            assert kw['temperature'] == 0 and kw['model_kwargs'] == {'reasoning_effort': 'low'}
+        else:
+            assert 'temperature' not in kw and 'model_kwargs' not in kw
+    monkeypatch.setenv(prefix + '_TEMPERATURE', 'nan')
+    with pytest.raises(ValueError):
+        make_models(Ledger())
+    assert len(captured) == 5
+
+
+def test_patient_perspective_and_rubric():
+    from evals.runner import patient_messages, RUBRIC
+    scenario = load_scenarios(ROOT / 'scenarios.json')[0]
+    messages = patient_messages(scenario, [{'patient': 'How much?', 'reply': 'Our crowns cost EUR 220–320.'}])
+    assert [m.type for m in messages] == ['system', 'ai', 'human']
+    assert messages[1].content == 'How much?'
+    assert messages[2].content.startswith('Our crowns')
+    assert 'ONLY the fictional PATIENT' in messages[0].content
+    assert 'ONLY when the patient asks' in RUBRIC
+    assert 'must explain why' in RUBRIC
+
+
+def test_provider_error_is_reported_without_keys(monkeypatch, tmp_path):
+    monkeypatch.setenv('OPENAI_API_KEY', 'synthetic-private-key')
+    ledger = Ledger(limit=10)
+    models = fake_models(ledger)
+    class Failure:
+        async def ainvoke(self, messages):
+            raise ValueError('Unsupported reasoning_effort; key synthetic-private-key sk-secret-token')
+    models['judge'] = MeteredModel(Failure(), ledger)
+    scenarios = load_scenarios(ROOT / 'scenarios.json')[:1]
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger))
+    report = write_report(results, scenarios, ledger, tmp_path).read_text()
+    assert 'Unsupported reasoning_effort' in report
+    assert 'synthetic-private-key' not in report and 'sk-secret-token' not in report
+
+
+@pytest.mark.parametrize('agent', ['v1', 'v2'])
+def test_servicer_swallowed_provider_error_still_in_report(monkeypatch, tmp_path, agent):
+    deny_network(monkeypatch)
+    ledger = Ledger(limit=10)
+    class Failure(FakeModel):
+        async def ainvoke(self, messages):
+            raise ValueError('Unsupported model parameter (synthetic provider error)')
+    models = fake_models(ledger)
+    models['writer'] = MeteredModel(Failure('writer'), ledger)
+    scenarios = load_scenarios(ROOT / 'scenarios.json')[:1]
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger, agent=agent))
+    assert not results[0]['passed']
+    assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in results[0]['turns'][0]['actions'])
+    assert 'Unsupported model parameter' in write_report(results, scenarios, ledger, tmp_path).read_text()

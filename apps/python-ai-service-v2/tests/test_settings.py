@@ -101,3 +101,39 @@ def test_validation_error_does_not_echo_secret_values():
     with pytest.raises(ValidationError) as error:
         _settings(ENVIRONMENT="production", INTERNAL_RPC_SECRET="leaky-short")
     assert "leaky-short" not in str(error.value)
+
+
+@pytest.mark.parametrize('role', ['FLAGSHIP', 'EXTRACTOR', 'CHEAP'])
+def test_optional_role_settings(monkeypatch, role):
+    config = _settings(**{role + '_TEMPERATURE': '', role + '_REASONING_EFFORT': ''})
+    assert getattr(config, role + '_TEMPERATURE') is None
+    assert getattr(config, role + '_REASONING_EFFORT') is None
+    from app.infrastructure import llm_factory
+    captured = []
+    monkeypatch.setattr(llm_factory, 'ChatOpenAI', lambda **kw: captured.append(kw))
+    monkeypatch.setattr(settings, role + '_TEMPERATURE', None)
+    monkeypatch.setattr(settings, role + '_REASONING_EFFORT', None)
+    getattr(LLMFactory, 'get_' + role.lower() + '_llm')()
+    assert 'temperature' not in captured[-1] and 'model_kwargs' not in captured[-1]
+    monkeypatch.setattr(settings, role + '_TEMPERATURE', 0)
+    monkeypatch.setattr(settings, role + '_REASONING_EFFORT', 'low')
+    getattr(LLMFactory, 'get_' + role.lower() + '_llm')()
+    assert captured[-1]['temperature'] == 0
+    assert captured[-1]['model_kwargs'] == {'reasoning_effort': 'low'}
+
+
+@pytest.mark.parametrize('role', ['FLAGSHIP', 'EXTRACTOR', 'CHEAP'])
+@pytest.mark.parametrize('suffix,value', [('TEMPERATURE', 'nan'), ('TEMPERATURE', 'inf'),
+                                          ('TEMPERATURE', -1), ('REASONING_EFFORT', 'invalid')])
+def test_invalid_role_options(role, suffix, value):
+    with pytest.raises(ValidationError):
+        _settings(**{role + '_' + suffix: value})
+
+
+@pytest.mark.parametrize('model', ['gpt-6-luna', 'gpt-6.1-sol'])
+def test_unconfigured_options_absent_from_provider_payload(monkeypatch, model):
+    monkeypatch.setattr(settings, 'FLAGSHIP_MODEL', model)
+    monkeypatch.setattr(settings, 'FLAGSHIP_TEMPERATURE', None)
+    monkeypatch.setattr(settings, 'FLAGSHIP_REASONING_EFFORT', None)
+    payload = LLMFactory.get_flagship_llm()._get_request_payload([AIMessage(content='Synthetic')])
+    assert 'temperature' not in payload and 'reasoning_effort' not in payload

@@ -60,3 +60,31 @@ class DatabaseService:
                 """)
                 return db.execute(query, {"conv_id": conv_id, "org_id": org_id, "limit": limit}).fetchall()
         return await asyncio.to_thread(_fetch)
+
+    @staticmethod
+    async def get_clinic_knowledge(org_id: str, max_chars: int) -> str | None:
+        """Existing clinic-uploaded knowledge; None means use retrieval instead.
+
+        The schema has no approval flag: clinic approval remains an upload/ops
+        prerequisite. Do not mistake document processing status for approval.
+        Bound returned text even if knowledge changes between the two reads.
+        """
+        if not org_id:
+            raise ValueError("Knowledge requires tenant context")
+
+        def _fetch():
+            with SessionLocal() as db:
+                size = db.execute(text(
+                    'SELECT COALESCE(SUM(length(content)), 0) + GREATEST(COUNT(*) - 1, 0) * 2 '
+                    'FROM organization_knowledge WHERE "organizationId" = :org_id'
+                ), {"org_id": org_id}).scalar_one()
+                if size > max_chars:
+                    return None
+                rows = db.execute(text(
+                    'SELECT left(content, :text_limit) FROM organization_knowledge '
+                    'WHERE "organizationId" = :org_id ORDER BY "createdAt", id LIMIT :row_limit'
+                ), {"org_id": org_id, "text_limit": max_chars + 1,
+                    "row_limit": max_chars + 1}).scalars().all()
+                content = "\n\n".join(rows)
+                return content if len(content) <= max_chars else None
+        return await asyncio.to_thread(_fetch)

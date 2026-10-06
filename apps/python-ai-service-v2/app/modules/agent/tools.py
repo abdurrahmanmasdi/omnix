@@ -164,11 +164,12 @@ async def fetch_battlecard(user_objection: str, config: RunnableConfig) -> str:
         db.close()
 
 @tool
-async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
+async def escalate_to_human(reason: str, config: RunnableConfig, summary: str = "") -> str:
     """
     Escalates the conversation to a human agent.
-    Use this ONLY when the patient explicitly asks for a human, is extremely frustrated,
-    is ready to make a payment and needs human assistance, or reports a post-op medical issue.
+    Include a short summary of the patient goal, known facts and open questions.
+    Use for medical or clinical questions, human requests, payment or discount
+    requests, anger, or missing evidence/uncertainty requiring staff assistance.
 
     IMPORTANT: This tool does NOT modify the database. It returns virtual actions
     for the NestJS orchestrator to execute (Separation of Concerns).
@@ -180,9 +181,12 @@ async def escalate_to_human(reason: str, config: RunnableConfig) -> str:
 
     if not isinstance(org_id, str) or not isinstance(conv_id, str) or not org_id or not conv_id:
         return "UNVERIFIED: Handoff context is unavailable."
+    # Contract v1 has only reason; keep the short summary inside that field.
+    # Existing v1 callers omit summary and preserve their previous behavior.
+    handoff_reason = f"{reason[:150]} | Summary: {summary[:330]}" if summary.strip() else reason[:500]
     return json.dumps({
         "action": "HANDOFF_TO_HUMAN",
-        "payload": {"reason": reason[:500]},
+        "payload": {"reason": handoff_reason},
     })
 
 @tool
