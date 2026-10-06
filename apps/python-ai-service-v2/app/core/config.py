@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     CHEAP_TEMPERATURE: float | None = None
     CHEAP_REASONING_EFFORT: str | None = None
 
+    COORDINATOR_KNOWLEDGE_MAX_CHARS: int = Field(24000, gt=0, le=200000)
+
     GRPC_PORT: int = Field(50051, ge=1, le=65535)
     # Internal gRPC transport (KI-002), same switch name as the Nest backend; see
     # app/core/grpc_transport.py. Material is checked when the server starts.
