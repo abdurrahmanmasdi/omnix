@@ -168,8 +168,8 @@ async def escalate_to_human(reason: str, config: RunnableConfig, summary: str = 
     """
     Escalates the conversation to a human agent.
     Include a short summary of the patient goal, known facts and open questions.
-    Use this ONLY when the patient explicitly asks for a human, is extremely frustrated,
-    is ready to make a payment and needs human assistance, or reports a post-op medical issue.
+    Use for medical or clinical questions, human requests, payment or discount
+    requests, anger, or missing evidence/uncertainty requiring staff assistance.
 
     IMPORTANT: This tool does NOT modify the database. It returns virtual actions
     for the NestJS orchestrator to execute (Separation of Concerns).

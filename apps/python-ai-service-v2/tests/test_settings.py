@@ -128,3 +128,12 @@ def test_optional_role_settings(monkeypatch, role):
 def test_invalid_role_options(role, suffix, value):
     with pytest.raises(ValidationError):
         _settings(**{role + '_' + suffix: value})
+
+
+@pytest.mark.parametrize('model', ['gpt-6-luna', 'gpt-6.1-sol'])
+def test_unconfigured_options_absent_from_provider_payload(monkeypatch, model):
+    monkeypatch.setattr(settings, 'FLAGSHIP_MODEL', model)
+    monkeypatch.setattr(settings, 'FLAGSHIP_TEMPERATURE', None)
+    monkeypatch.setattr(settings, 'FLAGSHIP_REASONING_EFFORT', None)
+    payload = LLMFactory.get_flagship_llm()._get_request_payload([AIMessage(content='Synthetic')])
+    assert 'temperature' not in payload and 'reasoning_effort' not in payload

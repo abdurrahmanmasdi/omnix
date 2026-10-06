@@ -75,7 +75,7 @@ class DatabaseService:
         def _fetch():
             with SessionLocal() as db:
                 size = db.execute(text(
-                    'SELECT COALESCE(SUM(length(content) + 2), 0) '
+                    'SELECT COALESCE(SUM(length(content)), 0) + GREATEST(COUNT(*) - 1, 0) * 2 '
                     'FROM organization_knowledge WHERE "organizationId" = :org_id'
                 ), {"org_id": org_id}).scalar_one()
                 if size > max_chars:

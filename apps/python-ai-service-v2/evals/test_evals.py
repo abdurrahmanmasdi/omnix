@@ -307,3 +307,19 @@ def test_provider_error_is_reported_without_keys(monkeypatch, tmp_path):
     report = write_report(results, scenarios, ledger, tmp_path).read_text()
     assert 'Unsupported reasoning_effort' in report
     assert 'synthetic-private-key' not in report and 'sk-secret-token' not in report
+
+
+@pytest.mark.parametrize('agent', ['v1', 'v2'])
+def test_servicer_swallowed_provider_error_still_in_report(monkeypatch, tmp_path, agent):
+    deny_network(monkeypatch)
+    ledger = Ledger(limit=10)
+    class Failure(FakeModel):
+        async def ainvoke(self, messages):
+            raise ValueError('Unsupported model parameter (synthetic provider error)')
+    models = fake_models(ledger)
+    models['writer'] = MeteredModel(Failure('writer'), ledger)
+    scenarios = load_scenarios(ROOT / 'scenarios.json')[:1]
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger, agent=agent))
+    assert not results[0]['passed']
+    assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in results[0]['turns'][0]['actions'])
+    assert 'Unsupported model parameter' in write_report(results, scenarios, ledger, tmp_path).read_text()
