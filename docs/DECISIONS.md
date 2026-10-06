@@ -169,3 +169,9 @@ _D-011…D-016: decisions already made in the project's plan documents (CTO plan
 - Date: 2026-10-06 · Status: accepted (founder)
 - Decision: `.github/workflows/ci.yml` runs on pull requests only: backend build + unit tests + contract check, frontend build + vitest, Python pytest. No browser or database suites in CI; cards run those locally only when they say so.
 - Consequences: replaces the backend cross-service workflow and the Python workflow; hosted browser/DB coverage is gone on purpose (cost).
+
+## D-030 — Validate with clinics first; build only WhatsApp coexistence now
+- Date: 2026-10-06 · Status: accepted (founder) · Supersedes: D-028 build order; amends D-029 (CI)
+- Context: founder wants to test the market before building more; the current product (WhatsApp AI replies, handoff, Inbox, leads, TR/EN/AR) is enough to demo and pilot.
+- Decision: (1) next work is validation: deploy, go-live basics, a staging demo, 10 clinic conversations, one pilot (`PLAN.md` V1–V5). (2) The only build card now is **M4 = P2-04 + P2-05 WhatsApp coexistence** — the clinic keeps its own number and phone app, a better experience than a second Cloud API number. (3) M1–M3 wait until a pilot clinic needs them; P2-01 partial work parked on `p2-01/coordination-records` @ 44033f6 (schema + migration, untested, not merged). (4) CI runs by hand only (`workflow_dispatch`); agents never wait for or fix CI unless the founder asks.
+- Consequences: Meta Business verification + Tech Provider review is now on the critical path (founder). Until it passes, a pilot can start on a dedicated Cloud API number.

@@ -48,7 +48,7 @@ Data hygiene
 **Card process (light, D-027)**
 1. Planner gives one prompt for one card from `PLAN.md`.
 2. Builder works on branch `<card-id>/<short-name>` (e.g. `p2-01/coordination-records`), one commit per item, pushes the branch, opens a PR.
-3. Builder runs only the tests the card names: tests for the files it touched while working, the app's unit suite once at the end, DB/browser suites only if the card says so. The GitHub CI (one small check) runs on the PR.
+3. Builder runs only the tests the card names: tests for the files it touched while working, the app's unit suite once at the end, DB/browser suites only if the card says so. CI is manual; do not wait for it or fix it unless the founder asks (D-030).
 4. Builder ends with: `PLAN.md` status updated, one `LOG.md` entry (branch, commits, test counts, decisions needed, what to click), new KIs in `ISSUES.md`. **No evidence files, no new `.md` files.**
 5. Planner reviews (log entry, commits, migrations, the riskiest change) and tells the founder what to decide and click. Founder merges the PR and deploys.
 
@@ -74,5 +74,5 @@ Dates: YYYY-MM-DD, Europe/Istanbul. Evidence levels: **[verified]** checked in c
 
 - GitHub repo: `omnix` (monorepo since 2026-10-06, D-027). The old `Omnix_BE`, `Omnix_FE`, `Omnix_py` repos are archived read-only.
 - `main` = what is deployed. Railway deploys each service from `main` with its root directory: Backend → `apps/backend-v2`, Frontend → `apps/frontend-v2`, Python → `apps/python-ai-service-v2`. Environments: `staging`, `production`.
-- CI: `.github/workflows/ci.yml`, pull requests only: backend build + unit tests + contract check, frontend build + vitest, Python pytest (D-029).
+- CI: `.github/workflows/ci.yml`, **run by hand only** (D-030): backend build + unit tests + contract check, frontend build + vitest, Python pytest (D-029).
 - Local dev/test commands per app: `ARCHITECTURE.md` → the app's section. Full local gate (slow, only when a card asks): `bash apps/backend-v2/scripts/quality-gate.sh`; DB acceptance: `./test_e2e_pilot.sh` (Docker, disposable DB).

@@ -1,10 +1,10 @@
-# One small check per pull request (D-029). No browser or database suites here:
+# One small check, run by hand only (D-029, D-030).
 # run those locally only when a card asks for them.
 name: CI
 permissions:
   contents: read
 on:
-  pull_request:
+  # Manual only (D-030): Actions → CI → Run workflow, e.g. before merging something risky.
   workflow_dispatch:
 jobs:
   backend:

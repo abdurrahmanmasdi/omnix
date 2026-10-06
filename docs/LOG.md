@@ -15,3 +15,8 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 - Decisions: D-027 (monorepo + docs + light process), D-028 (MVP = 5 items), D-029 (small CI). KI-015 closed. New Q14 (pilot mode).
 - Not run: no tests, no builds (no code changed apart from the N4/N5 merge, which matches the reviewed branch tips exactly).
 - **Founder to click:** (1) GitHub → New repository `omnix` (private, empty, no README). (2) Terminal: `cd ~/Desktop/omnix && git remote add origin git@github.com:abdurrahmanmasdi/omnix.git && git push -u origin main`. (3) Railway, each environment: Backend/Frontend/Python service → Settings → Source → connect repo `omnix`, branch `main`, Root Directory `apps/backend-v2` / `apps/frontend-v2` / `apps/python-ai-service-v2`; set `PLATFORM_ADMIN_EMAILS` on Backend; optional Watch Paths `apps/<app>/**` so a change in one app does not redeploy the others; deploy staging first, check `/ready`, log in, open Settings → Team; then production. (4) GitHub: archive `Omnix_BE`, `Omnix_FE`, `Omnix_py` (Settings → Archive); delete the `ci-private-peers` environment/secret. (5) Open the first PR in `omnix` later and check the CI goes green.
+
+## 2026-10-06 22:00 — Validate first (D-030)
+- Founder: test the market before building; WhatsApp coexistence (M4) is the one card worth building now. CI switched to manual only.
+- Codex had started P2-01 in the monorepo; stopped by the founder. Its commit `44033f6` (schema + migration, untested) is parked on `p2-01/coordination-records`; not merged.
+- Next: founder V1 (Railway switch) + Meta Business verification/Tech Provider; Codex runs M4 from the prompt in chat.
