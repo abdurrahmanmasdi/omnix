@@ -1,7 +1,7 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-097 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-098 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
 
@@ -42,6 +42,9 @@ AI-2 opt-in v2 bypasses the LLM compliance-checker loop and keeps deterministic 
 
 **KI-095 — Output policy misses appointment-confirmation wording** · high · open
 [verified] Existing `DeliverySafetyPolicy.check_output("Your appointment is confirmed.")` allows the text. AI-2 guidelines and eval judge forbid confirmation, but deterministic prevention is incomplete in both versions. Found while testing AI-2; not changed outside the card. Owner: safety policy card.
+
+**KI-097 — AI-2 changed production model defaults** · high (before deploy) · open
+Before AI-2 every call sent `reasoning_effort: none` + temperature 0.3/0.1/0.0; now nothing is sent unless configured. On deploy, set on Railway (Python): `FLAGSHIP_REASONING_EFFORT=none FLAGSHIP_TEMPERATURE=0.3 EXTRACTOR_REASONING_EFFORT=none EXTRACTOR_TEMPERATURE=0.1 CHEAP_REASONING_EFFORT=none CHEAP_TEMPERATURE=0` for luna-class models (leave empty for models that reject them, e.g. gpt-6.1-sol). Owner: founder at deploy.
 
 ### Medium
 
