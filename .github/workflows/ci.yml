@@ -1,0 +1,50 @@
+# One small check per pull request (D-029). No browser or database suites here:
+# run those locally only when a card asks for them.
+name: CI
+permissions:
+  contents: read
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/backend-v2 } }
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: apps/backend-v2/.nvmrc, cache: npm, cache-dependency-path: apps/backend-v2/package-lock.json }
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+      - run: npm test -- --runInBand
+      - name: Cross-service contracts (proto, action, socket)
+        working-directory: apps
+        run: python3 backend-v2/scripts/check-cross-repo-contracts.py
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/frontend-v2 } }
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version-file: apps/frontend-v2/.nvmrc, cache: npm, cache-dependency-path: apps/frontend-v2/package-lock.json }
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
+  python:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/python-ai-service-v2 } }
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13', cache: pip, cache-dependency-path: apps/python-ai-service-v2/requirements-dev.txt }
+      - run: python -m pip install -r requirements-dev.txt
+      - name: pytest (synthetic values, no model calls, no real DB)
+        env:
+          OPENAI_API_KEY: synthetic-test-key
+          INTERNAL_RPC_SECRET: synthetic-rpc-secret
+          DATABASE_URL: postgresql://synthetic:synthetic@127.0.0.1:5432/omnix_synthetic
+        run: python -m pytest -q
