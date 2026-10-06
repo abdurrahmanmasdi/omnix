@@ -31,7 +31,7 @@ def discloses_ai(text):
 
 
 def sentence_count(text):
-    text = re.sub(r"https?://\S+", "URL", text)
+    text = re.sub(r"https?://\S+", lambda m: "URL" + (m[0][-1] if m[0][-1] in ".!?" else ""), text)
     text = re.sub(r"\b(?:Dr|Mr|Ms)\.", "TITLE", text, flags=re.I)
     text = re.sub(r"(?<=\d)[.,](?=\d)", "", text)
     return len([s for s in re.split(r"[.!?؟。！？]+(?:[\s]|$)|\n+|\|\|\|", text) if s.strip()])

@@ -75,13 +75,13 @@ def escaped(text):
 def write_report(results, scenarios, ledger, directory=ROOT / 'reports'):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.md')
-    complete = [r for r in results if r['complete']]
+    complete = [r for r in results if r['error'] != 'budget_stop']
     passed = sum(r['passed'] for r in complete)
     scores = [t['judge']['score'] for r in results for t in r['turns']]
     avg = sum(scores) / len(scores) if scores else 0
     lines = ['# AI-1 synthetic evaluation', '',
              f'Selected: {len(scenarios)}; attempted: {len(results)}; completed: {len(complete)}; unrun: {len(scenarios) - len(results)}.',
-             f'Pass rate (completed scenarios): {passed}/{len(complete)} ({100 * passed / len(complete) if complete else 0:.1f}%).',
+             f'Pass rate (finished attempts, errors count as failures): {passed}/{len(complete)} ({100 * passed / len(complete) if complete else 0:.1f}%).',
              f'Average reply score: {avg:.2f}/5 ({len(scores)} judged replies).',
              f'Errors/incomplete: {sum(not r["complete"] for r in results)}; budget stopped: {ledger.stopped}.',
              f'Estimated token cost: ${ledger.cost:.4f}; limit: ${ledger.limit:.2f}.',

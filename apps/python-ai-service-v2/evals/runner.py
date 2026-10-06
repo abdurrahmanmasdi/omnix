@@ -85,11 +85,15 @@ class AgentHarness:
             'DATABASE_URL': 'postgresql://synthetic:synthetic@127.0.0.1:1/eval',
             'INTERNAL_RPC_SECRET': 'synthetic-eval-rpc', 'ENVIRONMENT': 'test',
             'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', 'synthetic-fake-key'),
+            'PATIENT_IMAGE_ANALYSIS_ENABLED': 'false',
+            'LANGCHAIN_TRACING_V2': 'false', 'LANGSMITH_TRACING': 'false',
         }))
         import agent_pb2
         from app.grpc_services import agent_servicer
         from app.modules.agent import nodes, tools
         from app.core import database
+        from app.core.config import settings
+        self.stack.enter_context(patch.object(settings, 'PATIENT_IMAGE_ANALYSIS_ENABLED', False))
         self.pb, self.servicer = agent_pb2, agent_servicer.SalesAgentServicer()
         for name, role in [('get_flagship_llm', 'writer'), ('get_extractor_llm', 'extractor'), ('get_cheap_llm', 'checker')]:
             self.stack.enter_context(patch.object(nodes.LLMFactory, name, return_value=self.models[role]))
@@ -125,13 +129,15 @@ class AgentHarness:
         return self.history
 
     async def get_messages(self, *args, **kwargs):
-        return [SimpleNamespace(id='new', content=self.patient, mediaUrl=None)]
+        return [SimpleNamespace(id='new', content=self.patient,
+                                mediaUrl='https://example.invalid/synthetic-eval.png' if self.photo else None)]
 
     def reset(self):
         self.history, self.summary = [], ''
 
     async def reply(self, scenario, patient):
         self.patient = patient
+        self.photo = scenario.get('attachment') == 'synthetic_photo' and not self.history
         result = await self.servicer.GenerateReply(self.pb.AgentRequest(
             organizationId='eval-org', conversationId='eval-' + scenario['id'], newMessageIds=['new'],
             clinicName=self.facts['clinic_name'], agentTone='warm concise', leadSummary=self.summary,
