@@ -1,7 +1,7 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-091 · Q15 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-091 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
 
@@ -109,6 +109,10 @@ Owner: founder (Q13) + developer.
 Pending wording (not KIs): KI-025/060/047 copy drafts → F02; KI-064 Turkish STOP words → Q13.
 
 ## 2. Open questions (Q)
+
+### Q15 — Coexistence: should old contacts stay AI-paused?
+- Raised: 2026-10-06 (M4 review). Today, every conversation created from imported WhatsApp history (up to 180 days back) or from a phone-app echo to an unknown number is created **AI-paused and without a lead**. So after onboarding, the AI answers only brand-new contacts; existing patients stay with staff until someone resumes the AI.
+- Options: (a) keep it (safe: existing patients have a human relationship) — recommended for the pilot; (b) AI may answer old contacts after N days of silence; (c) clinic chooses in settings.
 
 ### Q14 — Pilot mode for the first clinic
 - Raised: 2026-10-06 · Needed before the pilot gate (`PLAN.md`).

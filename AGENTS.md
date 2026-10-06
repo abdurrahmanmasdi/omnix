@@ -22,7 +22,7 @@ These files are the project memory: they stop us guessing. If it is not written 
 - Work on the card's branch; never commit to `main`, never merge, deploy, touch Railway or migrate a shared database.
 - Do only the card. Other findings → new KI in `docs/ISSUES.md`, don't fix them.
 - Run only the tests the card lists. No new tests, CI jobs, tooling or `.md` files beyond the card.
-- End of card: update `docs/PLAN.md` (status) + add a `docs/LOG.md` entry (≤ 8 lines). No separate evidence files.
+- End of card: append one `docs/LOG.md` entry (≤ 8 lines). Don't edit `docs/PLAN.md` (the planner does). No separate evidence files.
 
 ## Next.js warning (frontend)
 This Next.js version has breaking changes — APIs, conventions and file structure may differ from your training data. Read the relevant guide in `apps/frontend-v2/node_modules/next/dist/docs/` before writing Next code. Heed deprecation notices.

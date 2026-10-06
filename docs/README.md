@@ -49,7 +49,7 @@ Data hygiene
 1. Planner gives one prompt for one card from `PLAN.md`.
 2. Builder works on branch `<card-id>/<short-name>` (e.g. `p2-01/coordination-records`), one commit per item, pushes the branch, opens a PR.
 3. Builder runs only the tests the card names: tests for the files it touched while working, the app's unit suite once at the end, DB/browser suites only if the card says so. CI is manual; do not wait for it or fix it unless the founder asks (D-030).
-4. Builder ends with: `PLAN.md` status updated, one `LOG.md` entry (branch, commits, test counts, decisions needed, what to click), new KIs in `ISSUES.md`. **No evidence files, no new `.md` files.**
+4. Builder ends with one `LOG.md` entry appended at the bottom (no edits to `PLAN.md` — the planner updates it after review, to avoid merge conflicts) (branch, commits, test counts, decisions needed, what to click), new KIs in `ISSUES.md`. **No evidence files, no new `.md` files.**
 5. Planner reviews (log entry, commits, migrations, the riskiest change) and tells the founder what to decide and click. Founder merges the PR and deploys.
 
 **Credits.** Commit after every item so a stopped run loses nothing. Don't re-read big files; grep. No new tests, CI or tooling beyond the card — write the idea as an IMP in `ISSUES.md`. Mechanical chores don't need the strongest model.
