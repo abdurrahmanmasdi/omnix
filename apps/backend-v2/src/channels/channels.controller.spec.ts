@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChannelsController } from './channels.controller';
+import { EmbeddedSignupService } from './embedded-signup.service';
 import { ChannelsService } from './channels.service';
 import { PermissionService } from '../auth/permission.service';
 import { Reflector } from '@nestjs/core';
@@ -12,6 +13,7 @@ describe('ChannelsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChannelsController,
+        { provide: EmbeddedSignupService, useValue: { configuration: jest.fn(), connect: jest.fn() } },
         {
           provide: ChannelsService,
           useValue: {

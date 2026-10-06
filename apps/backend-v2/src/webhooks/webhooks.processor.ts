@@ -1,5 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { CoexistenceService } from './coexistence.service';
+import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import type { WhatsAppWebhookPayload } from './interfaces/whatsapp.interface';
@@ -44,6 +45,7 @@ export class WebhooksProcessor extends WorkerHost {
     private readonly credentials: CredentialsService,
     private readonly outboundAttempts: OutboundAttemptService,
     private readonly grpcClient: GrpcClientService,
+    @Optional() private readonly coexistence?: CoexistenceService,
   ) {
     super();
   }
@@ -321,7 +323,8 @@ export class WebhooksProcessor extends WorkerHost {
           // const wabaId = entry.id;
           for (const change of entry.changes) {
             const value = change.value;
-            const receivingPhoneNumberId = value.metadata.phone_number_id;
+            const receivingPhoneNumberId = value.metadata?.phone_number_id;
+            if (!receivingPhoneNumberId) continue;
 
             // Find the channel and its organization
             const matchingChannels = await this.prisma.channel.findMany({
@@ -345,6 +348,21 @@ export class WebhooksProcessor extends WorkerHost {
             if (!organization) {
               this.logger.warn('Webhook organization lookup failed.');
               continue;
+            }
+
+            if (
+              ['history', 'smb_app_state_sync', 'smb_message_echoes'].includes(
+                change.field,
+              )
+            ) {
+              if (channel.status === 'DISCONNECTED') continue;
+              const metadata = channel.metadata as Prisma.JsonObject | null;
+              if (metadata?.wabaId && metadata.wabaId !== entry.id) continue;
+              if (!this.coexistence)
+                throw new Error('COEXISTENCE_HANDLER_UNAVAILABLE');
+              if (change.field === 'history')
+                await this.coexistence.history(channel, value);
+              continue; // Never enter the inbound/AI pipeline for coexistence data.
             }
 
             for (const status of value.statuses ?? []) {

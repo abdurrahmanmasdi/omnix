@@ -21,7 +21,11 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { CreateChannelDto } from "../../model";
+import type {
+  CreateChannelDto,
+  EmbeddedSignupConfigDto,
+  EmbeddedSignupDto,
+} from "../../model";
 
 import { customFetch } from "../../axios-client";
 
@@ -356,6 +360,325 @@ export const useChannelsControllerDeleteChannel = <
 > => {
   const mutationOptions =
     getChannelsControllerDeleteChannelMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+export const channelsControllerGetEmbeddedSignupConfig = (
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<EmbeddedSignupConfigDto>(
+    { url: `/channels/embedded-signup/config`, method: "GET", signal },
+    options,
+  );
+};
+
+export const getChannelsControllerGetEmbeddedSignupConfigQueryKey = () => {
+  return [`/channels/embedded-signup/config`] as const;
+};
+
+export const getChannelsControllerGetEmbeddedSignupConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getChannelsControllerGetEmbeddedSignupConfigQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>
+  > = ({ signal }) =>
+    channelsControllerGetEmbeddedSignupConfig(requestOptions, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type ChannelsControllerGetEmbeddedSignupConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>
+>;
+export type ChannelsControllerGetEmbeddedSignupConfigQueryError = unknown;
+
+export function useChannelsControllerGetEmbeddedSignupConfig<
+  TData = Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+          TError,
+          Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useChannelsControllerGetEmbeddedSignupConfig<
+  TData = Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+          TError,
+          Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useChannelsControllerGetEmbeddedSignupConfig<
+  TData = Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+
+export function useChannelsControllerGetEmbeddedSignupConfig<
+  TData = Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof channelsControllerGetEmbeddedSignupConfig>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getChannelsControllerGetEmbeddedSignupConfigQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+export const channelsControllerConnectEmbeddedSignup = (
+  embeddedSignupDto: EmbeddedSignupDto,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<void>(
+    {
+      url: `/channels/embedded-signup`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: embeddedSignupDto,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getChannelsControllerConnectEmbeddedSignupMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof channelsControllerConnectEmbeddedSignup>>,
+    TError,
+    { data: EmbeddedSignupDto },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof channelsControllerConnectEmbeddedSignup>>,
+  TError,
+  { data: EmbeddedSignupDto },
+  TContext
+> => {
+  const mutationKey = ["channelsControllerConnectEmbeddedSignup"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof channelsControllerConnectEmbeddedSignup>>,
+    { data: EmbeddedSignupDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return channelsControllerConnectEmbeddedSignup(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChannelsControllerConnectEmbeddedSignupMutationResult = NonNullable<
+  Awaited<ReturnType<typeof channelsControllerConnectEmbeddedSignup>>
+>;
+export type ChannelsControllerConnectEmbeddedSignupMutationBody =
+  EmbeddedSignupDto;
+export type ChannelsControllerConnectEmbeddedSignupMutationError = unknown;
+
+export const useChannelsControllerConnectEmbeddedSignup = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof channelsControllerConnectEmbeddedSignup>>,
+      TError,
+      { data: EmbeddedSignupDto },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof channelsControllerConnectEmbeddedSignup>>,
+  TError,
+  { data: EmbeddedSignupDto },
+  TContext
+> => {
+  const mutationOptions =
+    getChannelsControllerConnectEmbeddedSignupMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+export const channelsControllerVerifyConnection = (
+  id: string,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<void>(
+    { url: `/channels/${id}/verify`, method: "POST", signal },
+    options,
+  );
+};
+
+export const getChannelsControllerVerifyConnectionMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof channelsControllerVerifyConnection>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof channelsControllerVerifyConnection>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["channelsControllerVerifyConnection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof channelsControllerVerifyConnection>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return channelsControllerVerifyConnection(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChannelsControllerVerifyConnectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof channelsControllerVerifyConnection>>
+>;
+
+export type ChannelsControllerVerifyConnectionMutationError = unknown;
+
+export const useChannelsControllerVerifyConnection = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof channelsControllerVerifyConnection>>,
+      TError,
+      { id: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof channelsControllerVerifyConnection>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationOptions =
+    getChannelsControllerVerifyConnectionMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

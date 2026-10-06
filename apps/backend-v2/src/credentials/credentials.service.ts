@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { tenantStorage } from '../core/tenant/tenant.context';
 import { ConfigService } from '@nestjs/config';
-import { CredentialProvider, CredentialStatus } from '@prisma/client';
+import { Prisma, CredentialProvider, CredentialStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -67,6 +67,33 @@ export class CredentialsService implements OnModuleInit {
       metadata: { provider },
     });
     return cred;
+  }
+
+  async createInTransaction(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    provider: CredentialProvider,
+    payload: SecretPayload,
+  ) {
+    const credential = await tx.credential.create({
+      data: {
+        organizationId,
+        provider,
+        encryptedPayload: this.encrypt(payload),
+        lastVerifiedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    await tx.auditLog.create({
+      data: {
+        organizationId,
+        action: 'credential.create',
+        targetId: credential.id,
+        actor: 'system',
+        metadata: { provider },
+      },
+    });
+    return credential;
   }
 
   async readActive(organizationId: string, id: string): Promise<SecretPayload> {

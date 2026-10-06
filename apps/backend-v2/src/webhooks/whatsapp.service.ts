@@ -1,3 +1,4 @@
+import { metaGraphUrl } from '../config/meta-graph';
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
@@ -23,7 +24,9 @@ export interface MetaMessageResponse {
 @Injectable()
 export class WhatsappService implements IChannelProvider {
   private readonly logger = new Logger(WhatsappService.name);
-  private readonly apiUrl = 'https://graph.facebook.com/v25.0';
+  private get apiUrl() {
+    return metaGraphUrl(this.configService);
+  }
 
   constructor(
     private readonly httpService: HttpService,

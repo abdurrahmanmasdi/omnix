@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Message } from '@prisma/client';
+import { Message, Prisma } from '@prisma/client';
 import { alertConversationStaff } from '../notifications/conversation-staff-alert';
 import { PrismaService } from '../prisma/prisma.service';
 import { tenantStorage } from '../core/tenant/tenant.context';
@@ -87,11 +87,22 @@ export class OutboundAttemptService {
     if (!conversation.externalContactId) return block('NO_CONTACT');
     // Meta allows free-form text/media only within 24 hours of the most
     // recent customer message. No approved template is configured here.
+    const channelMetadata = channel.metadata as Prisma.JsonObject | null;
+    const onboardingAt =
+      channelMetadata?.coexistence &&
+      typeof channelMetadata.onboardingAt === 'string'
+        ? Date.parse(channelMetadata.onboardingAt)
+        : 0;
+    const windowStart = Math.max(
+      Date.now() - 24 * 60 * 60 * 1000,
+      Number.isFinite(onboardingAt) ? onboardingAt : 0,
+    );
+    // Pre-onboarding history never opens a Cloud API customer service window.
     const recentInbound = await this.prisma.message.count({
       where: {
         conversationId,
         type: { in: ['LEAD_TEXT', 'LEAD_MEDIA'] },
-        createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        createdAt: { gt: new Date(windowStart) },
       },
     });
     if (!recentInbound) return block('OUTSIDE_24H_WINDOW');

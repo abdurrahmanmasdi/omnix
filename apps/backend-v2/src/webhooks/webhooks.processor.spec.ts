@@ -45,7 +45,7 @@ describe('WebhooksProcessor', () => {
             changes: [
               {
                 value: {
-                  metadata: { display_phone_number: '123' },
+                  metadata: { display_phone_number: '123', phone_number_id: 'synthetic-phone-id' },
                   messages: [
                     {
                       from: '456',
@@ -114,7 +114,7 @@ describe('WebhooksProcessor', () => {
             changes: [
               {
                 value: {
-                  metadata: { display_phone_number: '123' },
+                  metadata: { display_phone_number: '123', phone_number_id: 'synthetic-phone-id' },
                   messages: [
                     {
                       from: '456',
@@ -171,7 +171,7 @@ describe('WebhooksProcessor', () => {
             changes: [
               {
                 value: {
-                  metadata: { display_phone_number: '123' },
+                  metadata: { display_phone_number: '123', phone_number_id: 'synthetic-phone-id' },
                   messages: [
                     {
                       from: '456',

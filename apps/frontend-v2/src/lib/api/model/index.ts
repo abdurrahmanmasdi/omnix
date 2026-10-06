@@ -42,6 +42,8 @@ export * from "./createOrganizationDto";
 export * from "./createOrganizationDtoBusinessRules";
 export * from "./createPipelineStageDto";
 export * from "./createPipelineStageDtoMappedStatus";
+export * from "./embeddedSignupConfigDto";
+export * from "./embeddedSignupDto";
 export * from "./grantableClinicRoleDto";
 export * from "./inboxConversationDto";
 export * from "./inboxConversationDtoLead";

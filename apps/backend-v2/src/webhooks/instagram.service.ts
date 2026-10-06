@@ -1,3 +1,6 @@
+import { ConfigService } from '@nestjs/config';
+import { Optional } from '@nestjs/common';
+import { metaGraphUrl } from '../config/meta-graph';
 import {
   Injectable,
   Logger,
@@ -17,11 +20,14 @@ export interface MetaMessageResponse {
 @Injectable()
 export class InstagramService implements IChannelProvider {
   private readonly logger = new Logger(InstagramService.name);
-  private readonly apiUrl = 'https://graph.facebook.com/v25.0';
+  private get apiUrl() {
+    return metaGraphUrl(this.configService);
+  }
 
   constructor(
     private readonly httpService: HttpService,
     private readonly credentials: CredentialsService,
+    @Optional() private readonly configService?: ConfigService,
   ) {}
 
   async verifyCredentials(

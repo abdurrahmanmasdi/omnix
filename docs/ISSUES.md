@@ -75,9 +75,6 @@ Compose sets `REDIS_HOST/PORT` but the app reads `REDIS_URL`; lacks `INTERNAL_GR
 **KI-068 — Stranded PENDING memberships in production** · high→med · partial
 Code fixed (c1fdac4); staging clean. Remains: production check with the KI-013 rotation. Owner: founder (close-out d).
 
-**KI-076 — Mixed Meta Graph API versions** · med · open
-`whatsapp-media.service.ts` v19.0 vs v25.0 elsewhere. Owner: P2-04.
-
 **KI-081 — Multi-clinic staff stranded after login** · med · open
 Login form has no clinic picker; null organization → onboarding. Existing memberships already prevent new clinic creation (QA-1F F6). Owner: developer, P2-01.
 
@@ -108,7 +105,7 @@ Owner: founder (Q13) + developer.
 `ERD.svg` last changed 2026-09-03 (fe044ef), 22 schema commits ago (no OutboundAttempt). Regenerate or delete in a docs pass. Backend `uploads/` (ignored, local PDFs): confirm synthetic or delete locally. Owner: developer / founder.
 
 ---
-**Closed** (full text in git history / backup zip): KI-015 2026-10-06 (monorepo, no peer token — D-027); KI-003, 009 (→021), 011, 012, 014, 016, 019, 022, 023, 024, 025, 027, 028, 029, 030, 031, 032, 034, 035, 036, 038, 039, 040, 042, 043, 046, 047, 048, 049, 051, 052, 053, 054, 057, 060, 061, 062, 063, 064, 065 (→068), 069, 074a, 077 (D-020 recorded 2026-10-04); 001 folded into 067; 021 + 066 fixed 2026-10-04 by CLN-1 (backend 95a9c46, frontend 364da78, Python 8c1d515; merged). KI-071 was never assigned. QA-1F fixed 2026-10-04 on `qa-1f/fixes` (merged to `main` 2026-10-04): KI-070 backend 74202ca; KI-078 backend 71897f4; KI-079 frontend 6e92264; KI-080 backend eb24f85; KI-082 Python 4ff4ec5; KI-083 backend 700ff29 + Python 91c24ad; KI-084 frontend c2115c4; KI-085 backend 0b3576b + frontend c3b49a5; KI-086 backend 35a9cae; KI-090 backend 5d505b0; KI-072 backend 194697f + frontend f416701 (lint-staged installed, existing `.lintstagedrc.json` used). Fix details and verification: old evidence QA-1_2026-10-04 (backup zip).
+**Closed** (full text in git history / backup zip): KI-076 2026-10-06 (M4: one `META_GRAPH_API_VERSION`, default v26.0, including media and SDK); KI-015 2026-10-06 (monorepo, no peer token — D-027); KI-003, 009 (→021), 011, 012, 014, 016, 019, 022, 023, 024, 025, 027, 028, 029, 030, 031, 032, 034, 035, 036, 038, 039, 040, 042, 043, 046, 047, 048, 049, 051, 052, 053, 054, 057, 060, 061, 062, 063, 064, 065 (→068), 069, 074a, 077 (D-020 recorded 2026-10-04); 001 folded into 067; 021 + 066 fixed 2026-10-04 by CLN-1 (backend 95a9c46, frontend 364da78, Python 8c1d515; merged). KI-071 was never assigned. QA-1F fixed 2026-10-04 on `qa-1f/fixes` (merged to `main` 2026-10-04): KI-070 backend 74202ca; KI-078 backend 71897f4; KI-079 frontend 6e92264; KI-080 backend eb24f85; KI-082 Python 4ff4ec5; KI-083 backend 700ff29 + Python 91c24ad; KI-084 frontend c2115c4; KI-085 backend 0b3576b + frontend c3b49a5; KI-086 backend 35a9cae; KI-090 backend 5d505b0; KI-072 backend 194697f + frontend f416701 (lint-staged installed, existing `.lintstagedrc.json` used). Fix details and verification: old evidence QA-1_2026-10-04 (backup zip).
 Pending wording (not KIs): KI-025/060/047 copy drafts → F02; KI-064 Turkish STOP words → Q13.
 
 ## 2. Open questions (Q)
