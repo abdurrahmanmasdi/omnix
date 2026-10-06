@@ -1,4 +1,4 @@
-"""Usage: python -m evals.run [--only id,...] [--max-scenarios N] [--max-cost USD].
+"""Usage: python -m evals.run [--agent v1|v2] [--only id,...] [--max-scenarios N] [--max-cost USD].
 
 Set OPENAI_API_KEY, FLAGSHIP_MODEL, EXTRACTOR_MODEL, CHEAP_MODEL,
 EVAL_PATIENT_MODEL, EVAL_JUDGE_MODEL in the shell, never a dotenv file.
@@ -85,7 +85,8 @@ def write_report(results, scenarios, ledger, directory=ROOT / 'reports'):
     passed = sum(r['passed'] for r in complete)
     scores = [t['judge']['score'] for r in results for t in r['turns']]
     avg = sum(scores) / len(scores) if scores else 0
-    lines = ['# AI-1 synthetic evaluation', '',
+    lines = ['# Synthetic coordinator evaluation', '',
+             f'Agent: {results[0].get("agent", "injected harness") if results else "no results"}.',
              f'Selected: {len(scenarios)}; attempted: {len(results)}; completed: {len(complete)}; unrun: {len(scenarios) - len(results)}.',
              f'Pass rate (finished attempts, errors count as failures): {passed}/{len(complete)} ({100 * passed / len(complete) if complete else 0:.1f}%).',
              f'Average reply score: {avg:.2f}/5 ({len(scores)} judged replies).',
@@ -117,6 +118,7 @@ def write_report(results, scenarios, ledger, directory=ROOT / 'reports'):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--agent', choices=['v1', 'v2'], default='v1')
     parser.add_argument('--only', help='Comma-separated scenario IDs')
     parser.add_argument('--max-scenarios', type=positive_int)
     parser.add_argument('--max-cost', type=positive, default=5.0)
@@ -137,7 +139,9 @@ def main(argv=None):
         models = make_models(ledger)
     except (ValueError, OSError, argparse.ArgumentTypeError) as exc:
         parser.error(str(exc))
-    results = asyncio.run(evaluate(scenarios, facts, models, ledger))
+    results = asyncio.run(evaluate(scenarios, facts, models, ledger, agent=args.agent))
+    for result in results:
+        result['agent'] = args.agent
     path = write_report(results, scenarios, ledger)
     print(f'Report: {path}; estimated cost ${ledger.cost:.4f}')
     return 0 if len(results) == len(scenarios) and all(r['passed'] for r in results) else 1

@@ -102,8 +102,14 @@ class MeteredModel:
         return result
 
 
+EVAL_ORG_ID = '00000000-0000-4000-8000-000000000001'
+
+
 class AgentHarness:
-    def __init__(self, facts, models):
+    def __init__(self, facts, models, agent='v1'):
+        if agent not in {'v1', 'v2'}:
+            raise ValueError('Unknown agent')
+        self.agent = agent
         self.facts, self.models = facts, models
         self.history = []
         self.summary = ''
@@ -119,6 +125,7 @@ class AgentHarness:
             'INTERNAL_RPC_SECRET': 'synthetic-eval-rpc', 'ENVIRONMENT': 'test',
             'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', 'synthetic-fake-key'),
             'PATIENT_IMAGE_ANALYSIS_ENABLED': 'false',
+            'COORDINATOR_V2_ORG_IDS': EVAL_ORG_ID if self.agent == 'v2' else '',
             'LANGCHAIN_TRACING_V2': 'false', 'LANGSMITH_TRACING': 'false',
         }))
         import agent_pb2
@@ -127,6 +134,7 @@ class AgentHarness:
         from app.core import database
         from app.core.config import settings
         self.stack.enter_context(patch.object(settings, 'PATIENT_IMAGE_ANALYSIS_ENABLED', False))
+        self.stack.enter_context(patch.object(settings, 'COORDINATOR_V2_ORG_IDS', EVAL_ORG_ID if self.agent == 'v2' else ''))
         self.pb, self.servicer = agent_pb2, agent_servicer.SalesAgentServicer()
         for name, role in [('get_flagship_llm', 'writer'), ('get_extractor_llm', 'extractor'), ('get_cheap_llm', 'checker')]:
             self.stack.enter_context(patch.object(nodes.LLMFactory, name, return_value=self.models[role]))
@@ -142,6 +150,7 @@ class AgentHarness:
         self.stack.enter_context(patch.object(database, 'SessionLocal', side_effect=AssertionError('DB forbidden in eval')))
         self.stack.enter_context(patch.object(tools, 'SessionLocal', side_effect=AssertionError('DB forbidden in eval')))
         db = agent_servicer.DatabaseService
+        self.stack.enter_context(patch.object(db, 'get_clinic_knowledge', AsyncMock(return_value=json.dumps(self.facts, ensure_ascii=False))))
         self.stack.enter_context(patch.object(db, 'get_conversation_lead_info', AsyncMock(return_value=SimpleNamespace(
             lead_id='eval-lead', firstName='Guest', lastName=None, status='NEW', externalContactId=None))))
         self.stack.enter_context(patch.object(db, 'get_conversation_history', self.get_history))
@@ -172,7 +181,7 @@ class AgentHarness:
         self.patient = patient
         self.photo = scenario.get('attachment') == 'synthetic_photo' and not self.history
         result = await self.servicer.GenerateReply(self.pb.AgentRequest(
-            organizationId='eval-org', conversationId='eval-' + scenario['id'], newMessageIds=['new'],
+            organizationId=EVAL_ORG_ID, conversationId='eval-' + scenario['id'], newMessageIds=['new'],
             clinicName=self.facts['clinic_name'], agentTone='warm concise', leadSummary=self.summary,
             totalMessageCount=len(self.history) + 1,
             businessRulesJson=json.dumps({'maxSentences': 3, 'preferredLanguage': scenario['language']})), None)
@@ -202,10 +211,10 @@ Return JSON only: {"score": integer 1..5, "reason": string, "must_do_met": boole
 turn evaluate all scenario obligations. Do not let hard-check results dictate score.'''
 
 
-async def evaluate(scenarios, facts, models, ledger):
+async def evaluate(scenarios, facts, models, ledger, agent="v1"):
     from langchain_core.messages import SystemMessage, HumanMessage
     results = []
-    with AgentHarness(facts, models) as agent:
+    with AgentHarness(facts, models, agent=agent) as agent:
         for scenario in scenarios:
             agent.reset()
             error_start = len(ledger.errors)

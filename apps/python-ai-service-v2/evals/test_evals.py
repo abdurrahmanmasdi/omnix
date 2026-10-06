@@ -87,7 +87,8 @@ class FakeModel:
         self.calls = calls if calls is not None else []
 
     def bind_tools(self, tools):
-        assert {t.name for t in tools} >= {'search_clinic_knowledge'}
+        self.tools = {t.name for t in tools}
+        assert self.tools & {'search_clinic_knowledge', 'escalate_to_human'}
         return self
 
     def with_structured_output(self, schema):
@@ -106,6 +107,18 @@ class FakeModel:
         if self.role == 'patient':
             lang = language_of(messages[-1].content)
             return AIMessage(content={'en': 'What does the price include?', 'tr': 'Fiyat neyi içeriyor?', 'ar': 'ماذا يشمل السعر؟'}[lang])
+        v2 = 'Guidelines:' in messages[0].content
+        if v2:
+            data = json.loads(next(m.content for m in messages if m.type == 'human' and '"label": "recent messages"' in m.content))['data']
+            content = next(m['content'] for m in reversed(data) if m['role'] == 'human')
+            if isinstance(content, list):
+                content = ' '.join(c.get('text', '') for c in content if isinstance(c, dict))
+            lang = language_of(str(content))
+            return AIMessage(content={
+                'en': 'I am the clinic AI assistant. Implant prices are EUR 650–950, excluding the crown.',
+                'tr': 'Ben kliniğin yapay zeka asistanıyım. İmplant fiyatı 650–950 avro, kaplama hariç.',
+                'ar': 'أنا مساعد ذكاء اصطناعي للعيادة. سعر الزرعة 650–950 يورو ولا يشمل التاج.',
+            }.get(lang, 'I am the clinic AI assistant.'))
         if not isinstance(messages[-1], ToolMessage):
             return AIMessage(content='', tool_calls=[{'name': 'search_clinic_knowledge',
                 'args': {'search_query': 'clinic facts'}, 'id': 'eval-call'}])
@@ -134,16 +147,18 @@ def deny_network(monkeypatch):
     monkeypatch.setattr(socket, 'create_connection', deny)
 
 
-def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path):
+@pytest.mark.parametrize('agent', ['v1', 'v2'])
+def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path, agent):
     deny_network(monkeypatch)
     scenarios = load_scenarios(ROOT / 'scenarios.json')
     ledger = Ledger(limit=100)
-    results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger))
+    results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger, agent=agent))
     assert len(results) == 40
     assert all(r['complete'] for r in results), [(r['id'], r['error']) for r in results if r['error']]
     assert all(r['turns'] for r in results)
     assert any(r['passed'] for r in results)
-    assert any(not r['passed'] for r in results if r['id'].startswith('ar-'))
+    if agent == 'v1':
+        assert any(not r['passed'] for r in results if r['id'].startswith('ar-'))
     path = write_report(results, scenarios, ledger, tmp_path)
     report = path.read_text()
     assert 'Pass rate' in report and 'Average reply score' in report and 'Estimated token cost' in report
@@ -151,11 +166,12 @@ def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path):
     assert ledger.cost > 0
 
 
-def test_full_cli_with_fake_models(monkeypatch, tmp_path):
+@pytest.mark.parametrize('agent', ['v1', 'v2'])
+def test_full_cli_with_fake_models(monkeypatch, tmp_path, agent):
     deny_network(monkeypatch)
     monkeypatch.setattr('evals.run.make_models', fake_models)
     monkeypatch.setattr('evals.run.write_report', lambda r, s, l: write_report(r, s, l, tmp_path))
-    assert main(['--only', 'en-implant-price', '--max-scenarios', '1']) == 0
+    assert main(['--agent', agent, '--only', 'en-implant-price', '--max-scenarios', '1']) == 0
     assert len(list(tmp_path.glob('*.md'))) == 1
 
 
