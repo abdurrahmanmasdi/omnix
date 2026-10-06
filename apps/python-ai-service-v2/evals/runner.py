@@ -114,7 +114,8 @@ def agent_facts(facts):
         if isinstance(v, list):
             return [clean(x) for x in v]
         if isinstance(v, str):
-            return re.sub(r'\b[Ff]ictional\s+(?:policy:\s*)?', '', v)
+            v = re.sub(r'\b[Ff]ictional\s+(?:policy:\s*)?', '', v)
+            return re.sub(r'[;,.]?\s*[Nn]o real [^.;]*', '', v).strip()
         return v
     return clean(facts)
 

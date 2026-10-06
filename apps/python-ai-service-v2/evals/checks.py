@@ -27,7 +27,7 @@ def discloses_ai(text):
     # A denial such as 'I am not an AI' is never a disclosure.
     if re.search(r"not (?:an? )?(?:ai|bot)|(?:yapay zeka|robot) değil|لست.{0,15}(?:روبوت|ذكاء)", text, re.I):
         return False
-    return bool(re.search(r"\b(?:ai|artificial intelligence|bot)\b|yapay zek[aâ]|ذكاء اصطناعي|مساعد آلي|روبوت", text, re.I))
+    return bool(re.search(r"\b(?:ai|artificial intelligence|bot)\b|yapay zek[aâ]|ذكاء\s+(?:ال)?اصطناعي|مساعد آلي|روبوت", text, re.I))
 
 
 def sentence_count(text):
