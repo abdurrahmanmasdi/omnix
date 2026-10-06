@@ -10,7 +10,7 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 - 2026-10-06 — P2-01 prompt written; Codex did not start it.
 
 ## 2026-10-06 — Restructure: one repo, one docs folder, MVP plan (Claude chat, founder approved)
-- Repo: workspace root is now one git repo (`main`): `8a0fd8c` start · `f805235` import backend (origin/main `1359792` + merge of `n4/platform-admin` `b69236d` = N2–N5, only conflict was the deleted CI file) · `4d24f52` import frontend (origin/main `95b06de` + `n4` `2b2d340`, clean) · `23807ab` import Python (`90aac07`) · `5e9b59b` one small CI (D-029) · then the docs commit. Old `.git` folders kept in `_backup/git/` (local, not pushed).
+- Repo: workspace root is now one git repo (`main`): `8a0fd8c` start · `f805235` import backend (origin/main `1359792` + merge of `n4/platform-admin` `b69236d` = N2–N5, only conflict was the deleted CI file) · `4d24f52` import frontend (origin/main `95b06de` + `n4` `2b2d340`, clean) · `23807ab` import Python (`90aac07`) · `5e9b59b` one small CI (D-029) · `b8e5011` docs. Old `.git` folders kept in `_backup/git/` (local, not pushed).
 - Docs: ~70 `.md` files → `AGENTS.md` + `docs/` (6 files) + `docs/reference/`. Deleted: `context/`, `memory/`, `reviews/`, `graphify-out/`, `docs/archive/`, `docs/evidence/`, work packages, app `CLAUDE.md`/evidence, Meta tunnel scripts. Backup: `_backup/omnix-docs-before-restructure-2026-10-06.zip`.
 - Decisions: D-027 (monorepo + docs + light process), D-028 (MVP = 5 items), D-029 (small CI). KI-015 closed. New Q14 (pilot mode).
 - Not run: no tests, no builds (no code changed apart from the N4/N5 merge, which matches the reviewed branch tips exactly).
