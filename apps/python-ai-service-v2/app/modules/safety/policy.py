@@ -27,6 +27,12 @@ HANDOFF_MESSAGES = {
     },
 }
 
+APPOINTMENT_REQUEST_MESSAGES = {
+    "en": "Your request is noted. The clinic team will confirm the time.",
+    "tr": "Talebiniz not edildi. Saatini klinik ekibi teyit edecek.",
+    "ar": "تم تسجيل طلبك. سيؤكد فريق العيادة الوقت.",
+}
+
 # Default (English, can't-answer-safely). Graph nodes emit this as a sentinel;
 # the servicer localizes it before delivery.
 SAFE_HANDOFF_MESSAGE = HANDOFF_MESSAGES["cannot_answer"]["en"]
@@ -93,6 +99,17 @@ class DeliverySafetyPolicy:
     # A reply that includes any of these claims is unsafe unless it is replaced
     # by a coordinator handoff.  Do not depend on prompts/model self-reporting.
     OUTPUT_PATTERNS = {
+        "appointment_confirmation": (
+            r"\b(?:your|the|this)\s+(?:appointment|booking|consultation|slot)\s+(?:is|has been|was)\s+(?:confirmed|booked|scheduled|reserved)\b|"
+            r"\b(?:i|we)(?:'ve| have)?\s+(?:confirmed|booked|scheduled|reserved)\s+(?:your|the|you)\b|"
+            r"\byou(?:['’]re| are| have been)\s+(?:booked|scheduled|confirmed|reserved)\b|"
+            r"\b(?:appointment|booking|consultation)\s+confirmed\b|"
+            r"\b(?:randevu|rezervasyon)\w*\s+(?:(?:başarıyla|kesin olarak)\s+)?(?:onaylandı|onaylanmıştır|onaylı|kesinleşti|kesinleşmiştir|ayarlanmıştır|ayarlandı)\b|"
+            r"\brandevu\w*.{0,30}(?:onayladık|onayladım|ayarladık|ayarladım)\b|"
+            r"(?:تم|لقد تم)\s+(?:تأكيد|حجز|تثبيت)\s+(?:موعد|حجز)|"
+            r"(?:موعدك|حجزك|الموعد|الحجز)\s+(?:مؤكد|محجوز|تم تأكيده)|"
+            r"(?:أكدنا|حجزنا)\s+(?:موعدك|لك موعد)"
+        ),
         "guarantee": r"\b(?:guarantee(?:d)?|risk[- ]free|100%|always successful|permanent results?)\b",
         "unsupported_outcome_claim": r"\b(?:many successful cases|high success rate|premium quality|best clinic|top[- ]rated)\b",
         "medical_diagnosis_or_treatment": r"\b(?:diagnos(?:e|is)|prescri(?:be|ption)|dosage|take \d|infection|medication|you have (?:cancer|diabetes|disease|a condition|an infection)|you need (?:surgery|treatment|antibiotics|medicine)|you should (?:take|stop|avoid|rest))\b",

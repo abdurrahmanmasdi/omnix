@@ -17,7 +17,7 @@ from app.modules.agent.graph_builder import agent_app
 from app.modules.coordinator.coordinator import run_coordinator
 from app.modules.agent.actions import parse_virtual_action, CONTRACT_VERSION
 from app.modules.safety.policy import (
-    DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
+    APPOINTMENT_REQUEST_MESSAGES, DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,8 @@ def _blocked_reply(reason: str, language: str = "en"):
     """Return the only safe reply and an explicit NestJS handoff action."""
     return agent_pb2.AgentReply(
         contractVersion=CONTRACT_VERSION,
-        replyText=handoff_message(handoff_kind(reason), language),
+        replyText=(APPOINTMENT_REQUEST_MESSAGES.get(language, APPOINTMENT_REQUEST_MESSAGES["en"])
+                   if reason == "appointment_confirmation" else handoff_message(handoff_kind(reason), language)),
         actions=[agent_pb2.ToolAction(
             type="HANDOFF_TO_HUMAN",
             payload=json.dumps({"reason": f"Deterministic delivery policy blocked: {reason}"}),
