@@ -9,6 +9,7 @@ from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent import tools
 from .guidelines import GUIDELINES
+from .patient_facts import save_patient_facts, summary_data, summary_action
 
 CORE = '''You are the clinic's AI patient-enquiry assistant for dental care.
 Follow the guidelines. Answer first in the patient's language using 1–3 short
@@ -33,6 +34,10 @@ invent a discount; discount requests go to staff. With no approved sheet use exi
 knowledge, but do not advertise any offers from that fallback.
 Use knowledge search when full knowledge exceeds the prompt limit. An UNVERIFIED
 result needs staff handoff. Never claim an action succeeded without its proposal.
+When the patient supplies name, country, treatment interest, travel window or a photo,
+call save_patient_facts with a cumulative summary. Include known facts and open questions,
+never invent missing facts; mood is supplied from text. Facts with no CRM field are
+stored in the summary. Save patient facts even when handing off.
 After tool results, write the patient reply; no further tools are available.'''
 
 
@@ -98,12 +103,19 @@ async def run_coordinator(state, config):
     state['approved_offer_texts'] = [o['text'] for o in facts.get('offers', [])] if facts is not None else []
     messages = prompt(state, knowledge)
     model = LLMFactory.get_flagship_llm()
+    config = {'configurable': {**config['configurable'], 'lead_id': state.get('lead_id'),
+                              'patient_summary': state.get('lead_summary'),
+                              'patient_mood': state['customer']['detected_mood']}}
     available = {'escalate_to_human': tools.escalate_to_human}
+    if state.get('lead_id'):
+        available['save_patient_facts'] = save_patient_facts
     if knowledge is None:
         available['search_clinic_knowledge'] = tools.search_clinic_knowledge
     result = await model.bind_tools(list(available.values())).ainvoke(messages)
     actions = []
     calls = result.tool_calls
+    saved_summary = None
+    handoff_summary = None
     if calls:
         if len(calls) > 2 or len({c['id'] for c in calls}) != len(calls):
             raise ValueError('Invalid tool round')
@@ -118,9 +130,15 @@ async def run_coordinator(state, config):
             output = await tool.ainvoke(call['args'], config=config)
             if output.startswith('UNVERIFIED:'):
                 unverified = True
+            if call['name'] == 'save_patient_facts' and not output.startswith('UNVERIFIED:'):
+                proposed = json.loads(output)
+                actions.extend(json.dumps(a, ensure_ascii=False) for a in proposed if a['action'] != 'UPDATE_SUMMARY')
+                saved_summary = summary_data(proposed[-1]['payload']['summary'])
             if call['name'] == 'escalate_to_human':
                 actions.append(output)
                 handoff = not output.startswith('UNVERIFIED:')
+                if handoff:
+                    handoff_summary = json.loads(output)['payload']['reason']
             messages.append(ToolMessage(content=output, tool_call_id=call['id']))
         if unverified and not handoff:
             # Missing knowledge/tool failure cannot be ignored by a writer.
@@ -128,6 +146,12 @@ async def run_coordinator(state, config):
         result = await model.ainvoke(messages)
         if result.tool_calls:
             raise ValueError('Additional tool rounds are disabled')
+    if state.get('lead_id') and (saved_summary is not None or handoff_summary is not None):
+        data = saved_summary if saved_summary is not None else summary_data(state.get('lead_summary'))
+        data['facts']['mood'] = state['customer']['detected_mood']
+        if handoff_summary is not None:
+            data['handoffSummary'] = handoff_summary
+        actions.append(summary_action(data))
     if not isinstance(result.content, str) or not result.content.strip():
         raise ValueError('Empty coordinator reply')
     return {**state, 'messages': [*state['messages'], result], 'pending_crm_actions': actions}

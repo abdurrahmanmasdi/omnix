@@ -73,7 +73,7 @@ def reply(org=ORG):
 
 def assert_handoff(result):
     assert result.contractVersion == 1
-    assert [a.type for a in result.actions] == ['HANDOFF_TO_HUMAN']
+    assert [a.type for a in result.actions if a.type != 'UPDATE_SUMMARY'] == ['HANDOFF_TO_HUMAN']
 
 
 def test_guidelines_schema_and_unique_ids(tmp_path):
@@ -103,7 +103,7 @@ def test_tenant_switch(setup, monkeypatch, allowlist, org, enabled):
     assert not reply(org).actions
     assert len(model.calls) == int(enabled) and old.await_count == int(not enabled)
     if enabled:
-        assert model.bound == ['escalate_to_human']
+        assert model.bound == ['escalate_to_human', 'save_patient_facts']
         coordinator.DatabaseService.get_clinic_knowledge.assert_awaited_once_with(org, settings.COORDINATOR_KNOWLEDGE_MAX_CHARS)
 
 
@@ -132,7 +132,8 @@ def test_large_knowledge_uses_tenant_retriever(setup, monkeypatch):
                             AIMessage(content='Crowns cost EUR 220–320 per tooth.')])
     assert not reply().actions and len(model.calls) == 2
     assert 'search_clinic_knowledge' in model.bound
-    assert captured[0]['configurable'] == CONFIG['configurable']
+    assert captured[0]['configurable']['organization_id'] == ORG
+    assert captured[0]['configurable']['conversation_id'] == CONFIG['configurable']['conversation_id']
     assert 'Quoted clinic data' in model.calls[1][-1].content
 
 
@@ -317,3 +318,31 @@ def test_non_handoff_enquiries_reach_v2_and_stay_active(setup, monkeypatch, text
     assert 'ONLY' in instructions and 'AFTER one clarifying question' in instructions
     assert 'Identity questions' in instructions
     assert 'fully answered' in tools.escalate_to_human.description
+
+
+def test_patient_facts_use_only_existing_contract_actions(setup, monkeypatch):
+    model, _ = setup
+    previous = json.dumps({'format': 'omnix.patient-summary.v1', 'facts': {'travelWindow': 'November'},
+                           'summary': 'Considering crowns.', 'handoffSummary': None})
+    model.responses = iter([call('save_patient_facts', {'first_name': 'Synthetic', 'country': 'UK',
+                            'treatment_interest': 'Crowns', 'photo_sent': True,
+                            'summary': 'Synthetic patient considering crowns in November; photo received, permission pending.'}),
+                            AIMessage(content='Thanks. May I pass the photo to the doctor for a personal plan?')])
+    result = asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(agent_pb2.AgentRequest(
+        organizationId=ORG, conversationId='synthetic-conversation', newMessageIds=['new'], leadSummary=previous), None))
+    assert [a.type for a in result.actions] == ['UPDATE_LEAD', 'UPDATE_SUMMARY']
+    assert json.loads(result.actions[0].payload) == {'firstName': 'Synthetic', 'country': 'UK'}
+    saved = json.loads(json.loads(result.actions[1].payload)['summary'])
+    assert saved['facts'] == {'travelWindow': 'November', 'treatmentInterest': 'Crowns', 'photoSent': True, 'mood': 'calm'}
+    assert all(parse_virtual_action({'action': a.type, 'payload': json.loads(a.payload)}) for a in result.actions)
+
+
+def test_handoff_summary_is_persisted_without_executor_changes(setup):
+    model, _ = setup
+    model.responses = iter([call('escalate_to_human', {'reason': 'Medical question', 'summary': 'Crowns; suitability unknown.'}),
+                            AIMessage(content='I am passing your question to the team.')])
+    result = reply()
+    saved = json.loads(json.loads(next(a.payload for a in result.actions if a.type == 'UPDATE_SUMMARY'))['summary'])
+    assert saved['summary'] == ''
+    assert 'suitability unknown' in saved['handoffSummary']
+    assert saved['facts']['mood'] == 'calm'

@@ -145,7 +145,7 @@
   {
     "id": "G26-anger",
     "when": "Text or voice-note transcript shows calm, anxious, frustrated, angry or urgent mood",
-    "do": "Use detected_mood as a text cue, not a diagnosis. Read context including negation. Adapt tone: reassure anxious patients without promises, acknowledge frustration and urgency. Anger is a handoff trigger; anxiety or frustration alone is not. Hand off with an empathetic acknowledgement and concise summary; no timing promise.",
+    "do": "Use detected_mood as a text cue, not a diagnosis. Read context including negation. Adapt tone: reassure anxious patients without promises, acknowledge frustration and urgency. Anger is a handoff trigger; anxiety or frustration alone is not. Hand off with an empathetic acknowledgement and concise summary; no timing promise. When new patient facts or a changed mood are learned, call save_patient_facts with a cumulative summary.",
     "never": "Never infer emotion from audio, voice acoustics or images; only use text and voice-note transcripts."
   },
   {
