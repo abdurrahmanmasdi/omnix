@@ -346,3 +346,15 @@ def test_handoff_summary_is_persisted_without_executor_changes(setup):
     assert saved['summary'] == ''
     assert 'suitability unknown' in saved['handoffSummary']
     assert saved['facts']['mood'] == 'calm'
+
+
+def test_input_policy_handoff_saves_summary_for_v2(setup, monkeypatch):
+    model, _ = setup
+    monkeypatch.setattr(agent_servicer.DatabaseService, 'get_messages_by_ids', AsyncMock(return_value=[
+        SimpleNamespace(id='new', content='Please connect me to a human.', mediaUrl=None)]))
+    result = reply()
+    assert [a.type for a in result.actions] == ['UPDATE_SUMMARY', 'HANDOFF_TO_HUMAN']
+    data = json.loads(json.loads(result.actions[0].payload)['summary'])
+    assert 'human_handoff_request' in data['handoffSummary']
+    assert data['facts']['mood'] == 'calm'
+    assert not model.calls

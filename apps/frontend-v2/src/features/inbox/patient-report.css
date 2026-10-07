@@ -29,6 +29,9 @@
   #patient-report .report-controls {
     display: none;
   }
+  #patient-report .text-muted-foreground {
+    color: #444;
+  }
   #patient-report .report-event {
     break-inside: avoid;
   }

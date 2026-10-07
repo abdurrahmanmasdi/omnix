@@ -14,7 +14,8 @@ from app.core.config import settings
 from app.infrastructure.database_service import DatabaseService
 from app.infrastructure.llm_factory import LLMFactory
 from app.modules.agent.graph_builder import agent_app
-from app.modules.coordinator.coordinator import run_coordinator
+from app.modules.coordinator.coordinator import run_coordinator, detect_mood
+from app.modules.coordinator.patient_facts import summary_data, summary_action
 from app.modules.agent.actions import parse_virtual_action, CONTRACT_VERSION
 from app.modules.safety.policy import (
     APPOINTMENT_REQUEST_MESSAGES, INJECTION_MESSAGES, DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
@@ -277,13 +278,19 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                             contractVersion=CONTRACT_VERSION,
                             replyText=INJECTION_MESSAGES[language], actions=[],
                         )
+                    actions = [agent_pb2.ToolAction(
+                        type="HANDOFF_TO_HUMAN", payload=json.dumps({"reason": input_decision.reason}))]
+                    if org_id in settings.COORDINATOR_V2_ORG_IDS.split(',') and state_data.get('lead_id'):
+                        data = summary_data(state_data.get('lead_summary'))
+                        data['facts']['mood'] = detect_mood(combined_new_text)
+                        data['handoffSummary'] = f"{input_decision.reason}: {combined_new_text[:1000]}"
+                        # Persist the deterministic handoff through the same v1 summary action.
+                        action = parse_virtual_action(summary_action(data))
+                        if action is not None:
+                            actions.insert(0, agent_pb2.ToolAction(type=action[0], payload=json.dumps(action[1])))
                     return agent_pb2.AgentReply(
                         contractVersion=CONTRACT_VERSION,
-                        replyText=handoff_message(handoff_kind(input_decision.reason), language),
-                        actions=[agent_pb2.ToolAction(
-                            type="HANDOFF_TO_HUMAN",
-                            payload=json.dumps({"reason": input_decision.reason})
-                        )]
+                        replyText=handoff_message(handoff_kind(input_decision.reason), language), actions=actions,
                     )
 
             # Lead Creation Hook

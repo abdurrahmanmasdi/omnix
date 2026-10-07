@@ -887,7 +887,9 @@
     "working": "Working…",
     "approvalHelp": "Save changes before approving. Approval makes this exact version available to the AI.",
     "saved": "Draft saved.",
-    "saveFailed": "Could not save. Reload if another user changed the version."
+    "saveFailed": "Could not save. Reload if another user changed the version.",
+    "on": "On",
+    "off": "Off"
   },
   "PatientReport": {
     "title": "Patient report",

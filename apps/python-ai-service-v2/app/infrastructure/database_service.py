@@ -124,7 +124,7 @@ def active_clinic_facts(facts: dict, now: datetime | None = None) -> dict:
             end = datetime.fromisoformat(offer['validTo'].replace('Z', '+00:00'))
             if start.tzinfo and end.tzinfo and start <= now <= end:
                 offers.append(offer)
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, AttributeError):
             continue
     result['offers'] = offers
     return result

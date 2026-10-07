@@ -887,7 +887,9 @@
     "working": "İşleniyor…",
     "approvalHelp": "Onaylamadan önce değişiklikleri kaydedin. Onay, bu sürümü yapay zekâya sunar.",
     "saved": "Taslak kaydedildi.",
-    "saveFailed": "Kaydedilemedi. Başka bir kullanıcı sürümü değiştirdiyse yeniden yükleyin."
+    "saveFailed": "Kaydedilemedi. Başka bir kullanıcı sürümü değiştirdiyse yeniden yükleyin.",
+    "on": "Açık",
+    "off": "Kapalı"
   },
   "PatientReport": {
     "title": "Hasta raporu",

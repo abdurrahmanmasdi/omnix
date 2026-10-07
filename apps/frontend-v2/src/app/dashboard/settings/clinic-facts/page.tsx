@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBackendError } from "@/i18n/backend";
 import { Collections } from "./Collections";
+import { ApprovedFacts } from "./ApprovedFacts";
 
 const empty: ClinicFactsDto = {
   treatments: [],
@@ -89,12 +90,7 @@ function Editor({ sheet }: { sheet: ClinicFactSheetDto }) {
         {sheet.approved && (
           <details>
             <summary>{t("viewApproved")}</summary>
-            <pre
-              className="mt-3 whitespace-pre-wrap break-words text-sm"
-              dir="auto"
-            >
-              {JSON.stringify(sheet.approved.facts, null, 2)}
-            </pre>
+            <ApprovedFacts facts={sheet.approved.facts} />
           </details>
         )}
       </section>

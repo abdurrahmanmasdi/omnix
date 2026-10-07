@@ -10,6 +10,7 @@ import {
   IsNumber,
   IsString,
   MaxLength,
+  Matches,
   Min,
   ValidateNested,
   IsIn,
@@ -35,9 +36,11 @@ export class ClinicOfferDto {
   @ApiProperty() @IsBoolean() enabled: boolean;
   @ApiProperty({ format: 'date-time' })
   @IsDateString({ strict: true })
+  @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/)
   validFrom: string;
   @ApiProperty({ format: 'date-time' })
   @IsDateString({ strict: true })
+  @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/)
   validTo: string;
 }
 export class ClinicFactsDto {
