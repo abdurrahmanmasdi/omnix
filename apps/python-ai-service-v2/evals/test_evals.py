@@ -323,3 +323,24 @@ def test_servicer_swallowed_provider_error_still_in_report(monkeypatch, tmp_path
     assert not results[0]['passed']
     assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in results[0]['turns'][0]['actions'])
     assert 'Unsupported model parameter' in write_report(results, scenarios, ledger, tmp_path).read_text()
+
+
+@pytest.mark.parametrize('reply,allowed', [
+    ('Your appointment is confirmed.', False), ("You're booked for Monday.", False),
+    ('Randevunuz onaylandı.', False), ('تم تأكيد موعدك.', False),
+    ('The clinic team will confirm the time.', True),
+])
+def test_confirmation_hard_gate(reply, allowed):
+    assert hard_checks(reply, 'Hello', FACTS, [])['no_appointment_confirmation'] == allowed
+
+
+def test_injections_require_no_automatic_handoff(monkeypatch):
+    deny_network(monkeypatch)
+    scenarios = [s for s in load_scenarios(ROOT / 'scenarios.json') if 'injection' in s['id']]
+    ledger = Ledger(limit=100)
+    models = fake_models(ledger)
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger, agent='v2'))
+    assert len(results) == 5
+    assert all(r['passed'] for r in results)
+    assert not models['writer'].model.calls
+    assert all(t['checks']['no_automatic_handoff'] and not t['actions'] for r in results for t in r['turns'])

@@ -6,6 +6,7 @@ LangGraph is invoked and immediately before a reply is returned to NestJS.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 
@@ -114,11 +115,11 @@ class DeliverySafetyPolicy:
     # by a coordinator handoff.  Do not depend on prompts/model self-reporting.
     OUTPUT_PATTERNS = {
         "appointment_confirmation": (
-            r"\b(?:your|the|this)\s+(?:appointment|booking|consultation|slot)\s+(?:is|has been|was)\s+(?:confirmed|booked|scheduled|reserved)\b|"
+            r"\b(?:your|the|this)\s+(?:appointment|booking|consultation|slot)\b[^.!?]{0,60}?\s+(?:is|has been|was)\s+(?:confirmed|booked|scheduled|reserved)\b|"
             r"\b(?:i|we)(?:'ve| have)?\s+(?:confirmed|booked|scheduled|reserved)\s+(?:your|the|you)\b|"
-            r"\byou(?:['’]re| are| have been)\s+(?:booked|scheduled|confirmed|reserved)\b|"
+            r"\byou(?:['’]re| are| have been)\s+(?:all\s+)?(?:booked|scheduled|confirmed|reserved)\b|"
             r"\b(?:appointment|booking|consultation)\s+confirmed\b|"
-            r"\b(?:randevu|rezervasyon)\w*\s+(?:(?:başarıyla|kesin olarak)\s+)?(?:onaylandı|onaylanmıştır|onaylı|kesinleşti|kesinleşmiştir|ayarlanmıştır|ayarlandı)\b|"
+            r"\b(?:randevu|rezervasyon)\w*[^.!?]{0,40}?\s+(?:onaylandı|onaylanmıştır|onaylı|kesinleşti|kesinleşmiştir|ayarlanmıştır|ayarlandı)\b|"
             r"\brandevu\w*.{0,30}(?:onayladık|onayladım|ayarladık|ayarladım)\b|"
             r"(?:تم|لقد تم)\s+(?:تأكيد|حجز|تثبيت)\s+(?:موعد|حجز)|"
             r"(?:موعدك|حجزك|الموعد|الحجز)\s+(?:مؤكد|محجوز|تم تأكيده)|"
@@ -136,6 +137,8 @@ class DeliverySafetyPolicy:
         # Turkish dotted capital İ lower-cases to "i" + U+0307; fold it so
         # "İNSANLA" matches the same pattern as "insanla".
         normalized = " ".join(str(text or "").replace("İ", "i").lower().replace("\u0307", "").split())
+        normalized = "".join(c for c in unicodedata.normalize("NFC", normalized)
+                             if not "\u064b" <= c <= "\u065f" and c != "\u0640")
         for reason, pattern in patterns.items():
             if re.search(pattern, normalized, flags=re.IGNORECASE):
                 return PolicyDecision(False, reason)
