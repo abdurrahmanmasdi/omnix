@@ -1,9 +1,12 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-100 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-101 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
+
+**KI-100 — Coexistence test mock circular inference** · low · open
+AI-3b production TypeScript check passes, but full `tsc --noEmit` reports TS7022/TS7024 in `src/webhooks/coexistence.spec.ts` (self-referencing Prisma mock). Owner: developer; separate test-only fix.
 
 ### High
 
