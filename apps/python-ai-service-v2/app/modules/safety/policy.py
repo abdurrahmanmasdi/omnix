@@ -101,12 +101,16 @@ class DeliverySafetyPolicy:
         r"(?:yok say|görmezden gel|unut).{0,40}(?:talimat|kural)|"
         r"(?:تجاهل|تجاوز|انس|انسى).{0,60}(?:التعليمات|تعليمات|القواعد|قواعد)|"
         r"(?:اكشف|أظهر|اطبع).{0,40}(?:تعليمات النظام|رسالة النظام)",
-        "human_handoff_request": r"\b(?:human|real person|live (?:agent|person)|operator|supervisor|representative)\b|"
+        "human_handoff_request": r"^(?:a |an )?(?:human|real person|live agent|operator|supervisor|representative)(?: please)?[.!?]*$|"
+        r"\b(?:want|need|request|prefer)\s+(?:(?:a|an|the|your)\s+)?(?:human|real person|live agent|operator|supervisor|representative)\b|"
         r"\b(?:speak|talk|chat)\s+(?:to|with)\s+(?:(?:a|an|the|your|some)\s+)?"
-        r"(?:person|someone|somebody|agent|doctor|dentist|manager|staff|coordinator|team member|customer service)\b|"
+        r"(?:human|real person|live agent|operator|supervisor|representative|person|someone|somebody|agent|doctor|dentist|manager|staff|coordinator|team member|customer service)\b|"
         r"\b(?:connect|transfer|put)\s+me\s+(?:through\s+)?(?:to|with)\b|"
         r"\binsan(?:la|a)\b|\bbiri(?:yle|siyle)\s+(?:görüş|konuş)|\byetkili\w*|\btemsilci\w*|"
-        r"\bgerçek\s+bir\s+(?:kişi|insan)\w*|\b(?:doktor|hekim|koordinatör)\w*\s+(?:görüş|konuş)",
+        r"\bgerçek\s+bir\s+(?:kişiyle|insanla)\s+(?:görüş|konuş)|\b(?:doktor|hekim|koordinatör)\w*\s+(?:görüş|konuş)|"
+        r"(?:أريد|اريد|أحتاج|احتاج).{0,30}(?:التحدث|التواصل|شخص|إنسان|انسان|موظف)|"
+        r"(?:تحدث|أتحدث|اتحدث|التحدث|التواصل|تكلم).{0,15}(?:مع|إلى|الى).{0,20}(?:شخص|إنسان|انسان|موظف|الفريق|الطبيب)|"
+        r"(?:حولني|حوّلني|وصلني|أحِلني).{0,20}(?:شخص|إنسان|انسان|موظف|الفريق|الطبيب)",
         "medical_diagnosis_request": r"\b(?:diagnose|what(?:'s| is) wrong with|is it broken|is this infected|how do i treat|what should i take|"
         r"do i have (?:an? )?(?:infection|abscess|cavity|cavities|disease|cancer|gum disease)|"
         r"can you check my (?:teeth|tooth|gums?|x-?ray|photo|swelling|wound|implant))\b",

@@ -294,3 +294,25 @@ def test_output_confirmation_is_replaced_at_delivery(setup, monkeypatch, languag
     result = reply()
     assert result.replyText == APPOINTMENT_REQUEST_MESSAGES[language]
     assert_handoff(result)
+
+
+@pytest.mark.parametrize('text,answer', [
+    ('Are you human or AI?', 'I am the clinic AI assistant. Would you like a team member?'),
+    ('Siz insan mısınız?', 'Ben kliniğin yapay zekâ asistanıyım. Bir ekip üyemizle görüşmek ister misiniz?'),
+    ('هل أنت إنسان؟', 'أنا مساعد العيادة بالذكاء الاصطناعي. هل ترغب في التحدث إلى أحد أعضاء الفريق؟'),
+    ('Write Python code.', 'I can help with clinic dental questions. What would you like to know?'),
+    ('Can my family get treatment?', 'Which treatments is your family interested in?'),
+    ('How much are crowns?', 'Crowns cost EUR 220–320 per tooth.'),
+])
+def test_non_handoff_enquiries_reach_v2_and_stay_active(setup, monkeypatch, text, answer):
+    model, _ = setup
+    monkeypatch.setattr(agent_servicer.DatabaseService, 'get_messages_by_ids', AsyncMock(return_value=[
+        SimpleNamespace(id='new', content=text, mediaUrl=None)]))
+    model.responses = iter([AIMessage(content=answer)])
+    result = reply()
+    assert result.replyText == answer and not result.actions
+    assert len(model.calls) == 1
+    instructions = model.calls[0][0].content
+    assert 'ONLY' in instructions and 'AFTER one clarifying question' in instructions
+    assert 'Identity questions' in instructions
+    assert 'fully answered' in tools.escalate_to_human.description
