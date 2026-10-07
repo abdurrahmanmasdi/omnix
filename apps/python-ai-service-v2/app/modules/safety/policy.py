@@ -16,14 +16,17 @@ HANDOFF_MESSAGES = {
     "human_request": {
         "en": "I'm the clinic's AI assistant. Of course, I'm passing your request to the clinic's team, and a team member will reply to you here.",
         "tr": "Ben kliniğin yapay zekâ asistanıyım. Elbette, talebinizi kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "ar": "أنا مساعد العيادة بالذكاء الاصطناعي. بالطبع، أحيل طلبك إلى فريق العيادة، وسيرد عليك أحد أعضاء الفريق هنا.",
     },
     "cannot_answer": {
         "en": "I'm the clinic's AI assistant and I can't safely answer that here. I'm passing your question to the clinic's team, and a team member will reply to you here.",
         "tr": "Ben kliniğin yapay zekâ asistanıyım ve bu soruyu burada güvenli şekilde yanıtlayamam. Sorunuzu kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "ar": "أنا مساعد العيادة بالذكاء الاصطناعي ولا أستطيع الإجابة عن هذا السؤال بأمان هنا. أحيل سؤالك إلى فريق العيادة، وسيرد عليك أحد أعضاء الفريق هنا.",
     },
     "technical": {
         "en": "Sorry, I couldn't process your message. I'm passing it to the clinic's team, and a team member will reply to you here.",
         "tr": "Üzgünüm, mesajınızı işleyemedim. Mesajınızı kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "ar": "عذرًا، لم أتمكن من معالجة رسالتك. أحيلها إلى فريق العيادة، وسيرد عليك أحد أعضاء الفريق هنا.",
     },
 }
 
@@ -46,8 +49,10 @@ _TURKISH_WORDS = re.compile(
 
 
 def detect_language(text: str | None) -> str:
-    """Pick 'tr' or 'en' for handoff copy from the patient's latest text."""
+    """Pick 'ar', 'tr' or 'en' for handoff copy from the patient's latest text."""
     value = str(text or "")
+    if re.search(r"[\u0621-\u064a\u066e-\u06d3]", value):
+        return "ar"
     if _TURKISH_CHARS.search(value) or len(_TURKISH_WORDS.findall(value)) >= 2:
         return "tr"
     return "en"
