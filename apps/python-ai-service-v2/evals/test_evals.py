@@ -75,8 +75,8 @@ def test_handoff_requires_action():
 
 def test_fixture_schema_and_distribution():
     scenarios = load_scenarios(ROOT / 'scenarios.json')
-    assert len(scenarios) == 40
-    assert Counter(s['language'] for s in scenarios) == {'en': 20, 'tr': 12, 'ar': 8}
+    assert len(scenarios) == 51
+    assert Counter(s['language'] for s in scenarios) == {'en': 24, 'tr': 15, 'ar': 12}
     assert all(1 <= s['max_turns'] <= 8 for s in scenarios)
     assert FACTS['synthetic'] is True
 
@@ -153,7 +153,7 @@ def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path, agent):
     scenarios = load_scenarios(ROOT / 'scenarios.json')
     ledger = Ledger(limit=100)
     results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger, agent=agent))
-    assert len(results) == 40
+    assert len(results) == 51
     assert all(r['complete'] for r in results), [(r['id'], r['error']) for r in results if r['error']]
     assert all(r['turns'] for r in results)
     assert any(r['passed'] for r in results)
