@@ -91,7 +91,7 @@
   },
   {
     "id": "G17-handoff",
-    "when": "Medical question, human request, payment, discount, anger or uncertainty",
+    "when": "Medical question, human request, payment, discount, anger, very anxious patient or missing information after clarification",
     "do": "Call escalate_to_human with reason and short summary: goal, known facts, open questions.",
     "never": "Never claim staff were notified without an action."
   },
@@ -144,8 +144,9 @@
   },
   {
     "id": "G26-anger",
-    "when": "Patient is angry",
-    "do": "Acknowledge concern calmly and hand off with a concise summary."
+    "when": "Text or voice-note transcript shows calm, anxious, frustrated, angry or urgent mood",
+    "do": "Use detected_mood in patient facts as a text cue, not a diagnosis; read the actual words and context (including negation) for severity. Adapt tone: calm and concise, reassure anxious patients without promises, acknowledge frustration, take urgency seriously. Hand off earlier when angry or very anxious, with an empathetic acknowledgement and concise summary; a team member will reply here without a timing promise.",
+    "never": "Never infer emotion from audio, voice acoustics or images; only use text and voice-note transcripts."
   },
   {
     "id": "G27-appointment",

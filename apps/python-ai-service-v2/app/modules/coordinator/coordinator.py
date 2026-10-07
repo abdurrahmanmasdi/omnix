@@ -1,5 +1,6 @@
 """One coordinator, with at most one tool round; no LLM compliance loop."""
 import json
+import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
@@ -36,6 +37,32 @@ def quoted(label, data):
     }, ensure_ascii=False))
 
 
+def detect_mood(text):
+    """Conservative text cues only, including voice-note transcripts; no audio.
+
+    This transient fact is a tone hint, not a diagnosis or persisted CRM fact.
+    The coordinator also reads context for severity/negation and adapts its tone.
+    """
+    value = str(text or '').casefold()
+    cues = {
+        'angry': r"\b(?:angry|furious|outraged|unacceptable|öfkel\w*|kızgın\w*)\b|غاضب|غاضبة|هذا غير مقبول",
+        'urgent': r"\b(?:urgent|urgently|emergency|acil|acilen)\b|عاجل|طارئ",
+        'anxious': r"\b(?:anxious|scared|terrified|panic\w*|afraid|worried|endiş\w*|kork\w*|kayg\w*|panik)\b|خائف|خائفة|قلق|مذعور",
+        'frustrated': r"\b(?:frustrated|fed up|annoyed|bıkt\w*|sinirl\w*)\b|محبط|منزعج|سئمت",
+    }
+    for mood, pattern in cues.items():
+        if re.search(pattern, value):
+            return mood
+    return 'calm'
+
+
+def patient_text(state):
+    latest = next((m.content for m in reversed(state['messages']) if m.type == 'human'), '')
+    if isinstance(latest, list):
+        return ' '.join(c.get('text', '') for c in latest if isinstance(c, dict) and c.get('type') == 'text')
+    return str(latest)
+
+
 def prompt(state, knowledge):
     messages = [SystemMessage(content=CORE + '\nGuidelines:\n' + json.dumps(GUIDELINES))]
     messages.append(quoted('clinic knowledge', knowledge if knowledge is not None else
@@ -57,6 +84,8 @@ async def run_coordinator(state, config):
     org_id = config['configurable']['organization_id']
     if not org_id or org_id != state['organization_id']:
         raise ValueError('Tenant context mismatch')
+    state = {**state, 'customer': {**state.get('customer', {}),
+                                 'detected_mood': detect_mood(patient_text(state))}}
     knowledge = await DatabaseService.get_clinic_knowledge(org_id, settings.COORDINATOR_KNOWLEDGE_MAX_CHARS)
     messages = prompt(state, knowledge)
     model = LLMFactory.get_flagship_llm()
