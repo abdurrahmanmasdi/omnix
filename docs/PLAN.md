@@ -27,10 +27,10 @@ _Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-0
 | --- | --- | --- |
 | AI-1 | Eval set (~40 scenarios EN/TR/AR) + simulated patient + judge + hard checks + one command; synthetic demo clinic fact sheet; runs with a fake model in tests, real model only when the founder runs it | **Done** (PR #2); baseline run by founder pending |
 | AI-2 | Coordinator v2: playbook guidelines file + clinic fact sheet in prompt + one agent + tools, behind a per-clinic switch; old graph kept until v2 wins on evals | **Done** (PR #3, 80% vs 27.5%) |
-| AI-3a | **Done (branch `ai-3a/safety-behavior`)** Safety + behavior: block appointment-confirmation wording (KI-095), EN/TR/AR handoff copy, off-topic/manipulation levels (D-033), photo consent, fewer early handoffs, price confidence; new eval scenarios | review OK; founder eval run pending |
-| AI-3b | Clinic fact sheet (settings page + approval), save-patient-facts via existing actions, handoff summary shown in Inbox, active offers, patient report | **NEXT** |
+| AI-3a | **Done (merged)** Safety + behavior: block appointment-confirmation wording (KI-095), EN/TR/AR handoff copy, off-topic/manipulation levels (D-033), photo consent, fewer early handoffs, price confidence; new eval scenarios | **Done** (38/51; handoff overuse fixed in AI-3b item 0) |
+| AI-3b | Clinic fact sheet (settings page + approval), save-patient-facts via existing actions, handoff summary shown in Inbox, active offers, patient report | **Done** (PR #5, migration `20261007000000_clinic_fact_sheets`); founder eval run pending |
 | AI-3c | Model comparison luna vs sol on the evals (founder runs) + Railway settings (KI-097) | queued |
-| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) + per-patient report | queued |
+| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) (per-patient report done in AI-3b) | **NEXT** (Claude Code) |
 | INT-1 | Generic CRM connector: outbound webhooks for lead/handoff/consultation events (Zapier/Make) + CSV export; native connector only for the CRM most interviewed clinics use | queued |
 | AI-4 | More tools: consultation request (staff confirm), forward patient file to doctor (with consent), smart follow-ups (templates/24 h rule) | queued |
 | M4b | 360dialog connector: clinic connects its WhatsApp Business app number via its own 360dialog account (coexistence) and pastes the API key; OmniX sends/receives through 360dialog incl. phone echoes → AI pause. Needed because OmniX cannot be a Meta Tech Provider without a company (README §0) | queued — before the first pilot |
