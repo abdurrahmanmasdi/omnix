@@ -14,8 +14,8 @@ from dataclasses import dataclass
 # safely vs. a technical problem), never promise when staff will reply.
 HANDOFF_MESSAGES = {
     "human_request": {
-        "en": "Of course. I'm passing your request to the clinic's team, and a team member will reply to you here.",
-        "tr": "Elbette. Talebinizi kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "en": "I'm the clinic's AI assistant. Of course, I'm passing your request to the clinic's team, and a team member will reply to you here.",
+        "tr": "Ben kliniğin yapay zekâ asistanıyım. Elbette, talebinizi kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
     },
     "cannot_answer": {
         "en": "I'm the clinic's AI assistant and I can't safely answer that here. I'm passing your question to the clinic's team, and a team member will reply to you here.",
