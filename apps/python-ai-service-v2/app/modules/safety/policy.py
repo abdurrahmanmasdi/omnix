@@ -30,6 +30,12 @@ HANDOFF_MESSAGES = {
     },
 }
 
+INJECTION_MESSAGES = {
+    "en": "This message tries to change my rules, so I can't help with it. Would you like a team member?",
+    "tr": "Bu mesaj kurallarımı değiştirmeye çalışıyor, bu yüzden bu konuda yardımcı olamam. Bir ekip üyemizle görüşmek ister misiniz?",
+    "ar": "تحاول هذه الرسالة تغيير قواعدي، لذلك لا أستطيع المساعدة فيها. هل ترغب في التحدث إلى أحد أعضاء الفريق؟",
+}
+
 APPOINTMENT_REQUEST_MESSAGES = {
     "en": "Your request is noted. The clinic team will confirm the time.",
     "tr": "Talebiniz not edildi. Saatini klinik ekibi teyit edecek.",
@@ -90,7 +96,10 @@ class DeliverySafetyPolicy:
         "prompt_injection": r"(?:ignore|disregard|override|forget).{0,80}(?:previous|prior|above|system|developer|instruction|rules|prompt)|"
         r"(?:reveal|show|print|repeat).{0,40}(?:system prompt|developer message|your (?:instructions|prompt|rules))|"
         r"(?:system prompt|developer message|jailbreak|do anything now)|"
-        r"(?:talimat|kural)\w*.{0,40}(?:yok say|görmezden gel|unut)",
+        r"(?:talimat|kural)\w*.{0,40}(?:yok say|görmezden gel|unut)|"
+        r"(?:yok say|görmezden gel|unut).{0,40}(?:talimat|kural)|"
+        r"(?:تجاهل|تجاوز|انس|انسى).{0,60}(?:التعليمات|تعليمات|القواعد|قواعد)|"
+        r"(?:اكشف|أظهر|اطبع).{0,40}(?:تعليمات النظام|رسالة النظام)",
         "human_handoff_request": r"\b(?:human|real person|live (?:agent|person)|operator|supervisor|representative)\b|"
         r"\b(?:speak|talk|chat)\s+(?:to|with)\s+(?:(?:a|an|the|your|some)\s+)?"
         r"(?:person|someone|somebody|agent|doctor|dentist|manager|staff|coordinator|team member|customer service)\b|"

@@ -17,7 +17,7 @@ from app.modules.agent.graph_builder import agent_app
 from app.modules.coordinator.coordinator import run_coordinator
 from app.modules.agent.actions import parse_virtual_action, CONTRACT_VERSION
 from app.modules.safety.policy import (
-    APPOINTMENT_REQUEST_MESSAGES, DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
+    APPOINTMENT_REQUEST_MESSAGES, INJECTION_MESSAGES, DeliverySafetyPolicy, SAFE_HANDOFF_MESSAGE, detect_language, handoff_kind, handoff_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -271,6 +271,12 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
                 input_decision = DeliverySafetyPolicy.check_input(combined_new_text)
                 if not input_decision.allowed:
                     logger.warning("INPUT_POLICY_BLOCKED conversation_id=%s", conv_id)
+                    if input_decision.reason == "prompt_injection":
+                        # D-033: refuse the override and offer staff; keep AI enabled.
+                        return agent_pb2.AgentReply(
+                            contractVersion=CONTRACT_VERSION,
+                            replyText=INJECTION_MESSAGES[language], actions=[],
+                        )
                     return agent_pb2.AgentReply(
                         contractVersion=CONTRACT_VERSION,
                         replyText=handoff_message(handoff_kind(input_decision.reason), language),
