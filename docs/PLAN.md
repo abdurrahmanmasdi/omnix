@@ -30,6 +30,10 @@ _Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-0
 | AI-3a | Safety + behavior: block appointment-confirmation wording (KI-095), EN/TR/AR handoff copy, off-topic/manipulation levels (D-033), photo consent, fewer early handoffs, price confidence; new eval scenarios | **NEXT** |
 | AI-3b | Clinic fact sheet (settings page + approval), save-patient-facts via existing actions, handoff summary shown in Inbox | queued |
 | AI-3c | Model comparison luna vs sol on the evals (founder runs) + Railway settings (KI-097) | queued |
+| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) + per-patient report | queued |
+| INT-1 | Generic CRM connector: outbound webhooks for lead/handoff/consultation events (Zapier/Make) + CSV export; native connector only for the CRM most interviewed clinics use | queued |
+| AI-4 | More tools: consultation request (staff confirm), forward patient file to doctor (with consent), smart follow-ups (templates/24 h rule) | queued |
+| UX-1 | Dashboard redesign (colors, layout, profile page) — **last**, after the designer delivers the palette (founder 2026-10-07) | queued |
 
 ## Validate first (D-030)
 
