@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import type { InboxPatientDto } from "@/lib/api/model";
@@ -30,6 +31,7 @@ export function PatientPanel({
   conversationId: string;
 }) {
   const { t } = useInboxText();
+  const report = useTranslations("PatientReport");
   const client = useQueryClient();
   const [edits, setEdits] = useState<PatientEdits>({
     firstName: patient.firstName,
@@ -169,6 +171,12 @@ export function PatientPanel({
         <ReadError error={stage.error} retry={() => stage.reset()} />
       )}
       <PatientFacts patient={patient} />
+      <Link
+        className="mt-4 block text-brand-cyan underline"
+        href={`/dashboard/conversations/${encodeURIComponent(conversationId)}/report`}
+      >
+        {report("openReport")}
+      </Link>
       <Link
         className="mt-4 inline-block text-brand-cyan underline"
         href={`/dashboard/leads?highlight=${encodeURIComponent(patient.id)}`}
