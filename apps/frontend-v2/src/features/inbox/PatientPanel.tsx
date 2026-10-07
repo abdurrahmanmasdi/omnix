@@ -20,6 +20,7 @@ import type { PatientEdits } from "./model";
 import type { InboxString } from "./i18n";
 import { useInboxText } from "./i18n";
 import { ReadError } from "./ReadError";
+import { PatientFacts } from "./PatientFacts";
 
 export function PatientPanel({
   patient,
@@ -167,10 +168,7 @@ export function PatientPanel({
       {stage.isError && (
         <ReadError error={stage.error} retry={() => stage.reset()} />
       )}
-      <h4 className="mt-5 font-semibold">{t("summary")}</h4>
-      <p className="mt-2 whitespace-pre-wrap break-words">
-        {patient.summary || t("noSummary")}
-      </p>
+      <PatientFacts patient={patient} />
       <Link
         className="mt-4 inline-block text-brand-cyan underline"
         href={`/dashboard/leads?highlight=${encodeURIComponent(patient.id)}`}
