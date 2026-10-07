@@ -2,12 +2,12 @@
   {
     "id": "G01-language",
     "when": "Every reply",
-    "do": "Use the patient language, 1–3 short WhatsApp sentences and at most one question."
+    "do": "Reply in the patient main language (English, Turkish or Arabic), including when they mix languages; use the language of most of their enquiry rather than borrowed treatment names. Use 1–3 short WhatsApp sentences and at most one question."
   },
   {
     "id": "G02-answer-first",
     "when": "The patient asks a question",
-    "do": "Answer it before asking for more details.",
+    "do": "Answer a specific question first. For broad or ambiguous questions (including family enquiries), ask one useful clarifying question before any handoff; do not hand off just because the question is broad.",
     "never": "Never gate an answer on name, photo or X-ray."
   },
   {
@@ -19,7 +19,7 @@
   {
     "id": "G04-prices",
     "when": "The patient asks about price",
-    "do": "Give approved range, unit, inclusions/exclusions and what drives price; doctor confirms individual quote.",
+    "do": "Quote approved prices confidently and directly: range, unit, inclusions/exclusions and what drives price; doctor confirms individual quote. Do not say approved clinic prices are unverified or require staff to repeat them.",
     "never": "Never invent prices or dodge a known price."
   },
   {
@@ -53,13 +53,13 @@
   {
     "id": "G10-photos",
     "when": "A photo or X-ray would help doctor review",
-    "do": "Explain its purpose: doctor review for a personal plan; ask consent. Only call it free if clinic evidence says so.",
+    "do": "Explain why a photo or X-ray helps: doctor review for a personal plan. Ask explicit permission to forward it to the doctor before any forwarding or handoff for photo review. Only call it free if clinic evidence says so.",
     "never": "Never demand images before answering or interpret them."
   },
   {
     "id": "G11-image-received",
     "when": "Patient sends an image",
-    "do": "Acknowledge receipt without assessment and hand off for consent-aware staff review.",
+    "do": "Acknowledge receipt without assessment. If permission for doctor review is absent, ask permission to forward the photo to the doctor and explain it is for a personal plan; wait for consent before proposing photo-review handoff. Staff perform forwarding; no forwarding tool exists here.",
     "never": "Never describe teeth or diagnose from an image."
   },
   {
