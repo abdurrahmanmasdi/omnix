@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from evals.checks import hard_checks, handoff_check, language_of, sentence_count
 from evals.run import ROOT, load_scenarios, main, write_report
-from evals.runner import Ledger, MeteredModel, evaluate
+from evals.runner import Ledger, MeteredModel, agent_facts, evaluate
 
 FACTS = json.loads((ROOT / 'demo_clinic.json').read_text())
 
@@ -235,7 +235,7 @@ def test_retrieval_stub_contains_facts_and_restores_factory(monkeypatch):
         from app.modules.agent import tools, nodes
         stub = tools.search_clinic_knowledge
         retrieved = asyncio.run(stub.ainvoke({'search_query': 'price'}, config={'configurable': {'organization_id': 'eval-org'}}))
-        assert '650' in retrieved and FACTS['clinic_name'] in retrieved
+        assert '650' in retrieved and agent_facts(FACTS)['clinic_name'] in retrieved
         unavailable = asyncio.run(tools.fetch_social_proof.ainvoke({'user_objection': 'fear'}, config={}))
         assert unavailable.startswith('UNVERIFIED:')
         assert nodes.LLMFactory.get_flagship_llm() is models['writer']

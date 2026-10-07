@@ -51,9 +51,6 @@ When a writer's tool call ended in a handoff/unverified result, the AI tool-call
 
 ### Medium
 
-**KI-099 — Eval retrieval assertion expects removed fictional label** · med · open
-[verified] AI-3a affected tests fail `test_retrieval_stub_contains_facts_and_restores_factory`: the assertion expects `FACTS['clinic_name']` including “Fictional”, while existing `agent_facts()` strips that label before returning retrieval data. The same assertion and cleaner are present on main; left unchanged under card scope. Owner: eval fixture maintenance.
-
 
 **KI-096 — Local Python suite crashes after passing at interpreter shutdown** · med · open
 [verified] AI-2 full Python suite once: 225 passed, then process exit 139 (signal 11) after pytest summary; no test assertion failures. Subsequent affected-unit run: 118 passed, exit 0. Cause not diagnosed; do not treat full-suite process as clean. Owner: local runtime/test investigation.
@@ -168,7 +165,7 @@ Pending wording (not KIs): KI-025/060/047 copy drafts → F02; KI-064 Turkish ST
 - Needed: a Turkish speaker (ideally the design partner) confirms the STOP words (`mesaj gönderme`, `artık mesaj`, proposed `durdur`, `abonelikten çık` / `abonelikten cik`), whether bare `dur` should count (ambiguous: "wait"), START (`BAŞLA`), and the draft EN/TR handoff, consent-request and disclosure copy (F02). `iptal` / `cancel` are deliberately not opt-outs (D-021). Final lists: old evidence WP-B1_FOLLOWUPS_2026-10-03 (backup zip). Also covers KI-064 / KI-087.
 
 ---
-**Resolved:** Q15 old contacts stay AI-paused → D-032 · Q1 → D-008 · Q2 → D-009 (now D-027) · Q7 monorepo → D-027 · Q8 → D-017 · Q9 → D-019 · Q12 → D-020. Parked list: empty (CI token item closed by D-027).
+KI-099 fixed 2026-10-07 (test uses `agent_facts`). **Resolved:** Q15 old contacts stay AI-paused → D-032 · Q1 → D-008 · Q2 → D-009 (now D-027) · Q7 monorepo → D-027 · Q8 → D-017 · Q9 → D-019 · Q12 → D-020. Parked list: empty (CI token item closed by D-027).
 
 ## 3. Improvement ideas (IMP) — open only
 
