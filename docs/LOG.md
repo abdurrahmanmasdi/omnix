@@ -74,3 +74,9 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 ## 2026-10-07 00:30 — Rerun after fixes: v1 27.5% → v2 80% (founder runs, planner review)
 - v1: 11/40 (27.5%), avg 3.60, ~$0.21. **v2: 32/40 (80%), avg 4.55, ~$0.03.**
 - v2 failures: 2 price questions still said "can't verify" (prompt called knowledge "untrusted" + fixture said "no real credentials") → fixed: coordinator prompt now says clinic knowledge is approved and prices should be quoted directly; eval facts drop "no real …" phrases. 2 hard-check false fails in Arabic (identity regex missed "الذكاء الاصطناعي" → fixed; refused "99 يورو" counted as a price → known limit). 3 prompt-injection scenarios end in the input-policy handoff (safe; judge wanted the real price — decide in AI-3). ar-family handoff too early; tr-photo did not ask consent before forwarding the photo → AI-3 guidelines.
+
+## 2026-10-07 17:30 — v2 82.5%; repo repair; AI-3 planned (planner)
+- v2 rerun after price/identity fixes: 33/40 (82.5%), avg 4.51 (~$0.03).
+- PR #3 was merged on GitHub before the last 5 AI-2 commits were pushed → merged them into `main` locally (`c6f30bc`: KI-098 tool-history fix, AI disclosure in handoff copy, price confidence).
+- Local git index had been emptied (file dated 14:20, cause unknown) → one bad local commit recorded mass deletions; it was never pushed, reset with `git reset --mixed` (working files untouched) and redone. If `git status` ever lists every file as untracked/deleted, stop and ask before committing.
+- D-033: EN/TR/AR only; off-topic/manipulation three levels. Cards AI-3a/3b/3c in PLAN.
