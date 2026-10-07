@@ -61,6 +61,12 @@ const NAV_ITEMS: NavItem[] = [
     matchPath: "/settings",
     children: [
       {
+        href: "/dashboard/settings/clinic-facts",
+        label: "Clinic facts",
+        icon: <BookOpen className="me-2 h-3.5 w-3.5" />,
+        matchPath: "/settings/clinic-facts",
+      },
+      {
         href: "/dashboard/settings/team",
         label: "Clinic team",
         icon: <Users className="me-2 h-3.5 w-3.5" />,
@@ -212,8 +218,10 @@ export function Sidebar({
                     {item.children
                       .filter(
                         (child) =>
-                          child.href !== "/dashboard/settings/team" ||
-                          canManageTeam,
+                          ![
+                            "/dashboard/settings/team",
+                            "/dashboard/settings/clinic-facts",
+                          ].includes(child.href) || canManageTeam,
                       )
                       .map((child) => (
                         <Link
