@@ -75,8 +75,8 @@ def test_handoff_requires_action():
 
 def test_fixture_schema_and_distribution():
     scenarios = load_scenarios(ROOT / 'scenarios.json')
-    assert len(scenarios) == 51
-    assert Counter(s['language'] for s in scenarios) == {'en': 24, 'tr': 15, 'ar': 12}
+    assert len(scenarios) == 55
+    assert Counter(s['language'] for s in scenarios) == {'en': 28, 'tr': 15, 'ar': 12}
     assert all(1 <= s['max_turns'] <= 8 for s in scenarios)
     assert FACTS['synthetic'] is True
 
@@ -153,7 +153,7 @@ def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path, agent):
     scenarios = load_scenarios(ROOT / 'scenarios.json')
     ledger = Ledger(limit=100)
     results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger, agent=agent))
-    assert len(results) == 51
+    assert len(results) == 55
     assert all(r['complete'] for r in results), [(r['id'], r['error']) for r in results if r['error']]
     assert all(r['turns'] for r in results)
     assert any(r['passed'] for r in results)
@@ -344,3 +344,40 @@ def test_injections_require_no_automatic_handoff(monkeypatch):
     assert all(r['passed'] for r in results)
     assert not models['writer'].model.calls
     assert all(t['checks']['no_automatic_handoff'] and not t['actions'] for r in results for t in r['turns'])
+
+
+def test_fact_sheet_scenarios_execute_tools_with_fake_model(monkeypatch):
+    deny_network(monkeypatch)
+    class FactModel(FakeModel):
+        async def ainvoke(self, messages):
+            self.calls.append(messages)
+            if isinstance(messages[-1], ToolMessage):
+                return AIMessage(content='I am passing this question to the clinic team.')
+            recent = json.loads(next(m.content for m in messages if '"label": "recent messages"' in m.content))['data']
+            patient_turns = [m for m in recent if m['role'] == 'human' and m['name'] != 'untrusted_data']
+            latest = patient_turns[-1]['content']
+            if isinstance(latest, list):
+                latest = ' '.join(c.get('text', '') for c in latest if isinstance(c, dict))
+            if 'discount' in latest.lower() or len(patient_turns) > 1:
+                return AIMessage(content='', tool_calls=[{'name': 'escalate_to_human',
+                    'args': {'reason': 'Discount request' if 'discount' in latest.lower() else 'Missing warranty after clarification', 'summary': latest}, 'id': 'fact-call'}])
+            facts = json.loads(next(m.content for m in messages if '"label": "clinic knowledge"' in m.content))['data']
+            if 'warranty' in latest.lower():
+                return AIMessage(content='Which treatment warranty are you asking about?')
+            return AIMessage(content=facts['offers'][0]['text'] if facts['offers'] else 'No active offer is listed.')
+    class Patient(FakeModel):
+        async def ainvoke(self, messages):
+            return AIMessage(content='I mean your implant warranty.')
+    ledger = Ledger(limit=100)
+    models = fake_models(ledger)
+    model = FactModel('writer')
+    models['writer'] = MeteredModel(model, ledger)
+    models['patient'] = MeteredModel(Patient('patient'), ledger)
+    scenarios = [s for s in load_scenarios(ROOT / 'scenarios.json') if s.get('fact_sheet_variant')]
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger, agent='v2'))
+    assert len(results) == 4
+    assert all(r['passed'] for r in results), [(r['id'], r) for r in results if not r['passed']]
+    missing = next(r for r in results if r['id'] == 'en-fact-missing')
+    assert not missing['turns'][0]['actions']
+    assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in missing['turns'][1]['actions'])
+    assert any(a['type'] == 'UPDATE_SUMMARY' for a in missing['turns'][1]['actions'])

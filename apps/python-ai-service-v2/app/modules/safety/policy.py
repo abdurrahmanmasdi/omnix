@@ -101,12 +101,16 @@ class DeliverySafetyPolicy:
         r"(?:yok say|görmezden gel|unut).{0,40}(?:talimat|kural)|"
         r"(?:تجاهل|تجاوز|انس|انسى).{0,60}(?:التعليمات|تعليمات|القواعد|قواعد)|"
         r"(?:اكشف|أظهر|اطبع).{0,40}(?:تعليمات النظام|رسالة النظام)",
-        "human_handoff_request": r"\b(?:human|real person|live (?:agent|person)|operator|supervisor|representative)\b|"
+        "human_handoff_request": r"^(?:a |an )?(?:human|real person|live agent|operator|supervisor|representative)(?: please)?[.!?]*$|"
+        r"\b(?:want|need|request|prefer)\s+(?:(?:a|an|the|your)\s+)?(?:human|real person|live agent|operator|supervisor|representative)\b|"
         r"\b(?:speak|talk|chat)\s+(?:to|with)\s+(?:(?:a|an|the|your|some)\s+)?"
-        r"(?:person|someone|somebody|agent|doctor|dentist|manager|staff|coordinator|team member|customer service)\b|"
+        r"(?:human|real person|live agent|operator|supervisor|representative|person|someone|somebody|agent|doctor|dentist|manager|staff|coordinator|team member|customer service)\b|"
         r"\b(?:connect|transfer|put)\s+me\s+(?:through\s+)?(?:to|with)\b|"
         r"\binsan(?:la|a)\b|\bbiri(?:yle|siyle)\s+(?:görüş|konuş)|\byetkili\w*|\btemsilci\w*|"
-        r"\bgerçek\s+bir\s+(?:kişi|insan)\w*|\b(?:doktor|hekim|koordinatör)\w*\s+(?:görüş|konuş)",
+        r"\bgerçek\s+bir\s+(?:kişiyle|insanla)\s+(?:görüş|konuş)|\b(?:doktor|hekim|koordinatör)\w*\s+(?:görüş|konuş)|"
+        r"(?:أريد|اريد|أحتاج|احتاج).{0,30}(?:التحدث|التواصل|شخص|إنسان|انسان|موظف)|"
+        r"(?:تحدث|أتحدث|اتحدث|التحدث|التواصل|تكلم).{0,15}(?:مع|إلى|الى).{0,20}(?:شخص|إنسان|انسان|موظف|الفريق|الطبيب)|"
+        r"(?:حولني|حوّلني|وصلني|أحِلني).{0,20}(?:شخص|إنسان|انسان|موظف|الفريق|الطبيب)",
         "medical_diagnosis_request": r"\b(?:diagnose|what(?:'s| is) wrong with|is it broken|is this infected|how do i treat|what should i take|"
         r"do i have (?:an? )?(?:infection|abscess|cavity|cavities|disease|cancer|gum disease)|"
         r"can you check my (?:teeth|tooth|gums?|x-?ray|photo|swelling|wound|implant))\b",
@@ -149,5 +153,20 @@ class DeliverySafetyPolicy:
         return cls._check(text, cls.INPUT_PATTERNS)
 
     @classmethod
-    def check_output(cls, text: str) -> PolicyDecision:
-        return cls._check(text, cls.OUTPUT_PATTERNS)
+    def check_output(cls, text: str, approved_offers: list[str] | tuple = ()) -> PolicyDecision:
+        # Only the discount/offer gate may accept exact trusted active-offer text.
+        # Medical, identity, urgency and appointment boundaries still check it.
+        patterns = dict(cls.OUTPUT_PATTERNS)
+        offer_pattern = patterns.pop("false_urgency_or_unauthorized_discount")
+        decision = cls._check(text, patterns)
+        if not decision.allowed:
+            return decision
+        urgency = cls._check(text, {"false_urgency_or_unauthorized_discount":
+            r"\b(?:expires today|limited time|act now|only \d+ left|sale ends|buy now or)\b"})
+        if not urgency.allowed:
+            return urgency
+        remainder = text
+        for offer in sorted(approved_offers, key=len, reverse=True):
+            if isinstance(offer, str) and offer.strip():
+                remainder = remainder.replace(offer, "[approved clinic offer]")
+        return cls._check(remainder, {"false_urgency_or_unauthorized_discount": offer_pattern})

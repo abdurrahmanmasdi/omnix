@@ -78,6 +78,7 @@ model Organization {
   crmSyncLogs        CrmSyncLog[]
   credentials        Credential[]
   outboundAttempts   OutboundAttempt[]
+  clinicFactSheets   ClinicFactSheet[]
   accountInvitations AccountInvitation[]
 
   @@map("organizations")
@@ -784,4 +785,20 @@ model AccountActivationEvent {
 
   @@index([userId, createdAt])
   @@map("account_activation_events")
+}
+
+// Each saved draft is a revision; approved revisions remain immutable.
+model ClinicFactSheet {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version        Int
+  facts          Json
+  approvedAt     DateTime?
+  approvedBy     String?      @db.Uuid
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, version])
+  @@index([organizationId, approvedAt])
+  @@map("clinic_fact_sheets")
 }

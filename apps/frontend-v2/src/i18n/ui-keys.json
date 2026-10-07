@@ -541,5 +541,6 @@
   "Sync deadline expired": "me8d1605211ce",
   "Request outcome uncertain": "mc1e9c111ed52",
   "Subscribed": "m25c4797cdc7f",
-  "Meta webhook configuration required": "mf731f3562bf3"
+  "Meta webhook configuration required": "mf731f3562bf3",
+  "Clinic facts": "clinicFacts"
 }

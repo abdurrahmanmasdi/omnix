@@ -41,6 +41,7 @@ const LABEL_MAP: Record<string, string> = {
   dashboard: "Dashboard",
   profile: "Profile",
   team: "Clinic team",
+  "clinic-facts": "Clinic facts",
   leads: "Leads",
   conversations: "Conversations",
   pipeline: "Pipeline",

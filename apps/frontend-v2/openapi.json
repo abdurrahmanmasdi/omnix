@@ -3008,6 +3008,96 @@
         },
         "tags": ["Channels"]
       }
+    },
+    "/organizations/current/clinic-facts": {
+      "get": {
+        "operationId": "ClinicFactsController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicFactSheetDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Facts"]
+      },
+      "put": {
+        "operationId": "ClinicFactsController_save",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveClinicFactsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicFactRevisionDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Facts"]
+      }
+    },
+    "/organizations/current/clinic-facts/approve": {
+      "post": {
+        "operationId": "ClinicFactsController_approve",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveClinicFactsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicFactRevisionDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Facts"]
+      }
     }
   },
   "info": {
@@ -4487,6 +4577,198 @@
           }
         },
         "required": ["code"]
+      },
+      "ClinicTreatmentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "priceMin": {
+            "type": "number"
+          },
+          "priceMax": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "enum": ["EUR", "USD", "TRY", "GBP"]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "included": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "priceMin",
+          "priceMax",
+          "currency",
+          "unit",
+          "included"
+        ]
+      },
+      "ClinicDoctorDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "years": {
+            "type": "number"
+          }
+        },
+        "required": ["name", "role", "years"]
+      },
+      "ClinicOfferDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["text", "enabled", "validFrom", "validTo"]
+      },
+      "ClinicFactsDto": {
+        "type": "object",
+        "properties": {
+          "treatments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClinicTreatmentDto"
+            }
+          },
+          "warranty": {
+            "type": "string"
+          },
+          "doctors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClinicDoctorDto"
+            }
+          },
+          "process": {
+            "type": "string"
+          },
+          "days": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "paymentMethods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClinicOfferDto"
+            }
+          }
+        },
+        "required": [
+          "treatments",
+          "warranty",
+          "doctors",
+          "process",
+          "days",
+          "location",
+          "paymentMethods",
+          "languages",
+          "offers"
+        ]
+      },
+      "ClinicFactRevisionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/ClinicFactsDto"
+          },
+          "approvedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "approvedBy": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["version", "facts", "approvedAt", "approvedBy"]
+      },
+      "ClinicFactSheetDto": {
+        "type": "object",
+        "properties": {
+          "latest": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClinicFactRevisionDto"
+              }
+            ]
+          },
+          "approved": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClinicFactRevisionDto"
+              }
+            ]
+          }
+        },
+        "required": ["latest", "approved"]
+      },
+      "SaveClinicFactsDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "description": "Latest saved version, or zero for the first draft"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/ClinicFactsDto"
+          }
+        },
+        "required": ["expectedVersion", "facts"]
+      },
+      "ApproveClinicFactsDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": ["version"]
       }
     }
   }

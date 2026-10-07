@@ -1,0 +1,38 @@
+@media print {
+  @page {
+    margin: 18mm;
+  }
+  body:has(#patient-report) * {
+    visibility: hidden;
+  }
+  body:has(#patient-report),
+  body:has(#patient-report) div,
+  body:has(#patient-report) main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #patient-report,
+  #patient-report * {
+    visibility: visible;
+  }
+  #patient-report {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    padding: 0;
+    color: black;
+    background: white;
+    font-size: 11pt;
+  }
+  #patient-report .report-controls {
+    display: none;
+  }
+  #patient-report .text-muted-foreground {
+    color: #444;
+  }
+  #patient-report .report-event {
+    break-inside: avoid;
+  }
+}

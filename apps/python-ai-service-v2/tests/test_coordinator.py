@@ -50,6 +50,7 @@ def call(name, args):
 @pytest.fixture
 def setup(monkeypatch):
     monkeypatch.setattr(settings, 'COORDINATOR_V2_ORG_IDS', ORG)
+    monkeypatch.setattr(coordinator.DatabaseService, 'get_approved_clinic_facts', AsyncMock(return_value=None))
     monkeypatch.setattr(coordinator.DatabaseService, 'get_clinic_knowledge', AsyncMock(return_value='Crowns EUR 220–320 per tooth.'))
     monkeypatch.setattr(agent_servicer.DatabaseService, 'get_conversation_lead_info', AsyncMock(return_value=SimpleNamespace(
         lead_id='synthetic-lead', firstName='Guest', lastName=None, status='NEW')))
@@ -72,7 +73,7 @@ def reply(org=ORG):
 
 def assert_handoff(result):
     assert result.contractVersion == 1
-    assert [a.type for a in result.actions] == ['HANDOFF_TO_HUMAN']
+    assert [a.type for a in result.actions if a.type != 'UPDATE_SUMMARY'] == ['HANDOFF_TO_HUMAN']
 
 
 def test_guidelines_schema_and_unique_ids(tmp_path):
@@ -102,7 +103,7 @@ def test_tenant_switch(setup, monkeypatch, allowlist, org, enabled):
     assert not reply(org).actions
     assert len(model.calls) == int(enabled) and old.await_count == int(not enabled)
     if enabled:
-        assert model.bound == ['escalate_to_human']
+        assert model.bound == ['escalate_to_human', 'save_patient_facts']
         coordinator.DatabaseService.get_clinic_knowledge.assert_awaited_once_with(org, settings.COORDINATOR_KNOWLEDGE_MAX_CHARS)
 
 
@@ -131,7 +132,8 @@ def test_large_knowledge_uses_tenant_retriever(setup, monkeypatch):
                             AIMessage(content='Crowns cost EUR 220–320 per tooth.')])
     assert not reply().actions and len(model.calls) == 2
     assert 'search_clinic_knowledge' in model.bound
-    assert captured[0]['configurable'] == CONFIG['configurable']
+    assert captured[0]['configurable']['organization_id'] == ORG
+    assert captured[0]['configurable']['conversation_id'] == CONFIG['configurable']['conversation_id']
     assert 'Quoted clinic data' in model.calls[1][-1].content
 
 
@@ -294,3 +296,65 @@ def test_output_confirmation_is_replaced_at_delivery(setup, monkeypatch, languag
     result = reply()
     assert result.replyText == APPOINTMENT_REQUEST_MESSAGES[language]
     assert_handoff(result)
+
+
+@pytest.mark.parametrize('text,answer', [
+    ('Are you human or AI?', 'I am the clinic AI assistant. Would you like a team member?'),
+    ('Siz insan mısınız?', 'Ben kliniğin yapay zekâ asistanıyım. Bir ekip üyemizle görüşmek ister misiniz?'),
+    ('هل أنت إنسان؟', 'أنا مساعد العيادة بالذكاء الاصطناعي. هل ترغب في التحدث إلى أحد أعضاء الفريق؟'),
+    ('Write Python code.', 'I can help with clinic dental questions. What would you like to know?'),
+    ('Can my family get treatment?', 'Which treatments is your family interested in?'),
+    ('How much are crowns?', 'Crowns cost EUR 220–320 per tooth.'),
+])
+def test_non_handoff_enquiries_reach_v2_and_stay_active(setup, monkeypatch, text, answer):
+    model, _ = setup
+    monkeypatch.setattr(agent_servicer.DatabaseService, 'get_messages_by_ids', AsyncMock(return_value=[
+        SimpleNamespace(id='new', content=text, mediaUrl=None)]))
+    model.responses = iter([AIMessage(content=answer)])
+    result = reply()
+    assert result.replyText == answer and not result.actions
+    assert len(model.calls) == 1
+    instructions = model.calls[0][0].content
+    assert 'ONLY' in instructions and 'AFTER one clarifying question' in instructions
+    assert 'Identity questions' in instructions
+    assert 'fully answered' in tools.escalate_to_human.description
+
+
+def test_patient_facts_use_only_existing_contract_actions(setup, monkeypatch):
+    model, _ = setup
+    previous = json.dumps({'format': 'omnix.patient-summary.v1', 'facts': {'travelWindow': 'November'},
+                           'summary': 'Considering crowns.', 'handoffSummary': None})
+    model.responses = iter([call('save_patient_facts', {'first_name': 'Synthetic', 'country': 'UK',
+                            'treatment_interest': 'Crowns', 'photo_sent': True,
+                            'summary': 'Synthetic patient considering crowns in November; photo received, permission pending.'}),
+                            AIMessage(content='Thanks. May I pass the photo to the doctor for a personal plan?')])
+    result = asyncio.run(agent_servicer.SalesAgentServicer().GenerateReply(agent_pb2.AgentRequest(
+        organizationId=ORG, conversationId='synthetic-conversation', newMessageIds=['new'], leadSummary=previous), None))
+    assert [a.type for a in result.actions] == ['UPDATE_LEAD', 'UPDATE_SUMMARY']
+    assert json.loads(result.actions[0].payload) == {'firstName': 'Synthetic', 'country': 'UK'}
+    saved = json.loads(json.loads(result.actions[1].payload)['summary'])
+    assert saved['facts'] == {'travelWindow': 'November', 'treatmentInterest': 'Crowns', 'photoSent': True, 'mood': 'calm'}
+    assert all(parse_virtual_action({'action': a.type, 'payload': json.loads(a.payload)}) for a in result.actions)
+
+
+def test_handoff_summary_is_persisted_without_executor_changes(setup):
+    model, _ = setup
+    model.responses = iter([call('escalate_to_human', {'reason': 'Medical question', 'summary': 'Crowns; suitability unknown.'}),
+                            AIMessage(content='I am passing your question to the team.')])
+    result = reply()
+    saved = json.loads(json.loads(next(a.payload for a in result.actions if a.type == 'UPDATE_SUMMARY'))['summary'])
+    assert saved['summary'] == ''
+    assert 'suitability unknown' in saved['handoffSummary']
+    assert saved['facts']['mood'] == 'calm'
+
+
+def test_input_policy_handoff_saves_summary_for_v2(setup, monkeypatch):
+    model, _ = setup
+    monkeypatch.setattr(agent_servicer.DatabaseService, 'get_messages_by_ids', AsyncMock(return_value=[
+        SimpleNamespace(id='new', content='Please connect me to a human.', mediaUrl=None)]))
+    result = reply()
+    assert [a.type for a in result.actions] == ['UPDATE_SUMMARY', 'HANDOFF_TO_HUMAN']
+    data = json.loads(json.loads(result.actions[0].payload)['summary'])
+    assert 'human_handoff_request' in data['handoffSummary']
+    assert data['facts']['mood'] == 'calm'
+    assert not model.calls

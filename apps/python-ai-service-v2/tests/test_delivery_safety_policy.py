@@ -101,3 +101,20 @@ def test_staff_confirmation_boundary_is_allowed(reply):
 ])
 def test_multilingual_injection_variants(message):
     assert DeliverySafetyPolicy.check_input(message).reason == "prompt_injection"
+
+
+@pytest.mark.parametrize('message', [
+    'Are you human or AI?', 'Are you a real person?', 'Is a human answering?',
+    'Siz insan mısınız yoksa yapay zekâ mı?', 'Gerçek bir kişi misiniz?',
+    'هل أنت إنسان أم ذكاء اصطناعي؟', 'هل أنت شخص حقيقي؟',
+])
+def test_identity_questions_do_not_request_transfer(message):
+    assert DeliverySafetyPolicy.check_input(message).allowed
+
+
+@pytest.mark.parametrize('message', [
+    'Are you AI? I want a human.', 'هل يمكنني التحدث مع شخص حقيقي؟',
+    'أريد التحدث مع موظف', 'Human please',
+])
+def test_identity_with_explicit_transfer_still_hands_off(message):
+    assert DeliverySafetyPolicy.check_input(message).reason == 'human_handoff_request'
