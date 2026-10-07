@@ -2,6 +2,12 @@
 
 _Single source of truth since 2026-10-06 (D-027). Older docs: `docs/reference/` and git history._
 
+## 0. Founder context (read this — it shapes many decisions)
+- The founder is **Syrian, living in Turkey under temporary protection** (not a Turkish citizen). Reads Turkish and Arabic; native Turkish copy review must come from a native speaker (e.g. the pilot clinic).
+- **No registered company until the first sales** (by choice, Turkish taxes). Pilots are free or symbolic, with a written "we pay if X" commitment. Company/tax questions go to an accountant who works with foreigners.
+- Meta business verification / Tech Provider under OmniX is not possible yet → pilot WhatsApp coexistence goes through the **clinic's own 360dialog account** (card M4b; guide `reference/ops/META_WHATSAPP_SETUP.md`).
+- Very tight budget: model costs in cents, credits matter, no extra CI/tests/tooling.
+
 ## 1. What OmniX is
 
 - **Brand:** OmniX. Old names: OmniDesk AI, OmniDesk_ai, AI Sales Agent. Same product.

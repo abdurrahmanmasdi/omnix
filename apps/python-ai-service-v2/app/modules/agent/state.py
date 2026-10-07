@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated, Sequence
+from typing import TypedDict, Annotated, Sequence, Literal
 from langchain_core.messages import BaseMessage
 import operator
 
@@ -9,6 +9,7 @@ class CustomerData(TypedDict, total=False):
     country: str | None
     service_interested: str | None
     is_medical_evidence_provided: bool
+    detected_mood: Literal["calm", "anxious", "frustrated", "angry", "urgent"]
 
 # 2. The Global State (حالة المحادثة الكاملة)
 class ConversationState(TypedDict):

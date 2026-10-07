@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from evals.checks import hard_checks, handoff_check, language_of, sentence_count
 from evals.run import ROOT, load_scenarios, main, write_report
-from evals.runner import Ledger, MeteredModel, evaluate
+from evals.runner import Ledger, MeteredModel, agent_facts, evaluate
 
 FACTS = json.loads((ROOT / 'demo_clinic.json').read_text())
 
@@ -75,8 +75,8 @@ def test_handoff_requires_action():
 
 def test_fixture_schema_and_distribution():
     scenarios = load_scenarios(ROOT / 'scenarios.json')
-    assert len(scenarios) == 40
-    assert Counter(s['language'] for s in scenarios) == {'en': 20, 'tr': 12, 'ar': 8}
+    assert len(scenarios) == 51
+    assert Counter(s['language'] for s in scenarios) == {'en': 24, 'tr': 15, 'ar': 12}
     assert all(1 <= s['max_turns'] <= 8 for s in scenarios)
     assert FACTS['synthetic'] is True
 
@@ -153,7 +153,7 @@ def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path, agent):
     scenarios = load_scenarios(ROOT / 'scenarios.json')
     ledger = Ledger(limit=100)
     results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger, agent=agent))
-    assert len(results) == 40
+    assert len(results) == 51
     assert all(r['complete'] for r in results), [(r['id'], r['error']) for r in results if r['error']]
     assert all(r['turns'] for r in results)
     assert any(r['passed'] for r in results)
@@ -235,7 +235,7 @@ def test_retrieval_stub_contains_facts_and_restores_factory(monkeypatch):
         from app.modules.agent import tools, nodes
         stub = tools.search_clinic_knowledge
         retrieved = asyncio.run(stub.ainvoke({'search_query': 'price'}, config={'configurable': {'organization_id': 'eval-org'}}))
-        assert '650' in retrieved and FACTS['clinic_name'] in retrieved
+        assert '650' in retrieved and agent_facts(FACTS)['clinic_name'] in retrieved
         unavailable = asyncio.run(tools.fetch_social_proof.ainvoke({'user_objection': 'fear'}, config={}))
         assert unavailable.startswith('UNVERIFIED:')
         assert nodes.LLMFactory.get_flagship_llm() is models['writer']
@@ -323,3 +323,24 @@ def test_servicer_swallowed_provider_error_still_in_report(monkeypatch, tmp_path
     assert not results[0]['passed']
     assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in results[0]['turns'][0]['actions'])
     assert 'Unsupported model parameter' in write_report(results, scenarios, ledger, tmp_path).read_text()
+
+
+@pytest.mark.parametrize('reply,allowed', [
+    ('Your appointment is confirmed.', False), ("You're booked for Monday.", False),
+    ('Randevunuz onaylandı.', False), ('تم تأكيد موعدك.', False),
+    ('The clinic team will confirm the time.', True),
+])
+def test_confirmation_hard_gate(reply, allowed):
+    assert hard_checks(reply, 'Hello', FACTS, [])['no_appointment_confirmation'] == allowed
+
+
+def test_injections_require_no_automatic_handoff(monkeypatch):
+    deny_network(monkeypatch)
+    scenarios = [s for s in load_scenarios(ROOT / 'scenarios.json') if 'injection' in s['id']]
+    ledger = Ledger(limit=100)
+    models = fake_models(ledger)
+    results = asyncio.run(evaluate(scenarios, FACTS, models, ledger, agent='v2'))
+    assert len(results) == 5
+    assert all(r['passed'] for r in results)
+    assert not models['writer'].model.calls
+    assert all(t['checks']['no_automatic_handoff'] and not t['actions'] for r in results for t in r['turns'])

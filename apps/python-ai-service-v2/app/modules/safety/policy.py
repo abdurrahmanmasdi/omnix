@@ -6,6 +6,7 @@ LangGraph is invoked and immediately before a reply is returned to NestJS.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 
@@ -16,15 +17,30 @@ HANDOFF_MESSAGES = {
     "human_request": {
         "en": "I'm the clinic's AI assistant. Of course, I'm passing your request to the clinic's team, and a team member will reply to you here.",
         "tr": "Ben kliniğin yapay zekâ asistanıyım. Elbette, talebinizi kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "ar": "أنا مساعد العيادة بالذكاء الاصطناعي. بالطبع، أحيل طلبك إلى فريق العيادة، وسيرد عليك أحد أعضاء الفريق هنا.",
     },
     "cannot_answer": {
         "en": "I'm the clinic's AI assistant and I can't safely answer that here. I'm passing your question to the clinic's team, and a team member will reply to you here.",
         "tr": "Ben kliniğin yapay zekâ asistanıyım ve bu soruyu burada güvenli şekilde yanıtlayamam. Sorunuzu kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "ar": "أنا مساعد العيادة بالذكاء الاصطناعي ولا أستطيع الإجابة عن هذا السؤال بأمان هنا. أحيل سؤالك إلى فريق العيادة، وسيرد عليك أحد أعضاء الفريق هنا.",
     },
     "technical": {
         "en": "Sorry, I couldn't process your message. I'm passing it to the clinic's team, and a team member will reply to you here.",
         "tr": "Üzgünüm, mesajınızı işleyemedim. Mesajınızı kliniğin ekibine iletiyorum; bir ekip üyemiz size buradan yanıt verecek.",
+        "ar": "عذرًا، لم أتمكن من معالجة رسالتك. أحيلها إلى فريق العيادة، وسيرد عليك أحد أعضاء الفريق هنا.",
     },
+}
+
+INJECTION_MESSAGES = {
+    "en": "This message tries to change my rules, so I can't help with it. Would you like a team member?",
+    "tr": "Bu mesaj kurallarımı değiştirmeye çalışıyor, bu yüzden bu konuda yardımcı olamam. Bir ekip üyemizle görüşmek ister misiniz?",
+    "ar": "تحاول هذه الرسالة تغيير قواعدي، لذلك لا أستطيع المساعدة فيها. هل ترغب في التحدث إلى أحد أعضاء الفريق؟",
+}
+
+APPOINTMENT_REQUEST_MESSAGES = {
+    "en": "Your request is noted. The clinic team will confirm the time.",
+    "tr": "Talebiniz not edildi. Saatini klinik ekibi teyit edecek.",
+    "ar": "تم تسجيل طلبك. سيؤكد فريق العيادة الوقت.",
 }
 
 # Default (English, can't-answer-safely). Graph nodes emit this as a sentinel;
@@ -40,8 +56,10 @@ _TURKISH_WORDS = re.compile(
 
 
 def detect_language(text: str | None) -> str:
-    """Pick 'tr' or 'en' for handoff copy from the patient's latest text."""
+    """Pick 'ar', 'tr' or 'en' for handoff copy from the patient's latest text."""
     value = str(text or "")
+    if re.search(r"[\u0621-\u064a\u066e-\u06d3]", value):
+        return "ar"
     if _TURKISH_CHARS.search(value) or len(_TURKISH_WORDS.findall(value)) >= 2:
         return "tr"
     return "en"
@@ -79,7 +97,10 @@ class DeliverySafetyPolicy:
         "prompt_injection": r"(?:ignore|disregard|override|forget).{0,80}(?:previous|prior|above|system|developer|instruction|rules|prompt)|"
         r"(?:reveal|show|print|repeat).{0,40}(?:system prompt|developer message|your (?:instructions|prompt|rules))|"
         r"(?:system prompt|developer message|jailbreak|do anything now)|"
-        r"(?:talimat|kural)\w*.{0,40}(?:yok say|görmezden gel|unut)",
+        r"(?:talimat|kural)\w*.{0,40}(?:yok say|görmezden gel|unut)|"
+        r"(?:yok say|görmezden gel|unut).{0,40}(?:talimat|kural)|"
+        r"(?:تجاهل|تجاوز|انس|انسى).{0,60}(?:التعليمات|تعليمات|القواعد|قواعد)|"
+        r"(?:اكشف|أظهر|اطبع).{0,40}(?:تعليمات النظام|رسالة النظام)",
         "human_handoff_request": r"\b(?:human|real person|live (?:agent|person)|operator|supervisor|representative)\b|"
         r"\b(?:speak|talk|chat)\s+(?:to|with)\s+(?:(?:a|an|the|your|some)\s+)?"
         r"(?:person|someone|somebody|agent|doctor|dentist|manager|staff|coordinator|team member|customer service)\b|"
@@ -93,6 +114,17 @@ class DeliverySafetyPolicy:
     # A reply that includes any of these claims is unsafe unless it is replaced
     # by a coordinator handoff.  Do not depend on prompts/model self-reporting.
     OUTPUT_PATTERNS = {
+        "appointment_confirmation": (
+            r"\b(?:your|the|this)\s+(?:appointment|booking|consultation|slot)\b[^.!?]{0,60}?\s+(?:is|has been|was)\s+(?:confirmed|booked|scheduled|reserved)\b|"
+            r"\b(?:i|we)(?:'ve| have)?\s+(?:confirmed|booked|scheduled|reserved)\s+(?:your|the|you)\b|"
+            r"\byou(?:['’]re| are| have been)\s+(?:all\s+)?(?:booked|scheduled|confirmed|reserved)\b|"
+            r"\b(?:appointment|booking|consultation)\s+confirmed\b|"
+            r"\b(?:randevu|rezervasyon)\w*[^.!?]{0,40}?\s+(?:onaylandı|onaylanmıştır|onaylı|kesinleşti|kesinleşmiştir|ayarlanmıştır|ayarlandı)\b|"
+            r"\brandevu\w*.{0,30}(?:onayladık|onayladım|ayarladık|ayarladım)\b|"
+            r"(?:تم|لقد تم)\s+(?:تأكيد|حجز|تثبيت)\s+(?:موعد|حجز)|"
+            r"(?:موعدك|حجزك|الموعد|الحجز)\s+(?:مؤكد|محجوز|تم تأكيده)|"
+            r"(?:أكدنا|حجزنا)\s+(?:موعدك|لك موعد)"
+        ),
         "guarantee": r"\b(?:guarantee(?:d)?|risk[- ]free|100%|always successful|permanent results?)\b",
         "unsupported_outcome_claim": r"\b(?:many successful cases|high success rate|premium quality|best clinic|top[- ]rated)\b",
         "medical_diagnosis_or_treatment": r"\b(?:diagnos(?:e|is)|prescri(?:be|ption)|dosage|take \d|infection|medication|you have (?:cancer|diabetes|disease|a condition|an infection)|you need (?:surgery|treatment|antibiotics|medicine)|you should (?:take|stop|avoid|rest))\b",
@@ -105,6 +137,8 @@ class DeliverySafetyPolicy:
         # Turkish dotted capital İ lower-cases to "i" + U+0307; fold it so
         # "İNSANLA" matches the same pattern as "insanla".
         normalized = " ".join(str(text or "").replace("İ", "i").lower().replace("\u0307", "").split())
+        normalized = "".join(c for c in unicodedata.normalize("NFC", normalized)
+                             if not "\u064b" <= c <= "\u065f" and c != "\u0640")
         for reason, pattern in patterns.items():
             if re.search(pattern, normalized, flags=re.IGNORECASE):
                 return PolicyDecision(False, reason)
