@@ -306,7 +306,7 @@ class SalesAgentServicer(agent_pb2_grpc.SalesAgentServicer):
             # 5. Extract Final Content & Media
             ai_reply_msg = final_state["messages"][-1]
             ai_reply_text = ai_reply_msg.content
-            output_decision = DeliverySafetyPolicy.check_output(ai_reply_text)
+            output_decision = DeliverySafetyPolicy.check_output(ai_reply_text, final_state.get("approved_offer_texts", []))
             if not output_decision.allowed:
                 logger.warning("OUTPUT_POLICY_BLOCKED conversation_id=%s", conv_id)
                 return _blocked_reply(output_decision.reason or "unsafe_output", language)

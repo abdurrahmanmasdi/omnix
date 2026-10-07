@@ -165,6 +165,7 @@ class AgentHarness:
         self.stack.enter_context(patch.object(database, 'SessionLocal', side_effect=AssertionError('DB forbidden in eval')))
         self.stack.enter_context(patch.object(tools, 'SessionLocal', side_effect=AssertionError('DB forbidden in eval')))
         db = agent_servicer.DatabaseService
+        self.stack.enter_context(patch.object(db, 'get_approved_clinic_facts', AsyncMock(return_value=None)))
         self.stack.enter_context(patch.object(db, 'get_clinic_knowledge', AsyncMock(return_value=json.dumps(agent_facts(self.facts), ensure_ascii=False))))
         self.stack.enter_context(patch.object(db, 'get_conversation_lead_info', AsyncMock(return_value=SimpleNamespace(
             lead_id='eval-lead', firstName='Guest', lastName=None, status='NEW', externalContactId=None))))

@@ -50,6 +50,7 @@ def call(name, args):
 @pytest.fixture
 def setup(monkeypatch):
     monkeypatch.setattr(settings, 'COORDINATOR_V2_ORG_IDS', ORG)
+    monkeypatch.setattr(coordinator.DatabaseService, 'get_approved_clinic_facts', AsyncMock(return_value=None))
     monkeypatch.setattr(coordinator.DatabaseService, 'get_clinic_knowledge', AsyncMock(return_value='Crowns EUR 220–320 per tooth.'))
     monkeypatch.setattr(agent_servicer.DatabaseService, 'get_conversation_lead_info', AsyncMock(return_value=SimpleNamespace(
         lead_id='synthetic-lead', firstName='Guest', lastName=None, status='NEW')))

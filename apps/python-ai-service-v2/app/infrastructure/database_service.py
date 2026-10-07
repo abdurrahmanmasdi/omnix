@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, timezone
+from copy import deepcopy
 from sqlalchemy import text
 from app.core.database import SessionLocal
 
@@ -88,3 +90,41 @@ class DatabaseService:
                 content = "\n\n".join(rows)
                 return content if len(content) <= max_chars else None
         return await asyncio.to_thread(_fetch)
+
+
+    @staticmethod
+    async def get_approved_clinic_facts(org_id: str) -> dict | None:
+        """Latest approved revision only, with active offers; never read a draft."""
+        if not org_id:
+            raise ValueError("Fact sheet requires tenant context")
+
+        def _fetch():
+            with SessionLocal() as db:
+                row = db.execute(text(
+                    'SELECT version, facts FROM clinic_fact_sheets '
+                    'WHERE "organizationId" = :org_id AND "approvedAt" IS NOT NULL '
+                    'ORDER BY version DESC LIMIT 1'
+                ), {"org_id": org_id}).mappings().first()
+                if not row:
+                    return None
+                return {"version": row["version"], **active_clinic_facts(row["facts"])}
+        return await asyncio.to_thread(_fetch)
+
+
+def active_clinic_facts(facts: dict, now: datetime | None = None) -> dict:
+    """Malformed/undated offers are inactive; compare aware instants in UTC."""
+    result = deepcopy(facts)
+    now = now or datetime.now(timezone.utc)
+    offers = []
+    for offer in result.get('offers', []):
+        if offer.get('enabled') is not True:
+            continue
+        try:
+            start = datetime.fromisoformat(offer['validFrom'].replace('Z', '+00:00'))
+            end = datetime.fromisoformat(offer['validTo'].replace('Z', '+00:00'))
+            if start.tzinfo and end.tzinfo and start <= now <= end:
+                offers.append(offer)
+        except (KeyError, TypeError, ValueError):
+            continue
+    result['offers'] = offers
+    return result

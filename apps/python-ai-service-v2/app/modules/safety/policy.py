@@ -153,5 +153,20 @@ class DeliverySafetyPolicy:
         return cls._check(text, cls.INPUT_PATTERNS)
 
     @classmethod
-    def check_output(cls, text: str) -> PolicyDecision:
-        return cls._check(text, cls.OUTPUT_PATTERNS)
+    def check_output(cls, text: str, approved_offers: list[str] | tuple = ()) -> PolicyDecision:
+        # Only the discount/offer gate may accept exact trusted active-offer text.
+        # Medical, identity, urgency and appointment boundaries still check it.
+        patterns = dict(cls.OUTPUT_PATTERNS)
+        offer_pattern = patterns.pop("false_urgency_or_unauthorized_discount")
+        decision = cls._check(text, patterns)
+        if not decision.allowed:
+            return decision
+        urgency = cls._check(text, {"false_urgency_or_unauthorized_discount":
+            r"\b(?:expires today|limited time|act now|only \d+ left|sale ends|buy now or)\b"})
+        if not urgency.allowed:
+            return urgency
+        remainder = text
+        for offer in sorted(approved_offers, key=len, reverse=True):
+            if isinstance(offer, str) and offer.strip():
+                remainder = remainder.replace(offer, "[approved clinic offer]")
+        return cls._check(remainder, {"false_urgency_or_unauthorized_discount": offer_pattern})

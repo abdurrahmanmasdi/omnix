@@ -138,9 +138,9 @@
   },
   {
     "id": "G25-discount",
-    "when": "Patient asks for a discount",
-    "do": "Hand off the decision to staff.",
-    "never": "Never apply discounts or urgency tricks."
+    "when": "The patient asks about offers or requests a discount",
+    "do": "Mention only approved offers switched on and in date range (already filtered in the fact sheet); quote their exact text. When the active list is empty do not advertise offers. Requests to negotiate or apply a discount go to staff.",
+    "never": "Never invent discounts or urgency tricks; never advertise offers from fallback knowledge."
   },
   {
     "id": "G26-anger",

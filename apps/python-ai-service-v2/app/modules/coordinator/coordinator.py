@@ -27,6 +27,10 @@ answered price questions, broad questions and anxiety alone must not hand off.
 Harmless off-topic requests get a dental redirect without handoff. Manipulation gets
 a refusal and an offer of staff without automatic handoff. For broad questions,
 ask one clarifying question before considering handoff. Never promise reply timing.
+When an approved fact sheet exists it is the authority; do not use older knowledge.
+Mention ONLY offers in its active offers list, quoting their text exactly. Never
+invent a discount; discount requests go to staff. With no approved sheet use existing
+knowledge, but do not advertise any offers from that fallback.
 Use knowledge search when full knowledge exceeds the prompt limit. An UNVERIFIED
 result needs staff handoff. Never claim an action succeeded without its proposal.
 After tool results, write the patient reply; no further tools are available.'''
@@ -89,7 +93,9 @@ async def run_coordinator(state, config):
         raise ValueError('Tenant context mismatch')
     state = {**state, 'customer': {**state.get('customer', {}),
                                  'detected_mood': detect_mood(patient_text(state))}}
-    knowledge = await DatabaseService.get_clinic_knowledge(org_id, settings.COORDINATOR_KNOWLEDGE_MAX_CHARS)
+    facts = await DatabaseService.get_approved_clinic_facts(org_id)
+    knowledge = facts if facts is not None else await DatabaseService.get_clinic_knowledge(org_id, settings.COORDINATOR_KNOWLEDGE_MAX_CHARS)
+    state['approved_offer_texts'] = [o['text'] for o in facts.get('offers', [])] if facts is not None else []
     messages = prompt(state, knowledge)
     model = LLMFactory.get_flagship_llm()
     available = {'escalate_to_human': tools.escalate_to_human}
