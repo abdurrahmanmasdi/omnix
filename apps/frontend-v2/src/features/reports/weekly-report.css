@@ -115,3 +115,35 @@
     break-inside: avoid;
   }
 }
+@media print {
+  #weekly-report {
+    font-size: 8.5pt;
+    line-height: 1.2;
+  }
+  #weekly-report .weekly-tile h3 {
+    display: inline;
+  }
+  #weekly-report .weekly-tile > p:not(.text-sm) {
+    display: inline;
+    margin-inline-start: 6pt;
+    font-size: 12pt;
+  }
+  #weekly-report .weekly-tile > .text-sm {
+    margin-block-start: 3pt;
+  }
+}
+@media print {
+  #weekly-report .weekly-tile > p:not(.text-sm) {
+    display: inline-block;
+  }
+  #weekly-report footer {
+    margin-block-start: 3pt;
+    padding: 0;
+    border: 0;
+  }
+}
+@media print {
+  #weekly-report > * + * {
+    margin-block-start: 5pt;
+  }
+}
