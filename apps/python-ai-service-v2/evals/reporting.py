@@ -55,9 +55,9 @@ def manifest(label, agent, scenarios, models, rates, limits):
             'compatibility': 'Account access, API parameters and installed SDK compatibility are untested by offline preflight.'}
 
 
-def aggregate(results, selected):
+def aggregate(results, selected, accounting=None):
     by_id = {r['id']: r for r in results}
-    scores = [t['judge']['score'] for r in results for t in r['turns']]
+    scores = [t['judge']['score'] for r in results for t in r['turns'] if t.get('judged', True)]
     passed = sum(r['passed'] for r in results)
     legacy = sum(r['error'] != 'budget_stop' for r in results)
     languages = {}
@@ -66,12 +66,39 @@ def aggregate(results, selected):
         languages[lang] = {'selected': len(rows), 'attempted': sum(s['id'] in by_id for s in rows),
                            'passed': sum(bool(by_id.get(s['id'], {}).get('passed')) for s in rows)}
     failures = Counter(k for r in results for t in r['turns'] for k, ok in t['checks'].items() if not ok)
+    handoffs = {'expected': 0, 'actual': 0, 'unnecessary': 0, 'missed': 0, 'unassessed': 0}
+    for scenario in selected:
+        expected = scenario['expect_handoff']
+        handoffs['expected'] += expected
+        result = by_id.get(scenario['id'])
+        if result is None:
+            handoffs['unassessed'] += 1
+            continue
+        actions = result.get('actions', [a for t in result['turns'] for a in t['actions']])
+        actual = any(a['type'] == 'HANDOFF_TO_HUMAN' for a in actions)
+        handoffs['actual'] += actual
+        handoffs['unnecessary'] += actual and not expected
+        handoffs['missed'] += expected and not actual
+    samples = [t for r in results for t in r.get('agent_turns', [])]
+    elapsed = sorted(t['seconds'] for t in samples)
+    latency = {'samples': len(elapsed), 'median_seconds': statistics.median(elapsed) if elapsed else None,
+               'p95_seconds': elapsed[math.ceil(.95 * len(elapsed)) - 1] if elapsed else None,
+               'errors': sum(t['error'] for t in samples), 'timeouts': sum(t['timeout'] for t in samples),
+               'writer_calls': sum(t['writer_calls'] for t in samples),
+               'zero_writer_call_turns': sum(t['writer_calls'] == 0 for t in samples)}
+    roles = (accounting or {}).get('roles', {})
+    writer_cost = roles.get('writer', {}).get('cost', 0)
     return {'selected': len(selected), 'attempted': len(results),
             'completed': sum(r['complete'] for r in results), 'unrun': len(selected) - len(results),
             'passed': passed, 'pass_rate': passed / len(selected) if selected else None,
             'legacy_finished_attempts': legacy, 'legacy_pass_rate': passed / legacy if legacy else None,
             'judge_average': sum(scores) / len(scores) if scores else None, 'judge_replies': len(scores),
-            'languages': languages, 'hard_check_failures': dict(failures)}
+            'languages': languages, 'hard_check_failures': dict(failures), 'handoffs': handoffs,
+            'latency': latency, 'provider_errors': sum(len(r.get('provider_errors', [])) for r in results),
+            'provider_timeouts': sum(r['timeouts'] for r in roles.values()),
+            'truncations': sum(r['truncations'] for r in roles.values()),
+            'writer_cost_per_scenario': writer_cost / len(results) if results else None,
+            'writer_cost_per_turn': writer_cost / len(samples) if samples else None}
 
 
 def escaped(value):

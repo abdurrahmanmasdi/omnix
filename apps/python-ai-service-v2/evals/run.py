@@ -2,8 +2,8 @@
 
 Set OPENAI_API_KEY, FLAGSHIP_MODEL, EXTRACTOR_MODEL, CHEAP_MODEL,
 EVAL_PATIENT_MODEL, EVAL_JUDGE_MODEL in the shell, never a dotenv file.
-EVAL_INPUT_USD_PER_MILLION / EVAL_OUTPUT_USD_PER_MILLION apply to ALL calls;
-use the highest chosen model rates for a conservative estimate. Defaults 1/5
+EVAL_<ROLE>_INPUT_USD_PER_MILLION / EVAL_<ROLE>_OUTPUT_USD_PER_MILLION
+override the global EVAL_INPUT_USD_PER_MILLION / EVAL_OUTPUT_USD_PER_MILLION pair. Defaults 1/5
 are illustrative, not a provider price quote. --max-cost defaults to USD 5.
 """
 import argparse
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .reporting import SCHEMA_VERSION, aggregate, escaped, manifest
 
-from .runner import Ledger, MeteredModel, evaluate
+from .runner import Ledger, MeteredModel, evaluate, safe_error
 
 ROOT = Path(__file__).resolve().parent
 
@@ -97,7 +97,7 @@ def resolved_configuration():
 
 def make_models(ledger):
     # Validate all roles before importing/constructing any API client.
-    models = getattr(ledger, 'manifest', {}).get('models') or resolved_configuration()[0]
+    models = (ledger.manifest or {}).get('models') or resolved_configuration()[0]
     if not os.environ.get('OPENAI_API_KEY'):
         raise ValueError('Missing environment variable: OPENAI_API_KEY')
     from langchain_openai import ChatOpenAI
@@ -105,7 +105,7 @@ def make_models(ledger):
     return {role: MeteredModel(ChatOpenAI(
         model=config['model'], api_key=os.environ['OPENAI_API_KEY'], timeout=20,
         max_retries=0, max_tokens=1024,
-        **model_options(config['temperature'], config['reasoning_effort'])), ledger)
+        **model_options(config['temperature'], config['reasoning_effort'])), ledger, role=role, model_id=config['model'])
         for role, config in models.items()}
 
 
@@ -115,33 +115,37 @@ def write_report(results, scenarios, ledger, directory=ROOT / 'reports'):
     run_manifest = getattr(ledger, 'manifest', None)
     basename = run_manifest['run_id'] if run_manifest else datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     path = directory / (basename + '.md')
-    summary = aggregate(results, scenarios)
+    summary = aggregate(results, scenarios, ledger.accounting())
     sidecar = {'schema_version': SCHEMA_VERSION, 'manifest': run_manifest, 'results': results,
-               'aggregate': summary, 'accounting': {'cost': ledger.cost, 'budget_limit': ledger.limit,
-               'budget_stopped': ledger.stopped, 'input_tokens': ledger.input_tokens,
-               'output_tokens': ledger.output_tokens, 'estimated_usage': ledger.estimated_usage}}
+               'aggregate': summary, 'accounting': ledger.accounting()}
     path.with_suffix('.json').write_text(json.dumps(sidecar, ensure_ascii=False, indent=2, allow_nan=False) + '\n')
     complete = [r for r in results if r['error'] != 'budget_stop']
     passed = sum(r['passed'] for r in complete)
-    scores = [t['judge']['score'] for r in results for t in r['turns']]
+    scores = [t['judge']['score'] for r in results for t in r['turns'] if t.get('judged', True)]
     avg = sum(scores) / len(scores) if scores else 0
     lines = ['# Synthetic coordinator evaluation', '',
              f'Primary pass rate (all selected): {summary["passed"]}/{len(scenarios)}.',
              f'Agent: {results[0].get("agent", "injected harness") if results else "no results"}.',
-             f'Selected: {len(scenarios)}; attempted: {len(results)}; completed: {len(complete)}; unrun: {len(scenarios) - len(results)}.',
+             f'Selected: {len(scenarios)}; attempted: {len(results)}; completed: {summary["completed"]}; unrun: {len(scenarios) - len(results)}.',
              f'Pass rate (finished attempts, errors count as failures): {passed}/{len(complete)} ({100 * passed / len(complete) if complete else 0:.1f}%).',
              f'Average reply score: {avg:.2f}/5 ({len(scores)} judged replies).',
              f'Errors/incomplete: {sum(not r["complete"] for r in results)}; budget stopped: {ledger.stopped}.',
              f'Estimated token cost: ${ledger.cost:.4f}; limit: ${ledger.limit:.2f}.',
              f'Input tokens: {ledger.input_tokens}; output tokens: {ledger.output_tokens}; reservation estimates used: {ledger.estimated_usage}.',
-             f'Assumed USD/million rates (all roles): input {ledger.input_rate}, output {ledger.output_rate}. Defaults are illustrative; set actual rates in shell.',
+             ledger.accounting()['assumptions'],
              'A pass requires every reply score ≥4, all hard checks and judge obligations, and expected handoff action by conversation end.',
              'Language, currency and identity checks are conservative heuristics; the judge checks contextual grounding and semantic questions.',
              'Knowledge is a full synthetic fact sheet, not production retrieval quality. Actions are recorded proposals; no backend execution.',
              'Budget reservations include failed calls and structured responses without exposed usage; provider billing may differ.', '',
              '## Model configuration', '']
-    for key in ['FLAGSHIP_MODEL', 'EXTRACTOR_MODEL', 'CHEAP_MODEL', 'EVAL_PATIENT_MODEL', 'EVAL_JUDGE_MODEL']:
-        lines.append(f'- {key}: {escaped(os.environ.get(key, "injected fake model"))}')
+    for role, key in NAMES.items():
+        config = run_manifest['models'][role] if run_manifest else 'injected fake model'
+        lines.append(f'- {key}: {escaped(config)}')
+    lines += ['', '## Role accounting', '', escaped(json.dumps(ledger.accounting(), indent=2)),
+              '', '## Agent turn latency', '', escaped(json.dumps(summary['latency'], indent=2)),
+              'Full in-process agent.reply time, including deterministic/failed turns; excludes patient and judge. Not WhatsApp response speed.',
+              f"Writer cost / attempted scenario: {summary['writer_cost_per_scenario']}; / attempted agent turn: {summary['writer_cost_per_turn']}.",
+              f"Run error: {escaped(ledger.run_error)}."]
     if run_manifest:
         lines += ['', '## Run manifest', '', escaped(json.dumps(run_manifest, ensure_ascii=False, indent=2))]
     lines += ['', '## Worst 10 transcripts', '']
@@ -187,6 +191,7 @@ def main(argv=None):
                         positive(os.environ.get('EVAL_OUTPUT_USD_PER_MILLION', '5')))
         facts = json.loads((ROOT / 'demo_clinic.json').read_text())
         models_config, rates, limits = resolved_configuration()
+        ledger.role_rates = rates
         ledger.manifest = manifest(args.label, args.agent, scenarios, models_config, rates,
                                    {**limits, 'budget_usd': args.max_cost})
         if args.preflight:
@@ -194,8 +199,12 @@ def main(argv=None):
             return 0
         models = make_models(ledger)
     except (ValueError, OSError, argparse.ArgumentTypeError) as exc:
-        parser.error(str(exc))
-    results = asyncio.run(evaluate(scenarios, facts, models, ledger, agent=args.agent))
+        parser.error(safe_error(exc))
+    try:
+        results = asyncio.run(evaluate(scenarios, facts, models, ledger, agent=args.agent))
+    except Exception as exc:
+        ledger.run_error = safe_error(exc)
+        results = []
     for result in results:
         result['agent'] = args.agent
     path = write_report(results, scenarios, ledger)

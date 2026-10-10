@@ -136,7 +136,7 @@ class FakeModel:
 
 
 def fake_models(ledger):
-    return {r: MeteredModel(FakeModel(r), ledger) for r in ['writer', 'extractor', 'checker', 'patient', 'judge']}
+    return {r: MeteredModel(FakeModel(r), ledger, role=r, model_id='fake-' + r) for r in ['writer', 'extractor', 'checker', 'patient', 'judge']}
 
 
 def deny_network(monkeypatch):
@@ -458,3 +458,120 @@ def test_partial_json_sidecar(monkeypatch, tmp_path):
     assert doc['aggregate']['completed'] == 0 and doc['aggregate']['unrun'] == 1
     assert doc['aggregate']['pass_rate'] == 0
     assert doc['accounting']['budget_stopped']
+
+
+@pytest.mark.parametrize('bad', ['0', '-1', 'nan', 'inf', ''])
+def test_role_rate_validation_before_clients(monkeypatch, bad):
+    configure_eval(monkeypatch)
+    monkeypatch.setenv('EVAL_WRITER_INPUT_USD_PER_MILLION', bad)
+    monkeypatch.setenv('EVAL_WRITER_OUTPUT_USD_PER_MILLION', '10')
+    monkeypatch.setattr('evals.run.make_models', lambda l: pytest.fail('Invalid rates constructed models'))
+    with pytest.raises(SystemExit) as exc:
+        main(['--preflight'])
+    assert exc.value.code == 2
+
+
+def test_role_rate_half_pair_and_origins(monkeypatch):
+    from evals.run import resolved_configuration
+    configure_eval(monkeypatch)
+    assert resolved_configuration()[1]['writer']['origin'] == 'illustrative'
+    monkeypatch.setenv('EVAL_INPUT_USD_PER_MILLION', '2')
+    monkeypatch.setenv('EVAL_OUTPUT_USD_PER_MILLION', '10')
+    assert resolved_configuration()[1]['judge']['origin'] == 'global'
+    monkeypatch.setenv('EVAL_WRITER_INPUT_USD_PER_MILLION', '0.1')
+    with pytest.raises(ValueError, match='Both rate'):
+        resolved_configuration()
+    monkeypatch.setenv('EVAL_WRITER_OUTPUT_USD_PER_MILLION', '0.5')
+    rates = resolved_configuration()[1]
+    assert rates['writer'] == {'input': .1, 'output': .5, 'origin': 'explicit'}
+    assert rates['patient']['input'] == 2
+
+
+def test_shared_role_budget_wrapper_propagation_and_usage():
+    from evals.runner import BudgetExceeded
+    ledger = Ledger(limit=.025, role_rates={'writer': {'input': 2, 'output': 10},
+                                          'judge': {'input': .1, 'output': .5}})
+    writer = MeteredModel(FakeModel('writer'), ledger, role='writer', model_id='sol')
+    structured = writer.with_structured_output(type('ExtractionOutput', (), {}))
+    assert structured.ledger is ledger and structured.model_id == 'sol' and structured.role == 'writer'
+    # Keep an outstanding reservation; the next role must honor that same budget.
+    bound = ledger.reserve(['first'], 1024, 'writer')
+    with pytest.raises(BudgetExceeded):
+        ledger.reserve(['second'], 1024, 'writer')
+    ledger.record(AIMessage(content='ok', usage_metadata={'input_tokens': 100, 'output_tokens': 20,
+                   'total_tokens': 120, 'output_token_details': {'reasoning': 10}}), bound, 1024, 'writer')
+    assert ledger.output_tokens == 20
+    assert ledger.cost == pytest.approx(.0004)
+    bound = ledger.reserve(['judge'], 1024, 'judge')
+    ledger.record(None, bound, 1024, 'judge')
+    assert ledger.cost == pytest.approx(sum(r['cost'] for r in ledger.roles.values()))
+    assert ledger.pending_cost == pytest.approx(0)
+    assert ledger.roles['judge']['estimated_output_tokens'] == 1024
+
+
+@pytest.mark.parametrize('exception', [TimeoutError(), ValueError('provider failure'), asyncio.CancelledError()])
+def test_failed_calls_charged_once_with_role(exception):
+    class Failure:
+        async def ainvoke(self, messages):
+            raise exception
+    ledger = Ledger()
+    with pytest.raises(type(exception)):
+        asyncio.run(MeteredModel(Failure(), ledger, role='writer', model_id='luna').ainvoke(['test']))
+    stats = ledger.roles['writer']
+    assert stats['calls'] == stats['errors'] == 1
+    assert stats['estimated_output_tokens'] == 1024 and stats['measured_output_tokens'] == 0
+    assert ledger.cost == stats['cost'] and ledger.pending_cost == 0
+
+
+def test_bind_tools_preserves_role_and_model():
+    ledger = Ledger()
+    class Binding:
+        def bind_tools(self, tools):
+            return self
+    bound = MeteredModel(Binding(), ledger, role='writer', model_id='sol').bind_tools([])
+    assert bound.role == 'writer' and bound.model_id == 'sol' and bound.ledger is ledger
+
+
+def test_agent_timing_excludes_patient_and_judge_includes_errors(monkeypatch):
+    deny_network(monkeypatch)
+    from evals.runner import AgentHarness
+    clock = [0.0]
+    monkeypatch.setattr('evals.runner.time.monotonic', lambda: clock[0])
+    class TimedJudge(FakeModel):
+        async def ainvoke(self, messages):
+            clock[0] += 50
+            return await super().ainvoke(messages)
+    class TimedPatient(FakeModel):
+        async def ainvoke(self, messages):
+            clock[0] += 100
+            return AIMessage(content='What is included?')
+    async def reply(self, scenario, patient):
+        clock[0] += 2
+        if patient == 'What is included?':
+            raise TimeoutError()
+        return 'Implants cost EUR 650–950.', []
+    monkeypatch.setattr(AgentHarness, 'reply', reply)
+    ledger = Ledger(limit=100)
+    models = fake_models(ledger)
+    models['judge'] = TimedJudge('judge')
+    models['patient'] = TimedPatient('patient')
+    results = asyncio.run(evaluate(load_scenarios(ROOT / 'scenarios.json')[:1], FACTS, models, ledger, agent='v2'))
+    assert [t['seconds'] for t in results[0]['agent_turns']] == [2, 2]
+    assert results[0]['agent_turns'][1]['error'] and results[0]['agent_turns'][1]['timeout']
+    assert not results[0]['passed']
+
+
+def test_provider_error_stops_run_and_truncation_is_visible(monkeypatch):
+    deny_network(monkeypatch)
+    ledger = Ledger(limit=100)
+    class Failure(FakeModel):
+        async def ainvoke(self, messages):
+            raise ValueError('Unsupported parameter')
+    models = fake_models(ledger)
+    models['writer'] = MeteredModel(Failure('writer'), ledger, role='writer', model_id='fake-writer')
+    results = asyncio.run(evaluate(load_scenarios(ROOT / 'scenarios.json')[:2], FACTS, models, ledger, agent='v2'))
+    assert len(results) == 1 and not results[0]['passed']
+    assert results[0]['agent_turns'][0]['error']
+    bound = ledger.reserve([], 1024, 'judge')
+    ledger.record(AIMessage(content='partial', response_metadata={'finish_reason': 'length'}), bound, 1024, 'judge')
+    assert ledger.roles['judge']['truncations'] == 1
