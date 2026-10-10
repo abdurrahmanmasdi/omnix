@@ -145,6 +145,8 @@ def deny_network(monkeypatch):
         raise AssertionError('Network forbidden')
     monkeypatch.setattr(socket.socket, 'connect', deny)
     monkeypatch.setattr(socket, 'create_connection', deny)
+    monkeypatch.setattr(socket.socket, 'connect_ex', deny)
+    monkeypatch.setattr(socket, 'getaddrinfo', deny)
 
 
 @pytest.mark.parametrize('agent', ['v1', 'v2'])
@@ -169,6 +171,7 @@ def test_full_runner_and_report_with_fake_models(monkeypatch, tmp_path, agent):
 @pytest.mark.parametrize('agent', ['v1', 'v2'])
 def test_full_cli_with_fake_models(monkeypatch, tmp_path, agent):
     deny_network(monkeypatch)
+    configure_eval(monkeypatch)
     monkeypatch.setattr('evals.run.make_models', fake_models)
     monkeypatch.setattr('evals.run.write_report', lambda r, s, l: write_report(r, s, l, tmp_path))
     assert main(['--agent', agent, '--only', 'en-implant-price', '--max-scenarios', '1']) == 0
@@ -381,3 +384,77 @@ def test_fact_sheet_scenarios_execute_tools_with_fake_model(monkeypatch):
     assert not missing['turns'][0]['actions']
     assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in missing['turns'][1]['actions'])
     assert any(a['type'] == 'UPDATE_SUMMARY' for a in missing['turns'][1]['actions'])
+
+
+# AI-3c: configuration and manifest tests never require account access.
+def configure_eval(monkeypatch, writer='gpt-6-luna'):
+    from evals.run import NAMES
+    for role, name in NAMES.items():
+        prefix = name.removesuffix('_MODEL')
+        monkeypatch.setenv(name, writer if role == 'writer' else 'gpt-6-luna')
+        monkeypatch.setenv(prefix + '_REASONING_EFFORT', 'none')
+        monkeypatch.setenv(prefix + '_TEMPERATURE', {'writer': '0.3', 'extractor': '0.1',
+                                                   'checker': '0', 'patient': '0.3', 'judge': '0'}[role])
+        for kind in ('INPUT', 'OUTPUT'):
+            monkeypatch.delenv(f'EVAL_{role.upper()}_{kind}_USD_PER_MILLION', raising=False)
+    for kind in ('INPUT', 'OUTPUT'):
+        monkeypatch.delenv(f'EVAL_{kind}_USD_PER_MILLION', raising=False)
+
+
+def test_preflight_allowlist_no_clients_key_dotenv(monkeypatch, capsys):
+    deny_network(monkeypatch)
+    configure_eval(monkeypatch, 'gpt-6-sol')
+    monkeypatch.setenv('FLAGSHIP_TEMPERATURE', '')
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    monkeypatch.setenv('DATABASE_URL', 'must-never-be-displayed')
+    from pydantic_settings.sources import DotEnvSettingsSource
+    def forbidden(*args, **kwargs):
+        pytest.fail('Client or dotenv accessed in preflight')
+    monkeypatch.setattr(DotEnvSettingsSource, '_read_env_files', forbidden)
+    monkeypatch.setattr('evals.run.make_models', forbidden)
+    assert main(['--agent', 'v2', '--label', 'offline', '--preflight']) == 0
+    output = capsys.readouterr().out
+    doc = json.loads(output)
+    assert len(doc['selected']) == 55
+    assert doc['models']['writer']['temperature'] is None
+    assert doc['models']['writer']['reasoning_effort'] == 'none'
+    assert 'must-never-be-displayed' not in output and 'OPENAI_API_KEY' not in output
+    assert doc['source']['established']
+    assert 'untested' in doc['compatibility']
+    assert all('.env' not in name and 'reports' not in name for name in doc['source']['hashes'])
+
+
+def test_preflight_rejects_changed_fixture_and_bad_selection(monkeypatch):
+    configure_eval(monkeypatch)
+    original = load_scenarios(ROOT / 'scenarios.json')
+    monkeypatch.setattr('evals.run.load_scenarios', lambda p: original[:-1])
+    with pytest.raises(SystemExit) as exc:
+        main(['--agent', 'v2', '--preflight'])
+    assert exc.value.code == 2
+    monkeypatch.setattr('evals.run.load_scenarios', lambda p: original)
+    with pytest.raises(SystemExit) as exc:
+        main(['--only', 'en-implant-price,en-implant-price', '--preflight'])
+    assert exc.value.code == 2
+
+
+def test_source_identity_failure_is_ineligible(monkeypatch):
+    from evals.reporting import source_identity
+    def fail(*args, **kwargs):
+        raise OSError('git unavailable')
+    monkeypatch.setattr('evals.reporting.subprocess.run', fail)
+    identity = source_identity()
+    assert not identity['established'] and not identity['selection_eligible']
+
+
+def test_partial_json_sidecar(monkeypatch, tmp_path):
+    deny_network(monkeypatch)
+    scenarios = load_scenarios(ROOT / 'scenarios.json')[:2]
+    ledger = Ledger(limit=0.000001)
+    results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger))
+    path = write_report(results, scenarios, ledger, tmp_path)
+    doc = json.loads(path.with_suffix('.json').read_text())
+    assert doc['schema_version'] == 1
+    assert doc['aggregate']['selected'] == 2 and doc['aggregate']['attempted'] == 1
+    assert doc['aggregate']['completed'] == 0 and doc['aggregate']['unrun'] == 1
+    assert doc['aggregate']['pass_rate'] == 0
+    assert doc['accounting']['budget_stopped']
