@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { isAxiosError } from "axios";
 import { useAuthStore } from "@/store/auth-store";
@@ -38,6 +38,10 @@ function ReportSession({
   organizationId: string;
 }) {
   const [weekStart, setWeekStart] = useState<string>();
+  const [navigation, setNavigation] = useState<{
+    weekStart: string;
+    asOf: string;
+  }>();
   const t = useTranslations("WeeklyReport");
   const locale = useLocale();
   const scope = { userId, organizationId };
@@ -61,6 +65,16 @@ function ReportSession({
       refetchOnWindowFocus: false,
     },
   });
+  useEffect(() => {
+    if (query.data)
+      setNavigation({
+        weekStart: query.data.period.weekStart,
+        asOf: query.data.asOf,
+      });
+  }, [query.data]);
+  const controlsWeek =
+    weekStart ?? query.data?.period.weekStart ?? navigation?.weekStart;
+  const navigationAsOf = query.data?.asOf ?? navigation?.asOf;
   const clinic = profile.data?.memberships.find(
     (m) => m.organizationId === organizationId && m.status === "ACTIVE",
   )?.organizationName;
@@ -82,8 +96,8 @@ function ReportSession({
       timeStyle: "short",
       timeZone: "Europe/Istanbul",
     }).format(new Date(value));
-  const currentMonday = report
-    ? new Date(Date.parse(report.asOf) + 3 * 3600000)
+  const currentMonday = navigationAsOf
+    ? new Date(Date.parse(navigationAsOf) + 3 * 3600000)
     : null;
   if (currentMonday)
     currentMonday.setUTCDate(
@@ -112,18 +126,18 @@ function ReportSession({
       >
         <Button
           variant="outline"
-          disabled={!report || report.period.weekStart <= earliest}
+          disabled={!controlsWeek || controlsWeek <= earliest}
           onClick={() =>
-            report && setWeekStart(shiftWeek(report.period.weekStart, -1))
+            controlsWeek && setWeekStart(shiftWeek(controlsWeek, -1))
           }
         >
           {t("previous")}
         </Button>
         <Button
           variant="outline"
-          disabled={!report || report.period.weekStart === currentDate}
+          disabled={!controlsWeek || controlsWeek === currentDate}
           onClick={() =>
-            report && setWeekStart(shiftWeek(report.period.weekStart, 1))
+            controlsWeek && setWeekStart(shiftWeek(controlsWeek, 1))
           }
         >
           {t("next")}

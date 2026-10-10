@@ -5,3 +5,113 @@
 #weekly-report td {
   padding: 0.35rem 0.5rem;
 }
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body:has(#weekly-report) {
+    background: white !important;
+    color: #111 !important;
+  }
+  body:has(#weekly-report) *:has(#weekly-report) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body:has(#weekly-report)
+    *:has(#weekly-report)
+    > :not(:has(#weekly-report)):not(#weekly-report) {
+    display: none !important;
+  }
+  #weekly-report {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+    color: #111;
+    background: white;
+    font-size: 9pt;
+    line-height: 1.25;
+  }
+  #weekly-report[data-print-ready="false"] {
+    display: none !important;
+  }
+  #weekly-report .weekly-controls {
+    display: none !important;
+  }
+  #weekly-report > * + * {
+    margin-top: 7pt;
+  }
+  #weekly-report h1 {
+    font-size: 16pt;
+  }
+  #weekly-report h2 {
+    font-size: 11pt;
+    break-after: avoid;
+  }
+  #weekly-report h3,
+  #weekly-report p,
+  #weekly-report dt,
+  #weekly-report dd {
+    margin: 0;
+  }
+  #weekly-report .text-sm {
+    font-size: 8pt;
+  }
+  #weekly-report .text-2xl {
+    font-size: 14pt;
+  }
+  #weekly-report .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5pt;
+  }
+  #weekly-report .weekly-tile {
+    padding: 5pt;
+    border-color: #aaa;
+    break-inside: avoid;
+  }
+  #weekly-report table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #weekly-report thead {
+    display: table-header-group;
+  }
+  #weekly-report tr,
+  #weekly-report li {
+    break-inside: avoid;
+  }
+  #weekly-report th,
+  #weekly-report td {
+    padding: 2pt 4pt;
+    border-bottom: 1px solid #ddd;
+  }
+  #weekly-report footer {
+    color: #333;
+  }
+}
+@media print {
+  /* Reset Tailwind's logical spacing so screen gaps cannot waste printed pages. */
+  #weekly-report > *,
+  #weekly-report .space-y-2 > *,
+  #weekly-report .space-y-1 > * {
+    margin-block: 0;
+  }
+  #weekly-report > * + * {
+    margin-block-start: 7pt;
+  }
+  #weekly-report {
+    font-family: Arial, sans-serif;
+  }
+  #weekly-report footer {
+    break-inside: avoid;
+  }
+}

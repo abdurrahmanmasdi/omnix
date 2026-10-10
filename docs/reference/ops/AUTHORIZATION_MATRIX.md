@@ -29,6 +29,12 @@ Personas used by the tests, each in two synthetic clinics (A and B):
 | Member role changes/removal (D-026, N5)                                    | Active membership and organization:manage; grant only issuer-held permissions (overrides included); no self action; retain active Super Admin; immediate security-version/session revocation; audited | 403 permission/grant refusal; 404 other clinic/id; 409 self or last-owner conflict   |
 | Revoked session                                                            | Membership active, user ACTIVE, `securityVersion` current (HTTP strategies and socket handshake)                                                                                                      | 401 / socket disconnected                                                            |
 
+## Weekly owner report (REP-1)
+
+GET `/analytics/weekly-report` and `/analytics/weekly-report/access` require **all** of `analytics:view`, `leads:view`, `leads:read:all`, `leads:read:messages`, `view_conversations`, plus authenticated clinic membership. Missing context/grants fail before analytics reads (403); clinic comes solely from authenticated membership. PII permission is unnecessary: the report returns aggregate counts/topic IDs only. Assigned-only staff are denied. Default Super Admin and Manager grants include all five; Agent lacks clinic-wide/report access. No role grants were broadened. Both routes return `Cache-Control: private, no-store`.
+
+Reports navigation uses the guarded access probe rather than role names (profile does not expose effective grants). HTTP remains the authority on direct navigation and refresh. Nest HTTP tests in `src/analytics/weekly-http.spec.ts` exercise every missing grant and malformed queries; `weekly-report.service.spec.ts` checks two-clinic query scopes and private aggregates with mocked storage, **not a database integration run**.
+
 ## Where each rule is tested
 
 | Surface                                                                               | Tests                                                                                                      |

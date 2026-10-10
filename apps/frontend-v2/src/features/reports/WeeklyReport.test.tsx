@@ -147,11 +147,22 @@ describe("weekly report", () => {
     expect(
       screen.getByRole("button", { name: "Print / Save as PDF" }),
     ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+    await act(async () =>
+      pending.get("2026-09-21")!({
+        ...weeklyFixture("2026-09-21"),
+        newLeads: 99,
+      }),
+    );
+    expect(screen.queryByText("99")).not.toBeInTheDocument();
+    await act(async () =>
+      pending.get("2026-09-14")!(weeklyFixture("2026-09-14")),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Next week" }));
     await act(async () =>
       pending.get("2026-09-21")!(weeklyFixture("2026-09-21")),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Next week" }));
-    await screen.findByText("Not tracked yet"); // cached last completed week
+    await screen.findByText("Not tracked yet");
     const keys = client
       .getQueryCache()
       .getAll()
