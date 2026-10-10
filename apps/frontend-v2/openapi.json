@@ -891,6 +891,96 @@
         "tags": ["Clinic Team"]
       }
     },
+    "/organizations/current/clinic-facts": {
+      "get": {
+        "operationId": "ClinicFactsController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicFactSheetDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Facts"]
+      },
+      "put": {
+        "operationId": "ClinicFactsController_save",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveClinicFactsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicFactRevisionDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Facts"]
+      }
+    },
+    "/organizations/current/clinic-facts/approve": {
+      "post": {
+        "operationId": "ClinicFactsController_approve",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveClinicFactsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicFactRevisionDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["Clinic Facts"]
+      }
+    },
     "/conversations": {
       "get": {
         "operationId": "ConversationsController_getConversations",
@@ -2871,82 +2961,6 @@
         "tags": ["AI Persona Settings"]
       }
     },
-    "/channels": {
-      "post": {
-        "operationId": "ChannelsController_createChannel",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateChannelDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Channel connected successfully"
-          }
-        },
-        "summary": "Connect a new communication channel (e.g., WhatsApp)",
-        "tags": ["Channels"]
-      },
-      "get": {
-        "operationId": "ChannelsController_getChannels",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "List of channels"
-          }
-        },
-        "summary": "Get all connected channels for the organization",
-        "tags": ["Channels"]
-      }
-    },
-    "/channels/{id}": {
-      "delete": {
-        "operationId": "ChannelsController_deleteChannel",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Channel disconnected successfully"
-          }
-        },
-        "summary": "Disconnect a channel",
-        "tags": ["Channels"]
-      }
-    },
-    "/analytics/summary": {
-      "get": {
-        "operationId": "AnalyticsController_getSummary",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Returns the analytics summary",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyticsSummaryDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Get aggregated analytics for the dashboard",
-        "tags": ["Analytics"]
-      }
-    },
     "/channels/embedded-signup/config": {
       "get": {
         "operationId": "ChannelsController_getEmbeddedSignupConfig",
@@ -2988,6 +3002,40 @@
         "tags": ["Channels"]
       }
     },
+    "/channels": {
+      "post": {
+        "operationId": "ChannelsController_createChannel",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Channel connected successfully"
+          }
+        },
+        "summary": "Connect a new communication channel (e.g., WhatsApp)",
+        "tags": ["Channels"]
+      },
+      "get": {
+        "operationId": "ChannelsController_getChannels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of channels"
+          }
+        },
+        "summary": "Get all connected channels for the organization",
+        "tags": ["Channels"]
+      }
+    },
     "/channels/{id}/verify": {
       "post": {
         "operationId": "ChannelsController_verifyConnection",
@@ -3009,94 +3057,97 @@
         "tags": ["Channels"]
       }
     },
-    "/organizations/current/clinic-facts": {
-      "get": {
-        "operationId": "ClinicFactsController_read",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClinicFactSheetDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
+    "/channels/{id}": {
+      "delete": {
+        "operationId": "ChannelsController_deleteChannel",
+        "parameters": [
           {
-            "bearer": []
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
-        "tags": ["Clinic Facts"]
-      },
-      "put": {
-        "operationId": "ClinicFactsController_save",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveClinicFactsDto"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClinicFactRevisionDto"
-                }
-              }
-            }
+            "description": "Channel disconnected successfully"
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": ["Clinic Facts"]
+        "summary": "Disconnect a channel",
+        "tags": ["Channels"]
       }
     },
-    "/organizations/current/clinic-facts/approve": {
-      "post": {
-        "operationId": "ClinicFactsController_approve",
+    "/analytics/weekly-report/access": {
+      "get": {
+        "operationId": "AnalyticsController_getWeeklyAccess",
         "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApproveClinicFactsDto"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ClinicFactRevisionDto"
+                  "$ref": "#/components/schemas/WeeklyReportAccessDto"
                 }
               }
             }
           }
         },
-        "security": [
+        "tags": ["Analytics"]
+      }
+    },
+    "/analytics/weekly-report": {
+      "get": {
+        "operationId": "AnalyticsController_getWeeklyReport",
+        "parameters": [
           {
-            "bearer": []
+            "name": "weekStart",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            }
           }
         ],
-        "tags": ["Clinic Facts"]
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeeklyReportDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "WEEKLY_REPORT_TOO_LARGE"
+          }
+        },
+        "tags": ["Analytics"]
+      }
+    },
+    "/analytics/summary": {
+      "get": {
+        "operationId": "AnalyticsController_getSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Returns the analytics summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsSummaryDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get aggregated analytics for the dashboard",
+        "tags": ["Analytics"]
       }
     }
   },
@@ -3638,6 +3689,198 @@
           }
         },
         "required": ["revoked"]
+      },
+      "ClinicTreatmentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "priceMin": {
+            "type": "number"
+          },
+          "priceMax": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "enum": ["EUR", "USD", "TRY", "GBP"]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "included": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "priceMin",
+          "priceMax",
+          "currency",
+          "unit",
+          "included"
+        ]
+      },
+      "ClinicDoctorDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "years": {
+            "type": "number"
+          }
+        },
+        "required": ["name", "role", "years"]
+      },
+      "ClinicOfferDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["text", "enabled", "validFrom", "validTo"]
+      },
+      "ClinicFactsDto": {
+        "type": "object",
+        "properties": {
+          "treatments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClinicTreatmentDto"
+            }
+          },
+          "warranty": {
+            "type": "string"
+          },
+          "doctors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClinicDoctorDto"
+            }
+          },
+          "process": {
+            "type": "string"
+          },
+          "days": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "paymentMethods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClinicOfferDto"
+            }
+          }
+        },
+        "required": [
+          "treatments",
+          "warranty",
+          "doctors",
+          "process",
+          "days",
+          "location",
+          "paymentMethods",
+          "languages",
+          "offers"
+        ]
+      },
+      "ClinicFactRevisionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/ClinicFactsDto"
+          },
+          "approvedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "approvedBy": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["version", "facts", "approvedAt", "approvedBy"]
+      },
+      "ClinicFactSheetDto": {
+        "type": "object",
+        "properties": {
+          "latest": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClinicFactRevisionDto"
+              }
+            ]
+          },
+          "approved": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClinicFactRevisionDto"
+              }
+            ]
+          }
+        },
+        "required": ["latest", "approved"]
+      },
+      "SaveClinicFactsDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number",
+            "description": "Latest saved version, or zero for the first draft"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/ClinicFactsDto"
+          }
+        },
+        "required": ["expectedVersion", "facts"]
+      },
+      "ApproveClinicFactsDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": ["version"]
       },
       "InboxPatientDto": {
         "type": "object",
@@ -4468,6 +4711,36 @@
         },
         "required": ["clinicName"]
       },
+      "EmbeddedSignupConfigDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true
+          },
+          "configId": {
+            "type": "string",
+            "nullable": true
+          },
+          "graphVersion": {
+            "type": "string"
+          }
+        },
+        "required": ["available", "appId", "configId", "graphVersion"]
+      },
+      "EmbeddedSignupDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Single-use Facebook Login for Business authorization code"
+          }
+        },
+        "required": ["code"]
+      },
       "CreateChannelDto": {
         "type": "object",
         "properties": {
@@ -4485,6 +4758,305 @@
           }
         },
         "required": ["provider", "providerAccountId", "accessToken"]
+      },
+      "WeeklyReportAccessDto": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          }
+        },
+        "required": ["allowed"]
+      },
+      "WeeklyPeriodDto": {
+        "type": "object",
+        "properties": {
+          "weekStart": {
+            "type": "string"
+          },
+          "weekEnd": {
+            "type": "string"
+          },
+          "startUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cutoffUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string",
+            "enum": ["Europe/Istanbul"]
+          },
+          "inProgress": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "weekStart",
+          "weekEnd",
+          "startUtc",
+          "endUtc",
+          "cutoffUtc",
+          "timezone",
+          "inProgress"
+        ]
+      },
+      "WeeklyActivityDto": {
+        "type": "object",
+        "properties": {
+          "aiReplies": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "staffDashboardReplies": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "staffPhoneMessages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "denominator": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "aiPercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "staffPercent": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "aiReplies",
+          "staffDashboardReplies",
+          "staffPhoneMessages",
+          "denominator",
+          "aiPercent",
+          "staffPercent"
+        ]
+      },
+      "WeeklySenderIntervalDto": {
+        "type": "object",
+        "properties": {
+          "replied": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "medianSeconds": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": ["replied", "medianSeconds"]
+      },
+      "WeeklyReplyIntervalDto": {
+        "type": "object",
+        "properties": {
+          "opportunities": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "replied": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "medianSeconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "p90Seconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "ai": {
+            "$ref": "#/components/schemas/WeeklySenderIntervalDto"
+          },
+          "staff": {
+            "$ref": "#/components/schemas/WeeklySenderIntervalDto"
+          }
+        },
+        "required": [
+          "opportunities",
+          "replied",
+          "pending",
+          "medianSeconds",
+          "p90Seconds",
+          "ai",
+          "staff"
+        ]
+      },
+      "WeeklyConsultationsDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number",
+            "nullable": true,
+            "enum": [null]
+          },
+          "availability": {
+            "type": "string",
+            "enum": ["not_tracked"]
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["consultation_records_unavailable"]
+          }
+        },
+        "required": ["value", "availability", "reason"]
+      },
+      "WeeklyTopicDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "price",
+              "implants",
+              "crowns_veneers",
+              "consultation",
+              "travel_location",
+              "payment",
+              "other"
+            ]
+          },
+          "conversations": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["id", "conversations"]
+      },
+      "WeeklyCoverageDto": {
+        "type": "object",
+        "properties": {
+          "legacyOriginMessages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unresolvedHandoffReferences": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "topicClassifiedConversations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "topicUnclassifiedConversations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "excludedPhoneMessages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "legacyOriginMessages",
+          "unresolvedHandoffReferences",
+          "topicClassifiedConversations",
+          "topicUnclassifiedConversations",
+          "excludedPhoneMessages"
+        ]
+      },
+      "WeeklyReportDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "enum": [1]
+          },
+          "period": {
+            "$ref": "#/components/schemas/WeeklyPeriodDto"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "newLeads": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activeConversations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "patientMessages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "activity": {
+            "$ref": "#/components/schemas/WeeklyActivityDto"
+          },
+          "replyInterval": {
+            "$ref": "#/components/schemas/WeeklyReplyIntervalDto"
+          },
+          "handedToTeamConversations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "consultations": {
+            "$ref": "#/components/schemas/WeeklyConsultationsDto"
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WeeklyTopicDto"
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/WeeklyCoverageDto"
+          },
+          "methodology": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "surviving_records",
+                "all_recorded_activity",
+                "legacy_origin",
+                "provider_acceptance",
+                "reply_interval",
+                "phone_excluded",
+                "handoff_retention",
+                "approximate_topics",
+                "consultations_unavailable"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "period",
+          "generatedAt",
+          "asOf",
+          "newLeads",
+          "activeConversations",
+          "patientMessages",
+          "activity",
+          "replyInterval",
+          "handedToTeamConversations",
+          "consultations",
+          "topics",
+          "coverage",
+          "methodology"
+        ]
       },
       "RecentActivityDto": {
         "type": "object",
@@ -4547,228 +5119,6 @@
           "aiConversionRate",
           "recentActivity"
         ]
-      },
-      "EmbeddedSignupConfigDto": {
-        "type": "object",
-        "properties": {
-          "available": {
-            "type": "boolean"
-          },
-          "appId": {
-            "type": "string",
-            "nullable": true
-          },
-          "configId": {
-            "type": "string",
-            "nullable": true
-          },
-          "graphVersion": {
-            "type": "string"
-          }
-        },
-        "required": ["available", "appId", "configId", "graphVersion"]
-      },
-      "EmbeddedSignupDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Single-use Facebook Login for Business authorization code"
-          }
-        },
-        "required": ["code"]
-      },
-      "ClinicTreatmentDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "priceMin": {
-            "type": "number"
-          },
-          "priceMax": {
-            "type": "number"
-          },
-          "currency": {
-            "type": "string",
-            "enum": ["EUR", "USD", "TRY", "GBP"]
-          },
-          "unit": {
-            "type": "string"
-          },
-          "included": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "priceMin",
-          "priceMax",
-          "currency",
-          "unit",
-          "included"
-        ]
-      },
-      "ClinicDoctorDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "years": {
-            "type": "number"
-          }
-        },
-        "required": ["name", "role", "years"]
-      },
-      "ClinicOfferDto": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "validFrom": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "validTo": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": ["text", "enabled", "validFrom", "validTo"]
-      },
-      "ClinicFactsDto": {
-        "type": "object",
-        "properties": {
-          "treatments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ClinicTreatmentDto"
-            }
-          },
-          "warranty": {
-            "type": "string"
-          },
-          "doctors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ClinicDoctorDto"
-            }
-          },
-          "process": {
-            "type": "string"
-          },
-          "days": {
-            "type": "string"
-          },
-          "location": {
-            "type": "string"
-          },
-          "paymentMethods": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "languages": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "offers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ClinicOfferDto"
-            }
-          }
-        },
-        "required": [
-          "treatments",
-          "warranty",
-          "doctors",
-          "process",
-          "days",
-          "location",
-          "paymentMethods",
-          "languages",
-          "offers"
-        ]
-      },
-      "ClinicFactRevisionDto": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "number"
-          },
-          "facts": {
-            "$ref": "#/components/schemas/ClinicFactsDto"
-          },
-          "approvedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "approvedBy": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": ["version", "facts", "approvedAt", "approvedBy"]
-      },
-      "ClinicFactSheetDto": {
-        "type": "object",
-        "properties": {
-          "latest": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ClinicFactRevisionDto"
-              }
-            ]
-          },
-          "approved": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ClinicFactRevisionDto"
-              }
-            ]
-          }
-        },
-        "required": ["latest", "approved"]
-      },
-      "SaveClinicFactsDto": {
-        "type": "object",
-        "properties": {
-          "expectedVersion": {
-            "type": "number",
-            "description": "Latest saved version, or zero for the first draft"
-          },
-          "facts": {
-            "$ref": "#/components/schemas/ClinicFactsDto"
-          }
-        },
-        "required": ["expectedVersion", "facts"]
-      },
-      "ApproveClinicFactsDto": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "number"
-          }
-        },
-        "required": ["version"]
       }
     }
   }

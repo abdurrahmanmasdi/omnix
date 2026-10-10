@@ -1,0 +1,7 @@
+#weekly-report th {
+  text-align: start;
+}
+#weekly-report th,
+#weekly-report td {
+  padding: 0.35rem 0.5rem;
+}

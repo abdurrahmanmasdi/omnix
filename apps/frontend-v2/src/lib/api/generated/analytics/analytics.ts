@@ -18,11 +18,331 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { AnalyticsSummaryDto } from "../../model";
+import type {
+  AnalyticsControllerGetWeeklyReportParams,
+  AnalyticsSummaryDto,
+  WeeklyReportAccessDto,
+  WeeklyReportDto,
+} from "../../model";
 
 import { customFetch } from "../../axios-client";
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+export const analyticsControllerGetWeeklyAccess = (
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<WeeklyReportAccessDto>(
+    { url: `/analytics/weekly-report/access`, method: "GET", signal },
+    options,
+  );
+};
+
+export const getAnalyticsControllerGetWeeklyAccessQueryKey = () => {
+  return [`/analytics/weekly-report/access`] as const;
+};
+
+export const getAnalyticsControllerGetWeeklyAccessQueryOptions = <
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+      TError,
+      TData
+    >
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAnalyticsControllerGetWeeklyAccessQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>
+  > = ({ signal }) =>
+    analyticsControllerGetWeeklyAccess(requestOptions, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type AnalyticsControllerGetWeeklyAccessQueryResult = NonNullable<
+  Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>
+>;
+export type AnalyticsControllerGetWeeklyAccessQueryError = unknown;
+
+export function useAnalyticsControllerGetWeeklyAccess<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+          TError,
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useAnalyticsControllerGetWeeklyAccess<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+          TError,
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useAnalyticsControllerGetWeeklyAccess<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+
+export function useAnalyticsControllerGetWeeklyAccess<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyAccess>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getAnalyticsControllerGetWeeklyAccessQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+export const analyticsControllerGetWeeklyReport = (
+  params?: AnalyticsControllerGetWeeklyReportParams,
+  options?: SecondParameter<typeof customFetch>,
+  signal?: AbortSignal,
+) => {
+  return customFetch<WeeklyReportDto>(
+    { url: `/analytics/weekly-report`, method: "GET", params, signal },
+    options,
+  );
+};
+
+export const getAnalyticsControllerGetWeeklyReportQueryKey = (
+  params?: AnalyticsControllerGetWeeklyReportParams,
+) => {
+  return [`/analytics/weekly-report`, ...(params ? [params] : [])] as const;
+};
+
+export const getAnalyticsControllerGetWeeklyReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+  TError = void,
+>(
+  params?: AnalyticsControllerGetWeeklyReportParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAnalyticsControllerGetWeeklyReportQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>
+  > = ({ signal }) =>
+    analyticsControllerGetWeeklyReport(params, requestOptions, signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type AnalyticsControllerGetWeeklyReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>
+>;
+export type AnalyticsControllerGetWeeklyReportQueryError = void;
+
+export function useAnalyticsControllerGetWeeklyReport<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+  TError = void,
+>(
+  params: undefined | AnalyticsControllerGetWeeklyReportParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+          TError,
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useAnalyticsControllerGetWeeklyReport<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+  TError = void,
+>(
+  params?: AnalyticsControllerGetWeeklyReportParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+          TError,
+          Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useAnalyticsControllerGetWeeklyReport<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+  TError = void,
+>(
+  params?: AnalyticsControllerGetWeeklyReportParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+
+export function useAnalyticsControllerGetWeeklyReport<
+  TData = Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+  TError = void,
+>(
+  params?: AnalyticsControllerGetWeeklyReportParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof analyticsControllerGetWeeklyReport>>,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getAnalyticsControllerGetWeeklyReportQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
 
 /**
  * @summary Get aggregated analytics for the dashboard

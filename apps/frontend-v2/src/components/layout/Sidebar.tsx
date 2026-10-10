@@ -2,6 +2,8 @@
 import { useUserProfileControllerGet } from "@/lib/api/generated/users/users";
 import { useCopy } from "@/i18n/copy";
 
+import { useReportAccess } from "@/features/reports/hooks";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -47,6 +49,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Inbox",
     icon: <MessageSquare className="me-2.5 h-4 w-4" />,
     matchPath: "/conversations",
+  },
+  {
+    href: "/dashboard/reports/weekly",
+    label: "Reports",
+    icon: <LayoutDashboard className="me-2.5 h-4 w-4" />,
+    matchPath: "/reports",
   },
   // {
   //   href: '/dashboard/knowledge-base',
@@ -128,6 +136,8 @@ export function Sidebar({
   onClose?: () => void;
 }) {
   const copy = useCopy();
+  const reports = useTranslations("WeeklyReport");
+  const reportAccess = useReportAccess();
 
   const { t } = useInboxText();
   const pathname = usePathname();
@@ -181,7 +191,11 @@ export function Sidebar({
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-ice/40 px-3 pt-3 pb-2">
           {copy("Main Menu")}
         </p>
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(
+          (item) =>
+            item.matchPath !== "/reports" ||
+            (!reportAccess.isError && reportAccess.data?.allowed),
+        ).map((item) => {
           if (item.children) {
             return (
               <div key={item.href}>
@@ -198,7 +212,9 @@ export function Sidebar({
                     {item.icon}
                     {item.matchPath === "/conversations"
                       ? t("inbox")
-                      : copy(item.label)}
+                      : item.matchPath === "/reports"
+                        ? reports("navigation")
+                        : copy(item.label)}
                   </span>
                   <ChevronDown
                     className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${
@@ -262,7 +278,9 @@ export function Sidebar({
                 {item.icon}
                 {item.matchPath === "/conversations"
                   ? t("inbox")
-                  : copy(item.label)}
+                  : item.matchPath === "/reports"
+                    ? reports("navigation")
+                    : copy(item.label)}
               </Button>
             </Link>
           );
