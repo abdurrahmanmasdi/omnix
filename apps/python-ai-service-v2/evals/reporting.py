@@ -1,6 +1,8 @@
 """Allowlisted source identity and pure report calculations; no application imports."""
 import hashlib
 import math
+import os
+import re
 import statistics
 import subprocess
 import uuid
@@ -15,7 +17,7 @@ ROLES = ('writer', 'extractor', 'checker', 'patient', 'judge')
 # Explicit source allowlist: never walk the repository, dotenv or report directories.
 SOURCE_FILES = (
     'evals/scenarios.json', 'evals/demo_clinic.json', 'evals/run.py', 'evals/runner.py',
-    'evals/checks.py', 'evals/reporting.py',
+    'evals/checks.py', 'evals/reporting.py', 'evals/compare.py',
     'app/core/config.py', 'app/infrastructure/model_options.py', 'app/infrastructure/llm_factory.py',
     'app/infrastructure/database_service.py', 'app/grpc_services/agent_servicer.py',
     'app/modules/agent/nodes.py', 'app/modules/agent/tools.py', 'app/modules/agent/graph_builder.py', 'app/modules/agent/prompts.py',
@@ -24,6 +26,18 @@ SOURCE_FILES = (
     'app/modules/coordinator/guidelines.json', 'app/modules/coordinator/patient_facts.py',
     'app/modules/safety/policy.py', 'app/modules/agent/actions.py', 'app/modules/agent/agent-actions.v1.json',
 )
+
+
+def safe_error(exc):
+    body = getattr(exc, 'body', None)
+    error = body.get('error', body) if isinstance(body, dict) else None
+    message = error.get('message') if isinstance(error, dict) else None
+    value = str(message or str(exc) or type(exc).__name__)
+    for name, secret in os.environ.items():
+        if any(word in name.upper() for word in ('KEY', 'TOKEN', 'SECRET', 'PASSWORD')) and secret:
+            value = value.replace(secret, '[REDACTED]')
+    value = re.sub(r'(?i)bearer\s+\S+|sk-[A-Za-z0-9_-]+', '[REDACTED]', value)
+    return value[:2000]
 
 
 def source_identity():

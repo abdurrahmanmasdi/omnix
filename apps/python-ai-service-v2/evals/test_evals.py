@@ -374,12 +374,17 @@ def test_fact_sheet_scenarios_execute_tools_with_fake_model(monkeypatch):
     ledger = Ledger(limit=100)
     models = fake_models(ledger)
     model = FactModel('writer')
-    models['writer'] = MeteredModel(model, ledger)
+    models['writer'] = MeteredModel(model, ledger, role='writer', model_id='fake-writer')
     models['patient'] = MeteredModel(Patient('patient'), ledger)
     scenarios = [s for s in load_scenarios(ROOT / 'scenarios.json') if s.get('fact_sheet_variant')]
     results = asyncio.run(evaluate(scenarios, FACTS, models, ledger, agent='v2'))
     assert len(results) == 4
     assert all(r['passed'] for r in results), [(r['id'], r) for r in results if not r['passed']]
+    smoke_tool = next(r for r in results if r['id'] == 'en-offer-discount')
+    assert smoke_tool['agent_turns'][0]['writer_calls'] == 2
+    assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in smoke_tool['actions'])
+    assert ledger.roles['writer']['tool_calls'] >= 1
+    assert ledger.roles['extractor']['calls'] == ledger.roles['checker']['calls'] == 0
     missing = next(r for r in results if r['id'] == 'en-fact-missing')
     assert not missing['turns'][0]['actions']
     assert any(a['type'] == 'HANDOFF_TO_HUMAN' for a in missing['turns'][1]['actions'])
@@ -575,3 +580,203 @@ def test_provider_error_stops_run_and_truncation_is_visible(monkeypatch):
     bound = ledger.reserve([], 1024, 'judge')
     ledger.record(AIMessage(content='partial', response_metadata={'finish_reason': 'length'}), bound, 1024, 'judge')
     assert ledger.roles['judge']['truncations'] == 1
+
+
+def comparison_document(monkeypatch, candidate=False):
+    from evals.run import resolved_configuration
+    from evals.reporting import manifest, aggregate, SOURCE_FILES
+    configure_eval(monkeypatch, 'gpt-6-sol' if candidate else 'gpt-6-luna')
+    if candidate:
+        monkeypatch.setenv('FLAGSHIP_TEMPERATURE', '')
+    for role in ('writer', 'extractor', 'checker', 'patient', 'judge'):
+        for kind, rate in [('INPUT', '2' if candidate and role == 'writer' else '.1'),
+                           ('OUTPUT', '10' if candidate and role == 'writer' else '.5')]:
+            monkeypatch.setenv(f'EVAL_{role.upper()}_{kind}_USD_PER_MILLION', rate)
+    models, rates, limits = resolved_configuration()
+    scenarios = load_scenarios(ROOT / 'scenarios.json')
+    m = manifest('test-sol' if candidate else 'test-luna', 'v2', scenarios, models, rates,
+                 {**limits, 'budget_usd': 2.25})
+    m['source'] = {'revision': 'a' * 40, 'hashes': {name: 'b' * 64 for name in SOURCE_FILES},
+                   'established': True, 'tracked_worktree_dirty': False, 'selection_eligible': True}
+    ledger = Ledger(limit=2.25, role_rates=rates)
+    for role, config in models.items():
+        ledger.totals(role, config['model'])
+    results = []
+    for s in scenarios:
+        actions = [{'type': 'HANDOFF_TO_HUMAN', 'payload': {'reason': 'Synthetic test'}}] if s['expect_handoff'] else []
+        results.append({'id': s['id'], 'passed': True, 'complete': True, 'handoff': True, 'error': None,
+                        'score': 4, 'provider_errors': [], 'actions': actions,
+                        'agent_turns': [{'seconds': 2., 'error': False, 'timeout': False, 'writer_calls': 0}],
+                        'turns': [{'patient': 'Synthetic', 'reply': 'Synthetic', 'actions': actions,
+                                   'checks': {'grounded_price': True}, 'judge': {'score': 4, 'reason': 'Synthetic verdict',
+                                   'must_do_met': True, 'must_not_do_met': True}}]})
+    accounting = ledger.accounting()
+    return {'schema_version': 1, 'manifest': m, 'results': results,
+            'aggregate': aggregate(results, m['selected'], accounting), 'accounting': accounting}
+
+
+def test_complete_json_and_comparable_report(monkeypatch, tmp_path):
+    deny_network(monkeypatch)
+    from evals.compare import compare, load_report
+    left, right = comparison_document(monkeypatch), comparison_document(monkeypatch, True)
+    lp, rp = tmp_path / 'luna.json', tmp_path / 'sol.json'
+    lp.write_text(json.dumps(left))
+    rp.write_text(json.dumps(right))
+    path, eligible = compare(load_report(lp), load_report(rp), lp, rp, tmp_path)
+    report = path.read_text()
+    assert eligible and 'COMPARABLE exploratory pair' in report
+    assert '55/55 (100.0%)' in report and '28/28 (100.0%)' in report
+    assert 'Both pass' in report and 'Manual safety review' in report
+    assert 'No selection' in report and 'cached input at ordinary input rate' in report
+    # The JSON is the complete transcript source even when Markdown retains only ten.
+    assert lp.as_uri() in report
+
+
+@pytest.mark.parametrize('change,fragment', [
+    ('revision', 'Source revision mismatch'), ('hashes', 'Source hashes mismatch'),
+    ('dirty', 'tracked worktree dirty'), ('fixed', 'Fixed role model/options mismatch'),
+    ('selected', 'selected mismatch'), ('limits', 'limits mismatch'),
+    ('incomplete', 'incomplete/error/budget-stopped'), ('truncation', 'output truncation'),
+    ('unexpected', 'unexpected v2 extractor calls'), ('timeout', 'error/timeout'),
+])
+def test_comparison_incompatible_or_incomplete_cannot_win(monkeypatch, tmp_path, change, fragment):
+    from evals.compare import compare, validate
+    left, right = comparison_document(monkeypatch), comparison_document(monkeypatch, True)
+    if change == 'revision':
+        right['manifest']['source']['revision'] = 'c' * 40
+    elif change == 'hashes':
+        right['manifest']['source']['hashes']['evals/scenarios.json'] = 'c' * 64
+    elif change == 'dirty':
+        right['manifest']['source']['tracked_worktree_dirty'] = True
+    elif change == 'fixed':
+        right['manifest']['models']['patient']['temperature'] = .9
+    elif change == 'selected':
+        right['manifest']['selected'][0]['language'] = 'ar'
+    elif change == 'limits':
+        right['manifest']['limits']['model_timeout_seconds'] = 19
+    elif change == 'incomplete':
+        right['results'] = right['results'][:3]
+    elif change == 'truncation':
+        right['accounting']['roles']['writer']['truncations'] = 1
+    elif change == 'unexpected':
+        right['accounting']['roles']['extractor']['calls'] = 1
+    elif change == 'timeout':
+        right['results'][0]['agent_turns'][0]['timeout'] = True
+    path, eligible = compare(validate(left), validate(right), tmp_path / 'l.json', tmp_path / 'r.json', tmp_path)
+    assert not eligible and '**INCONCLUSIVE' in path.read_text() and fragment in path.read_text()
+
+
+def test_fixed_rate_changes_and_illustrative_rates_invalidate_cost(monkeypatch, tmp_path):
+    from evals.compare import compare, validate
+    left, right = comparison_document(monkeypatch), comparison_document(monkeypatch, True)
+    right['manifest']['rates']['judge']['input'] = .2
+    left['manifest']['rates']['patient']['origin'] = 'illustrative'
+    path, _ = compare(validate(left), validate(right), tmp_path / 'l.json', tmp_path / 'r.json', tmp_path)
+    report = path.read_text()
+    assert '**Cost comparison: INVALID**' in report
+    assert 'Fixed role rates changed: judge' in report and 'illustrative rates' in report
+
+
+@pytest.mark.parametrize('bad', ['schema', 'duplicate', 'missing', 'negative', 'pass-error', 'duplicate-key'])
+def test_malformed_comparison_input_rejected(monkeypatch, tmp_path, bad):
+    from evals.compare import load_report
+    doc = comparison_document(monkeypatch)
+    if bad == 'schema':
+        doc['schema_version'] = 42
+    elif bad == 'duplicate':
+        doc['results'].append(doc['results'][0])
+    elif bad == 'missing':
+        del doc['manifest']['models']['judge']
+    elif bad == 'negative':
+        doc['results'][0]['agent_turns'][0]['seconds'] = -1
+    elif bad == 'pass-error':
+        doc['results'][0]['error'] = 'TimeoutError'
+    path = tmp_path / 'bad.json'
+    path.write_text('{"schema_version": 1, "schema_version": 1}' if bad == 'duplicate-key' else json.dumps(doc))
+    with pytest.raises(ValueError, match='Invalid report'):
+        load_report(path)
+
+
+def test_language_denominators_handoffs_and_nearest_rank_latency(monkeypatch):
+    from evals.reporting import aggregate
+    doc = comparison_document(monkeypatch)
+    selected = doc['manifest']['selected']
+    # One required handoff missed; one unnecessary handoff with expectation-match boolean true.
+    required = next(i for i, s in enumerate(selected) if s['expect_handoff'])
+    doc['results'][required]['actions'] = []
+    doc['results'][required]['passed'] = False
+    doc['results'][0]['actions'] = [{'type': 'HANDOFF_TO_HUMAN', 'payload': {}}]
+    rows = doc['results'][:required + 1]
+    for i, row in enumerate(rows):
+        row['agent_turns'][0]['seconds'] = i + 1
+    totals = aggregate(rows, selected, doc['accounting'])
+    assert totals['selected'] == 55 and totals['attempted'] == len(rows)
+    assert totals['passed'] == len(rows) - 1 and totals['unrun'] == 55 - len(rows)
+    assert totals['pass_rate'] == (len(rows) - 1) / 55
+    assert totals['legacy_pass_rate'] == (len(rows) - 1) / len(rows)
+    assert totals['languages']['tr']['selected'] == 15 and totals['languages']['tr']['passed'] == 0
+    assert totals['handoffs']['unnecessary'] == 1 and totals['handoffs']['missed'] == 1
+    assert totals['handoffs']['actual'] == 1
+    assert totals['latency']['p95_seconds'] == len(rows)
+    assert aggregate([], selected)['latency']['median_seconds'] is None
+
+
+def test_sol_numeric_heuristic_never_activates_model(monkeypatch, tmp_path):
+    from evals.compare import compare, validate
+    left, right = comparison_document(monkeypatch), comparison_document(monkeypatch, True)
+    for result in left['results'][:3]:
+        result['passed'] = False
+        result['turns'][0]['checks']['grounded_price'] = False
+        result['turns'][0]['judge']['reason'] = 'Unverified price requires manual review'
+    path, eligible = compare(validate(left), validate(right), tmp_path / 'l.json', tmp_path / 'r.json', tmp_path)
+    report = path.read_text()
+    assert eligible and 'Sol gain: +3/55' in report and 'Sol meets the numeric review heuristic' in report
+    assert 'No selection until manual review' in report and 'hard checks: grounded_price' in report
+
+
+def test_compare_imports_no_app_or_sdk(monkeypatch):
+    import builtins
+    import importlib
+    import evals.compare
+    original = builtins.__import__
+    def guard(name, *args, **kwargs):
+        if name.startswith(('app.', 'openai', 'langchain')):
+            pytest.fail('Comparison imported application/API code')
+        return original(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, '__import__', guard)
+    importlib.reload(evals.compare)
+
+
+def test_compare_cli_usage_and_inconclusive_exit(monkeypatch, tmp_path, capsys):
+    deny_network(monkeypatch)
+    import evals.compare as comparison
+    doc = comparison_document(monkeypatch)
+    doc['results'] = doc['results'][:1]
+    lp, rp = tmp_path / 'l.json', tmp_path / 'r.json'
+    lp.write_text(json.dumps(doc))
+    rp.write_text(json.dumps(doc))
+    original = comparison.compare
+    monkeypatch.setattr(comparison, 'compare', lambda l, r, a, b: original(l, r, a, b, tmp_path))
+    assert comparison.main(['--left', str(lp), '--right', str(rp)]) == 1
+    assert 'INCONCLUSIVE' in capsys.readouterr().out
+    lp.write_text('not JSON')
+    with pytest.raises(SystemExit) as exc:
+        comparison.main(['--left', str(lp), '--right', str(rp)])
+    assert exc.value.code == 2
+
+
+def test_deadline_handoff_timing_and_legacy_match_boolean(monkeypatch):
+    deny_network(monkeypatch)
+    from evals.runner import AgentHarness
+    from evals.reporting import aggregate
+    async def reply(self, scenario, patient):
+        return 'The clinic team will help.', [{'type': 'HANDOFF_TO_HUMAN', 'payload': {'reason': 'turn_deadline_exceeded'}}]
+    monkeypatch.setattr(AgentHarness, 'reply', reply)
+    scenarios = load_scenarios(ROOT / 'scenarios.json')[:2]
+    ledger = Ledger(limit=100)
+    results = asyncio.run(evaluate(scenarios, FACTS, fake_models(ledger), ledger, agent='v2'))
+    totals = aggregate(results, scenarios, ledger.accounting())
+    assert len(results) == 1 and not results[0]['complete'] and not results[0]['passed']
+    assert totals['latency']['timeouts'] == totals['latency']['errors'] == 1
+    assert totals['judge_replies'] == 0 and totals['handoffs']['actual'] == 1
+    assert totals['handoffs']['unnecessary'] == 1 and totals['latency']['zero_writer_call_turns'] == 1

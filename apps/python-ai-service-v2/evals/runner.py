@@ -11,19 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from .checks import hard_checks, handoff_check
-from .reporting import ROLES
-
-
-def safe_error(exc):
-    body = getattr(exc, 'body', None)
-    error = body.get('error', body) if isinstance(body, dict) else None
-    message = error.get('message') if isinstance(error, dict) else None
-    value = str(message or str(exc) or type(exc).__name__)
-    for name, secret in os.environ.items():
-        if any(word in name.upper() for word in ('KEY', 'TOKEN', 'SECRET', 'PASSWORD')) and secret:
-            value = value.replace(secret, '[REDACTED]')
-    value = re.sub(r'(?i)bearer\s+\S+|sk-[A-Za-z0-9_-]+', '[REDACTED]', value)
-    return value[:2000]
+from .reporting import safe_error
 
 
 def patient_messages(scenario, turns):

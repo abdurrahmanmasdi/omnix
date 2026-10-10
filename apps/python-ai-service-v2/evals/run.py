@@ -38,11 +38,15 @@ def positive_int(value):
 
 def load_scenarios(path):
     rows = json.loads(path.read_text())
+    if not isinstance(rows, list) or not rows:
+        raise ValueError('Scenarios must be a nonempty list')
     required = {'id', 'language', 'persona', 'opening_message', 'hidden_goal', 'must_do', 'must_not_do', 'expect_handoff', 'max_turns'}
     ids = set()
     for row in rows:
         if not isinstance(row, dict) or not required <= row.keys():
             raise ValueError('Scenario missing required fields')
+        if not isinstance(row['id'], str) or not isinstance(row['language'], str):
+            raise ValueError('Invalid scenario ID/language')
         if row['id'] in ids or row['language'] not in {'en', 'tr', 'ar'}:
             raise ValueError('Duplicate scenario ID or unsupported language')
         ids.add(row['id'])
