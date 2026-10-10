@@ -105,3 +105,10 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 - PR #5 was merged before planner review; reviewed on `main` (64b8008). Migration `20261007000000_clinic_fact_sheets` is additive (new table, FK to organizations with cascade, version/approval checks, unique (org, version)); grants backend runtime CRUD and Python runtime SELECT only. Servicer: deterministic handoffs now also write an UPDATE_SUMMARY via contract v1 (handoff summary includes up to 1000 chars of the patient's text — internal only; stays wrapped as untrusted data when fed back to the model). Output policy now receives the approved offer texts.
 - Needs before deploy: founder runs `npm run db:deploy` on staging (new migration), then production; run the 55-scenario v2 eval (command in the AI-3b entry above). KI-100 (test-only tsc errors) open.
 - Next: REP-1 (weekly owner report) with Claude Code.
+
+## 2026-10-10 — AI-3c planning handoff
+- [verified] Inspected existing eval runner, role factory, ledger, reporting and model settings; current reports lack resolved options, role accounting and timing needed for comparison.
+- [proposed] Full AI-3c card in `reference/plan/PRODUCT_EXECUTION_TASKS.md`; architecture extension in §5. Four offline implementation items, explicit checks and founder-only paid/model-selection/deployment stages.
+- Planner refreshed PLAN Now/order: AI-3c ready on `ai-3c/model-comparison`; REP-1 next to plan. No production code, paid run, deployment or model selection performed.
+- Official Luna/Sol pages checked: Chat Completions tool use requires reasoning none; founder smoke must verify exact SDK/account compatibility. Proposed aggregate estimated eval budget $5; no builder paid-call authorization.
+- Verification: documentation diff/links/scope review and `git diff --check`; no application tests needed for this documentation-only session. Pre-existing frontend `next-env.d.ts` change excluded.
