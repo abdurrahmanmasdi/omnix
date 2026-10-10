@@ -426,3 +426,94 @@ Files changed: `docs/evidence/QA-1_2026-10-04.md` (+ `_harness/`), `memory/{know
 Results: PASS — STOP/iptal/START, manual send (normal/422/opted-out warning), takeover during generation, UNKNOWN routing (no resend, one alert per staff), EN/TR deterministic handoff, media consent (once, 30 d, withdrawal), invitations + role/tenant matrix, startup refusal, /ready, gRPC TLS combinations, crash recovery (SIGKILL, 160 s, no duplicates). FAIL — KI-078 disclosure order (16/23 reply-first), KI-079 Inbox socket not restored after token expiry, KI-080 revoked credential loses inbound, KI-081 multi-clinic login, KI-082 model escalation wording, KI-083 /ready ignores RPC secret, CSP not enforceable (KI-044), KI-070 reproduced.
 Not tested: AI wording (no model budget), prompt-injection actions, voice/image/PDF runtime, two instances, hosted build, keyboard/mobile.
 Next task: QA-1 fixes package (fix list groups 1–4 + decisions in group 5), then P2-01.
+
+## AI-3c — coordinator model comparison
+
+**Prepared:** 2026-10-10. **Status:** ready for offline implementation; paid results and founder selection pending. **Branch:** `ai-3c/model-comparison`. This card is the current AI-3c scope and takes precedence over older broad AI/rebuild cards in this reference file. Read only this section for AI-3c.
+
+**Goal:** let the founder compare the current AI-3b coordinator with `gpt-6-luna` versus `gpt-6-sol` on the same 55 synthetic EN/TR/AR scenarios, understand quality/cost/latency tradeoffs, and apply an explicit model configuration with a rollback path. Do not substitute `gpt-6.1-sol` merely because it is newer. The first complete Luna run also supplies the pending post-AI-3b baseline.
+
+**Two completion states:** (A) builder delivers tested offline tooling, exact founder commands and a PR; (B) founder runs paid comparison, reviews failures, chooses the model and later applies settings. Completing A does not complete B, resolve KI-097 or approve a pilot. D-031 reserves paid calls for the founder; the builder must not call a real model, inspect secrets, deploy, access Railway or enable a clinic.
+
+### Read and scope
+
+Read `AGENTS.md`, `docs/README.md`, `docs/PLAN.md` Now, `docs/ARCHITECTURE.md` sections 5 and 8, decisions D-013/D-031/D-033/D-034, issues KI-006/KI-097 and Q3, and the last three LOG entries. Inspect `evals/run.py`, `runner.py`, `checks.py`, `test_evals.py`, `scenarios.json`, `demo_clinic.json`, `app/infrastructure/model_options.py`, `llm_factory.py`, `app/core/config.py` and the servicer's turn-deadline path. Read `docs/reference/ops/PYTHON_DEPLOYMENT.md` only to append the founder handoff.
+
+Allowed implementation: existing `evals/run.py`, `runner.py`, `test_evals.py`; new `evals/compare.py` and, if needed for readability, one small reporting helper within `evals/`; existing architecture/deployment/ISSUES/LOG documents. Do not edit PLAN as builder. No production Python behavior changes, dependency upgrades, API migration, prompt/rubric/hard-check/scenario changes, backend/frontend changes, database work, CI or unrelated fixes. Runtime JSON/Markdown reports may be generated only under the already ignored `evals/reports/` or test temporary directories; do not commit them or create separate evidence documents.
+
+### Comparison protocol and compatibility
+
+1. Use agent **v2 only**, all current 55 scenarios, unchanged ordering, facts, playbook, rubric, safety checks and source revision. Abort preflight if the fixture count has changed; report the discrepancy instead of silently testing a subset. Existing single-run v1 support must remain working.
+2. Baseline writer: `gpt-6-luna`, reasoning `none`, temperature `0.3`. Candidate writer: `gpt-6-sol`, reasoning `none`, temperature omitted (empty shell value); validate this exact configuration during the founder smoke run. The different temperature is recorded as a configuration difference; do not describe this as an isolated model-weights experiment.
+3. Fixed roles in both runs: patient `gpt-6-luna` / `none` / `0.3`; judge `gpt-6-luna` / `none` / `0`; extractor `gpt-6-luna` / `none` / `0.1`; checker `gpt-6-luna` / `none` / `0`. Extractor/checker remain configured for compatibility but should show zero calls on the v2 path. Unexpected calls are visible and investigated, not silently ignored.
+4. Preserve the current eval timeout (20 s), retries (0) and output cap (1024). Record effective limits and servicer deadline. Measure the full `agent.reply` turn separately from patient/judge time. This is synthetic in-process latency, not WhatsApp response speed. If output truncation or unsupported parameters prevent a valid comparison, mark it inconclusive; no automatic parameter search, retries, fallback model or production changes.
+5. Current official model pages checked 2026-10-10 specify `reasoning_effort=none` for function calling through Chat Completions for both candidates. This conflicts with the older generic Sol omission advice in KI-097; do not copy that advice without checking the exact model/API. Sources: [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Sol](https://developers.openai.com/api/docs/models/gpt-6-sol). Recheck those pages before supplying the final commands. Published capability is not proof of this account's access or installed SDK compatibility.
+6. The patient and judge use the same configuration, but generated continuations may differ. Treat results as one exploratory run per configuration. Review failed and changed scenarios manually; do not claim statistical significance or multilingual human validation. No reruns to cherry-pick a winner.
+
+### Item 1 — reproducible runs and offline preflight
+
+Extend `python -m evals.run` with `--label` and `--preflight` (existing arguments keep their behavior). Preflight prints an allowlisted resolved configuration and validates scenario selection, model/options and rate configuration without requiring a key, constructing a client, reading dotenv or touching a DB/network. It must explain that account/API compatibility is untested.
+
+Create a versioned, explicit run manifest, captured once before execution: run ID/time, label, agent, Git revision and tracked-worktree-dirty flag, selected scenario IDs/languages, SHA-256 of scenarios/facts and the relevant eval/prompt/policy source files, all five model IDs and resolved options (omitted is JSON null), timeout/retry/output/turn limits and rate assumptions. Never dump the environment, Settings object, filesystem paths containing credentials or SDK objects. Hash only explicitly named source/fixture files; never `.env`, outputs or arbitrary repository contents. Mark a run ineligible for model selection when source identity cannot be established or tracked work is dirty.
+
+Write a JSON sidecar with schema version, manifest, scenario results, aggregate counts and accounting alongside each existing Markdown report using a shared unique basename. Keep the existing ten worst transcripts. Partial/error/budget-stopped runs still produce readable reports. Preserve current CLI exit behavior: zero only when every selected scenario passed; ordinary eval failures return nonzero but the founder can still compare the saved reports. Preflight success returns zero; bad CLI/configuration returns a distinct usage failure.
+
+### Item 2 — role accounting and latency
+
+Extend the existing Ledger/MeteredModel path, preserving its public defaults for existing callers/tests. Attach role and model identity to wrappers and preserve them through `bind_tools`/`with_structured_output`. A shared ledger owns the single run budget; per-role totals must sum to the run total, never five independent budgets.
+
+Add optional `EVAL_<ROLE>_INPUT_USD_PER_MILLION` and `EVAL_<ROLE>_OUTPUT_USD_PER_MILLION`, where ROLE is WRITER, EXTRACTOR, CHECKER, PATIENT or JUDGE. A role with neither override retains existing global `EVAL_INPUT_USD_PER_MILLION` / `EVAL_OUTPUT_USD_PER_MILLION` behavior; reject half-pairs, non-finite or nonpositive rates before any calls. Record whether rates are explicit, global or illustrative. Founder comparison commands set explicit rates for every role. Do not use an illustrative-rate run to recommend a model on price.
+
+Maintain pre-call reservations using the relevant role's rates, and charge failed calls/missing usage conservatively as today. Use provider usage when available; do not count reasoning tokens twice if already included in output. Report measured token usage versus reservation estimates separately, along with call/error counts. Estimate cached input at the ordinary input rate for this small card and explicitly disclose that no cache discount, regional premium or billing reconciliation is modeled. This is an estimated spending guard, not an exact provider billing cap.
+
+Measure elapsed time with a monotonic clock around `agent.reply`, including deterministic paths and failed turns; exclude simulated-patient and judge calls. Report sample count, median and nearest-rank p95, timeout/error counts, plus writer-call count so zero-call policy replies are visible. Never drop slow/error turns silently or use missing samples as zero. Report writer cost per attempted scenario and per attempted agent turn separately from total eval cost (patient + judge included).
+
+### Item 3 — offline comparison
+
+Implement `python -m evals.compare --left <run.json> --right <run.json>`, using the standard library and no application-settings/API-client imports. It writes a comparison Markdown report into ignored `evals/reports/` and prints the path. Reject malformed/unknown-schema/duplicate-ID inputs with a useful error.
+
+Compatibility checks require equal source revision/source hashes, clean recorded trees, agent v2, selected IDs/order/languages, fixed-role models/options and execution limits. Only writer model/options, label/time/run ID and writer rates may differ; other rate changes must be disclosed and invalidate cost comparison. The left/right pair must be the intended Luna/Sol candidates to apply this card's selection guidance. Incompatible or incomplete pairs produce diagnostic output marked **INCONCLUSIVE**, never an eligible winner; no hidden intersection/subset comparison.
+
+Report selected/attempted/completed/unrun separately. Primary pass rate uses all selected scenarios as denominator; errors/unrun are not passes. Also show the legacy finished-attempt rate with its denominator so old reports remain understandable. Include EN/TR/AR counts/rates, average judge score and its reply count, failure counts by hard-check name, expected versus actual handoff, unnecessary/missed handoffs, provider errors, timeouts, agent-turn latency and role cost/token tables. Use actual HANDOFF_TO_HUMAN actions rather than treating the existing `handoff` boolean (expectation matched) as an action count. Show scenario IDs for Luna-only passes, Sol-only passes, both-fail and both-pass, with failed-check/judge reasons and links to their source reports. Preserve the existing safe error redaction.
+
+Selection guidance is a **review aid, not automatic activation**:
+- A complete comparable pair and manual review of all safety-related failures are required. Any confirmed invented clinic fact/price, diagnosis/personal medical advice, confirmed booking, missed required handoff or consent violation blocks recommending that configuration for patient use. Regex flags alone are not a clinical assessment; retain flags and annotate manual review separately.
+- Prefer retaining Luna unless Sol gives at least 3 additional passing scenarios out of 55, has no lower pass count in any language, and introduces no confirmed safety regression. This is a planning heuristic, not statistical significance or a pilot acceptance threshold.
+- Show latency and writer-cost increases alongside that result; founder decides whether the improvement is worth them. Deadline/provider failures prevent a deployment recommendation until understood. If neither configuration qualifies, report **no selection**; record issues for another card rather than tuning prompts here.
+- A favorable synthetic result does not open the pilot gate. Final choice remains with the founder after transcript review.
+
+### Item 4 — founder commands and Railway handoff
+
+Append one AI-3c section to the existing `docs/reference/ops/PYTHON_DEPLOYMENT.md`, containing exact copy/paste commands for offline preflight, paid smoke, full Luna run, full Sol run and offline comparison. Use existing env names and the new per-role rate overrides. Run with shell-provided `OPENAI_API_KEY`; never source or inspect dotenv. Explicitly set/clear every model option so a prior shell setting cannot contaminate a run. Use the app's absolute `.venv/bin/python` and `PYTHONPATH` from a clean temporary cwd as in verification below. Commands must not dump the environment or echo credentials.
+
+Use current official standard text rates, recording source/date and assumptions beside the commands. At planning time the model pages list Luna input/output $0.10/$0.50 and Sol $2/$10 per million tokens; verify again before the founder runs. Do not infer rates from the historical ~$0.03 summaries.
+
+Proposed initial total estimated budget is **$5** across four founder-invoked runs: two $0.25 smoke runs (one per candidate), then $2.25 per full run. Each smoke selects the same three existing scenario IDs covering a normal reply, a real tool invocation and a multilingual case; inspect fixtures and name exact IDs in the delivered commands. Verify the tool scenario actually calls the writer/tool, not only a deterministic policy branch. Stop on API/model/parameter errors or a budget stop; do not silently rerun or increase the budget. Smoke results are not mixed into the 55-scenario scores. Additional repeats require a founder-chosen budget; none run automatically. The budget is a proposed founder command limit, not permission for builder-paid calls.
+
+Railway handoff must list the exact tested winner's FLAGSHIP model/reasoning/temperature and the explicit extractor/checker fallback configuration. Explain clearing an option versus setting literal `none`; keep v2's existing per-clinic allowlist and approved-knowledge requirements. Record the current configuration privately in the founder's deployment workflow before changing it; do not ask the agent to read secrets. Founder first applies settings on staging and runs synthetic price, identity, handoff, consent and takeover checks. Production promotion is founder-owned. On model regression restore the previous tested model/options; on unsafe replies pause AI for affected conversations. Removing a v2 allowlist entry falls back to v1 and is **not** an AI shutdown. Keep KI-097 open until founder confirms actual environment configuration; keep Q3 open until model choice. No builder Railway access.
+
+### Required verification — only these tests
+
+Add meaningful offline cases to existing `evals/test_evals.py` for: manifest allowlisting/no secrets and omitted options; preflight without key/network/dotenv; role rates/reservations and wrapper propagation; failed/missing-usage calls charged once; timing excludes patient/judge (fake clock, no sleeps); complete and partial JSON reports; compatible comparison and source/fixture/fixed-role mismatch; language/denominator/handoff calculations; incomplete reports cannot win. Extend the existing deny-network fixture. Preserve existing fake-model v1/v2 coverage and unchanged hard gates. No paid tests, new suite, browser/DB tests, package installation or CI.
+
+From repository root, run targeted tests while implementing, then the Python suite once at the end. Run from a clean temporary directory so production Settings cannot discover a local dotenv file:
+
+```bash
+REPO_ROOT="$PWD"
+AI3C_TEST_CWD="$(mktemp -d /tmp/omnix-ai3c-tests.XXXXXX)"
+cd "$AI3C_TEST_CWD"
+OPENAI_API_KEY=synthetic-test-key INTERNAL_RPC_SECRET=synthetic-rpc-secret \
+DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:1/omnix_synthetic \
+LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false \
+PYTHONPATH="$REPO_ROOT/apps/python-ai-service-v2" \
+"$REPO_ROOT/apps/python-ai-service-v2/.venv/bin/python" -m pytest -q \
+"$REPO_ROOT/apps/python-ai-service-v2/evals/test_evals.py"
+```
+
+For the final suite use the same command/environment with both `"$REPO_ROOT/apps/python-ai-service-v2/tests"` and `"$REPO_ROOT/apps/python-ai-service-v2/evals/test_evals.py"` as test targets. After returning to the repo, run `git diff --check`. Report collection failures, sandbox limitations and teardown errors distinctly from assertion failures; rerun only affected blocked cases when justified. Do not repair unrelated KI-100 or broaden scope.
+
+### Builder completion and copy/paste kickoff
+
+Commit after each item; stage explicit files and preserve unrelated working changes (the planning session observed a pre-existing frontend `next-env.d.ts` change). Update architecture only for what was implemented, append one LOG entry ≤8 lines, and record unrelated findings in ISSUES. Push the card branch and open a PR under the normal card process. No merge. Final response: PR, item commits, tests, exact founder run sequence, remaining compatibility/selection steps. Keep all evaluation outputs ignored; summarize actual paid results later in LOG only after the founder supplies them.
+
+**Kickoff prompt:** Implement only AI-3c in `docs/reference/plan/PRODUCT_EXECUTION_TASKS.md`, section “AI-3c — coordinator model comparison”, on `ai-3c/model-comparison`. Read the listed project memory, then complete items 1–4 and only their required offline tests. The planning commit already contains the architecture and scope. Keep production behavior and eval fixtures unchanged. Deliver a PR and founder-run commands; do not make paid calls, deploy, migrate, merge or edit PLAN. Implementation can finish while paid comparison/model selection remain pending.

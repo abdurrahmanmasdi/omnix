@@ -105,3 +105,19 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 - PR #5 was merged before planner review; reviewed on `main` (64b8008). Migration `20261007000000_clinic_fact_sheets` is additive (new table, FK to organizations with cascade, version/approval checks, unique (org, version)); grants backend runtime CRUD and Python runtime SELECT only. Servicer: deterministic handoffs now also write an UPDATE_SUMMARY via contract v1 (handoff summary includes up to 1000 chars of the patient's text — internal only; stays wrapped as untrusted data when fed back to the model). Output policy now receives the approved offer texts.
 - Needs before deploy: founder runs `npm run db:deploy` on staging (new migration), then production; run the 55-scenario v2 eval (command in the AI-3b entry above). KI-100 (test-only tsc errors) open.
 - Next: REP-1 (weekly owner report) with Claude Code.
+
+## 2026-10-10 — AI-3c planning handoff
+- [verified] Inspected existing eval runner, role factory, ledger, reporting and model settings; current reports lack resolved options, role accounting and timing needed for comparison.
+- [proposed] Full AI-3c card in `reference/plan/PRODUCT_EXECUTION_TASKS.md`; architecture extension in §5. Four offline implementation items, explicit checks and founder-only paid/model-selection/deployment stages.
+- Planner refreshed PLAN Now/order: AI-3c ready on `ai-3c/model-comparison`; REP-1 next to plan. No production code, paid run, deployment or model selection performed.
+- Official Luna/Sol pages checked: Chat Completions tool use requires reasoning none; founder smoke must verify exact SDK/account compatibility. Proposed aggregate estimated eval budget $5; no builder paid-call authorization.
+- Verification: documentation diff/links/scope review and `git diff --check`; no application tests needed for this documentation-only session. Pre-existing frontend `next-env.d.ts` change excluded.
+
+
+## 2026-10-10 — AI-3c offline implementation
+- Branch `ai-3c/model-comparison`; PR [#6](https://github.com/abdurrahmanmasdi/omnix/pull/6). Items 1–4: `c2d3386`, `6d37397`, `ef5d630`, `40348ff` (plus closing memory commit).
+- [verified offline] Allowlisted manifests/key-free preflight, paired JSON/Markdown, shared per-role reservations/accounting, agent-only monotonic latency, strict offline comparison with primary/language/action handoff metrics and manual safety-review guidance; all 55 fixtures/hard gates unchanged; v1/v2 fake coverage preserved.
+- Targeted evals progressed 67/80/103 passes; final suite once: 366 passed + 3 localhost-bind runtime failures + 4 localhost-bind setup errors, no collection/assertion failures. Card-authorized rerun of only those 7 blocked cases: 7 passed, exit 0 (373 combined; 104 eval cases). First full run printed a shutdown-hook error after summary (KI-096), distinct from sandbox failures; no unrelated repair.
+- `git diff --check` passes. No paid call, production behavior/dependency change, DB/browser suite, CI, merge, deployment or builder PLAN edit. Unrelated frontend `next-env.d.ts` and untracked design-system work preserved; PR includes prior planner commit `c82653f`.
+- Exact founder setup/preflight → separate Luna/Sol $0.25 smokes → separate $2.25 full runs → offline comparison and staging/rollback settings in `reference/ops/PYTHON_DEPLOYMENT.md` → AI-3c; current official model pages checked 2026-10-10. Tool smoke `en-offer-discount` verified with fake writer/tool, paid behavior untested.
+- Founder: review PR and commands, verify account/API/SDK via smoke, review failures, choose model, then apply/test staging and own production promotion. KI-097/Q3 remain open; synthetic results do not open the pilot gate.

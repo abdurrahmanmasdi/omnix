@@ -1,12 +1,12 @@
 # OmniX plan — the compass
 
 ## Now
-_Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-07 00:35._
+_Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-10._
 
 - **Goal:** find out what clinics need before building more (D-030) and make the AI conversation excellent (D-031).
-- **AI status:** coordinator v2 on `ai-2/coordinator-v2` (PR #3): **80% pass, 4.55/5** vs old graph 27.5% on the 40-scenario eval (gpt-6-luna, ~$0.03 per v2 run). Fixes after that run (`1891fca`) not yet measured. v2 is off until a clinic id is listed in `COORDINATOR_V2_ORG_IDS`.
-- **Done 2026-10-07:** v2 rerun **33/40 (82.5%), 4.51/5**; PR #3 merged (follow-up fixes merged locally afterwards, `c6f30bc`).
-- **Then:** plan AI-3 together — tools, knowledge use (when to put all facts in the prompt vs search), handoff rules, photo consent, prompt-injection answer, appointment-confirmation block (KI-095), Arabic handoff copy, model choice (KI-097 Railway settings before deploy).
+- **AI status:** AI-1, AI-2, AI-3a and AI-3b recorded complete/merged. Latest 55-scenario AI-3b real-model eval remains pending; historical 33/40 is not evidence for the current version. V2 stays opt-in through `COORDINATOR_V2_ORG_IDS`.
+- **Now:** AI-3c implementation card ready on `ai-3c/model-comparison`: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → **AI-3c — coordinator model comparison**. Builder prepares comparison/reporting offline; founder runs paid evals and owns model selection/Railway changes.
+- **In parallel:** planner expands REP-1, then INT-1 and later cards. REP-1 implementation follows AI-3c preparation; a pending founder eval need not block planning.
 - **Founder, in parallel:** Railway switch (V1), Meta verification + v4 config, D2 mystery shopping + D3 interviews (Claude writes the materials).
 - **Open founder decisions:** Q14 pilot mode (draft mode recommended), Q5 which clinic.
 - **Parked:** P2-01 partial work on `p2-01/coordination-records` @ `44033f6`.
@@ -29,8 +29,8 @@ _Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-0
 | AI-2 | Coordinator v2: playbook guidelines file + clinic fact sheet in prompt + one agent + tools, behind a per-clinic switch; old graph kept until v2 wins on evals | **Done** (PR #3, 80% vs 27.5%) |
 | AI-3a | **Done (merged)** Safety + behavior: block appointment-confirmation wording (KI-095), EN/TR/AR handoff copy, off-topic/manipulation levels (D-033), photo consent, fewer early handoffs, price confidence; new eval scenarios | **Done** (38/51; handoff overuse fixed in AI-3b item 0) |
 | AI-3b | Clinic fact sheet (settings page + approval), save-patient-facts via existing actions, handoff summary shown in Inbox, active offers, patient report | **Done** (PR #5, migration `20261007000000_clinic_fact_sheets`); founder eval run pending |
-| AI-3c | Model comparison luna vs sol on the evals (founder runs) + Railway settings (KI-097) | queued |
-| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) (per-patient report done in AI-3b) | **NEXT** (Claude Code) |
+| AI-3c | Model comparison luna vs sol on the evals (founder runs) + Railway settings (KI-097). Full card: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → AI-3c | **READY TO IMPLEMENT**; paid comparison follows |
+| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) (per-patient report done in AI-3b) | next to plan; after AI-3c preparation |
 | INT-1 | Generic CRM connector: outbound webhooks for lead/handoff/consultation events (Zapier/Make) + CSV export; native connector only for the CRM most interviewed clinics use | queued |
 | AI-4 | More tools: consultation request (staff confirm), forward patient file to doctor (with consent), smart follow-ups (templates/24 h rule) | queued |
 | M4b | 360dialog connector: clinic connects its WhatsApp Business app number via its own 360dialog account (coexistence) and pastes the API key; OmniX sends/receives through 360dialog incl. phone echoes → AI pause. Needed because OmniX cannot be a Meta Tech Provider without a company (README §0) | queued — before the first pilot |

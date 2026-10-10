@@ -48,6 +48,7 @@ AI-2 opt-in v2 bypasses the LLM compliance-checker loop and keeps deterministic 
 
 **KI-097 — AI-2 changed production model defaults** · high (before deploy) · open
 Before AI-2 every call sent `reasoning_effort: none` + temperature 0.3/0.1/0.0; now nothing is sent unless configured. On deploy, set on Railway (Python): `FLAGSHIP_REASONING_EFFORT=none FLAGSHIP_TEMPERATURE=0.3 EXTRACTOR_REASONING_EFFORT=none EXTRACTOR_TEMPERATURE=0.1 CHEAP_REASONING_EFFORT=none CHEAP_TEMPERATURE=0` for luna-class models (leave empty for models that reject them, e.g. gpt-6.1-sol). Owner: founder at deploy.
+[verified offline, AI-3c] Comparison tooling and exact founder commands are prepared in `reference/ops/PYTHON_DEPLOYMENT.md` → AI-3c. Official Luna/Sol pages rechecked 2026-10-10 require literal reasoning `none` for Chat Completions tools; Luna writer temperature 0.3, Sol writer temperature omitted. No account compatibility, model selection or actual Railway settings confirmed; keep open.
 
 **KI-098 — Old graph sends broken tool history → OpenAI 400** · high · fixed (pending founder test run)
 When a writer's tool call ended in a handoff/unverified result, the AI tool-call message stayed in history without its tool result; the next call (compliance checker, retry, summarizer) was rejected with BadRequest 400 → "system_exception" handoff. Fix: `clean_history()` in `app/modules/agent/nodes.py` drops incomplete tool exchanges (keeps AI text) before every model call. Tests: `tests/test_clean_history.py`.
@@ -140,7 +141,7 @@ Pending wording (not KIs): KI-025/060/047 copy drafts → F02; KI-064 Turkish ST
 ### Q3 — Which LLM provider/models for the pilot?
 - Raised: 2026-09-30
 - Source strings `gpt-5.6-luna` / `gpt-5.6-terra` unverified (KI-006). Models come from validated config (WP-C).
-- Partly decided (D-013): selection happens in C13 by EN/TR evaluation, not now. Remaining: which candidates and budget.
+- Partly decided (D-013/D-031): AI-3c prepares Luna vs Sol on 55 EN/TR/AR synthetic scenarios, with a proposed $5 aggregate estimated guard. Paid smoke/full runs and manual safety/transcript review remain founder-owned; Q3 stays open until the founder records the model choice.
 
 ### Q4 — Deployment target and environments
 - Raised: 2026-09-30
