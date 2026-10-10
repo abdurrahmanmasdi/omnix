@@ -136,7 +136,7 @@ class FakeModel:
 
 
 def fake_models(ledger):
-    return {r: MeteredModel(FakeModel(r), ledger, role=r, model_id='fake-' + r) for r in ['writer', 'extractor', 'checker', 'patient', 'judge']}
+    return {r: MeteredModel(FakeModel(r), ledger, role=r, model_id=(ledger.manifest or {}).get('models', {}).get(r, {}).get('model', 'fake-' + r)) for r in ['writer', 'extractor', 'checker', 'patient', 'judge']}
 
 
 def deny_network(monkeypatch):
@@ -780,3 +780,18 @@ def test_deadline_handoff_timing_and_legacy_match_boolean(monkeypatch):
     assert totals['latency']['timeouts'] == totals['latency']['errors'] == 1
     assert totals['judge_replies'] == 0 and totals['handoffs']['actual'] == 1
     assert totals['handoffs']['unnecessary'] == 1 and totals['latency']['zero_writer_call_turns'] == 1
+
+
+
+def test_emitted_cli_json_validates_with_resolved_manifest(monkeypatch, tmp_path):
+    deny_network(monkeypatch)
+    configure_eval(monkeypatch)
+    from evals.compare import load_report
+    monkeypatch.setattr('evals.run.make_models', fake_models)
+    monkeypatch.setattr('evals.run.write_report', lambda r, s, l: write_report(r, s, l, tmp_path))
+    assert main(['--agent', 'v2', '--label', 'actual-fake-run', '--only', 'en-implant-price']) == 0
+    doc = load_report(next(tmp_path.glob('*.json')))
+    assert doc['manifest']['label'] == 'actual-fake-run'
+    assert doc['accounting']['roles']['writer']['calls'] == doc['aggregate']['latency']['writer_calls']
+    assert doc['aggregate']['judge_replies'] == len(doc['results'][0]['turns'])
+    assert doc['accounting']['roles']['extractor']['calls'] == doc['accounting']['roles']['checker']['calls'] == 0

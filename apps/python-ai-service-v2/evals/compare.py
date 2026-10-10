@@ -126,6 +126,11 @@ def validate(doc):
                     'reserved_input_tokens', 'reserved_output_tokens'):
             require(type(stats.get(key)) is int and stats[key] >= 0, 'Invalid accounting ' + role + '.' + key)
         require(stats['errors'] <= stats['calls'] and stats['timeouts'] <= stats['errors'], 'Invalid error counts')
+        inp = stats['measured_input_tokens'] + stats['estimated_input_tokens']
+        out = stats['measured_output_tokens'] + stats['estimated_output_tokens']
+        rate = m['rates'][role]
+        require(math.isclose(stats['cost'], (inp * rate['input'] + out * rate['output']) / 1_000_000,
+                             abs_tol=1e-12), 'Role cost contradicts tokens/rates: ' + role)
     require(math.isclose(accounting['cost'], sum(r['cost'] for r in accounting['roles'].values()), abs_tol=1e-12),
             'Role costs do not sum to total')
     for kind in ('input', 'output'):
