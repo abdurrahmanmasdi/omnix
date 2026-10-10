@@ -121,3 +121,10 @@ _One entry per finished card or working session, ≤ 8 lines: date — card/topi
 - `git diff --check` passes. No paid call, production behavior/dependency change, DB/browser suite, CI, merge, deployment or builder PLAN edit. Unrelated frontend `next-env.d.ts` and untracked design-system work preserved; PR includes prior planner commit `c82653f`.
 - Exact founder setup/preflight → separate Luna/Sol $0.25 smokes → separate $2.25 full runs → offline comparison and staging/rollback settings in `reference/ops/PYTHON_DEPLOYMENT.md` → AI-3c; current official model pages checked 2026-10-10. Tool smoke `en-offer-discount` verified with fake writer/tool, paid behavior untested.
 - Founder: review PR and commands, verify account/API/SDK via smoke, review failures, choose model, then apply/test staging and own production promotion. KI-097/Q3 remain open; synthetic results do not open the pilot gate.
+
+## 2026-10-10 — REP-1 adoption + founder Luna smoke review
+- [doc] Adopted the external REP-1 architecture/card into existing docs; dashboard + Print/Save as PDF confirmed in D-035; no new schema/provider/model call in the card.
+- Handoff: `rep-1/weekly-owner-report`, isolated `/tmp/omnix-rep1-handoff`, base `5892123`; dependent PR base is AI-3c until founder merges #6. Original AI-3c checkout untouched.
+- [verified report] Founder Luna smoke: 3 selected/completed, 1/3 pass, 4.17/5 over 6 replies, est. $0.0068; no provider errors/timeouts/truncations; writer 12 calls/6 tool calls, extractor/checker 0.
+- EN price policy block + TR summed-range hard-check failure recorded KI-101/102; discount handoff passed. SDK warning did not stop these calls; exact rejected EN draft/root cause remains unknown.
+- Documentation scope/format checks only; no application tests, paid calls, merge, deploy or production changes. INT-1 planning remains outside the repository.

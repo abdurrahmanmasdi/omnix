@@ -129,6 +129,10 @@ Where things are: `src/main.ts` (HTTP + Socket.IO, `rawBody: true`), `src/app.mo
 - Applied migrations are forward-only: add a new one, never edit (e.g. `20260930000000_least_privilege_roles`, KI-013).
 **Fix, don't extend:** follow-up processor runs actions before storing bubbles (KI-061); AI authority over lead status/phone/email in `action-executor.service.ts` (KI-024); `src/follow-ups/` duplicates ai-reply send logic (merge later behind e2e tests). `ERD.svg` is stale (KI-089).
 
+### REP-1 — weekly owner report (planned 2026-10-10)
+
+[proposed — card ready] Extend analytics with clinic-scoped GET `/analytics/weekly-report`, Monday weeks in Europe/Istanbul and aggregate-only DTOs. A read-only consistent view of Leads/Messages/OutboundAttempts/Notifications provides record counts, acceptance-based reply intervals, AI/dashboard-staff/phone activity, recipient-deduplicated handoff conversations and deterministic approximate enquiry-topic counts. Imports/deletions/drafts/uncertain sends are excluded as defined; consultation requests remain unavailable until consultation records exist. The endpoint requires analytics:view, leads:view, leads:read:all, leads:read:messages and view_conversations; assigned-only users are denied. Generated Orval and identity/week-scoped query caching power `/dashboard/reports/weekly`; browser printing exports the displayed aggregate report. No new schema, model call, cron or provider. Definitions, availability, sample denominators, period/generation time and retention/reconciliation limits accompany values. Full card: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → REP-1.
+
 ## 7. Frontend — `apps/frontend-v2` (Next.js)
 
 Old review rating 2.6/5: keep the session/API core, the Inbox was rebuilt (C14 slice, `src/features/inbox/`).

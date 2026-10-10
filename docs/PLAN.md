@@ -5,8 +5,8 @@ _Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-1
 
 - **Goal:** find out what clinics need before building more (D-030) and make the AI conversation excellent (D-031).
 - **AI status:** AI-1, AI-2, AI-3a and AI-3b recorded complete/merged. Latest 55-scenario AI-3b real-model eval remains pending; historical 33/40 is not evidence for the current version. V2 stays opt-in through `COORDINATOR_V2_ORG_IDS`.
-- **Now:** AI-3c implementation card ready on `ai-3c/model-comparison`: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → **AI-3c — coordinator model comparison**. Builder prepares comparison/reporting offline; founder runs paid evals and owns model selection/Railway changes.
-- **In parallel:** planner expands REP-1, then INT-1 and later cards. REP-1 implementation follows AI-3c preparation; a pending founder eval need not block planning.
+- **Now:** AI-3c offline implementation delivered in PR #6; founder Luna smoke completed 3/3, passed 1/3 (4.17/5, est. $0.0068), with price policy/gate failures requiring review. Paid comparison/model choice/Railway settings remain pending; no production activation.
+- **In parallel:** REP-1 card ready in `reference/plan/PRODUCT_EXECUTION_TASKS.md` → REP-1. Builder uses `rep-1/weekly-owner-report` in `/tmp/omnix-rep1-handoff`; planner prepares INT-1 outside the repo. REP-1 may proceed while AI-3c founder comparison is pending.
 - **Founder, in parallel:** Railway switch (V1), Meta verification + v4 config, D2 mystery shopping + D3 interviews (Claude writes the materials).
 - **Open founder decisions:** Q14 pilot mode (draft mode recommended), Q5 which clinic.
 - **Parked:** P2-01 partial work on `p2-01/coordination-records` @ `44033f6`.
@@ -29,8 +29,8 @@ _Planner rewrites this section after each review (≤ 25 lines). Last: 2026-10-1
 | AI-2 | Coordinator v2: playbook guidelines file + clinic fact sheet in prompt + one agent + tools, behind a per-clinic switch; old graph kept until v2 wins on evals | **Done** (PR #3, 80% vs 27.5%) |
 | AI-3a | **Done (merged)** Safety + behavior: block appointment-confirmation wording (KI-095), EN/TR/AR handoff copy, off-topic/manipulation levels (D-033), photo consent, fewer early handoffs, price confidence; new eval scenarios | **Done** (38/51; handoff overuse fixed in AI-3b item 0) |
 | AI-3b | Clinic fact sheet (settings page + approval), save-patient-facts via existing actions, handoff summary shown in Inbox, active offers, patient report | **Done** (PR #5, migration `20261007000000_clinic_fact_sheets`); founder eval run pending |
-| AI-3c | Model comparison luna vs sol on the evals (founder runs) + Railway settings (KI-097). Full card: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → AI-3c | **READY TO IMPLEMENT**; paid comparison follows |
-| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) (per-patient report done in AI-3b) | next to plan; after AI-3c preparation |
+| AI-3c | Model comparison luna vs sol on the evals (founder runs) + Railway settings (KI-097). Full card: `reference/plan/PRODUCT_EXECUTION_TASKS.md` → AI-3c | **IMPLEMENTED** (PR #6); founder comparison/selection pending |
+| REP-1 | Weekly owner report (leads, reply speed, handoffs, consultations requested, top questions, AI vs staff) (per-patient report done in AI-3b) | **READY TO IMPLEMENT**; full card in `reference/plan/PRODUCT_EXECUTION_TASKS.md` → REP-1 |
 | INT-1 | Generic CRM connector: outbound webhooks for lead/handoff/consultation events (Zapier/Make) + CSV export; native connector only for the CRM most interviewed clinics use | queued |
 | AI-4 | More tools: consultation request (staff confirm), forward patient file to doctor (with consent), smart follow-ups (templates/24 h rule) | queued |
 | M4b | 360dialog connector: clinic connects its WhatsApp Business app number via its own 360dialog account (coexistence) and pastes the API key; OmniX sends/receives through 360dialog incl. phone echoes → AI pause. Needed because OmniX cannot be a Meta Tech Provider without a company (README §0) | queued — before the first pilot |

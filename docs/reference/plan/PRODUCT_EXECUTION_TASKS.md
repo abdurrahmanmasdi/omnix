@@ -517,3 +517,151 @@ For the final suite use the same command/environment with both `"$REPO_ROOT/apps
 Commit after each item; stage explicit files and preserve unrelated working changes (the planning session observed a pre-existing frontend `next-env.d.ts` change). Update architecture only for what was implemented, append one LOG entry ≤8 lines, and record unrelated findings in ISSUES. Push the card branch and open a PR under the normal card process. No merge. Final response: PR, item commits, tests, exact founder run sequence, remaining compatibility/selection steps. Keep all evaluation outputs ignored; summarize actual paid results later in LOG only after the founder supplies them.
 
 **Kickoff prompt:** Implement only AI-3c in `docs/reference/plan/PRODUCT_EXECUTION_TASKS.md`, section “AI-3c — coordinator model comparison”, on `ai-3c/model-comparison`. Read the listed project memory, then complete items 1–4 and only their required offline tests. The planning commit already contains the architecture and scope. Keep production behavior and eval fixtures unchanged. Deliver a PR and founder-run commands; do not make paid calls, deploy, migrate, merge or edit PLAN. Implementation can finish while paid comparison/model selection remain pending.
+
+## REP-1 — weekly clinic-owner report
+
+Prepared 2026-10-10. **Status: ready to implement.** Branch `rep-1/weekly-owner-report`; isolated checkout `/tmp/omnix-rep1-handoff`.
+
+### Product decision and scope
+
+**Founder confirmed:** a dashboard page with **Print / Save as PDF**. The weekly report is computed when opened; no email, scheduler, PDF service or new external provider is needed.
+
+**Goal:** an authorized clinic owner can choose a week and see how much enquiry activity occurred, how quickly recorded replies followed patient contact, which patients needed staff, how AI and staff shared the work, and the main enquiry topics. Numbers must have explicit definitions and reconcile to clinic-scoped records. A saved PDF includes the selected week, timezone, generation time and measurement limitations.
+
+**Recommended first version:** reporting over current records, with no schema migration or new telemetry. Consultation requests are displayed as **Not tracked yet**, because the consultation record/action is still a future card. Do not substitute READY_TO_BOOK, patient intent keywords or appointments confirmed outside OmniX for tracked consultation requests. Likewise, group questions into **Top enquiry topics** rather than displaying patient text or claiming semantic question understanding. These scope choices are proposed for the implementation card; the dashboard/print delivery choice is founder-confirmed.
+
+The report does not claim revenue, conversion uplift, staff productivity, hours saved, appointments booked, exact delivery time or AI containment. The current dashboard remains separate. A historical report is a view of records available now, not an immutable ledger: deletions and late provider reconciliation can change it.
+
+### Evidence from read-only inspection
+
+Inspected the current AI-3c planning checkout on 2026-10-10; the implementation agent may change it later. Recheck the listed files before implementing.
+
+- `apps/backend-v2/src/analytics/analytics.service.ts` and controller currently provide `/analytics/summary`: all-time counts/current statuses and recent leads. They do not provide weekly cohorts. Existing tests largely check that providers instantiate.
+- `Lead` has organizationId, createdAt, deletedAt and current status; status is not an event history. `Conversation` has organizationId, leadId, channelId and deletedAt.
+- `Message` has createdAt, type, handledBy, status, metadata and deletedAt. Imported WhatsApp history is marked `metadata.origin = WHATSAPP_HISTORY`, `readOnly = true`; phone echoes are marked `WHATSAPP_PHONE`, are HUMAN/USER_TEXT and have the provider-origin timestamp.
+- `OutboundAttempt` has organizationId, conversationId, messageId, purpose, status and acceptedAt. Purposes are reply, staff, follow-up and consent-request. acceptedAt is a local provider-acceptance/reconciliation timestamp; it does not prove patient delivery. It may be filled late after UNKNOWN is reconciled.
+- AI handoff currently creates a `LEAD_HANDED_OFF` notification for each eligible staff recipient in a transaction. Counting rows would multiply the handoff by the staff count. No dedicated consultation table or immutable handoff-event table exists on the inspected schema.
+- `analytics:view` exists; the permission guard checks every requested permission. User permissions come through the existing profile endpoint. Generated Orval hooks, tenant query-key support and stale-session response rejection already exist.
+- Current patient reports use browser printing and dedicated print CSS. Next.js installed page documentation specifies asynchronous page searchParams; read the local guide before route work.
+
+### Architecture proposal
+
+```text
+Authorized dashboard user
+  → generated Orval weekly-report query (identity + week-scoped cache)
+  → Nest AnalyticsController: tenant from authenticated membership, permissions
+  → WeeklyReportService: validate week, read clinic-scoped records consistently
+  → pure aggregation helpers: counts, response samples, handoff dedupe, topics
+  → aggregate DTO only (no patient identifiers/text)
+  → weekly report page → browser print → user saves PDF
+```
+
+Extend the existing Nest analytics module; keep the existing summary endpoint behavior. Add one weekly service, small pure helpers for dates/aggregation/topics, request/response DTOs and a controller route. All business calculations belong in the backend. The frontend formats values, explains their definitions and handles navigation/printing; it does not calculate business metrics from Inbox records.
+
+Use the existing PostgreSQL/Prisma data and existing authorization. No Python calls, model calls, new event bus, chart dependency, scheduled job, materialized reports, storage, migration or new permission seed. The weekly endpoint returns aggregate-only data. Do not build patient drilldowns or CSV export here; those require separate scope/permissions.
+
+### API, periods and access
+
+**Endpoint:** `GET /analytics/weekly-report?weekStart=YYYY-MM-DD`. No organizationId parameter; resolve the organization solely from the authenticated user. Unknown query fields are rejected. weekStart is optional and, when present, must be a real Monday date, not a normalized impossible date. Repeated values/arrays are rejected.
+
+**Timezone:** fixed `Europe/Istanbul` for this Istanbul-only card. Week starts Monday 00:00 local and ends the following Monday 00:00 local, with an exclusive upper bound. Frontend locale and browser timezone do not change the reporting period. Return both local date labels and resolved UTC instants. Use a tested helper with explicit timezone conversion; do not depend on server-local timezone or parse date-only strings as browser-local dates. Do not add a timezone library unless an existing dependency supports it; Istanbul's current fixed UTC+03:00 can be represented explicitly for this bounded date range.
+
+Default to the **last completed week**. Allow the current week with a clear “Week in progress” badge; cutoff is the backend generation time. Reject future weeks and week starts more than 52 calendar weeks before the current Monday. Restricting history also avoids historical timezone-rule ambiguity in this first version. Return a `generatedAt` and `asOf` instant; use the same asOf for all calculations.
+
+For example, the week starting 2026-10-05 runs from `2026-10-04T21:00:00Z` to `2026-10-11T21:00:00Z`. On 2026-10-10 it is in progress; default report week is 2026-09-28. A complete week uses its end as cutoff; a current week uses asOf.
+
+**Authorization:** require all of `analytics:view`, `leads:view`, `leads:read:all`, `leads:read:messages`, and `view_conversations`. This report reads clinic-wide conversation history to derive topics; assigned-only staff cannot use it. This is a capabilities rule, not a hardcoded role-name check. Existing owner/admin defaults must be verified to have these grants; don't silently broaden roles. Missing organization context fails before queries; missing grants return 403. The UI hides its Reports navigation item without these grants but direct HTTP requests are independently guarded. No patient PII grant is required because neither raw content nor patient identities leave the service.
+
+Return `Cache-Control: private, no-store`. Browser TanStack Query caching remains identity-scoped and limited to this session; no shared/server report cache. Request cancellation and stale-session rejection use the existing session infrastructure.
+
+### Metric definitions (implementation contract)
+
+Common exclusions: soft-deleted leads/conversations/messages, foreign-tenant records, imported history messages and `metadata.readOnly = true` records. A conversation with a deleted linked lead is excluded; leadless live conversations may contribute activity, not new-lead counts. A legacy message with absent origin metadata is treated as live and disclosed as legacy coverage, not presumed imported. No live/test traffic flag exists: show “Includes all recorded activity; test traffic is not automatically separated.” Do not infer test patients from their names.
+
+| Display | Definition and source | Limits |
+| --- | --- | --- |
+| New lead records | Nondeleted Lead rows created during [start, cutoff), for this clinic | CRM/manual creation can contribute; label as records, not qualified patients or first-ever enquiries |
+| Active enquiry conversations | Distinct eligible conversation IDs with at least one eligible LEAD_TEXT or LEAD_MEDIA created during the period | Can include existing patients; not “new leads” |
+| Patient messages | Count of the same eligible inbound message rows | Dedupe is by stored message identity; don't recount retries or imported history |
+| AI replies recorded accepted | Distinct AI_TEXT/AI_MEDIA messages joined to an ACCEPTED attempt with purpose=reply and acceptedAt in the period | Counts bubbles, not agent turns; exclude drafts, consent prompts and follow-ups; acceptance is not delivery |
+| Staff dashboard replies recorded accepted | Distinct USER_TEXT/USER_MEDIA messages handledBy=HUMAN joined to ACCEPTED attempts with purpose=staff and acceptedAt in period | No staff audit row substitute: that row can be written before successful sending |
+| Staff phone messages observed | Distinct live USER_TEXT/USER_MEDIA HUMAN messages with origin=WHATSAPP_PHONE and createdAt in period | Provider-origin timestamps; no OutboundAttempt required. Keep separate from dashboard acceptance timestamps |
+| AI/staff activity mix | AI reply count versus dashboard staff count plus phone message count; return integer counts and denominator | These are message units, not time saved or work effort. Null percentages when denominator=0 |
+| Patients handed to team | Distinct eligible conversation IDs resolved from clinic LEAD_HANDED_OFF notifications created during the period | Resolve LEAD refs via current clinic lead/conversation and CONVERSATION refs directly. Deduplicate recipients/repeated events within the week. Do not call this total handoff events |
+| Consultation requests | value=null, availability=not_tracked, reason=consultation_records_unavailable | Keep visible with “Not tracked yet”, never zero; enable in the consultation card later |
+| Top enquiry topics | Up to five categories by distinct eligible conversation count in the period, using text rules below | Approximate category counts; no raw questions or transcripts returned |
+
+**First recorded reply interval this week:** one sample opportunity per active enquiry conversation. Anchor at the earliest eligible patient message during the period. Find the earliest eligible recorded outbound acceptance after that anchor and before cutoff, with message.createdAt >= anchor, purpose reply/staff and matching permitted sender type. Exclude follow-ups, consent requests, drafts, UNKNOWN, failed/cancelled attempts and phone echoes. An older queued message accepted after the anchor does not qualify if it was created before the anchor. Equal timestamps are eligible; use deterministic message ID ordering for ties.
+
+Return opportunity count, replied count, pending/unreplied-at-cutoff count, median seconds and nearest-rank p90 seconds for replied samples only. Return null timing values when replied count=0. Split replied samples by AI/staff sender with counts and median; combined sample count must equal the sum. Several inbound messages before the reply still create one sample anchored to the first, not several. A response after week end does not retroactively count for that week's interval; no overlapping follow-up window.
+
+User label: **First recorded reply interval**. Copy explains “Time from the first patient message this week to a reply recorded as accepted by the messaging provider. Phone-app replies are excluded.” Also disclose later reconciliation can overstate the interval, and replies might concern an earlier topic. Do not call it precise first response time, a delivery SLA or all staff reply speed. Surface excluded phone message count so users see coverage.
+
+**Recorded handoff coverage:** notifications can disappear if recipients/accounts are deleted; current status/aiPaused cannot reconstruct those events. Display this source/retention limitation in the methodology. A dangling or unsupported notification reference is not a patient handoff; skip it and include `unresolvedHandoffReferences` in coverage counters. Do not use body/title text or count generic STOP/delivery-error alerts as AI handoffs.
+
+### Topics: deterministic, bounded, private
+
+Topic IDs: `price`, `implants`, `crowns_veneers`, `consultation`, `travel_location`, `payment`, `other`. Use a small explicit EN/TR/AR phrase/token dictionary within the analytics feature. Price includes cost/price and Turkish fiyat/ücret or Arabic سعر/تكلفة; implants includes implant/implantasyon/زرع الأسنان/زراعة الأسنان; crowns_veneers includes crown/veneer/kaplama/تلبيسة/فينير; consultation includes consultation/appointment/randevu/استشارة/موعد; travel_location includes address/location/airport/adres/havalimanı/عنوان/مطار; payment includes payment/installment/ödeme/taksit/دفع/تقسيط. These examples are the intended vocabulary; builder can add straightforward spelling/inflection variants in this same item and its synthetic tests, not clinical inference.
+
+Use Unicode normalization/case folding and word/phrase matching suitable for the scripts, not substring matches such as implant inside unrelated words. Do not indiscriminately strip Arabic characters or depend on Latin-only word boundaries. A text can match several topics; each conversation counts once per topic per week. `other` applies only when that conversation has no matching topic across its eligible text messages. Media-only conversations have no classified topic and contribute to `topicUnclassifiedConversations`. Top-five ties use the fixed topic ID order above. Counts can exceed the number of classified conversations due to multiple topics; explain this in copy. “Consultation” topic is enquiry content, never the consultation-request metric.
+
+Process content only inside the authorized backend request, select no media URLs/PII, never log content or echo patient phrases. Return topic IDs/counts only. Do not feed summaries to a model, send patient data externally, store new classifications, add embeddings or create a learning pipeline. Rule categories are approximate and must be labelled as such.
+
+### Query and response design
+
+Use a read-only repeatable-read Prisma transaction for a consistent view of these source rows; no new records or locks. Explicitly scope every direct and relation query by organizationId and soft-deletion rules; never rely only on the UI or IDs derived from a notification. Use minimal selects and a small bounded number of bulk queries, not one query per conversation.
+
+Fetch only period-relevant inbound/topic rows, attempts/messages and notification references. Use `take = limit + 1` checks: at most 20,000 relevant inbound rows, 20,000 reply attempts, 20,000 phone rows, 10,000 notification rows and 5,000 resolved active/reference conversations per request. If any bound is exceeded return 422 with a stable `WEEKLY_REPORT_TOO_LARGE` code; do not silently truncate or print partial totals. Resolve notification references in batched tenant-scoped queries. Recheck query shapes/types against Prisma schema; no raw SQL unless Prisma demonstrably cannot express the query, and then propose a separate review before expanding scope.
+
+Response DTO includes: version=1; period dates/UTC instants/timezone/inProgress; generatedAt/asOf; newLeads; activeConversations; patientMessages; activity counts/percentages; replyInterval counts/null timings; handedToTeamConversations; consultations availability; topic ID/count rows; coverage counters; stable methodology codes. No patient IDs, names, phones, message snippets, notification text or media. Localize methodology codes in UI, don't encode long English paragraphs into the generated API model. All count fields are finite nonnegative integers and timing is seconds; null is distinct from zero. Use named nested DTOs with complete Swagger types, enums and nullability so Orval generates useful types.
+
+One current-period query has one coherent result. Don't mix response metrics from different weeks in the UI. The endpoint can compute counts as of current surviving records; it must not pretend to preserve prior snapshots.
+
+### Dashboard and print layout
+
+Route: `/dashboard/reports/weekly`. Thin route component + `src/features/reports/` components. Add one Reports sidebar item visible to users with all required grants. Use existing brand components and layouts; UX-1 redesign stays separate. No chart library: metric cards, short AI/staff breakdown, topic table and methodology are sufficient.
+
+Page order: title/clinic label, selected week + timezone, previous/next week controls, “Week in progress” when relevant, Refresh and Print / Save as PDF; summary counts; recorded reply interval with coverage; AI/staff messages table; handed-to-team and unavailable consultation request tile; top enquiry topics; methodology/footer. No patient drilldown links. Show absolute dates and seconds/minutes formatted with current locale; translations EN/TR/AR and Arabic RTL must work. Avoid invented comparisons to earlier weeks.
+
+Default last completed week comes from backend. Once loaded, previous/next controls request explicit Mondays. Prefer component state for the first version; a URL query is optional only if it follows installed Next guidance and is tested. Query keys include authenticated user/organization and requested week using existing generated key getters/session helpers; stale responses on rapid week switches or clinic changes must not replace the visible report. Do not reuse report data across identities. No auto-refresh; manual Refresh is enough. Set print disabled while fetching or after errors; on refresh errors, stale data must not appear to be a fresh complete report.
+
+Loading, authorized-empty, 403, 422-too-large and general error states are distinct. Empty is valid zeros with null reply timings and a not-tracked consultation metric. Retry errors using the existing ReadError conventions. Never render an API failure as zero leads. Hide navigation only as a convenience; unauthorized direct navigation is handled.
+
+Print CSS scoped to a unique report root: white background, dark text, A4-friendly width/margins, hide app shell/controls, expand scroll containers, repeat table headers and avoid breaking a metric/table row across pages. Include clinic label, date range, timezone, generation time and methodological caveats in printed output. Avoid patient-identifying footer/filename data. Use browser printing, not screenshot-based PDFs. Guard against printing an old clinic/week after a pending change. Verify one-page/overflow layouts with synthetic figures at desktop and narrow viewport; save a PDF manually during QA to inspect pagination. Do not commit screenshots/PDF evidence.
+
+### Implementation card
+
+**Branch:** `rep-1/weekly-owner-report` in `/tmp/omnix-rep1-handoff`, based on AI-3c commit `5892123`. Work only in this checkout; do not switch/reset the original checkout. AI-3c PR #6 is a dependency: if it is still unmerged, target the REP-1 PR at `ai-3c/model-comparison`, then retarget to main after the founder merges #6. The PR diff must contain REP-1 work only. Recheck the base before implementing; do not merge #6 yourself.
+
+Read AGENTS, README, PLAN Now, ARCHITECTURE backend/frontend + invariants, decisions D-011/D-013/D-034, authorization matrix and current analytics/schema. Read the installed Next guide `apps/frontend-v2/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/page.md` and the applicable navigation guide before Next code. Relevant known gap: KI-100 full backend test-only TypeScript errors; do not fix it here.
+
+1. **Metric helpers and contract.** Implement period validation, median/p90 helpers, deterministic topic rules and aggregation DTOs. Add synthetic cases exercising boundaries/null/zero and multi-topic counts. Commit this item.
+2. **Backend service and guarded endpoint.** Add the bounded tenant-scoped transaction/query path, deduplicate notification references, expose the weekly endpoint with full permissions and no-store header. Preserve `/analytics/summary`. Add service/controller tests including guards exercised through Nest HTTP testing with mocked storage. Commit.
+3. **Generated client and report UI.** Export OpenAPI using the existing exporter from a clean cwd with synthetic configuration, regenerate Orval through existing commands; don't hand-edit generated files. Implement scoped query, sidebar entry, states, EN/TR/AR copy and accessible week controls. Keep feature files small. Commit.
+4. **Print and verification.** Add scoped print styles, perform required checks below, update architecture/authorization matrix with implemented behavior, append LOG ≤8 lines and record unrelated issues. Commit, push branch and open PR. Founder owns merge/deploy. Do not edit PLAN as builder.
+
+Allowed production paths: backend `src/analytics/`; frontend weekly report route, new `src/features/reports/`, existing Sidebar and localization files; generated OpenAPI/Orval artifacts; required existing documentation. Add tests only for this card. No Python, outbound/handoff sender changes, schema migration, provider calls, email, CSV, scheduling, consultation workflow or dashboard redesign.
+
+### Required verification
+
+Only run targeted tests during implementation, each touched app's unit suite once at the end, production typechecks and the focused synthetic browser/print check below. No Python tests, full quality gate, general e2e/provider/DB suite, unrelated CI or dependency installs.
+
+Backend synthetic fixture must include two clinics, deleted rows, imported history, phone echoes, AI draft, failed/UNKNOWN/cancelled attempts, repeated status updates and duplicated handoff recipients. Assertions: all queries are scoped; foreign references don't resolve; exclusive week boundaries; impossible/non-Monday/future/too-old dates fail; grants each deny direct HTTP access when missing; no PII/raw messages in DTO; same conversation repeated notifications count once; reply timestamps/denominators and topic tie order are correct; limits fail loudly. Mocked storage is not evidence of a real DB integration run; report this limit.
+
+A minimal manually calculable reply fixture: conversation A inbound 09:00 and 09:02, AI reply accepted 09:05; B inbound 09:10, dashboard staff reply accepted 09:12; C inbound 09:20, no eligible reply by cutoff. Expected opportunities=3, replied=2, pending=1; intervals 300/120 seconds; median=210, nearest-rank p90=300; AI median=300, staff median=120. A second AI bubble increases AI message activity but not the reply sample count. One phone message appears in staff-phone activity and does not create an interval sample. Three staff notifications referring to A produce one handed-to-team conversation. Add a fourth conversation in clinic B and prove it contributes nothing. Consultation requests remain null/not_tracked.
+
+Targeted commands once paths exist:
+- Backend: `npm test -- --runInBand analytics`; final unit suite `npm test -- --runInBand`; production types `npx tsc --noEmit -p tsconfig.build.json`.
+- Frontend: `npm test -- src/features/reports`; include any touched existing sidebar/localization test paths explicitly; final `npm test`; types `npx tsc --noEmit`.
+- OpenAPI/Orval regeneration follows existing exporter/generator path; no hand-edits to generated files. Run it from a clean cwd with only synthetic process configuration as in the existing quality-gate snippet; do not run the whole quality gate or source dotenv.
+- Frontend tests cover loading/empty/error/403/422, not-tracked versus zero, locale/RTL, disabled print, week-switch races and stale clinic responses. Use the existing HTTP/session test conventions.
+- Focused browser test/QA only for this page using synthetic API fixtures: authorized EN/TR/AR render, narrow view, period switch, error retry and print CSS/media. Browser-test server runs from a clean temporary cwd using existing binaries and synthetic config; no shared DB/login or provider call. Use an existing browser harness if practical; add at most one card-specific spec if automation is needed. Browser execution blocked by the environment remains an explicit unverified acceptance item, not a passed check.
+- `git diff --check` and generated artifact review. No tests are run during this external planning session.
+
+### Done when / handoff
+
+Owner can open a completed or current week, understand each metric and unavailable field, and print a readable aggregate PDF. The fixture counts reconcile, unauthorized access is denied, imported history/drafts/retries are excluded correctly, and clinic/week changes cannot show stale results. Required checks pass or their exact environmental limitations are recorded. No real patient run or production-readiness claim follows from synthetic tests.
+
+Final builder response gives PR, per-item commits, checks, fixture outcomes, measurement limitations and founder click path. Founder staging check after merge: Reports → Weekly → last completed week → current week → Refresh → Print/Save as PDF; verify native Turkish/Arabic labels with clinic reviewers. Deploy only through existing founder procedure.
+
+**Agent kickoff:** Implement only REP-1 using the adopted “REP-1 — weekly clinic-owner report” card. Work on `rep-1/weekly-owner-report` in an isolated checkout when another agent is active. Follow the defined metrics exactly, preserve unavailable consultation requests, complete items 1–4 and only their listed checks, and deliver a PR. Do not deploy, migrate, call models/providers, modify Python or edit PLAN.

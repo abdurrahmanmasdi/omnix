@@ -193,3 +193,8 @@ _D-011…D-016: decisions already made in the project's plan documents (CTO plan
 ## D-034 — Build order after AI-3a; UX last; voice and emotion
 - Date: 2026-10-07 · Status: accepted (founder)
 - Decision: order AI-3a → AI-3b (fact sheet incl. **active offers**: the AI mentions only offers the clinic has switched on; discounts otherwise go to staff) → AI-3c → REP-1 → INT-1 → AI-4 → UX-1 (dashboard redesign waits for the designer's palette). Voice notes are already transcribed (`TRANSCRIPTION_MODEL`); emotion is read from the transcript and text (tone words, urgency, fear, anger), not from the sound itself — acoustic emotion analysis is costly and sensitive biometric-like data (KVKK) and stays out until a clinic asks and counsel agrees.
+
+## D-035 — Weekly owner report delivery
+- Date: 2026-10-10 · Status: accepted (founder)
+- Decision: REP-1 is a dashboard page with Print / Save as PDF. No weekly email is required for the first version.
+- Consequences: compute on demand using existing records; implementation/measurement scope is defined by the REP-1 card. Consultation-request tracking remains a future capability, never inferred from current lead status.

@@ -1,12 +1,18 @@
 # Issues, open questions, ideas
 
 _Merged 2026-10-06 from the old `memory/known-issues.md`, `open-questions.md`, `parked.md`, `improvement-backlog.md` (D-027). Open items only — when something is fixed or answered, remove it and add one line to "Closed"/"Resolved"._
-**Next free ids:** KI-101 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
+**Next free ids:** KI-103 · Q16 · IMP-019. Format: **id — title** · severity · status · what remains · owner.
 
 ## 1. Known issues (KI)
 
 **KI-100 — Coexistence test mock circular inference** · low · open
 AI-3b production TypeScript check passes, but full `tsc --noEmit` reports TS7022/TS7024 in `src/webhooks/coexistence.spec.ts` (self-referencing Prisma mock). Owner: developer; separate test-only fix.
+
+**KI-101 — Price enquiry blocked by medical output policy in Luna smoke** · medium · open
+[verified] Founder synthetic smoke 2026-10-10: en-implant-price returns deterministic medical_diagnosis_or_treatment handoff, judge 1/5. The report preserves the replacement reply, not the rejected draft; root cause/false-positive status is unconfirmed. Review separately without weakening medical gates. Owner: AI quality follow-up.
+
+**KI-102 — Price hard check rejects a sum of approved component ranges** · medium · open
+[verified] Same smoke: tr-implant-price judge 5/5 but grounded_price fails on EUR 870–1,270, the arithmetic sum of implant EUR 650–950 plus crown EUR 220–320. Investigate contextual arithmetic versus genuinely unsupported totals in a separate eval card; preserve existing gate for comparison. Owner: eval quality follow-up.
 
 ### High
 
