@@ -27,6 +27,7 @@ export function live(message: ReportMessage): boolean {
   );
 }
 export function acceptedSender(attempt: ReportAttempt): 'ai' | 'staff' | null {
+  if (attempt.message.conversationId !== attempt.conversationId) return null;
   if (
     attempt.status !== 'ACCEPTED' ||
     !attempt.acceptedAt ||

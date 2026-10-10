@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, Matches, ValidateIf } from 'class-validator';
-import { TOPICS, Topic } from '../weekly-topics';
+import type { Topic } from '../weekly-topics';
+import { TOPICS } from '../weekly-topics';
 
 export const WEEKLY_PERMISSIONS = [
   'analytics:view',

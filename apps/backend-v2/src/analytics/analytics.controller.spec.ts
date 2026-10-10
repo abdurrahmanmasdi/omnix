@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnalyticsController } from './analytics.controller';
+import { WeeklyReportService } from './weekly-report.service';
 import { AnalyticsService } from './analytics.service';
 import { PermissionService } from '../auth/permission.service';
 
@@ -10,6 +11,7 @@ describe('AnalyticsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnalyticsController,
+        { provide: WeeklyReportService, useValue: {} },
         { provide: AnalyticsService, useValue: { methodName: jest.fn() } },
         {
           provide: PermissionService,
